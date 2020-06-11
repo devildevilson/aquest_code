@@ -1,0 +1,33 @@
+[submodule "include/FastNoise"]
+	path = include/FastNoise
+	url = https://github.com/Auburns/FastNoise.git
+[submodule "include/json"]
+	path = include/json
+	url = https://github.com/nlohmann/json.git
+[submodule "include/Nuklear"]
+	path = include/Nuklear
+	url = https://github.com/Immediate-Mode-UI/Nuklear.git
+[submodule "include/sol2"]
+	path = include/sol2
+	url = https://github.com/ThePhD/sol2.git
+[submodule "include/stb"]
+	path = include/stb
+	url = https://github.com/nothings/stb.git
+[submodule "include/VulkanMemoryAllocator"]
+	path = include/VulkanMemoryAllocator
+	url = https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator.git
+[submodule "include/whereami"]
+	path = include/whereami
+	url = https://github.com/gpakosz/whereami.git
+[submodule "include/cxxopts"]
+	path = include/cxxopts
+	url = https://github.com/jarro2783/cxxopts.git
+[submodule "include/fmt"]
+	path = include/fmt
+	url = https://github.com/fmtlib/fmt.git
+[submodule "include/dr_libs"]
+	path = include/dr_libs
+	url = https://github.com/mackron/dr_libs.git
+[submodule "include/lz4"]
+	path = include/lz4
+	url = https://github.com/lz4/lz4.git

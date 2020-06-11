@@ -1,0 +1,276 @@
+cmake_minimum_required(VERSION 3.0)
+project(apates_quest) # 'эпати'
+
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME})
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME})
+
+set(TARGET_NAME ${PROJECT_NAME})
+
+set(PROJECT_VERSION_MAJOR "0")
+set(PROJECT_VERSION_MINOR "0")
+set(PROJECT_VERSION_PATCH "1")
+set(PROJECT_VERSION "${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}")
+set(PROJECT_VERSION_FULL "${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}.${PROJECT_VERSION_PATCH}")
+
+## Git revision number ##
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/.git")
+  execute_process(COMMAND git describe --tags HEAD
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+    OUTPUT_VARIABLE GIT_DESCRIBE_TAGS ERROR_QUIET)
+  if(GIT_DESCRIBE_TAGS)
+    string(REGEX REPLACE "^v(.*)" "\\1" GIT_REVISION "${GIT_DESCRIBE_TAGS}")
+    string(STRIP "${GIT_REVISION}" GIT_REVISION)
+    if(GIT_REVISION)
+      set(PROJECT_VERSION_FULL "${GIT_REVISION}")
+    endif(GIT_REVISION)
+  endif(GIT_DESCRIBE_TAGS)
+endif(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/.git")
+
+# find_package(git QUIET)
+# if(GIT_FOUND AND EXISTS "${PROJECT_SOURCE_DIR}/.git")
+# # Update submodules as needed
+#   option(GIT_SUBMODULE "Check submodules during build" ON)
+#   if(GIT_SUBMODULE)
+#     message(STATUS "Submodule update")
+#     execute_process(COMMAND ${GIT_EXECUTABLE} submodule update --init --recursive
+#                     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+#                     RESULT_VARIABLE GIT_SUBMOD_RESULT)
+#     if(NOT GIT_SUBMOD_RESULT EQUAL "0")
+#       message(FATAL_ERROR "git submodule update --init failed with ${GIT_SUBMOD_RESULT}, please checkout submodules")
+#     endif()
+#   endif()
+# endif()
+#
+# if(NOT EXISTS "${PROJECT_SOURCE_DIR}/include/fmt/CMakeLists.txt")
+#   message(FATAL_ERROR "The submodules were not downloaded! GIT_SUBMODULE was turned off or failed. Please update submodules and try again.")
+# endif()
+
+set(STB_INCLUDE_PATH include/stb)
+
+include_directories(
+  .
+  include/sol2/include/
+  include/lanes/src/
+  include/VulkanMemoryAllocator/src/
+  include/FastNoise/
+  include/
+  include/json/single_include/
+  include/stb/
+  include/whereami/src/
+)
+link_directories(
+  ${CMAKE_CURRENT_BINARY_DIR}
+  ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}
+  libs/
+)
+
+if (WIN32)
+  set(CPPFS_LIB_PATH C:/libs/cppfs)
+
+  set(GLFW3_LIB_DIRS C:/libs/glfw-3.2.1.bin.WIN64/lib-mingw-w64)
+  set(GLFW3_INCLUDE_DIRS C:/libs/glfw-3.2.1.bin.WIN64/include)
+  set(GLFW3_LIBRARIES glfw3)
+
+  set(VULKAN_SDK_PATH C:/VulkanSDK/1.1.97.0)
+  set(VULKAN_LIB_PATH ${VULKAN_SDK_PATH}/Lib)
+  set(VULKAN_INCLUDE_PATH ${VULKAN_SDK_PATH}/Include)
+  set(GLSL_VALIDATOR "${VULKAN_SDK_PATH}/Bin/glslangValidator")
+  set(VULKAN_LIB_NAME vulkan-1)
+
+  include_directories(
+    ${GLFW3_INCLUDE_DIRS}
+	  ${VULKAN_INCLUDE_PATH}
+	  ${GLM_LIB_PATH}
+  )
+
+  link_directories(
+	  ${GLFW3_LIB_DIRS}
+	  ${VULKAN_LIB_PATH}
+    ${CPPFS_LIB_PATH}
+  )
+else()
+  set(CPPFS_LIB_PATH libs)
+
+  # находим указанные зависимости (нужно чекнуть все ли это зависимости?)
+  # вместо glm у меня установлен gli
+  #find_package(glm)
+  find_package(glfw3)
+  find_package(PkgConfig REQUIRED)
+  #pkg_search_module(GLFW REQUIRED glfw3)
+  pkg_check_modules(GLFW3 REQUIRED glfw3)
+  # не может найти почему то vulkan-headers
+  #find_package(vulkan-headers)
+
+  set(VULKAN_LIB_NAME vulkan)
+  set(GLSL_VALIDATOR "glslangValidator")
+
+  include_directories(
+    ${GLFW3_INCLUDE_DIRS}
+  )
+
+  link_directories(
+    ${CPPFS_LIB_PATH}
+  )
+endif()
+
+set(COMPILED_SHADERS_PATH ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/shaders)
+
+file(MAKE_DIRECTORY ${COMPILED_SHADERS_PATH})
+
+if(NOT CMAKE_BUILD_TYPE)
+   set(CMAKE_BUILD_TYPE Debug ... FORCE)
+endif()
+
+add_definitions(
+  -DTECHNICAL_NAME="${PROJECT_NAME}"
+  -DAPP_NAME="Apate's quest"
+  -DAPP_VERSION=${PROJECT_VERSION_FULL}
+)
+
+if (CMAKE_BUILD_TYPE MATCHES "Debug")
+  # -fsanitize=address -fsanitize=pointer-compare -fsanitize=pointer-subtract -fsanitize=undefined
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -msse4.2 -pthread -std=c++17 -Wall -Wextra -g -fno-rtti")
+else()
+  add_definitions(-D_NDEBUG)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -msse4.2 -pthread -std=c++17 -Wall -Wextra -O3 -s -fno-rtti")
+endif (CMAKE_BUILD_TYPE MATCHES "Debug")
+
+file(GLOB_RECURSE GLSL_SOURCE_FILES
+  raw_shaders/tiles.vert
+  raw_shaders/tiles.geom
+  raw_shaders/tiles.frag
+  raw_shaders/tiles.comp
+  raw_shaders/tiles_borders.frag
+  raw_shaders/gui.frag
+  raw_shaders/gui.vert
+)
+
+foreach(GLSL ${GLSL_SOURCE_FILES})
+  get_filename_component(FILE_NAME ${GLSL} NAME_WE)
+  get_filename_component(FILE_EXT ${GLSL} EXT)
+  set(SPIRV "${COMPILED_SHADERS_PATH}/${FILE_NAME}${FILE_EXT}.spv")
+  add_custom_command(
+    OUTPUT ${SPIRV}
+#     COMMAND ${CMAKE_COMMAND} -E make_directory "${COMPILED_SHADERS_PATH}"
+    COMMAND ${GLSL_VALIDATOR} -V ${GLSL} -o ${SPIRV}
+    DEPENDS ${GLSL}
+  )
+  list(APPEND SPIRV_BINARY_FILES ${SPIRV})
+endforeach(GLSL)
+
+add_custom_target(
+  shaders
+  DEPENDS ${SPIRV_BINARY_FILES}
+)
+
+set(SRC_LIST
+  utils/thread_pool.cpp
+  utils/stack_allocator.cpp
+  utils/input.cpp
+  utils/id.cpp
+  utils/globals.cpp
+  utils/logging.cpp
+  utils/frame_time.cpp
+  utils/ecs.cpp
+  utils/random_engine.cpp
+  #utils/perlin.cpp
+  include/FastNoise/FastNoise.cpp
+  include/whereami/src/whereami.c
+)
+
+set(HDR_LIST
+  utils/thread_pool.h
+  utils/stack_allocator.h
+  utils/typeless_container.h
+  utils/memory_pool.h
+  utils/shared_application_constant.h
+  utils/shared_mathematical_constant.h
+  utils/shared_time_constant.h
+  utils/globals.h
+  utils/input.h
+  utils/id.h
+  utils/logging.h
+  utils/frame_time.h
+  utils/ecs.h
+  utils/yacs.h
+  utils/yacs_pool.h
+  utils/yacs_component.h
+  utils/random_engine.h
+  utils/concurrent_vector.h
+  #utils/perlin.h
+  include/FastNoise/FastNoise.h
+  include/whereami/src/whereami.h
+)
+
+add_library(utils ${SRC_LIST} ${HDR_LIST})
+target_link_libraries(utils)
+
+set(SRC_LIST
+  render/container.cpp
+  render/Core.cpp
+  render/Internal.cpp
+  render/Makers.cpp
+  render/RAII.cpp
+  render/render.cpp
+  render/Tasks.cpp
+  render/Types.cpp
+  render/window.cpp
+  render/stages.cpp
+  render/targets.cpp
+)
+
+set(HDR_LIST
+  render/container.h
+  render/context.h
+  render/shared_structures.h
+  render/stage.h
+  render/stages.h
+  render/target.h
+  render/targets.h
+  render/yavf.h
+  render/Core.h
+  render/Internal.h
+  render/Makers.h
+  render/RAII.h
+  render/render.h
+  render/Tasks.h
+  render/Types.h
+  render/window.h
+  render/nuklear_header.h
+)
+
+add_library(render ${SRC_LIST} ${HDR_LIST})
+target_link_libraries(render utils ${VULKAN_LIB_NAME} ${GLFW3_LIBRARIES})
+
+set(SRC_LIST
+  bin/interface_context.cpp
+  #bin/interfaces.cpp
+  bin/overlay.cpp
+  bin/figures.cpp
+  bin/main.cpp
+  bin/helper.cpp
+  bin/camera.cpp
+#   bin/generator_system.cpp
+  bin/map_generators.cpp
+  bin/map.cpp
+  #include/lanes/src/deep.c
+  #include/lanes/src/universe.c
+  #include/lanes/src/compat.c
+)
+
+set(HDR_LIST
+  bin/interface_context.h
+  #bin/interfaces.h
+  bin/overlay.h
+  bin/helper.h
+  bin/figures.h
+  bin/camera.h
+  bin/generator_system.h
+  bin/map_generators.h
+  bin/map.h
+  bin/generator_context.h
+  bin/map_generator.h
+)
+add_executable(${TARGET_NAME} ${SRC_LIST} ${HDR_LIST})
+target_link_libraries(${TARGET_NAME} render utils lua)
+add_dependencies(${TARGET_NAME} shaders)

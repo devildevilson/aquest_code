@@ -1,0 +1,184 @@
+#version 450
+
+#extension GL_GOOGLE_include_directive : enable
+#include "../render/shared_structures.h"
+#include "../utils/shared_mathematical_constant.h"
+
+layout(constant_id = 0) const float triangle_size = 23.8457f;
+//layout(constant_id = 0) const float triangle_size = 10.0f;
+
+layout(set = 0, binding = 0) uniform Camera {
+  mat4 viewproj;
+  mat4 view;
+  vec4 pos;
+  vec4 dir;
+  uvec4 dim;
+} camera;
+
+layout(std140, set = 1, binding = 0) readonly buffer tiles_buffer {
+  light_map_tile_t tiles[];
+};
+
+layout(std140, set = 1, binding = 2) readonly buffer tile_points_buffer {
+  vec4 tile_points[];
+};
+
+layout(std140, set = 1, binding = 3) readonly buffer triangles_buffer {
+  packed_fast_triangle_t triangles[];
+};
+
+layout(std430, set = 1, binding = 4) readonly buffer triangles_tile_indices_buffer {
+  uvec4 triangles_tile_indices[];
+};
+
+layout(std140, set = 2, binding = 0) buffer tile_indirect_buffer {
+  uvec4 pentagon_indirect;
+  uvec4 hexagon_indirect;
+  uvec4 counts;
+  // сюда можно засунуть фрустум
+  frustum_t frustum;
+};
+
+layout(std430, set = 2, binding = 1) buffer tile_instances_buffer {
+  instance_data_t tile_instances[];
+};
+
+#define FAR_PLANE 256.0f
+#define WORK_GROUP 256
+
+float distance2(const vec4 a, const vec4 b);
+vec4 get_triangle_dir(const vec4 a, const vec4 b, const vec4 c);
+bool triangle_frustum_test(const vec4 a, const vec4 b, const vec4 c, const frustum_t frustum);
+uint get_accel_triangle_tile_index(const uint index);
+
+//shared uint pentagon_count;
+//shared uint hexagon_count;
+layout(local_size_x = WORK_GROUP, local_size_y = 1, local_size_z = 1) in;
+
+void main() {
+  // pentagon_count = 0;
+  // hexagon_count = 0;
+  //
+  // barrier();
+
+  const uint triangle_count = counts.x;
+  const uint max_tiles_count = counts.y;
+  const uint triangle_index = gl_GlobalInvocationID.x;
+  if (triangle_index >= triangle_count) return;
+
+  //const light_map_tile_t tile = tiles[tile_index];
+  const packed_fast_triangle_t triangle = triangles[triangle_index];
+
+  const vec4 a = tile_points[triangle.points.x];
+  const vec4 b = tile_points[triangle.points.y];
+  const vec4 c = tile_points[triangle.points.z];
+
+  const vec4 dir = get_triangle_dir(a, b, c);
+
+  //const uint center_index = tile.tile_instances.x;
+
+  //const vec4 point = tile_points[center_index];
+
+  const vec4 camera_dir = camera.dir;
+  const vec4 camera_pos = camera.pos;
+
+  // должны быть в разные стороны
+  // *vec4(1.0f, 1.0f, 1.0f, 0.0f)
+  if (dot(dir, camera_dir) >= 0.0f) return;
+  //if (dot(point, camera_dir) >= 0.0f) return;
+
+  //const float approx_dist = (FAR_PLANE + 4.0f) * (FAR_PLANE + 4.0f);
+  //if (distance2(camera_pos, point) > approx_dist) return;
+
+  if (!triangle_frustum_test(a, b, c, frustum)) return;
+
+  // triangle.data[1] - количество тайлов всего, triangle.data[2] - есть ли среди них пентагон
+  // пентагон должен быть всегда последним
+  const uint new_tiles_count = triangle.data[1] - triangle.data[2];
+  const uint new_tiles_offset = atomicAdd(hexagon_indirect.y, new_tiles_count);
+
+  if (new_tiles_offset + new_tiles_count >= max_tiles_count) return;
+
+  for (uint i = 0; i < new_tiles_count; ++i) {
+    //tile_instances[12 + new_tiles_offset + i].index.x = triangles_tile_indices[triangle.data[0] + i];
+    tile_instances[12 + new_tiles_offset + i].index.x = get_accel_triangle_tile_index(triangle.data[0] + i);
+  }
+
+  if (bool(triangle.data[2])) {
+    const uint offset = atomicAdd(pentagon_indirect.y, 1);
+    //tile_instances[offset].index.x = triangles_tile_indices[triangle.data[0] + triangle.data[1] - 1];
+    tile_instances[offset].index.x = get_accel_triangle_tile_index(triangle.data[0] + triangle.data[1] - 1);
+  }
+
+  // uint index = 0;
+  // if (is_pentagon(tile)) index = atomicAdd(pentagon_indirect.y, 1);
+  // else index = atomicAdd(hexagon_indirect.y, 1);
+  //
+  // if (index >= max_tiles_count) return;
+  // tile_indices[index] = tile_index;
+
+  // мне необходимо два миллиона тайлов проверить на видимость
+  // крайне быстрый способ заключается в том что я могу легко продотать
+  // все тайлы и убрать те из них что смотрят в другую сторону
+  // вообще справедливо то что множество гексов останутся от кадра к кадру
+
+  // на 3-ем и 4-ом уровнях иерархической структуры лежат 1280 и 5120 треугольников соответственно
+  // на самом деле достаточно проверить лишь это количество треугольников
+  // в этом случае должно быть гораздо быстрее
+
+  // 5120 треугольников выдают по 100 тайлов каждый примерно (7 уровень детализации)
+  // tile_indices - это инстансный буфер, мы его можем расширить,
+  // например нам возможно потребуется посчитать uv координаты
+  // вообще uv координаты зависят не от тайла, а от точки,
+  // и для всех точек uv развертку можно посчитать заранее
+}
+
+float distance2(const vec4 a, const vec4 b) {
+  const vec4 dir = b-a;
+  return dot(dir, dir);
+}
+
+vec4 get_triangle_dir(const vec4 a, const vec4 b, const vec4 c) {
+  const vec4 ab = b-a;
+  const vec4 ac = c-a;
+  return vec4(cross(vec3(ab), vec3(ac)), 0.0f);
+}
+
+#define OUTSIDE 0
+#define INSIDE 1
+#define INTERSECT 2
+
+bool triangle_frustum_test(const vec4 a, const vec4 b, const vec4 c, const frustum_t frustum) {
+  const vec4 center = (a + b + c) / 3.0f;
+  const vec4 extents = vec4(triangle_size, triangle_size, triangle_size, 0.0f);
+
+  uint result = INSIDE;
+  for (uint i = 0; i < 6; ++i) {
+    // const float dist = dot(center.xyz, frustum.planes[i].xyz) + frustum.planes[i].w + triangle_size;
+    // if (dist < 0.0f) return false;
+
+    const vec4 plane = vec4(frustum.planes[i][0], frustum.planes[i][1], frustum.planes[i][2], 0.0f); //frustum.planes[i] * simd::vec4(1.0f, 1.0f, 1.0f, 0.0f);
+    const float p3 = frustum.planes[i][3];
+
+    const float d = dot(center,      plane);
+
+    const float r = dot(extents, abs(plane));
+
+    const float d_p_r = d + r;
+    const float d_m_r = d - r;
+
+    //frustumPlane.w
+    if (d_p_r < -p3) {
+      result = OUTSIDE;
+      break;
+    } else if (d_m_r < -p3) result = INTERSECT;
+  }
+
+  return result != OUTSIDE;
+}
+
+uint get_accel_triangle_tile_index(const uint index) {
+  const uint vec4_index = index / 4;
+  const uint vec4_offset = index % 4;
+  return triangles_tile_indices[vec4_index][vec4_offset];
+}

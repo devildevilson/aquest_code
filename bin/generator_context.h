@@ -75,6 +75,7 @@ namespace devils_engine {
       province_neighbour();
       province_neighbour(const bool across_water, const uint32_t &index);
       province_neighbour(const province_neighbour &another);
+      province_neighbour(const uint32_t &native);
       bool across_water() const;
       uint32_t index() const;
       

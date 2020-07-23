@@ -9,6 +9,7 @@
 #include "utils/ecs.h"
 #include "utils/thread_pool.h"
 #include "utils/random_engine.h"
+#include "utils/utility.h"
 //#include "utils/perlin.h"
 #include "FastNoise.h"
 
@@ -22,10 +23,14 @@
 #include "figures.h"
 #include "camera.h"
 #include "map.h"
-#include "map_generator.h"
-#include "map_generators.h"
-#include "generator_system.h"
-#include "generator_context.h"
+// #include "map_generator.h"
+// #include "map_generators.h"
+// #include "generator_system.h"
+#include "map_generators2.h"
+#include "generator_system2.h"
+#include "generator_container.h"
+//#include "generator_context.h"
+#include "generator_context2.h"
 #include "interface_context.h"
 #include "overlay.h"
 
@@ -47,8 +52,9 @@ namespace devils_engine {
     utils::typeless_container container;
     render::container* graphics_container;
     core::map* map;
-    systems::generator<map::generator_context>* map_generator;
+//     systems::generator<map::generator_context>* map_generator;
     interface::context* context;
+    map::generator::container* map_container;
 
     system_container_t();
     ~system_container_t();
@@ -66,22 +72,30 @@ namespace devils_engine {
   
   void keys_setup();
   void mouse_input(yacs::entity* ent, const size_t &time);
+  void key_input(const size_t &time);
   void zoom_input(yacs::entity* ent);
   uint32_t cast_mouse_ray();
-  void next_nk_frame();
+  void next_nk_frame(const size_t &time);
 
   void create_render_system(system_container_t &systems);
   void create_render_stages(system_container_t &systems);
   void create_map_container(system_container_t &systems);
-  void create_map_generator(system_container_t &systems, dt::thread_pool* pool, map::generator_context* context);
+//   void create_map_generator(system_container_t &systems, dt::thread_pool* pool, map::generator_context* context);
+//   std::vector<systems::generator<map::generator_context>*> create_map_generators(system_container_t &systems, dt::thread_pool* pool, map::generator_context* context);
 
   uint32_t sphere_frustum_test(const glm::vec3 &pos, const float &radius, const utils::frustum &fru);
-  void map_frustum_test(const map::container* map, const glm::mat4 &frustum, std::vector<uint32_t> &indices);
+//   void map_frustum_test(const map::container* map, const glm::mat4 &frustum, std::vector<uint32_t> &indices);
   void map_triangle_test(dt::thread_pool* pool, const map::container* map, const utils::frustum &fru, const uint32_t &triangle_index, std::atomic<uint32_t> &counter);
   void map_triangle_test(const map::container* map, const utils::frustum &fru, const uint32_t &triangle_index, std::atomic<uint32_t> &counter);
   void map_triangle_add(const map::container* map, const uint32_t &triangle_index, std::atomic<uint32_t> &counter);
   void map_triangle_add2(const map::container* map, const uint32_t &triangle_index, std::mutex &mutex, std::unordered_set<uint32_t> &unique_tiles, std::vector<uint32_t> &tiles_array);
-  void map_triangle_test2(dt::thread_pool* pool, const map::container* map, const utils::frustum &fru, const uint32_t &triangle_index, std::atomic<uint32_t> &counter);
+//   void map_triangle_test2(dt::thread_pool* pool, const map::container* map, const utils::frustum &fru, const uint32_t &triangle_index, std::atomic<uint32_t> &counter);
+  
+  void set_default_values(sol::state &lua, sol::table &table);
+  void rendering_mode(const map::generator::container* cont, core::map* map, const uint32_t &property, const uint32_t &render_mode, const uint32_t &water_mode);
+  void border_points_test(const std::vector<glm::vec4> &array);
+  void find_border_points(const map::generator::container* container, const core::map* map, const sol::table &table);
+  
 
   void sync(utils::frame_time &frame_time, const size_t &time);
   

@@ -13,7 +13,8 @@ namespace devils_engine {
       biomes(nullptr),
       provinces(nullptr),
       faiths(nullptr),
-      cultures(nullptr)
+      cultures(nullptr),
+      s(status::initial)
     {
       const uint32_t accel_triangles_count = tri_count_d(accel_struct_detail_level);
       const uint32_t tiles_count = hex_count_d(detail_level);
@@ -52,6 +53,19 @@ namespace devils_engine {
                                .binding(3, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_ALL)
                                .binding(4, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_ALL)
                                .create(TILES_DATA_LAYOUT_NAME);
+      }
+      
+      auto pool = device->descriptorPool(DEFAULT_DESCRIPTOR_POOL_NAME);
+      {
+        yavf::DescriptorMaker dm(device);
+        tiles_set = dm.layout(tiles_data_layout).create(pool)[0];
+        size_t index = tiles_set->add({tiles, 0, tiles->info().size, 0, 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER});
+                       tiles_set->add({biomes, 0, biomes->info().size, 0, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER});
+                       tiles_set->add({points, 0, points->info().size, 0, 2, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER});
+                       tiles_set->add({accel_triangles, 0, accel_triangles->info().size, 0, 3, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER});
+                       tiles_set->add({tile_indices, 0, tile_indices->info().size, 0, 4, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER});
+        tiles_set->update();
+        tiles->setDescriptor(tiles_set, index);
       }
     }
     
@@ -116,7 +130,9 @@ namespace devils_engine {
         }
       }
       
-      ASSERT(current_tri_index != UINT32_MAX); // по идее это условие всегда должно выполняться
+      //ASSERT(current_tri_index != UINT32_MAX); // по идее это условие всегда должно выполняться
+      // у нас еще не создана карта
+      if (current_tri_index == UINT32_MAX) return UINT32_MAX;
       
       while (current_detail_level <= detail_level) {
         const triangle &tri = triangles[current_tri_index];
@@ -374,15 +390,22 @@ namespace devils_engine {
 //       }
       
       {
-        yavf::DescriptorMaker dm(device);
-        auto desc = dm.layout(tiles_data_layout).create(pool)[0];
-        size_t index = desc->add({tiles, 0, tiles->info().size, 0, 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER});
-                       desc->add({biomes, 0, biomes->info().size, 0, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER});
-                       desc->add({points, 0, points->info().size, 0, 2, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER});
-                       desc->add({accel_triangles, 0, accel_triangles->info().size, 0, 3, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER});
-                       desc->add({tile_indices, 0, tile_indices->info().size, 0, 4, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER});
-        desc->update();
-        tiles->setDescriptor(desc, index);
+        tiles_set->at(0) = {tiles, 0, tiles->info().size, 0, 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER};
+        tiles_set->at(1) = {biomes, 0, biomes->info().size, 0, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER};
+        tiles_set->at(2) = {points, 0, points->info().size, 0, 2, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER};
+        tiles_set->at(3) = {accel_triangles, 0, accel_triangles->info().size, 0, 3, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER};
+        tiles_set->at(4) = {tile_indices, 0, tile_indices->info().size, 0, 4, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER};
+        tiles_set->update();
+        
+//         yavf::DescriptorMaker dm(device);
+//         auto desc = dm.layout(tiles_data_layout).create(pool)[0];
+//         size_t index = desc->add({tiles, 0, tiles->info().size, 0, 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER});
+//                        desc->add({biomes, 0, biomes->info().size, 0, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER});
+//                        desc->add({points, 0, points->info().size, 0, 2, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER});
+//                        desc->add({accel_triangles, 0, accel_triangles->info().size, 0, 3, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER});
+//                        desc->add({tile_indices, 0, tile_indices->info().size, 0, 4, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER});
+//         desc->update();
+//         tiles->setDescriptor(desc, index);
       }
     }
     
@@ -399,6 +422,14 @@ namespace devils_engine {
     void map::set_tile_height(const uint32_t &tile_index, const float &tile_hight) {
       auto tiles_arr = reinterpret_cast<render::light_map_tile_t*>(tiles->ptr());
       tiles_arr[tile_index].tile_indices.w = glm::floatBitsToUint(tile_hight);
+    }
+    
+    enum map::status map::status() const {
+      return s;
+    }
+    
+    void map::set_status(const enum map::status s) {
+      this->s = s;
     }
   }
 }

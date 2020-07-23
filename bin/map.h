@@ -17,6 +17,7 @@
 namespace yavf {
   class Buffer;
   class Device;
+  class DescriptorSet;
 }
 
 constexpr size_t power4(const uint32_t &pow) {
@@ -34,6 +35,11 @@ namespace devils_engine {
   
   namespace core {
     struct map {
+      enum class status {
+        initial,
+        valid
+      };
+      
       // уровень детализации карты лучше задавать через константы
       static const uint32_t detail_level = 7;
       static const uint32_t accel_struct_detail_level = 4;
@@ -82,8 +88,11 @@ namespace devils_engine {
       yavf::Buffer* provinces;
       yavf::Buffer* faiths;
       yavf::Buffer* cultures;
+      yavf::DescriptorSet* tiles_set;
       std::vector<triangle> triangles;
       float max_triangle_size; // 23.8457f
+      
+      status s;
       
       struct create_info {
         yavf::Device* device;
@@ -111,6 +120,9 @@ namespace devils_engine {
       void set_tile_biom(const uint32_t &tile_index, const uint32_t &biom_index);
       void set_tile_tectonic_plate(const uint32_t &tile_index, const uint32_t &tectonic_plate_index);
       void set_tile_height(const uint32_t &tile_index, const float &tile_hight);
+      
+      enum status status() const;
+      void set_status(const enum status s);
     };
   }
 }

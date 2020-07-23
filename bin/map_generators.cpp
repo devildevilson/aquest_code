@@ -109,6 +109,7 @@ namespace devils_engine {
     }
     
     province_neighbour::province_neighbour(const province_neighbour &another) : container(another.container) {}
+    province_neighbour::province_neighbour(const uint32_t &native) : container(native) {}
     
     bool province_neighbour::across_water() const {
       const uint32_t mask = uint32_t(1) << 31;

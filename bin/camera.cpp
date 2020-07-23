@@ -31,7 +31,7 @@ namespace devils_engine {
   }
   
   namespace components {
-    camera::camera(yacs::entity* ent) : m_ent(ent), m_zoom(min_zoom), m_front(glm::normalize(glm::vec3(-1.0f, 0.0f, 0.0f))) {}
+    camera::camera(yacs::entity* ent) : m_ent(ent), m_zoom(max_zoom), m_front(glm::normalize(glm::vec3(-1.0f, 0.0f, 0.0f))) {}
     void camera::move(const float &horisontal_angle, const float &vertical_angle) {
 //       m_horisontal_angle += horisontal_angle;
 //       m_vertical_angle += vertical_angle;

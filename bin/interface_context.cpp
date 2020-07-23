@@ -135,6 +135,7 @@ namespace devils_engine {
       nlohmann::json j;
       {
         std::fstream file(global::root_directory()+"fonts/fonts.json");
+        ASSERT(file);
         file >> j;
       }
       
@@ -274,6 +275,7 @@ namespace devils_engine {
       nlohmann::json j;
       {
         std::fstream file(global::root_directory()+"fonts/fonts.json");
+        ASSERT(file);
         file >> j;
       }
       

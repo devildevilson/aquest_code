@@ -707,7 +707,7 @@ namespace yavf {
     return *this;
   }
 
-  PipelineMaker & PipelineMaker::addData(const size_t &size, void* data) {
+  PipelineMaker & PipelineMaker::addData(const size_t &size, const void* data) {
     specs.back().dataSize = size;
     specs.back().data = data;
 

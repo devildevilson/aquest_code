@@ -33,6 +33,13 @@
 //
 // };
 
+// гекс состоит из треугольников
+const vec2 uv_borders[] = {
+  vec2(0.0f, 0.0f),
+  vec2(1.0f, 0.0f),
+  vec2(0.5f, 0.5f)
+};
+
 layout(set = 0, binding = 0) uniform Camera {
   mat4 viewproj;
   mat4 view;

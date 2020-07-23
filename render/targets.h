@@ -16,6 +16,8 @@ namespace devils_engine {
     struct buffers : public target {
       yavf::Buffer* uniform;
       yavf::Buffer* matrices;
+      yavf::Buffer* border_buffer;
+      yavf::Buffer* border_types;
 
       buffers(yavf::Device* device);
       ~buffers();

@@ -166,7 +166,7 @@ namespace yavf {
     //PipelineMaker & addShader(const VkShaderStageFlagBits &flag, const std::string &path, const char* name = nullptr);
     PipelineMaker & addShader(const VkShaderStageFlagBits &flag, const VkShaderModule &module, const char* name = nullptr);
     PipelineMaker & addSpecializationEntry(const uint32_t &constantID, const uint32_t &offset, const size_t &size);
-    PipelineMaker & addData(const size_t &size, void* data);
+    yavf::PipelineMaker& addData(const size_t& size, const void* data);
 
     PipelineMaker & vertexBinding(const uint32_t &binding, const uint32_t &stride, const VkVertexInputRate &rate = VK_VERTEX_INPUT_RATE_VERTEX);
     PipelineMaker & vertexAttribute(const uint32_t &location, const uint32_t &binding, const VkFormat &format, const uint32_t &offset);
@@ -224,7 +224,7 @@ namespace yavf {
     struct ShaderSpecialization {
       std::vector<VkSpecializationMapEntry> entries;
       size_t dataSize;
-      void* data;
+      const void* data;
     };
 
     bool tessellationState = false;

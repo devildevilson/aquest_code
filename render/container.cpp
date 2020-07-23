@@ -58,7 +58,9 @@ namespace devils_engine {
 
     yavf::Device* container::create_device() {
       const std::vector<const char*> deviceExtensions = {
-        VK_KHR_SWAPCHAIN_EXTENSION_NAME
+        VK_KHR_SWAPCHAIN_EXTENSION_NAME,
+//         "VK_KHR_8bit_storage",
+//         "VK_KHR_storage_buffer_storage_class",
       };
 
       VkSurfaceKHR s = window->surface.handle;
@@ -111,6 +113,7 @@ namespace devils_engine {
 
       VkPhysicalDeviceProperties deviceProperties;
       choosen.getProperties(&deviceProperties);
+      if (choosen.handle() == VK_NULL_HANDLE) throw std::runtime_error("choosen.handle() == VK_NULL_HANDLE");
       //Global::console()->printf("Using device: %s", deviceProperties.deviceName);
       std::cout << "Using device: " << deviceProperties.deviceName << '\n';
 

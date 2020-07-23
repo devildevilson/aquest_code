@@ -1,0 +1,108 @@
+#version 450
+
+#extension GL_GOOGLE_include_directive : enable
+#include "../render/shared_structures.h"
+#include "../utils/shared_mathematical_constant.h"
+
+struct border_data {
+  vec4 points[2];
+  vec4 dirs[2];
+};
+
+layout(set = 0, binding = 0) uniform Camera {
+  mat4 viewproj;
+  mat4 view;
+  vec4 pos;
+  vec4 dir;
+  uvec4 dim;
+} camera;
+
+layout(std140, set = 1, binding = 0) readonly buffer tiles_buffer {
+  light_map_tile_t tiles[];
+};
+
+layout(std140, set = 1, binding = 2) readonly buffer tile_points_buffer {
+  vec4 tile_points[];
+};
+
+layout(std140, set = 2, binding = 0) buffer tile_indirect_buffer {
+  uvec4 border_indirect;
+  uvec4 counts;
+  // сюда можно засунуть фрустум
+  frustum_t frustum;
+};
+
+layout(std140, set = 2, binding = 1) buffer border_indices_buffer {
+  uvec4 border_indices[];
+};
+
+layout(std140, set = 3, binding = 0) readonly buffer border_data_buffer {
+  border_data border_datas[];
+};
+
+bool triangle_frustum_test(const vec4 a, const vec4 b, const vec4 c, const frustum_t frustum);
+
+#define FAR_PLANE 256.0f
+#define WORK_GROUP 256
+
+layout(local_size_x = WORK_GROUP, local_size_y = 1, local_size_z = 1) in;
+
+void main() {
+  const uint borders_count = counts.x;
+  const uint border_index = gl_GlobalInvocationID.x;
+  //const uint border_index = gl_LocalInvocationIndex;
+  if (border_index >= borders_count) return;
+
+  const border_data data = border_datas[border_index];
+  const vec4 point_a = data.points[0];
+  const vec4 point_b = data.points[1];
+  const uint tile_index = floatBitsToUint(data.dirs[0].w);
+  const uint point_c_index = tiles[tile_index].tile_indices.x;
+  const vec4 point_c = tile_points[point_c_index];
+
+  const bool test = triangle_frustum_test(point_a, point_b, point_c, frustum);
+  if (test) {
+    const uint new_index = atomicAdd(border_indirect.x, 6);
+    for (uint i = 0; i < 6; ++i) {
+      const uint final_index = new_index+i;
+      const uint vec4_index = final_index / 4;
+      const uint slot_index = final_index % 4;
+
+      border_indices[vec4_index][slot_index] = border_index*6+i;
+    }
+  }
+}
+
+#define OUTSIDE 0
+#define INSIDE 1
+#define INTERSECT 2
+
+bool triangle_frustum_test(const vec4 a, const vec4 b, const vec4 c, const frustum_t frustum) {
+  const vec4 center = (a + b + c) / 3.0f;
+  const vec4 extents = max(abs(center - a), max(abs(center - b), abs(center - c)));
+  //const vec4 extents = vec4(triangle_size, triangle_size, triangle_size, 0.0f);
+
+  uint result = INSIDE;
+  for (uint i = 0; i < 6; ++i) {
+    // const float dist = dot(center.xyz, frustum.planes[i].xyz) + frustum.planes[i].w + triangle_size;
+    // if (dist < 0.0f) return false;
+
+    const vec4 plane = vec4(frustum.planes[i][0], frustum.planes[i][1], frustum.planes[i][2], 0.0f); //frustum.planes[i] * simd::vec4(1.0f, 1.0f, 1.0f, 0.0f);
+    const float p3 = frustum.planes[i][3];
+
+    const float d = dot(center,      plane);
+
+    const float r = dot(extents, abs(plane));
+
+    const float d_p_r = d + r;
+    const float d_m_r = d - r;
+
+    //frustumPlane.w
+    if (d_p_r < -p3) {
+      result = OUTSIDE;
+      break;
+    } else if (d_m_r < -p3) result = INTERSECT;
+  }
+
+  return result != OUTSIDE;
+}

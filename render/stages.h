@@ -88,6 +88,39 @@ namespace devils_engine {
       yavf::Buffer* tiles_indices;
       yavf::Pipeline pipe;
     };
+    
+    class tile_borders_optimizer : public stage {
+    public:
+      static const uint32_t work_group_size = 256;
+      
+      struct indirect_buffer {
+        VkDrawIndirectCommand border_command;
+        glm::uvec4 data;
+        utils::frustum frustum;
+      };
+      
+      static_assert(sizeof(indirect_buffer) % (sizeof(uint32_t)*4) == 0);
+      
+      struct create_info {
+        yavf::Device* device;
+      };
+      tile_borders_optimizer(const create_info &info);
+      ~tile_borders_optimizer();
+      void begin() override;
+      void proccess(context* ctx) override;
+      void clear() override;
+      
+      yavf::Buffer* indirect_buffer() const;
+      yavf::Buffer* vertices_buffer() const;
+      
+      void set_borders_count(const uint32_t &count);
+    private:
+      yavf::Device* device;
+      yavf::Buffer* indirect;
+      yavf::Buffer* borders_indices;
+      yavf::DescriptorSet* set;
+      yavf::Pipeline pipe;
+    };
 
     class tile_render : public stage, public pipeline_stage {
     public:
@@ -103,6 +136,7 @@ namespace devils_engine {
       void clear() override;
 
       void recreate_pipelines(const game::image_resources_t* resource) override;
+      void change_rendering_mode(const uint32_t &render_mode, const uint32_t &water_mode, const uint32_t &render_slot, const uint32_t &water_slot, const glm::vec3 &color);
       void add(const uint32_t &tile_index); // кажется только индекс тайла нам нужен
       
       yavf::Buffer* vertex_indices() const;
@@ -120,8 +154,8 @@ namespace devils_engine {
     public:
       struct create_info {
         yavf::Device* device;
-        tile_optimizer* opt;
-        tile_render* render;
+        tile_borders_optimizer* opt;
+//         tile_render* render;
       };
       tile_border_render(const create_info &info);
       ~tile_border_render();
@@ -134,8 +168,8 @@ namespace devils_engine {
 //       void add(const uint32_t &tile_index); // кажется только индекс тайла нам нужен
     private:
       yavf::Device* device;
-      tile_optimizer* opt;
-      tile_render* render;
+      tile_borders_optimizer* opt;
+//       tile_render* render;
       yavf::Pipeline pipe;
     };
     

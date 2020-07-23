@@ -57,6 +57,7 @@ include_directories(
   include/json/single_include/
   include/stb/
   include/whereami/src/
+  include/fmt/include/
 )
 link_directories(
   ${CMAKE_CURRENT_BINARY_DIR}
@@ -143,6 +144,9 @@ file(GLOB_RECURSE GLSL_SOURCE_FILES
   raw_shaders/tiles_borders.frag
   raw_shaders/gui.frag
   raw_shaders/gui.vert
+  raw_shaders/borders.comp
+  raw_shaders/borders.vert
+  raw_shaders/borders.frag
 )
 
 foreach(GLSL ${GLSL_SOURCE_FILES})
@@ -176,6 +180,8 @@ set(SRC_LIST
   #utils/perlin.cpp
   include/FastNoise/FastNoise.cpp
   include/whereami/src/whereami.c
+  include/fmt/src/format.cc
+  include/fmt/src/os.cc
 )
 
 set(HDR_LIST
@@ -250,9 +256,10 @@ set(SRC_LIST
   bin/main.cpp
   bin/helper.cpp
   bin/camera.cpp
-#   bin/generator_system.cpp
-  bin/map_generators.cpp
+  bin/generator_system2.cpp
+  bin/map_generators2.cpp
   bin/map.cpp
+  bin/generator_container.cpp
   #include/lanes/src/deep.c
   #include/lanes/src/universe.c
   #include/lanes/src/compat.c
@@ -265,10 +272,11 @@ set(HDR_LIST
   bin/helper.h
   bin/figures.h
   bin/camera.h
-  bin/generator_system.h
-  bin/map_generators.h
+  bin/generator_system2.h
+  bin/map_generators2.h
   bin/map.h
-  bin/generator_context.h
+  bin/generator_context2.h
+  bin/generator_container.h
   bin/map_generator.h
 )
 add_executable(${TARGET_NAME} ${SRC_LIST} ${HDR_LIST})

@@ -3,6 +3,7 @@
 #include "globals.h"
 #include "shared_time_constant.h"
 #include <cstring>
+#include <iostream>
 
 namespace devils_engine {
   namespace input {
@@ -359,7 +360,7 @@ namespace devils_engine {
     };
 
     event_data::event_data(const utils::id &id) : id(id), time(0) {}
-    key_data::key_data() : data(nullptr), event(release) {}
+    key_data::key_data() : data(nullptr), event(release), state(state_initial), state_time(0) {}
     data::data() : interface_focus(false), mouse_wheel(0.0f), current_text(0) {
       memset(text, 0, sizeof(uint32_t)*text_memory_size);
     }
@@ -414,10 +415,100 @@ namespace devils_engine {
     }
 
     void update_time(const size_t &time) {
-      const auto &container = global::get<data>()->key_events;
+      auto container = global::get<data>()->key_events.container;
       for (size_t i = 0; i < key_count; ++i) {
-        if (container.container[i].data == nullptr) continue;
-        container.container[i].data->time += time;
+        container[i].state_time += time;
+//         if (container[i].event != container[i].prev_event) {
+          switch (container[i].state) {
+            case state_initial: {
+              const bool press = container[i].event != release;
+              container[i].state = press ? state_press : container[i].state;
+              container[i].state_time = press ? 0 : container[i].state_time;
+              break;
+            }
+            
+            case state_press: {
+//               std::cout << "pressed " << key_names[i] << "\n";
+              const bool press = container[i].event != release;
+              if (press && container[i].state_time >= long_press_time) {
+                container[i].state = state_long_press;
+                container[i].state_time = 0;
+                break;
+              }
+              
+              container[i].state = !press ? state_click : container[i].state;
+              container[i].state_time = !press ? 0 : container[i].state_time;
+              break;
+            }
+            
+            case state_click: {
+//               std::cout << "clicked " << key_names[i] << "\n";
+              const bool press = container[i].event != release;
+              if (press && container[i].state_time < double_press_time) {
+                container[i].state = state_double_press;
+                container[i].state_time = 0;
+                break;
+              }
+              
+//               container[i].state = press ? state_press : container[i].state;
+//               container[i].state_time = press ? 0 : container[i].state_time;
+              if (container[i].state_time != 0) {
+                container[i].state = state_initial;
+                container[i].state_time = 0;
+              }
+              break;
+            }
+            
+            case state_double_press: {
+//               std::cout << "double pressed " << key_names[i] << "\n";
+              const bool press = container[i].event != release;
+              if (press && container[i].state_time >= long_press_time) {
+                container[i].state = state_long_press;
+                container[i].state_time = 0;
+                break;
+              }
+              
+              container[i].state = !press ? state_double_click : container[i].state;
+              container[i].state_time = !press ? 0 : container[i].state_time;
+              break;
+            }
+            
+            case state_double_click: {
+//               std::cout << "double clicked " << key_names[i] << "\n";
+//               const bool press = container[i].event != release;
+//               container[i].state = press ? state_press : container[i].state;
+//               container[i].state_time = press ? 0 : container[i].state_time;
+              if (container[i].state_time != 0) {
+                container[i].state = state_initial;
+                container[i].state_time = 0;
+              }
+              break;
+            }
+            
+            case state_long_press: {
+//               std::cout << "long pressed " << key_names[i] << "\n";
+              const bool press = container[i].event != release;
+              container[i].state = !press ? state_long_click : container[i].state;
+              container[i].state_time = !press ? 0 : container[i].state_time;
+              break;
+            }
+            
+            case state_long_click: {
+//               std::cout << "long clicked " << key_names[i] << "\n";
+//               const bool press = container[i].event != release;
+//               container[i].state = press ? state_press : container[i].state;
+//               container[i].state_time = press ? 0 : container[i].state_time;
+              if (container[i].state_time != 0) {
+                container[i].state = state_initial;
+                container[i].state_time = 0;
+              }
+              break;
+            }
+          }
+//         }
+        
+        if (container[i].data == nullptr) continue;
+        container[i].data->time += time;
       }
     }
 
@@ -447,6 +538,20 @@ namespace devils_engine {
       if (uint32_t(key) >= container_size) return nullptr;
       const auto &container = global::get<data>()->key_events;
       return container.container[key].data;
+    }
+    
+    bool check_key(const int &key, const uint32_t &states) {
+      if (uint32_t(key) >= container_size) return false;
+      const auto container = global::get<data>()->key_events.container;
+      return (container[key].state & states) != 0;
+    }
+    
+    bool timed_check_key(const int &key, const uint32_t &states, const size_t &wait, const size_t &period, const size_t &frame_time) {
+      if (uint32_t(key) >= container_size) return false;
+      const auto container = global::get<data>()->key_events.container;
+      if (container[key].state_time < wait) return false;
+      if (container[key].state_time % period >= frame_time) return false;
+      return (container[key].state & states) != 0;
     }
   }
 }

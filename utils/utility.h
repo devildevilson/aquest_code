@@ -23,5 +23,7 @@
 #define PRINT_VEC2(name, vec) std::cout << name << " x: " << vec.x << " y: " << vec.y << "\n";
 #define PRINT_VAR(name, var) std::cout << name << ": " << var << "\n";
 #define PRINT(var) std::cout << var << "\n";
+#define DELETE_PTR(ptr) delete ptr; ptr = nullptr;
+#define DELETE_ARR(arr) delete [] arr; arr = nullptr;
 
 #endif

@@ -13,11 +13,23 @@ namespace devils_engine {
     const size_t key_count = 350;
     const size_t container_size = key_count;
     extern const char* key_names[key_count];
+    const size_t long_press_time = ONE_SECOND / 3;
+    const size_t double_press_time = ONE_SECOND / 3;
 
     enum type {
       release,
       press,
       repeated
+    };
+    
+    enum state {
+      state_initial      = (1 << 0),
+      state_press        = (1 << 1),
+      state_click        = (1 << 2),
+      state_double_press = (1 << 3),
+      state_double_click = (1 << 4),
+      state_long_press   = (1 << 5),
+      state_long_click   = (1 << 6)
     };
 
     struct event_data {
@@ -31,7 +43,10 @@ namespace devils_engine {
 //       utils::id id;
 //       size_t time;
       event_data* data;
+//       type prev_event;
       type event;
+      enum state state;
+      size_t state_time;
       // size_t next; // может ли быть на одной копке несколько эвентов? вот у эвента может быть несколько кнопок
       key_data();
     };
@@ -79,6 +94,8 @@ namespace devils_engine {
     const char* get_key_name(const uint32_t &key);
     void set_key(const int &key, const utils::id &id);
     event_data* get_event(const int &key);
+    bool check_key(const int &key, const uint32_t &states);
+    bool timed_check_key(const int &key, const uint32_t &states, const size_t &wait, const size_t &period, const size_t &frame_time);
   }
 }
 

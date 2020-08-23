@@ -241,7 +241,7 @@ namespace devils_engine {
       
 #define LOCAL_EPSILON EPSILON
 
-      //if (det > -EPSILON) return false;
+//       if (det > -EPSILON) return false;
       if (det < LOCAL_EPSILON) return false;
 //       const glm::vec3 ray_pos_dir = glm::vec3(-ray.pos);
 //       const glm::vec3 pvec2 = glm::cross(ray_pos_dir, v0v2);
@@ -282,10 +282,11 @@ namespace devils_engine {
       auto points_arr = reinterpret_cast<glm::vec4*>(points->ptr());
       const auto &tile_data = render::unpack_data(tiles_arr[tile_index]);
       const uint32_t points_count = render::is_pentagon(tile_data) ? 5 : 6;
-      const uint32_t point_a_index = tile_data.points[0];
-      for (uint32_t i = 1; i < points_count-1; ++i) {
+      //const uint32_t point_a_index = tile_data.points[0];
+      const uint32_t point_a_index = tile_data.center;
+      for (uint32_t i = 0; i < points_count; ++i) {
         const uint32_t point_b_index = tile_data.points[i];
-        const uint32_t point_c_index = tile_data.points[i+1];
+        const uint32_t point_c_index = tile_data.points[(i+1)%points_count];
 
         const bool ret = intersect_tri(points_arr[point_a_index], points_arr[point_b_index], points_arr[point_c_index], ray);
         if (ret) return true;
@@ -430,6 +431,18 @@ namespace devils_engine {
     
     void map::set_status(const enum map::status s) {
       this->s = s;
+    }
+    
+    size_t map::memory_size() const {
+      size_t mem = 0;
+      mem += points->info().size;
+      mem += tiles->info().size;
+      mem += accel_triangles->info().size;
+      mem += tile_indices->info().size;
+      mem += biomes->info().size;
+      mem += triangles.size() * sizeof(triangles[0]);
+      mem += sizeof(*this);
+      return mem;
     }
   }
 }

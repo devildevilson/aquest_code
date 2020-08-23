@@ -13,6 +13,10 @@
 // то есть нужно четко обозначить персонажа и титулы
 // и тогда можно легко это дело сериализовать
 
+// скорее всего асинхроно запустить генерацию из главного треда у меня не выйдет
+// поэтому придется убрать весь мультитрединг отсюда
+// может ли он мне вообще пригодиться в игре?
+
 namespace devils_engine {
   namespace map {
     namespace debug {
@@ -46,6 +50,9 @@ namespace devils_engine {
             province_index,
             culture_id,
             country_index,
+            test_value_uint1,
+            test_value_uint2,
+            test_value_uint3,
             
             count
           };
@@ -88,6 +95,7 @@ namespace devils_engine {
         namespace province {
           enum values {
             country_index,
+            title_index,
             count
           };
         }
@@ -121,6 +129,9 @@ namespace devils_engine {
     void calculating_province_neighbours(generator::context* ctx, sol::table &table);
     void generate_cultures(generator::context* ctx, sol::table &table);
     void generate_countries(generator::context* ctx, sol::table &table);
+    void generate_titles(generator::context* ctx, sol::table &table);
+    void generate_characters(generator::context* ctx, sol::table &table);
+    void generate_tech_level(generator::context* ctx, sol::table &table);
   }
 }
 

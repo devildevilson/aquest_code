@@ -5,9 +5,9 @@
 #include <atomic>
 
 namespace devils_engine {
-  namespace map {
-    struct core;
-  }
+//   namespace map {
+//     struct core;
+//   }
   
   namespace systems {
     class generator {

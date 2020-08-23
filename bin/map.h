@@ -123,6 +123,7 @@ namespace devils_engine {
       
       enum status status() const;
       void set_status(const enum status s);
+      size_t memory_size() const;
     };
   }
 }

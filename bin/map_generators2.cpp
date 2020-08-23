@@ -40,6 +40,7 @@ namespace devils_engine {
       generator_pair("calculating province neighbours", calculating_province_neighbours),
       generator_pair("generating cultures", generate_cultures),
       generator_pair("generating countries", generate_countries),
+      generator_pair("generating titles", generate_titles)
     };
     
     province_neighbour::province_neighbour() : container(UINT32_MAX) {}
@@ -1870,7 +1871,10 @@ namespace devils_engine {
       }
       
       // куда сложить ответ?
+      table["tiles"].get_or_create<sol::table>();
       for (size_t i = 0; i < ground_distance.size(); ++i) {
+        table["tiles"][i].get_or_create<sol::table>();
+        table["tiles"][i][key].get_or_create<sol::table>();
         table["tiles"][i][key]["index"] = ground_distance[i].first;
         table["tiles"][i][key]["dist"] = ground_distance[i].second;
       }
@@ -2406,7 +2410,7 @@ namespace devils_engine {
         if (province_tiles[i].size() < province_tiles_max) continue;
         
         //const uint32_t new_provinces_count = (province_tiles[i].size() < province_tiles_avg * 2) ? (province_tiles[i].size() / province_tiles_min) : (province_tiles[i].size() / province_tiles_avg);
-        const uint32_t new_provinces_count = (province_tiles[i].size() / province_tiles_avg);
+        const uint32_t new_provinces_count = std::ceil(float(province_tiles[i].size()) / float(province_tiles_avg));
         ASSERT(new_provinces_count > 0);
         if (new_provinces_count == 1) continue;
         
@@ -2465,7 +2469,7 @@ namespace devils_engine {
               dist_to_water_accum += dist_to_water;
             }
             
-            if (dist_to_water_accum <= n_count) continue;
+//             if (dist_to_water_accum <= n_count) continue;
             if (!found) continue;
             
             tile_index = current_tile_index;
@@ -2526,7 +2530,7 @@ namespace devils_engine {
               dist_to_water_accum += dist_to_water;
             }
             
-            if (dist_to_water_accum <= n_count) continue;
+//             if (dist_to_water_accum <= n_count) continue;
             if (!found) continue;
             
             tile_index = current_tile_index;
@@ -2798,13 +2802,13 @@ namespace devils_engine {
             const uint32_t n_index = tile_data.neighbours[j];
             if (unique_tiles.find(n_index) != unique_tiles.end()) continue;
             
-            const float t = ctx->container->get_data<float>(debug::entities::tile, current_tile_index, debug::properties::tile::heat);
+            const float t = ctx->container->get_data<float>(debug::entities::tile, n_index, debug::properties::tile::heat);
             if (t <= 0.15f) continue;
             
-            const float height = ctx->container->get_data<float>(debug::entities::tile, current_tile_index, debug::properties::tile::elevation);
+            const float height = ctx->container->get_data<float>(debug::entities::tile, n_index, debug::properties::tile::elevation);
             if (height < 0.0f) continue;
             
-            ASSERT(ctx->container->get_data<uint32_t>(debug::entities::tile, current_tile_index, debug::properties::tile::province_index) == UINT32_MAX);
+            ASSERT(ctx->container->get_data<uint32_t>(debug::entities::tile, n_index, debug::properties::tile::province_index) == UINT32_MAX);
             
             free_area_tile[current_free_area].push_back(n_index);
             tile_free_area.push_back(std::make_pair(current_free_area, n_index));
@@ -2828,6 +2832,7 @@ namespace devils_engine {
       const uint32_t province_tiles_avg = float(good_tiles_count) / float(ctx->container->entities_count(debug::entities::province));
       const float province_tiles_ratio = 0.75f;
       const uint32_t province_tiles_min = province_tiles_ratio * province_tiles_avg;
+      const uint32_t province_tiles_max = (2.0f - province_tiles_ratio) * province_tiles_avg;
 //       const uint32_t province_tiles_max = (2.0f - province_tiles_ratio) * province_tiles_avg;
 //       ASSERT(province_tiles_avg == 38);
       
@@ -2892,7 +2897,7 @@ namespace devils_engine {
               const uint32_t n_index = tile_data.neighbours[j];
               if (unique_tiles.find(n_index) != unique_tiles.end()) continue;
               
-              const uint32_t temp_index = ctx->container->get_data<uint32_t>(debug::entities::tile, first_index, debug::properties::tile::province_index);
+              const uint32_t temp_index = ctx->container->get_data<uint32_t>(debug::entities::tile, n_index, debug::properties::tile::province_index);
               if (temp_index != UINT32_MAX) {
                 neighbor_province_index = temp_index;
                 break;
@@ -2915,6 +2920,45 @@ namespace devils_engine {
           }
         }
       }
+      
+//       PRINT_VAR("3722 size ", ctx->container->get_childs(debug::entities::province, 3722).size())
+//       PRINT_VAR("1171 size ", ctx->container->get_childs(debug::entities::province, 1171).size())
+      
+      // всякая информация
+      uint32_t province_min = 10000;
+      uint32_t province_max = 0;
+      uint32_t count = 0;
+      uint32_t count_more_max = 0;
+      uint32_t count_less_min = 0;
+      uint32_t accum_max = 0;
+      uint32_t accum_min = 0;
+      uint32_t accum_tiles_count = 0;
+      for (size_t i = 0; i < ctx->container->entities_count(debug::entities::province); ++i) {
+        province_min = std::min(uint32_t(ctx->container->get_childs(debug::entities::province, i).size()), province_min);
+        province_max = std::max(uint32_t(ctx->container->get_childs(debug::entities::province, i).size()), province_max);
+        ++count;
+        accum_tiles_count += ctx->container->get_childs(debug::entities::province, i).size();
+        
+        if (ctx->container->get_childs(debug::entities::province, i).size() > province_tiles_max) {
+          ++count_more_max;
+          accum_max += ctx->container->get_childs(debug::entities::province, i).size();
+        }
+        
+        if (ctx->container->get_childs(debug::entities::province, i).size() < province_tiles_min) {
+          ++count_less_min;
+          accum_min += ctx->container->get_childs(debug::entities::province, i).size();
+        }
+      }
+      
+      PRINT_VAR("provinces count ", ctx->container->entities_count(debug::entities::province))
+      PRINT_VAR("province_min  ", province_min)
+      PRINT_VAR("province_max  ", province_max)
+      PRINT_VAR("count_more_max", count_more_max)
+      PRINT_VAR("count_less_min", count_less_min)
+      PRINT_VAR("accum_tiles_count", accum_tiles_count)
+      PRINT_VAR("more_max_avg  ", float(accum_max) / float(count_more_max))
+      PRINT_VAR("less_min_avg  ", float(accum_min) / float(count_less_min))
+      PRINT_VAR("final_avg     ", float(accum_tiles_count) / float(count))
     }
     
     void calculating_province_neighbours(generator::context* ctx, sol::table &table) {
@@ -3036,7 +3080,6 @@ namespace devils_engine {
         }
       }, ctx);
       
-      // TODO: нужно что то сделать с соседями
       //context->province_neighbours.resize(context->province_tile.size());
       for (size_t i = 0; i < province_n.size(); ++i) {
         const uint32_t index = i;
@@ -3330,7 +3373,7 @@ namespace devils_engine {
           if (country_province[country_index].size() == 0) continue;
           if (country_province[country_index].size() == 1) continue;
           const float country_luck = 1.0f - luckness[country_index];
-          const float country_development = 1.0f - development[country_index];
+          const float country_development = 1.0f - development[country_index]; 
 //           PRINT_VAR("country probably", country_index)
           
           // как развалить страну? по идее от девелопмента можно вычислить
@@ -3877,6 +3920,10 @@ namespace devils_engine {
 //         }
 //       }
       
+      for (size_t i = 0; i < ctx->map->tiles_count(); ++i) {
+        ctx->container->set_data<uint32_t>(debug::entities::tile, i, debug::properties::tile::country_index, UINT32_MAX);
+      }
+      
       for (size_t i = 0; i < province_country.size(); ++i) {
         ctx->container->set_data<uint32_t>(debug::entities::province, i, debug::properties::province::country_index, province_country[i]);
         const auto &childs = ctx->container->get_childs(debug::entities::province, i);
@@ -3896,7 +3943,7 @@ namespace devils_engine {
       // на следующих шагах мне нужно как использовать историю сгененированную здесь
       // причем, мне нужно будет определить какие-то государства как нестабильные
       // и как стабильные, при начале игры нестабильные государства должны как то эпично разваливаться
-      // а стабильные большие государства должны представлять угрозу для игрока или легким уровнем сложности
+      // а стабильные большие государства должны представлять угрозу для игрока или быть легким уровнем сложности
       
       // какие страны стабильные а какие нет? у меня довольно много государств спавнится в которых 
       // очень сложная география (то есть как будто целая страна нарезана на лоскуты)
@@ -3927,6 +3974,1276 @@ namespace devils_engine {
       // земли кочевников, государства племен, и феодальные государства
       // неплохо было заспавнить несколько технологических центров (ну то есть сделать условный китай и итальянские республики)
       // 
+      
+      // нужно создать где то рядом персонажей и раздать им титулы
+    }
+    
+    void generate_titles(generator::context* ctx, sol::table &table) {
+      utils::time_log log("generating titles");
+      // титулы по идее должны как то учитывать сгенерированные государства
+      // сначало наверное нужно придумать механизм взаимодействия со строками
+      // должен быть некий банк строк либо алгоритм их вывода
+      // при совпадении типа и индекса выдается строка
+      // тип: строка для провинции, персонажа, титула и проч
+      // короче должен быть способ запоминать строки использованные в игре
+      // что делать с локализацией? нужны переменные локализации и 
+      // зарегистрировать особые функции связанные с локализацией
+      // при обращении к ним получать строку, а потом ее запихивать в стек
+      
+      // нашел хороший код который дал мне идею генератора (https://github.com/skeeto/fantasyname)
+      // основная задача генераторов названий: соединить несколько строк с определенными типами друг с другом
+      // например алфавит (арит|мерит)(нимир|риар) даст соответственно 4 имени
+      // помимо этого нужно добавить возможность делать первый символ большим, ставить символы в обратном порядке,
+      // брать символы из таблицы, пустой символ
+      // синтаксис !~<table_name|>(name_part|), так ли нужны таблицы?
+      // таблицы нужны прежде всего когда нужно повторить какой то паттерн
+      // вообще можно использовать % + символ для вызова таблиц
+      // (go%b|ro(bu|nu)|)~(%b|%a)!(byu|asd)
+      // не понял пока еще что такое Collapse Triples
+      // вроде как сделал
+      
+      // еще нужно придумать способ задавать переменные в текст
+      // то есть: Дженерик текст %character_name% дженерик текст
+      // причем еще нужно продумать какую то возможность учитывать падежи
+      // вообще идеально как-то помечать какой то участок текста и выводить например тултип
+      // но это видимо что-то из разряда фантастики 
+      // (наверное можно вычислить квадрат где находится этот участок)
+      
+      // осталось понять как адекватно сделать базы со строками
+      // я думаю что нужно предсгенерировать много имен, положить их в массивы строк по типам
+      // и во время игры просто доставать их оттуда
+      
+      // нужно сгенерировать титулы герцогские (несколько баронств), королевские (несколько герцогств) и имперские (несколько королевств)
+      // возможно добавить еще одну иерархию титулов (что-то вроде благословления богини, но ее можно создать только внутриигровым эвентом)
+      // я еще не придумал как титул обратно получать, из провинции
+      const uint32_t province_count = ctx->container->entities_count(debug::entities::province);
+      // нужно посчитать тайлы соприкосновения
+      const uint32_t border_size_const = 5;
+      std::vector<std::vector<std::pair<uint32_t, size_t>>> neighbours_border_size(province_count);
+      {
+        for (size_t i = 0; i < neighbours_border_size.size(); ++i) {
+          const auto &n = ctx->container->get_province_neighbours(i);
+          neighbours_border_size[i] = std::vector<std::pair<uint32_t, size_t>>(n.size());
+          for (size_t j = 0; j < neighbours_border_size[i].size(); ++j) {
+            neighbours_border_size[i][j] = std::make_pair(n[j], 0);
+          }
+        }
+        
+        std::unordered_set<size_t> unique_border;
+        for (uint32_t i = 0; i < ctx->container->entities_count(debug::entities::tile); ++i) {
+          const uint32_t province_index = ctx->container->get_data<uint32_t>(debug::entities::tile, i, debug::properties::tile::province_index);
+          if (province_index == UINT32_MAX) continue;
+          const auto &tile_data = render::unpack_data(ctx->map->get_tile(i));
+          const uint32_t n_count = render::is_pentagon(tile_data) ? 5 : 6;
+          for (uint32_t j = 0; j < n_count; ++j) {
+            const uint32_t n_index = tile_data.neighbours[j];
+            const uint32_t n_province_index = ctx->container->get_data<uint32_t>(debug::entities::tile, n_index, debug::properties::tile::province_index);
+            if (n_province_index == UINT32_MAX) continue;
+            if (province_index == n_province_index) continue;
+            
+            const uint32_t first_index = std::max(i, n_index);
+            const uint32_t second_index = std::min(i, n_index);
+            const size_t key = (size_t(second_index) << 32) | size_t(first_index);
+            if (unique_border.find(key) != unique_border.end()) continue;
+            
+            {
+              uint32_t n_prov_index = UINT32_MAX;
+              const auto &n = ctx->container->get_province_neighbours(province_index);
+              for (size_t k = 0; k < n.size(); ++k) {
+                if (n[k] == n_province_index) {
+                  n_prov_index = k;
+                  break;
+                }
+              }
+              
+              ASSERT(n_prov_index != UINT32_MAX);
+              neighbours_border_size[province_index][n_prov_index].second += 1;
+            }
+            
+            {
+              uint32_t n_prov_index = UINT32_MAX;
+              const auto &n = ctx->container->get_province_neighbours(n_province_index);
+              for (size_t k = 0; k < n.size(); ++k) {
+                if (n[k] == province_index) {
+                  n_prov_index = k;
+                  break;
+                }
+              }
+              
+              ASSERT(n_prov_index != UINT32_MAX);
+              neighbours_border_size[n_province_index][n_prov_index].second += 1;
+            }
+            
+            unique_border.insert(key);
+          }
+        }
+        
+        for (size_t i = 0; i < neighbours_border_size.size(); ++i) {
+          std::sort(neighbours_border_size[i].begin(), neighbours_border_size[i].end(), [] (const auto &first, const auto &second) -> bool {
+            return first.second > second.second;
+          });
+        }
+      }
+      
+      // герцогский титул это что? в цк2 в герцогстве находится до 6 баронств, в цк2 394 гергогств
+      const uint32_t duchies_count = province_count / 4; // среднее количество находится в районе 3-4 (в цк2 почти 4)
+      std::unordered_set<uint32_t> unique_indices;
+      std::queue<std::pair<uint32_t, uint32_t>> queue;
+      std::vector<std::vector<uint32_t>> duchies;
+      for (size_t i = 0; i < duchies_count; ++i) {
+        uint32_t province_index = UINT32_MAX;
+        uint32_t attempts = 0;
+        while (province_index == UINT32_MAX && attempts < 100) {
+          ++attempts;
+          const uint32_t rand_index = ctx->random->index(province_count);
+          if (unique_indices.find(rand_index) != unique_indices.end()) continue;
+          
+          // проверить соседей? соседей больше чем может быть в герцогстве баронств
+          province_index = rand_index;
+        }
+        
+        if (province_index == UINT32_MAX) continue;
+        
+        unique_indices.insert(province_index);
+        queue.push(std::make_pair(duchies.size(), province_index));
+        duchies.emplace_back();
+        duchies.back().push_back(province_index);
+      }
+      
+      while (!queue.empty()) {
+        const auto pair = queue.front();
+        queue.pop();
+        
+        const auto &neighbours = ctx->container->get_province_neighbours(pair.second);
+        if (neighbours.size() == 0) continue;
+        if (duchies[pair.first].size() > 5) continue;
+        ASSERT(duchies[pair.first].size() > 0);
+        if (duchies[pair.first].size() == 1) {
+          uint32_t province_index = UINT32_MAX;
+          uint32_t attempts = 0;
+          while (province_index == UINT32_MAX && attempts < 15) {
+            ++attempts;
+            const uint32_t rand_index = ctx->random->index(neighbours.size());
+            const auto border_size = neighbours_border_size[pair.second][rand_index];
+            if (border_size.second < border_size_const) continue;
+            const auto n_province_index = province_neighbour(neighbours[rand_index]);
+            if (n_province_index.across_water()) continue;
+            if (unique_indices.find(n_province_index.index()) != unique_indices.end()) continue;
+            
+            province_index = n_province_index.index();
+          }
+          
+          // вообще ситуация возможна при которой мы не сможем взять рандомного соседа
+          // это герцогство тогда должно пойти в состав другого, или позаимствовать 
+          
+          if (province_index == UINT32_MAX) continue;
+          
+          unique_indices.insert(province_index);
+          //queue.push(std::make_pair(pair.first, province_index));
+          // тут наверное нужно опять просмотреть соседей текущего
+          // то, что соседи могут "закнчится" и у текущей провинции и у соседней, кажется равновероятным
+          queue.push(std::make_pair(pair.first, pair.second));
+          duchies[pair.first].push_back(province_index);
+        } else {
+          for (size_t i = 0; i < neighbours.size(); ++i) {
+//             const size_t border_size = neighbours_border_size[pair.second][i];
+//             if (border_size < border_size_const) continue;
+            //const auto n_province_index = province_neighbour(neighbours[i]);
+            const auto n_province_index = province_neighbour(neighbours_border_size[pair.second][i].first);
+            const size_t border_size = neighbours_border_size[pair.second][i].second;
+            if (border_size < border_size_const) continue;
+            if (unique_indices.find(n_province_index.index()) != unique_indices.end()) continue;
+            
+            
+            bool found = false;
+            const auto &n_neighbours = ctx->container->get_province_neighbours(n_province_index.index());
+            for (size_t j = 0; j < n_neighbours.size(); ++j) {
+              const auto n_n_province_index = province_neighbour(n_neighbours[j]);
+              if (n_n_province_index.index() == pair.second) continue;
+              if (n_province_index.across_water()) continue;
+              
+              auto itr = std::find(neighbours.begin(), neighbours.end(), n_n_province_index.container);
+              if (itr != neighbours.end()) found = true;
+            }
+            
+            if (!found) continue;
+            
+            unique_indices.insert(n_province_index.index());
+            queue.push(std::make_pair(pair.first, n_province_index.index()));
+            duchies[pair.first].push_back(n_province_index.index());
+            break;
+          }
+        }
+      }
+      
+      PRINT_VAR("duchies provinces count", unique_indices.size());
+      PRINT_VAR("free provinces    count", province_count - unique_indices.size());
+      
+      // теперь нужно посмотреть чтобы было примерно равное распределение
+      // и наверное добавить свободные провинции
+      
+      for (size_t i = 0; i < duchies.size(); ++i) {
+        if (duchies[i].size() >= 6) continue;
+        
+        const uint32_t count = duchies[i].size();
+        for (size_t j = 0; j < count; ++j) {
+          const uint32_t province_index = duchies[i][j];
+          if (duchies[i].size() >= 6) break;
+          
+          const auto &neighbours = ctx->container->get_province_neighbours(province_index);
+          for (size_t k = 0; k < neighbours.size(); ++k) {
+//             const size_t border_size = neighbours_border_size[province_index][k];
+//             if (border_size < border_size_const) continue;
+//             const auto n_province_index = province_neighbour(neighbours[k]);
+            const auto n_province_index = province_neighbour(neighbours_border_size[province_index][k].first);
+            const size_t border_size = neighbours_border_size[province_index][k].second;
+            if (border_size < border_size_const) continue;
+            ASSERT(province_count > n_province_index.index());
+            if (n_province_index.across_water()) continue;
+            if (duchies[i].size() >= 6) break;
+            if (unique_indices.find(n_province_index.index()) != unique_indices.end()) continue;
+            
+            unique_indices.insert(n_province_index.index());
+            duchies[i].push_back(n_province_index.index());
+          }
+        }
+      }
+      
+      PRINT_VAR("duchies provinces count", unique_indices.size());
+      
+      const uint32_t current_duchies_count = duchies.size();
+      for (size_t i = 0; i < province_count; ++i) {
+        const uint32_t province_index = i;
+        if (unique_indices.find(province_index) != unique_indices.end()) continue;
+        
+        duchies.emplace_back();
+        duchies.back().push_back(province_index);
+        unique_indices.insert(province_index);
+      }
+      
+      ASSERT(unique_indices.size() == province_count);
+      
+      std::vector<uint32_t> province_duchy(province_count, UINT32_MAX);
+      for (size_t i = 0; i < duchies.size(); ++i) {
+        for (size_t j = 0; j < duchies[i].size(); ++j) {
+          const uint32_t p_index = duchies[i][j];
+          province_duchy[p_index] = i;
+        }
+      }
+      
+      for (size_t i = current_duchies_count; i < duchies.size(); ++i) {
+        ASSERT(duchies[i].size() == 1);
+        
+        const uint32_t province_index = duchies[i][0];
+        const auto &neighbours = ctx->container->get_province_neighbours(province_index);
+        std::unordered_set<uint32_t> unique_indices;
+        for (size_t k = 0; k < neighbours.size(); ++k) {
+//           const size_t border_size = neighbours_border_size[province_index][k];
+//           if (border_size < border_size_const) continue;
+//           const auto n_province_index = province_neighbour(neighbours[k]);
+          const auto n_province_index = province_neighbour(neighbours_border_size[province_index][k].first);
+          const size_t border_size = neighbours_border_size[province_index][k].second;
+          if (border_size < border_size_const) continue;
+          const uint32_t duchy_index = province_duchy[n_province_index.index()];
+          ASSERT(duchy_index != UINT32_MAX);
+          
+          if (n_province_index.across_water()) continue;
+          if (duchies[duchy_index].size() < 5) continue;
+          if (unique_indices.find(duchy_index) != unique_indices.end()) continue;
+          
+          unique_indices.insert(duchy_index);
+          auto itr = std::find(duchies[duchy_index].begin(), duchies[duchy_index].end(), n_province_index.index());
+          ASSERT(itr != duchies[duchy_index].end());
+          
+          duchies[duchy_index].erase(itr);
+          duchies[i].push_back(n_province_index.index());
+          province_duchy[n_province_index.index()] = i;
+        }
+      }
+      
+      // по прежнему могут остаться слишком маленькие герцогства
+      // в некоторых случаях это остров на одну провинцию
+      // в некоторых случайность
+      // такие герцогства можно соединить
+      const uint32_t duchies_count_stat_size = 7;
+      uint32_t duchies_count_stat[duchies_count_stat_size];
+      memset(duchies_count_stat, 0, duchies_count_stat_size * sizeof(uint32_t));
+      uint32_t max_duchy = 0;
+      uint32_t min_duchy = 10;
+      size_t duchy_counter = 0;
+      for (size_t i = 0; i < duchies.size(); ++i) {
+        if (duchies[i].size() == 0) continue;
+        if (duchies[i].size() == 1) ++duchies_count_stat[0];
+        if (duchies[i].size() == 2) ++duchies_count_stat[1];
+        if (duchies[i].size() == 3) ++duchies_count_stat[2];
+        if (duchies[i].size() == 4) ++duchies_count_stat[3];
+        if (duchies[i].size() == 5) ++duchies_count_stat[4];
+        if (duchies[i].size() == 6) ++duchies_count_stat[5];
+        if (duchies[i].size() > 6)  ++duchies_count_stat[6];
+        
+        ++duchy_counter;
+        max_duchy = std::max(max_duchy, uint32_t(duchies[i].size()));
+        min_duchy = std::min(min_duchy, uint32_t(duchies[i].size()));
+      }
+      
+      PRINT_VAR("duchies count ", duchy_counter)
+      PRINT_VAR("duchies size 1", duchies_count_stat[0])
+      PRINT_VAR("duchies size 2", duchies_count_stat[1])
+      PRINT_VAR("duchies size 3", duchies_count_stat[2])
+      PRINT_VAR("duchies size 4", duchies_count_stat[3])
+      PRINT_VAR("duchies size 5", duchies_count_stat[4])
+      PRINT_VAR("duchies size 6", duchies_count_stat[5])
+      PRINT_VAR("duchies size more 6", duchies_count_stat[6])
+      PRINT_VAR("max duchy     ", max_duchy)
+      PRINT_VAR("min duchy     ", min_duchy)
+      
+      // однопровинчатые нужно передать минимальному соседу да и все
+      for (size_t i = 0; i < duchies.size(); ++i) {
+        if (duchies[i].size() == 0) continue;
+        if (duchies[i].size() > 2) continue;
+        
+        const uint32_t count = duchies[i].size();
+        for (size_t j = 0; j < count; ++j) {
+          const uint32_t province_index = duchies[i][j];
+          const auto &neighbours = ctx->container->get_province_neighbours(province_index);
+          bool found = false;
+          for (size_t k = 0; k < neighbours.size(); ++k) {
+//             const size_t border_size = neighbours_border_size[province_index][k];
+//             if (border_size < border_size_const) continue;
+//             const auto n_province_index = province_neighbour(neighbours[k]);
+            const auto n_province_index = province_neighbour(neighbours_border_size[province_index][k].first);
+            const size_t border_size = neighbours_border_size[province_index][k].second;
+            if (border_size < border_size_const) continue; // ???
+            const uint32_t n_duchy_index = province_duchy[n_province_index.index()];
+            
+            if (n_province_index.across_water()) continue;
+            if (n_duchy_index == i) continue;
+            
+            const uint32_t union_index = std::max(n_duchy_index, uint32_t(i));
+            const uint32_t another = union_index == n_duchy_index ? i : n_duchy_index;
+            ASSERT(union_index != another);
+            if (duchies[union_index].size() + duchies[another].size() > 4) continue;
+            
+            duchies[union_index].insert(duchies[union_index].end(), duchies[another].begin(), duchies[another].end());
+            for (size_t l = 0; l < duchies[another].size(); ++l) {
+              province_duchy[duchies[another][l]] = union_index;
+            }
+            
+            duchies[another].clear();
+            found = true;
+            break;
+          }
+          
+          if (found) break;
+        }
+        
+        
+      }
+      
+      for (size_t i = 0; i < duchies.size(); ++i) {
+        if (duchies[i].size() == 0) continue;
+        if (duchies[i].size() != 1) continue;
+        
+        const uint32_t province_index = duchies[i][0];
+        const auto &neighbours = ctx->container->get_province_neighbours(province_index);
+        for (size_t k = 0; k < neighbours.size(); ++k) {
+//           const size_t border_size = neighbours_border_size[province_index][k];
+//           if (border_size < border_size_const) continue;
+//           const auto n_province_index = province_neighbour(neighbours[k]);
+          const auto n_province_index = province_neighbour(neighbours_border_size[province_index][k].first);
+          const uint32_t n_duchy_index = province_duchy[n_province_index.index()];
+          
+          if (n_province_index.across_water()) continue;
+          if (n_duchy_index == i) continue;
+          
+          const uint32_t union_index = std::max(n_duchy_index, uint32_t(i));
+          const uint32_t another = union_index == n_duchy_index ? i : n_duchy_index;
+          ASSERT(union_index != another);
+          if (duchies[union_index].size() + duchies[another].size() > 6) continue;
+          
+          duchies[union_index].insert(duchies[union_index].end(), duchies[another].begin(), duchies[another].end());
+          for (size_t l = 0; l < duchies[another].size(); ++l) {
+            province_duchy[duchies[another][l]] = union_index;
+          }
+          
+          duchies[another].clear();
+          break;
+        }
+      }
+      
+      memset(duchies_count_stat, 0, duchies_count_stat_size * sizeof(uint32_t));
+      max_duchy = 0;
+      min_duchy = 10;
+      duchy_counter = 0;
+      uint32_t check_duchies_count = 0;
+      for (size_t i = 0; i < duchies.size(); ++i) {
+        if (duchies[i].size() == 0) continue;
+        if (duchies[i].size() == 1) ++duchies_count_stat[0];
+        if (duchies[i].size() == 2) ++duchies_count_stat[1];
+        if (duchies[i].size() == 3) ++duchies_count_stat[2];
+        if (duchies[i].size() == 4) ++duchies_count_stat[3];
+        if (duchies[i].size() == 5) ++duchies_count_stat[4];
+        if (duchies[i].size() == 6) ++duchies_count_stat[5];
+        if (duchies[i].size() > 6)  ++duchies_count_stat[6];
+        
+        check_duchies_count += duchies[i].size();
+        for (size_t j = 0; j < duchies[i].size(); ++j) {
+          const uint32_t index = duchies[i][j];
+          province_duchy[index] = duchy_counter;
+        }
+        
+        ++duchy_counter;
+        max_duchy = std::max(max_duchy, uint32_t(duchies[i].size()));
+        min_duchy = std::min(min_duchy, uint32_t(duchies[i].size()));
+      }
+      
+      PRINT_VAR("duchies count ", duchy_counter)
+      PRINT_VAR("duchies size 1", duchies_count_stat[0])
+      PRINT_VAR("duchies size 2", duchies_count_stat[1])
+      PRINT_VAR("duchies size 3", duchies_count_stat[2])
+      PRINT_VAR("duchies size 4", duchies_count_stat[3])
+      PRINT_VAR("duchies size 5", duchies_count_stat[4])
+      PRINT_VAR("duchies size 6", duchies_count_stat[5])
+      PRINT_VAR("duchies size more 6", duchies_count_stat[6])
+      PRINT_VAR("max duchy     ", max_duchy)
+      PRINT_VAR("min duchy     ", min_duchy)
+      
+      const uint32_t prov_count = ctx->container->entities_count(debug::entities::province);
+      ASSERT(check_duchies_count == prov_count);
+      
+      (void)table;
+      for (size_t i = 0; i < ctx->container->entities_count(debug::entities::tile); ++i) {
+        ctx->container->set_data<uint32_t>(debug::entities::tile, i, debug::properties::tile::test_value_uint1, UINT32_MAX);
+      }
+      
+      for (size_t i = 0; i < province_duchy.size(); ++i) {
+        const uint32_t duchy_index = province_duchy[i];
+        const auto &childs = ctx->container->get_childs(debug::entities::province, i);
+        for (size_t j = 0; j < childs.size(); ++j) {
+          const uint32_t tile_index = childs[j];
+          ctx->container->set_data<uint32_t>(debug::entities::tile, tile_index, debug::properties::tile::test_value_uint1, duchy_index);
+        }
+      }
+      
+      for (auto itr = duchies.begin(); itr != duchies.end();) {
+        if (itr->size() == 0) itr = duchies.erase(itr);
+        else ++itr;
+      }
+      
+      ASSERT(duchies.size() == duchy_counter);
+      std::vector<std::vector<std::pair<uint32_t, uint32_t>>> duchies_neighbours(duchies.size());
+      {
+//         for (size_t i = 0; i < duchies_neighbours.size(); ++i) {
+//           
+//         }
+        
+        std::unordered_set<size_t> unique_border;
+        for (uint32_t i = 0; i < ctx->container->entities_count(debug::entities::tile); ++i) {
+          const uint32_t duchy_index = ctx->container->get_data<uint32_t>(debug::entities::tile, i, debug::properties::tile::test_value_uint1);
+          if (duchy_index == UINT32_MAX) continue;
+          const auto &tile_data = render::unpack_data(ctx->map->get_tile(i));
+          const uint32_t n_count = render::is_pentagon(tile_data) ? 5 : 6;
+          for (uint32_t j = 0; j < n_count; ++j) {
+            const uint32_t n_index = tile_data.neighbours[j];
+            const uint32_t n_duchy_index = ctx->container->get_data<uint32_t>(debug::entities::tile, n_index, debug::properties::tile::test_value_uint1);
+            if (n_duchy_index == UINT32_MAX) continue;
+            if (duchy_index == n_duchy_index) continue;
+            
+            const uint32_t first_index = std::max(i, n_index);
+            const uint32_t second_index = std::min(i, n_index);
+            const size_t key = (size_t(second_index) << 32) | size_t(first_index);
+            if (unique_border.find(key) != unique_border.end()) continue;
+            
+            {
+              auto itr = std::find_if(duchies_neighbours[duchy_index].begin(), duchies_neighbours[duchy_index].end(), [n_duchy_index] (const std::pair<uint32_t, uint32_t> &val) -> bool {
+                return val.first == n_duchy_index;
+              });
+              
+              if (itr == duchies_neighbours[duchy_index].end()) duchies_neighbours[duchy_index].push_back(std::make_pair(n_duchy_index, 1));
+              else itr->second += 1;
+            }
+            
+            {
+              auto itr = std::find_if(duchies_neighbours[n_duchy_index].begin(), duchies_neighbours[n_duchy_index].end(), [duchy_index] (const std::pair<uint32_t, uint32_t> &val) -> bool {
+                return val.first == duchy_index;
+              });
+              
+              if (itr == duchies_neighbours[n_duchy_index].end()) duchies_neighbours[n_duchy_index].push_back(std::make_pair(duchy_index, 1));
+              else itr->second += 1;
+            }
+            
+            unique_border.insert(key);
+          }
+        }
+        
+        for (size_t i = 0; i < duchies_neighbours.size(); ++i) {
+          //ASSERT(duchies_neighbours[i].size() != 0);
+          std::sort(duchies_neighbours[i].begin(), duchies_neighbours[i].end(), [] (const auto &first, const auto &second) -> bool {
+            return first.second > second.second;
+          });
+        }
+        
+//         std::vector<std::unordered_set<uint32_t>> tmp_duchies_neighbours(duchies.size());
+//         for (size_t i = 0 ; i < duchies.size(); ++i) {
+//           for (size_t j = 0; j < duchies[i].size(); ++j) {
+//             const uint32_t province_index = duchies[i][j];
+//             const auto &province_n = ctx->container->get_province_neighbours(province_index);
+//             for (size_t k = 0; k < province_n.size(); ++k) {
+// //               const size_t border_size = neighbours_border_size[province_index][k];
+// //               if (border_size < border_size_const) continue;
+//               const auto n_index = province_neighbour(province_n[k]);
+//               const uint32_t n_duchy_index =  province_duchy[n_index.index()];
+//               
+//               if (n_duchy_index != i) {
+//                 tmp_duchies_neighbours[i].insert(n_duchy_index);
+//                 tmp_duchies_neighbours[n_duchy_index].insert(i);
+//               }
+//             }
+//           }
+//         }
+//         
+//         for (size_t i = 0; i < tmp_duchies_neighbours.size(); ++i) {
+//           for (auto itr = tmp_duchies_neighbours[i].begin(); itr != tmp_duchies_neighbours[i].end(); ++itr) {
+//             duchies_neighbours[i].push_back(*itr);
+//           }
+//         }
+      }
+      
+      // теперь нужно создать королевства
+      // проблема заключается в том что не существует какого то конвенционального числа герцогств в королевстве
+      // в цк2 королеских титулов 116, примерно 4 герцогства на каждое
+      // но разброс от 2 герцогства до 11, как быть
+      // там еще есть множество формальных королевских титулов
+      // но с этим еще более менее понятно
+      
+      // я так понимаю, нужно сначала заспавнить половину (2/3? 3/4?) из всех королевств
+      // их заполнить до какого то предела (например 12 герцогств), а затем попытаться создать 
+      // оставшееся количество титулов, все королевства с одним герцогством удалить и раздать существующим
+      // малые королевства соединить (непохо было бы с учетом длинны границы)
+      // герцогства по примерно такому же принципу более менее нормально генерируются
+      
+      //const uint32_t king_titles_count = duchy_counter / 4;
+      const uint32_t king_titles_count_max = duchy_counter / 4;
+      const uint32_t king_titles_count = king_titles_count_max * (2.0f/3.0f);
+      std::unordered_set<uint32_t> unique_duchies;
+      std::queue<std::tuple<uint32_t, uint32_t, uint32_t>> king_queue;
+      std::vector<std::vector<uint32_t>> kingdoms(king_titles_count);
+      std::vector<uint32_t> duchy_kingdom(duchy_counter, UINT32_MAX);
+      ASSERT(kingdoms.size() != 0);
+      
+      const auto func = [&] () {
+        ASSERT(!king_queue.empty());
+        while (!king_queue.empty()) {
+          const auto data = king_queue.front();
+          king_queue.pop();
+          
+          const uint32_t king_index = std::get<0>(data);
+  //         if (kingdoms[king_index].size() > 11) continue;
+          const uint32_t kingdom_duchy_index = std::get<1>(data);
+          if (kingdom_duchy_index >= kingdoms[king_index].size()) continue;
+          const uint32_t current_duchy_index = kingdoms[king_index][kingdom_duchy_index];
+          uint32_t current_n_index = std::get<2>(data);
+          
+          ASSERT(current_duchy_index < duchies_neighbours.size());
+          
+          // нужно еще проверить случайного соседа
+          // нужно проверить соседей осортированных по длине границы герцогства (проверяю)
+          // по длине границы получаются в основном неплохие королевства
+          bool found = false;
+          for (; current_n_index < duchies_neighbours[current_duchy_index].size(); ++current_n_index) {
+            const auto index = duchies_neighbours[current_duchy_index][current_n_index];
+            //if (unique_duchies.find(index.first) != unique_duchies.end()) continue;
+            if (index.second < 6) continue;
+            if (duchy_kingdom[index.first] != UINT32_MAX) continue;
+            
+  //           unique_duchies.insert(index.first);
+            if (current_n_index < duchies_neighbours[current_duchy_index].size()-1) {
+              king_queue.push(std::make_tuple(king_index, kingdom_duchy_index, current_n_index+1));
+            } else {
+              king_queue.push(std::make_tuple(king_index, kingdom_duchy_index+1, 0));
+            }
+            
+            found = true;
+            kingdoms[king_index].push_back(index.first);
+            ASSERT(duchy_kingdom[index.first] == UINT32_MAX);
+            duchy_kingdom[index.first] = king_index;
+            break;
+          }
+          
+          if (!found) king_queue.push(std::make_tuple(king_index, kingdom_duchy_index+1, 0));
+        }
+      };
+      
+      for (size_t i = 0; i < king_titles_count; ++i) {
+        uint32_t duchy_index = UINT32_MAX;
+        uint32_t attempts = 0;
+        while (duchy_index == UINT32_MAX && attempts < 100) {
+          ++attempts;
+          const uint32_t rand_index = ctx->random->index(duchies.size());
+          ASSERT(duchies[rand_index].size() != 0);
+          if (unique_duchies.find(rand_index) != unique_duchies.end()) continue;
+          
+//           bool found = true;
+//           for (size_t j = 0; j < duchies_neighbours[rand_index].size(); ++j) {
+//             if (unique_duchies.find(duchies_neighbours[rand_index][j].first) != unique_duchies.end()) {
+//               found = false;
+//               break;
+//             }
+//           }
+//           
+//           if (!found) continue;
+          duchy_index = rand_index;
+        }
+        
+        ASSERT(duchy_index != UINT32_MAX);
+        
+        unique_duchies.insert(duchy_index);
+        king_queue.push(std::make_tuple(i, 0, 0));
+        kingdoms[i].push_back(duchy_index);
+        duchy_kingdom[duchy_index] = i;
+        
+        for (size_t j = 0; j < duchies_neighbours[duchy_index].size(); ++j) {
+          unique_duchies.insert(duchies_neighbours[duchy_index][j].first);
+        }
+      }
+      
+      func();
+      
+      for (size_t i = 0; i < duchy_kingdom.size(); ++i) {
+        if (duchy_kingdom[i] != UINT32_MAX) continue;
+        if (duchies[i].size() != 6) continue;
+        
+        duchy_kingdom[i] = kingdoms.size();
+        kingdoms.emplace_back();
+        kingdoms.back().push_back(i);
+        king_queue.push(std::make_tuple(duchy_kingdom[i], 0, 0));
+      }
+      
+      for (size_t i = 0; i < duchy_kingdom.size(); ++i) {
+        if (duchy_kingdom[i] != UINT32_MAX) continue;
+        if (duchies[i].size() < 4) continue;
+        
+        bool found = false;
+        for (size_t j = 0; j < duchies[i].size(); ++j) {
+          const uint32_t province_index = duchies[i][j];
+          ASSERT(province_duchy[province_index] == i);
+          
+          const auto &n = ctx->container->get_province_neighbours(province_index);
+          for (size_t k = 0; k < n.size(); ++k) {
+            const auto n_province_index = province_neighbour(n[k]);
+            const uint32_t n_duchy_index = province_duchy[n_province_index.index()];
+            if (n_duchy_index == i) continue;
+            if (duchy_kingdom[i] != UINT32_MAX) continue; 
+            found = true;
+          }
+        }
+        
+        if (!found) continue;
+        
+        duchy_kingdom[i] = kingdoms.size();
+        kingdoms.emplace_back();
+        kingdoms.back().push_back(i);
+        king_queue.push(std::make_tuple(duchy_kingdom[i], 0, 0));
+      }
+      
+      func();
+      
+      {
+        uint32_t max_kingdoms = 0;
+        uint32_t min_kingdoms = 235525;
+        uint32_t max_kingdoms_provinces = 0;
+        uint32_t min_kingdoms_provinces = 34363436;
+        uint32_t kingdoms2_count = 0;
+        std::vector<uint32_t> province_count(kingdoms.size(), 0);
+        size_t counter = 0;
+        for (size_t i = 0; i < kingdoms.size(); ++i) {
+          max_kingdoms = std::max(max_kingdoms, uint32_t(kingdoms[i].size()));
+          min_kingdoms = std::min(min_kingdoms, uint32_t(kingdoms[i].size()));
+          
+          for (uint32_t k = 0; k < kingdoms[i].size(); ++k) {
+            for (uint32_t c = 0; c < duchies[k].size(); ++c) {
+              //const uint32_t baron_index = duchies[k][c];
+              ++province_count[i];
+            }
+          }
+          
+          counter += province_count[i];
+          max_kingdoms_provinces = std::max(max_kingdoms_provinces, province_count[i]);
+          min_kingdoms_provinces = std::min(min_kingdoms_provinces, province_count[i]);
+          if (kingdoms[i].size() == 1) ++kingdoms2_count;
+        }
+        
+        PRINT_VAR("kingdoms_count ", kingdoms.size())
+        PRINT_VAR("max_kingdoms   ", max_kingdoms)
+        PRINT_VAR("min_kingdoms   ", min_kingdoms)
+        PRINT_VAR("kingdoms1_count", kingdoms2_count)
+        PRINT_VAR("avg kingdoms count", float(duchy_kingdom.size()) / float(kingdoms.size()))
+        PRINT_VAR("max_kingdoms_provinces", max_kingdoms_provinces)
+        PRINT_VAR("min_kingdoms_provinces", min_kingdoms_provinces)
+        PRINT_VAR("avg kingdoms provinces count", float(counter) / float(kingdoms.size()))
+      }
+      
+      std::vector<uint32_t> province_kingdom(ctx->container->entities_count(debug::entities::province), UINT32_MAX);
+      for (size_t i = 0; i < kingdoms.size(); ++i) {
+        for (size_t j = 0; j < kingdoms[i].size(); ++j) {
+          const uint32_t duchy_index = kingdoms[i][j];
+          for (size_t k = 0; k < duchies[duchy_index].size(); ++k) {
+            const uint32_t provice_index = duchies[duchy_index][k];
+            province_kingdom[provice_index] = i;
+          }
+        }
+      }
+      
+      for (size_t i = 0; i < ctx->container->entities_count(debug::entities::tile); ++i) {
+        ctx->container->set_data<uint32_t>(debug::entities::tile, i, debug::properties::tile::test_value_uint2, UINT32_MAX);
+      }
+      
+      for (size_t i = 0; i < province_kingdom.size(); ++i) {
+        const uint32_t kingdom_index = province_kingdom[i];
+        const auto &childs = ctx->container->get_childs(debug::entities::province, i);
+        for (size_t j = 0; j < childs.size(); ++j) {
+          const uint32_t tile_index = childs[j];
+          ctx->container->set_data<uint32_t>(debug::entities::tile, tile_index, debug::properties::tile::test_value_uint2, kingdom_index);
+        }
+      }
+      
+      // получается плохо, большая часть королевских титулов имеет слишком случайную форму
+      // теперь получается более менее нормально, почти все королевские титулы правильной формы
+      
+      // нужно сгенерить имперские титулы (в цк2 26 реальных имперских титулов)
+      // тот же принцип, находим соседей с протяженной границей, сортируем
+      // 
+      
+      std::vector<std::vector<std::pair<uint32_t, uint32_t>>> kingdoms_neighbours(kingdoms.size());
+      {
+//         for (size_t i = 0; i < duchies_neighbours.size(); ++i) {
+//           
+//         }
+        
+        std::unordered_set<size_t> unique_border;
+        for (uint32_t i = 0; i < ctx->container->entities_count(debug::entities::tile); ++i) {
+          const uint32_t kingdom_index = ctx->container->get_data<uint32_t>(debug::entities::tile, i, debug::properties::tile::test_value_uint2);
+          if (kingdom_index == UINT32_MAX) continue;
+          const auto &tile_data = render::unpack_data(ctx->map->get_tile(i));
+          const uint32_t n_count = render::is_pentagon(tile_data) ? 5 : 6;
+          for (uint32_t j = 0; j < n_count; ++j) {
+            const uint32_t n_index = tile_data.neighbours[j];
+            const uint32_t n_kingdom_index = ctx->container->get_data<uint32_t>(debug::entities::tile, n_index, debug::properties::tile::test_value_uint2);
+            if (n_kingdom_index == UINT32_MAX) continue;
+            if (kingdom_index == n_kingdom_index) continue;
+            
+            const uint32_t first_index = std::max(i, n_index);
+            const uint32_t second_index = std::min(i, n_index);
+            const size_t key = (size_t(second_index) << 32) | size_t(first_index);
+            if (unique_border.find(key) != unique_border.end()) continue;
+            
+            {
+              auto itr = std::find_if(kingdoms_neighbours[kingdom_index].begin(), kingdoms_neighbours[kingdom_index].end(), [n_kingdom_index] (const std::pair<uint32_t, uint32_t> &val) -> bool {
+                return val.first == n_kingdom_index;
+              });
+              
+              if (itr == kingdoms_neighbours[kingdom_index].end()) kingdoms_neighbours[kingdom_index].push_back(std::make_pair(n_kingdom_index, 1));
+              else itr->second += 1;
+            }
+            
+            {
+              auto itr = std::find_if(kingdoms_neighbours[n_kingdom_index].begin(), kingdoms_neighbours[n_kingdom_index].end(), [kingdom_index] (const std::pair<uint32_t, uint32_t> &val) -> bool {
+                return val.first == kingdom_index;
+              });
+              
+              if (itr == kingdoms_neighbours[n_kingdom_index].end()) kingdoms_neighbours[n_kingdom_index].push_back(std::make_pair(kingdom_index, 1));
+              else itr->second += 1;
+            }
+            
+            unique_border.insert(key);
+          }
+        }
+        
+        for (size_t i = 0; i < kingdoms_neighbours.size(); ++i) {
+          //ASSERT(duchies_neighbours[i].size() != 0);
+          std::sort(kingdoms_neighbours[i].begin(), kingdoms_neighbours[i].end(), [] (const auto &first, const auto &second) -> bool {
+            return first.second > second.second;
+          });
+        }
+      }
+      
+      const uint32_t emperor_titles_count_max = kingdoms.size() / 4;
+      const uint32_t emperor_titles_count = emperor_titles_count_max; // * (2.0f/3.0f)
+      std::unordered_set<uint32_t> unique_kingdoms;
+      std::queue<std::tuple<uint32_t, uint32_t, uint32_t>> emperor_queue;
+      std::vector<std::vector<uint32_t>> empires(emperor_titles_count);
+      std::vector<uint32_t> kingdom_empire(kingdoms.size(), UINT32_MAX);
+      
+      const auto empire_func = [&] () {
+        ASSERT(!emperor_queue.empty());
+        while (!emperor_queue.empty()) {
+          const auto data = emperor_queue.front();
+          emperor_queue.pop();
+          
+          const uint32_t emperor_index = std::get<0>(data);
+  //         if (kingdoms[king_index].size() > 11) continue;
+          const uint32_t empire_kingdom_index = std::get<1>(data);
+          if (empire_kingdom_index >= empires[emperor_index].size()) continue;
+          const uint32_t current_kingdom_index = empires[emperor_index][empire_kingdom_index];
+          uint32_t current_n_index = std::get<2>(data);
+          
+          ASSERT(current_kingdom_index < kingdoms_neighbours.size());
+          
+          // нужно еще проверить случайного соседа
+          // нужно проверить соседей осортированных по длине границы герцогства (проверяю)
+          // по длине границы получаются в основном неплохие королевства
+          bool found = false;
+          for (; current_n_index < kingdoms_neighbours[current_kingdom_index].size(); ++current_n_index) {
+            const auto index = kingdoms_neighbours[current_kingdom_index][current_n_index];
+            //if (unique_duchies.find(index.first) != unique_duchies.end()) continue;
+            if (index.second < 6) continue;
+            if (kingdom_empire[index.first] != UINT32_MAX) continue;
+            
+  //           unique_duchies.insert(index.first);
+            if (current_n_index < kingdoms_neighbours[current_kingdom_index].size()-1) {
+              emperor_queue.push(std::make_tuple(emperor_index, empire_kingdom_index, current_n_index+1));
+            } else {
+              emperor_queue.push(std::make_tuple(emperor_index, empire_kingdom_index+1, 0));
+            }
+            
+            found = true;
+            empires[emperor_index].push_back(index.first);
+            ASSERT(kingdom_empire[index.first] == UINT32_MAX);
+            kingdom_empire[index.first] = emperor_index;
+            break;
+          }
+          
+          if (!found) emperor_queue.push(std::make_tuple(emperor_index, empire_kingdom_index+1, 0));
+        }
+      };
+      
+      for (size_t i = 0; i < empires.size(); ++i) {
+        uint32_t attempts = 0;
+        uint32_t kingdom_index = UINT32_MAX;
+        while (kingdom_index == UINT32_MAX && attempts < 100) {
+          ++attempts;
+          const uint32_t rand_index = ctx->random->index(kingdoms.size());
+          if (unique_kingdoms.find(rand_index) != unique_kingdoms.end()) continue;
+          
+          kingdom_index = rand_index;
+        }
+        
+        unique_kingdoms.insert(kingdom_index);
+        empires[i].push_back(kingdom_index);
+        kingdom_empire[kingdom_index] = i;
+        emperor_queue.push(std::make_tuple(i, 0, 0));
+        
+        for (size_t j = 0; j < kingdoms_neighbours[kingdom_index].size(); ++j) {
+          unique_kingdoms.insert(kingdoms_neighbours[kingdom_index][j].first);
+        }
+      }
+      
+      empire_func();
+      
+      // у нас остаются империи с одним королевством, мы их либо добавляем соседям либо удаляем
+      // наверное империи должны быть минимум с 3-мя королевствами
+      for (size_t i = 0; i < empires.size(); ++i) {
+        if (empires[i].size() > 2) continue;
+        for (size_t k = 0; k < empires[i].size(); ++k) {
+          const uint32_t kingdom_index = empires[i][k];
+        
+          bool found = false;
+          for (size_t j = 0; j < kingdoms_neighbours[kingdom_index].size(); ++j) {
+            const uint32_t index = kingdoms_neighbours[kingdom_index][j].first;
+            const uint32_t new_emp = kingdom_empire[index];
+            if (new_emp == UINT32_MAX) continue;
+            if (empires[new_emp].size() < 3) continue;
+            
+            kingdom_empire[kingdom_index] = new_emp;
+            empires[new_emp].insert(empires[new_emp].end(), empires[i].begin(), empires[i].end());
+            empires[i].clear();
+            found = true;
+            break;
+          }
+          
+          if (found) continue;
+        
+          // удалить
+          empires[i].erase(empires[i].begin()+k);
+          kingdom_empire[kingdom_index] = UINT32_MAX;
+        }
+      }
+      
+      for (size_t i = 0; i < kingdom_empire.size(); ++i) {
+        if (kingdom_empire[i] != UINT32_MAX) continue;
+        
+        const uint32_t kingdom_index = i;
+        uint32_t found = 0;
+        for (size_t j = 0; j < kingdoms_neighbours[kingdom_index].size(); ++j) {
+          const uint32_t n_kingdom_index = kingdoms_neighbours[kingdom_index][j].first;
+          if (kingdom_empire[n_kingdom_index] != UINT32_MAX) continue;
+          
+          ++found;
+        }
+        
+        if (found < 2) continue;
+        
+        const uint32_t new_emp = empires.size();
+        empires.emplace_back();
+        
+        empires[new_emp].push_back(kingdom_index);
+        kingdom_empire[kingdom_index] = new_emp;
+        emperor_queue.push(std::make_tuple(new_emp, 0, 0));
+        for (size_t j = 0; j < kingdoms_neighbours[kingdom_index].size(); ++j) {
+          const uint32_t n_kingdom_index = kingdoms_neighbours[kingdom_index][j].first;
+          if (kingdom_empire[n_kingdom_index] != UINT32_MAX) continue;
+          
+          empires[new_emp].push_back(n_kingdom_index);
+          kingdom_empire[n_kingdom_index] = new_emp;
+        }
+      }
+      
+      empire_func();
+      
+      for (auto itr = empires.begin(); itr != empires.end();) {
+        if (itr->size() == 0) itr = empires.erase(itr);
+        else ++itr;
+      }
+        
+      {
+        uint32_t max_empires = 0;
+        uint32_t min_empires = 235525;
+        uint32_t max_provinces_empires = 0;
+        uint32_t min_provinces_empires = 45366737;
+        uint32_t empires1_count = 0;
+        uint32_t empires11_count = 0;
+        std::vector<uint32_t> province_count(empires.size(), 0);
+        size_t counter = 0;
+        for (size_t i = 0; i < empires.size(); ++i) {
+          if (empires[i].size() == 0) continue;
+          
+          for (uint32_t j = 0; j < empires[i].size(); ++j) {
+            for (uint32_t k = 0; k < kingdoms[j].size(); ++k) {
+              for (uint32_t c = 0; c < duchies[k].size(); ++c) {
+                //const uint32_t baron_index = duchies[k][c];
+                ++province_count[i];
+              }
+            }
+          }
+          
+          counter += province_count[i];
+          max_provinces_empires = std::max(max_provinces_empires, province_count[i]);
+          min_provinces_empires = std::min(min_provinces_empires, province_count[i]);
+          max_empires = std::max(max_empires, uint32_t(empires[i].size()));
+          min_empires = std::min(min_empires, uint32_t(empires[i].size()));
+          if (empires[i].size() == 3) ++empires1_count;
+          if (empires[i].size() == 11) ++empires11_count;
+        }
+        
+        PRINT_VAR("empires_count  ", empires.size())
+        PRINT_VAR("max_empires    ", max_empires)
+        PRINT_VAR("min_empires    ", min_empires)
+        PRINT_VAR("empires3_count ", empires1_count)
+        PRINT_VAR("empires11_count", empires11_count)
+        PRINT_VAR("avg empires count", float(kingdom_empire.size()) / float(empires.size()))
+        PRINT_VAR("max_provinces_empires", max_provinces_empires)
+        PRINT_VAR("min_provinces_empires", min_provinces_empires)
+        PRINT_VAR("avg empires provinces count", float(counter) / float(empires.size()))
+      }
+      
+      std::vector<uint32_t> province_empire(ctx->container->entities_count(debug::entities::province), UINT32_MAX);
+      uint32_t counter = 0;
+      for (size_t i = 0; i < empires.size(); ++i) {
+//         if (empires.size() == 0) continue;
+        ASSERT(empires.size() != 0);
+        
+        for (size_t j = 0; j < empires[i].size(); ++j) {
+          const uint32_t kingdom_index = empires[i][j];
+          kingdom_empire[kingdom_index] = counter;
+          
+          for (size_t k = 0; k < kingdoms[kingdom_index].size(); ++k) {
+            const uint32_t duchy_index = kingdoms[kingdom_index][k];
+            for (size_t c = 0; c < duchies[duchy_index].size(); ++c) {
+              const uint32_t provice_index = duchies[duchy_index][c];
+              province_empire[provice_index] = counter;
+            }
+          }
+        }
+        
+        ++counter;
+      }
+      
+      for (size_t i = 0; i < ctx->container->entities_count(debug::entities::tile); ++i) {
+        ctx->container->set_data<uint32_t>(debug::entities::tile, i, debug::properties::tile::test_value_uint3, UINT32_MAX);
+      }
+      
+      for (size_t i = 0; i < province_empire.size(); ++i) {
+        const uint32_t empire_index = province_empire[i];
+        const auto &childs = ctx->container->get_childs(debug::entities::province, i);
+        for (size_t j = 0; j < childs.size(); ++j) {
+          const uint32_t tile_index = childs[j];
+          ctx->container->set_data<uint32_t>(debug::entities::tile, tile_index, debug::properties::tile::test_value_uint3, empire_index);
+        }
+      }
+      
+      // выглядит с первого раза все более менее
+      // скорее всего история должна генерироваться на основе титулов
+      // титулы - это отражение предыдущих и последующих достижений и амбиций
+      
+      // начинаем создавать титулы
+      for (size_t i = 0; i < empires.size(); ++i) {
+        const uint32_t empire_index = i;
+        auto emp_t = ctx->container->create_titulus(core::titulus::type::imperial, empires[empire_index].size());
+        
+        for (size_t j = 0; j < empires[empire_index].size(); ++j) {
+          const uint32_t kingdom_index = empires[empire_index][j];
+          auto king_t = ctx->container->create_titulus(core::titulus::type::king, kingdoms[kingdom_index].size());
+          emp_t->set_child(j, king_t);
+          king_t->parent = emp_t;
+          
+          for (size_t k = 0; k < kingdoms[kingdom_index].size(); ++k) {
+            const uint32_t duchy_index = kingdoms[kingdom_index][k];
+            auto duchy_t = ctx->container->create_titulus(core::titulus::type::duke, duchies[duchy_index].size());
+            king_t->set_child(k, duchy_t);
+            duchy_t->parent = king_t;
+            
+            for (size_t c = 0; c < duchies[duchy_index].size(); ++c) {
+              const uint32_t baron_index = duchies[duchy_index][c];
+              auto baron_t = ctx->container->create_titulus(core::titulus::type::baron, 1);
+              duchy_t->set_child(c, baron_t);
+              baron_t->parent = duchy_t;
+              
+              ASSERT(baron_index < province_count);
+              baron_t->set_province(baron_index);
+              const uint32_t title_index = ctx->container->get_title_index(baron_t);
+              ctx->container->set_data<uint32_t>(debug::entities::province, baron_index, debug::properties::province::title_index, title_index);
+            }
+          }
+        }
+      }
+
+      // нам нужно каким то образом где то еще эти титулы запомнить
+      // во первых для того чтобы нарисовать для них интерфейс и выделить их на карте
+      // во вторых для того чтобы с ними можно было взаимодействовать
+      // где их хранить? лучше всего в провинциях (это логично и меньше места занимает)
+      // для всех титулов необходимо еще сгенерировать эмблему
+      // отличный механизм сделан уже в цк2 https://ck2.paradoxwikis.com/Coats_of_arms_modding
+      // нужно только сильно переделать его в угоду рандомной генерации
+      // для того чтобы хранить какие то такие данные не в тайлах
+      // нужно немного переделать функцию которая заполняет данными рендер
+      // пользователь должен смочь сделать функцию в луа с любыми данными
+    }
+    
+    void generate_characters(generator::context* ctx, sol::table &table) {
+      utils::time_log log("generating characters");
+      
+      // для каждого государства мы создаем по персонажу
+      // затем внутри каждого государства мы должны распределить провинции на вассалов
+      // как раздать провинции? во первых нужно примерно прикинуть сколько будет провинций
+      // а это наверное будет зависеть от формы правления, а что с формой правления?
+      // это набор нескольких механизмов центральных в средневековой стране: 
+      // 1. способ передачи власти
+      // 2. ответственность органов власти
+      // 3. разграничение полномочий
+      // первый пункт более менее простой - это очевидно нужно сделать 
+      // ответственность? зависимость персонажа от чего то, перед советом
+      // разграничение полномочий? тут по идее должна быть механика совета
+      // тут есть две силы крупные монарх и совет (который состоит из вассалов)
+      // они долны уравновешиваться армиями
+      // племя - несколько провинции в децентрализованном государстве (но не всегда)
+      // чаще всего мы определяем племя по тех уровню, следующий вопрос что то такое тех уровень?
+      // тех уровень я полагаю очень похож на институты в еу4, то есть некоторое знание распространяется 
+      // по провинциям и обозначает доступ к некоторым зданиям и бонусам (иногда его можно открыть)
+      // тех зависит от прошлых империй
+      
+      // раздачу титулов нужно совместить с историей похоже
+      
+      // можно раздать все титулы сначало одному персонажу, который в свою очередь раздаст 
+      // титулы своим подельникам, как раздать титулы более высокого уровня?
+      // герцогские еще более менее понятно, титулы вообще тоже зависят от тех уровня
+      // думаю что нужно сначало тех уровень продумать
+      
+      const uint32_t country_count = ctx->container->entities_count(debug::entities::country);
+      for (size_t i = 0; i < country_count; ++i) {
+        const uint32_t country_index = i;
+        const auto &childs = ctx->container->get_childs(debug::entities::country, country_index);
+        auto character = ctx->container->create_character();
+        
+        ASSERT(childs.size() != 0);
+//         if (childs.size() == 1) {
+//           const uint32_t title_index = ctx->container->get_data<uint32_t>(debug::entities::province, childs[0], debug::properties::province::title_index);
+//           auto title = ctx->container->get_title(title_index);
+//           character->add_title(title);
+//           // тут просто раздаем баронский титул
+//           // возможно какой то герцогский титул тоже нужно раздать
+//           continue;
+//         }
+//         
+//         std::unordered_map<core::titulus*, std::vector<uint32_t>> unique_titles;
+//         for (size_t j = 0; j < childs.size(); ++j) {
+//           const uint32_t province_index = childs[j];
+//           const uint32_t title_index = ctx->container->get_data<uint32_t>(debug::entities::province, province_index, debug::properties::province::title_index);
+//           auto title = ctx->container->get_title(title_index);
+//           // как раскинуть провки на персонажей?
+//           // нужно сначало догадаться какие максимальные титулы у нас есть
+//           unique_titles[title].push_back(province_index);
+//           auto p1 = title->parent;
+//           while (p1 != nullptr) {
+//             unique_titles[p1].push_back(province_index);
+//             p1 = p1->parent;
+//           }
+//         }
+//         
+//         const std::function<void(const core::titulus*, size_t &)> func = [&func] (const core::titulus* title, size_t &counter) {
+//           if (title->type == core::titulus::type::baron) {
+//             ++counter;
+//             return;
+//           }
+//           
+//           if (title->type != core::titulus::type::duke) {
+//             for (size_t i = 0; i < title->count; ++i) {
+//               auto child = title->get_child(i);
+//               func(child, counter);
+//             }
+//             
+//             return;
+//           }
+//           
+//           ASSERT(title->type == core::titulus::type::duke);
+//           counter += title->count;
+//         };
+//         
+//         for (const auto &pair : unique_titles) {
+//           if (pair.first->type == core::titulus::type::imperial && pair.first->owner == nullptr) {
+//             const uint32_t owned_provinces = pair.second.size();
+//             size_t counter = 0;
+//             func(pair.first, counter);
+//             
+//             const float owned_percent = float(owned_provinces) / float(counter);
+//             ASSERT(owned_percent >= 0.0f && owned_percent <= 1.0f);
+//             if (owned_percent > 0.5f) {
+//               character->add_title(pair.first);
+//             }
+//           }
+//         }
+        
+        for (const uint32_t province_index : childs) {
+          const uint32_t title_index = ctx->container->get_data<uint32_t>(debug::entities::province, province_index, debug::properties::province::title_index);
+          auto t = ctx->container->get_title(title_index);
+          character->add_title(t);
+        }
+      }
+      
+      const uint32_t province_count = ctx->container->entities_count(debug::entities::province);
+      for (uint32_t i = 0; i < province_count; ++i) {
+        const uint32_t province_index = i;
+        auto t = ctx->container->get_title(province_index);
+        auto owner = t->owner;
+        auto next_title = t->parent;
+        if (next_title->owner != nullptr) continue;
+        
+        uint32_t counter = 0;
+        for (uint32_t j = 0; j < next_title->count; ++j) {
+          auto child = next_title->get_child(j);
+          if (child->owner == owner) ++counter;
+        }
+        
+        if (counter > std::ceil(float(next_title->count) / 2.0f)) {
+          owner->add_title(next_title);
+        }
+      }
+      
+      for (size_t i = 0; i < country_count; ++i) {
+        const uint32_t country_index = i;
+        const auto &childs = ctx->container->get_childs(debug::entities::country, country_index);
+        // текущий генератор выдает в среднем 26 провинций на королевство
+        // и 144 провинций на империю, около того что я предполагал (100 провок на империю)
+        if (childs.size() < 20) continue; // минимум 20 королевство? 
+        
+        const uint32_t titulus_index = ctx->container->get_data<uint32_t>(debug::entities::province, childs[0], debug::properties::province::title_index);
+        auto t = ctx->container->get_title(titulus_index);
+        auto owner = t->owner;
+        
+        {
+          std::unordered_map<core::titulus*, uint32_t> unique_kingdoms;
+          for (size_t j = 0; j < childs.size(); ++j) {
+            const uint32_t titulus_index = ctx->container->get_data<uint32_t>(debug::entities::province, childs[j], debug::properties::province::title_index);
+            auto t = ctx->container->get_title(titulus_index);
+            auto duchy = t->parent;
+            auto kingdom = duchy->parent;
+            ASSERT(kingdom->type == core::titulus::type::king);
+            if (kingdom->owner != nullptr) continue;
+            auto itr = unique_kingdoms.find(kingdom);
+            if (itr == unique_kingdoms.end()) itr = unique_kingdoms.insert(std::make_pair(kingdom, 0)).first;
+            ++itr->second;
+          }
+          
+          uint32_t max_kingdom_count = 0;
+          core::titulus* kingdom = nullptr;
+          for (const auto &pair : unique_kingdoms) {
+            if (max_kingdom_count < pair.second) {
+              max_kingdom_count = pair.second;
+              kingdom = pair.first;
+            }
+          }
+          
+          owner->add_title(kingdom);
+        }
+        
+        if (childs.size() < 100) continue;
+        
+        {
+          std::unordered_map<core::titulus*, uint32_t> unique_empires;
+          for (size_t j = 0; j < childs.size(); ++j) {
+            const uint32_t titulus_index = ctx->container->get_data<uint32_t>(debug::entities::province, childs[j], debug::properties::province::title_index);
+            auto t = ctx->container->get_title(titulus_index);
+            auto duchy = t->parent;
+            auto kingdom = duchy->parent;
+            auto empire = kingdom->parent;
+            ASSERT(empire->type == core::titulus::type::imperial);
+            if (empire->owner != nullptr) continue;
+            auto itr = unique_empires.find(empire);
+            if (itr == unique_empires.end()) itr = unique_empires.insert(std::make_pair(empire, 0)).first;
+            ++itr->second;
+          }
+          
+          
+          core::titulus* empire = nullptr;
+          uint32_t max_kingdom_count = 0;
+          for (const auto &pair : unique_empires) {
+            if (max_kingdom_count < pair.second) {
+              max_kingdom_count = pair.second;
+              empire = pair.first;
+            }
+          }
+          
+          owner->add_title(empire);
+        }
+      }
+      
+      // как то так раздали все титулы одному персонажу пока что
+      // их нужно будет потом распределить по подельникам
+      // нужно сделать еще города
+    }
+    
+    void generate_tech_level(generator::context* ctx, sol::table &table) {
+      utils::time_log log("generating tech level");
+      
+      // что такое тех уровень?
+      // тех в средвековье определялся в основном прошлым 
+      // то есть примерно в области западной римской империи тех чуть повыше
+      // восточная римская империя - высокий тех
+      // рядом с китаем высокий тех
+      // что такое тех уровень с технической стороны?
+      // я думаю что можно сделать что то похожее на институты в еу4
+      // хороший вопрос как их распределить?
+      // существует несколько техов например обработка железа дает возможность нанимать тяжелые отряды
+      // хотя по теху пока еще не понятно как лучше сделать
+      // в цк2 тех состоял из формы правления и культурных техов
+      // форма правления не давала ниче строить племенам, техи позволяли проводить некоторые законы
+      // таким образом техи должны зависить от формы правления, а форма правления должна зависеть от техов
+      // техи получить должно быть возможно без формы правления, причем техи можно получить не по порядку
+      // какие техи? должны быть техи "ключевые", они позволяют серьезно продвинуться по развитию
+      // например тех организованность позволяют получить какую то форму феодализма
+      
+      // нужно решить несколько технических проблем
+      // как техи будут передавать свои бонусы? особые бонусы делать сложно
+      // особые бонусы это что?
     }
   }
 }

@@ -4,6 +4,7 @@
 #include "utils/globals.h"
 #include "render/targets.h"
 #include "render/window.h"
+#include "render/shared_structures.h"
 
 namespace devils_engine {
   namespace camera {
@@ -98,6 +99,12 @@ namespace devils_engine {
       m_zoom = glm::min(m_zoom, max_zoom); 
       auto trans = m_ent->get<components::transform>();
       trans->pos = -m_front * (520.0f + m_zoom);
+      const float norm_zoom = (m_zoom - min_zoom) / (max_zoom - min_zoom);
+      
+      auto u = global::get<render::buffers>()->uniform;
+      auto camera_data = reinterpret_cast<render::camera_data*>(u->ptr());
+      ASSERT(camera_data != nullptr);
+      camera_data->dim.z = glm::floatBitsToUint(norm_zoom);
     }
     
     float camera::zoom() const { return m_zoom; }

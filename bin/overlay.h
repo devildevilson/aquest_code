@@ -21,7 +21,7 @@ namespace devils_engine {
       end
     };
     
-    void debug(const uint32_t &picked_tile_index);
+    void debug(const uint32_t &picked_tile_index, const map::generator::container* container);
     state debug_generator(systems::generator* gen, map::generator::context* context, sol::table &table);
   }
 }

@@ -11,10 +11,11 @@
 #include "map_generators2.h"
 #include "utils/random_engine.h"
 #include "FastNoise.h"
+#include "generator_container.h"
 
 namespace devils_engine {
   namespace overlay {
-    void debug(const uint32_t &picked_tile_index) {
+    void debug(const uint32_t &picked_tile_index, const map::generator::container* container) {
       if (picked_tile_index == UINT32_MAX) return;
       
       auto interface = global::get<interface::context>();
@@ -26,9 +27,65 @@ namespace devils_engine {
       nk_style_set_font(ctx, &global::get<interface::context>()->fonts[fonts::technical]->handle);
       
       if (nk_begin(ctx, "debug interface", nk_rect(5, 5, 400, 400), NK_WINDOW_NO_SCROLLBAR | NK_WINDOW_BACKGROUND)) {
-        nk_layout_row_static(ctx, 30.0f, 400, 1);
+        nk_layout_row_static(ctx, 25.0f, 400, 1);
         {
           const std::string str = "Tile index " + std::to_string(picked_tile_index);
+          nk_label(ctx, str.c_str(), NK_TEXT_LEFT);
+        }
+        
+        {
+          const std::string str = "Plate index " + std::to_string(container->get_data<uint32_t>(map::debug::entities::tile, picked_tile_index, map::debug::properties::tile::plate_index));
+          nk_label(ctx, str.c_str(), NK_TEXT_LEFT);
+        }
+        
+        {
+          const std::string str = "Elevation " + std::to_string(container->get_data<float>(map::debug::entities::tile, picked_tile_index, map::debug::properties::tile::elevation));
+          nk_label(ctx, str.c_str(), NK_TEXT_LEFT);
+        }
+        
+        {
+          const std::string str = "Temperature " + std::to_string(container->get_data<float>(map::debug::entities::tile, picked_tile_index, map::debug::properties::tile::heat));
+          nk_label(ctx, str.c_str(), NK_TEXT_LEFT);
+        }
+        
+        {
+          const std::string str = "Moisture " + std::to_string(container->get_data<float>(map::debug::entities::tile, picked_tile_index, map::debug::properties::tile::moisture));
+          nk_label(ctx, str.c_str(), NK_TEXT_LEFT);
+        }
+        
+        {
+          const uint32_t biome_id = container->get_data<uint32_t>(map::debug::entities::tile, picked_tile_index, map::debug::properties::tile::biome);
+          const std::string str = "Plate index " + std::string(render::biome_names[biome_id]);
+          nk_label(ctx, str.c_str(), NK_TEXT_LEFT);
+        }
+        
+        {
+          const std::string str = "Province index " + std::to_string(container->get_data<uint32_t>(map::debug::entities::tile, picked_tile_index, map::debug::properties::tile::province_index));
+          nk_label(ctx, str.c_str(), NK_TEXT_LEFT);
+        }
+        
+        {
+          const std::string str = "Culture " + std::to_string(container->get_data<uint32_t>(map::debug::entities::tile, picked_tile_index, map::debug::properties::tile::culture_id));
+          nk_label(ctx, str.c_str(), NK_TEXT_LEFT);
+        }
+        
+        {
+          const std::string str = "Country " + std::to_string(container->get_data<uint32_t>(map::debug::entities::tile, picked_tile_index, map::debug::properties::tile::country_index));
+          nk_label(ctx, str.c_str(), NK_TEXT_LEFT);
+        }
+        
+        {
+          const std::string str = "Duchy " + std::to_string(container->get_data<uint32_t>(map::debug::entities::tile, picked_tile_index, map::debug::properties::tile::test_value_uint1));
+          nk_label(ctx, str.c_str(), NK_TEXT_LEFT);
+        }
+        
+        {
+          const std::string str = "Kingdom " + std::to_string(container->get_data<uint32_t>(map::debug::entities::tile, picked_tile_index, map::debug::properties::tile::test_value_uint2));
+          nk_label(ctx, str.c_str(), NK_TEXT_LEFT);
+        }
+        
+        {
+          const std::string str = "Empire " + std::to_string(container->get_data<uint32_t>(map::debug::entities::tile, picked_tile_index, map::debug::properties::tile::test_value_uint3));
           nk_label(ctx, str.c_str(), NK_TEXT_LEFT);
         }
       }
@@ -183,6 +240,7 @@ namespace devils_engine {
               gen->add(map::default_generator_pairs[15]);
               gen->add(map::default_generator_pairs[16]);
               gen->add(map::default_generator_pairs[17]);
+              gen->add(map::default_generator_pairs[18]);
               ++current_generator;
               
               current_state = state::constructed_generator;

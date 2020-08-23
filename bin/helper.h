@@ -10,6 +10,7 @@
 #include "utils/thread_pool.h"
 #include "utils/random_engine.h"
 #include "utils/utility.h"
+#include "utils/works_utils.h"
 //#include "utils/perlin.h"
 #include "FastNoise.h"
 
@@ -19,6 +20,8 @@
 #include "render/targets.h"
 #include "render/container.h"
 #include "render/shared_structures.h"
+#include "render/render_mode_container.h"
+#include "render/pipeline_mode_updater.h"
 
 #include "figures.h"
 #include "camera.h"
@@ -33,6 +36,7 @@
 #include "generator_context2.h"
 #include "interface_context.h"
 #include "overlay.h"
+#include "map_creator.h"
 
 #include <set>
 #include <vector>
@@ -80,6 +84,9 @@ namespace devils_engine {
   void create_render_system(system_container_t &systems);
   void create_render_stages(system_container_t &systems);
   void create_map_container(system_container_t &systems);
+  map::creator* setup_map_generator();
+  void destroy_map_generator(map::creator** ptr);
+  void setup_rendering_modes(render::mode_container &container);
 //   void create_map_generator(system_container_t &systems, dt::thread_pool* pool, map::generator_context* context);
 //   std::vector<systems::generator<map::generator_context>*> create_map_generators(system_container_t &systems, dt::thread_pool* pool, map::generator_context* context);
 
@@ -96,6 +103,7 @@ namespace devils_engine {
   void border_points_test(const std::vector<glm::vec4> &array);
   void find_border_points(const map::generator::container* container, const core::map* map, const sol::table &table);
   
+  void generate_tile_connections(const core::map* map, dt::thread_pool* pool);
 
   void sync(utils::frame_time &frame_time, const size_t &time);
   

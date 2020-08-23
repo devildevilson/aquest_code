@@ -93,23 +93,31 @@ namespace devils_engine {
     const utils::id map_move = utils::id::get("map_move");
     input::set_key(GLFW_MOUSE_BUTTON_RIGHT, map_move);
     
-    const utils::id plate_render_mode = utils::id::get("plate_render_mode");
+    const utils::id plates_render_mode = utils::id::get("plates_render_mode");
     const utils::id elevation_render_mode = utils::id::get("elevation_render_mode");
     const utils::id temperature_render_mode = utils::id::get("temperature_render_mode");
+    const utils::id moisture_render_mode = utils::id::get("moisture_render_mode");
     const utils::id biome_render_mode = utils::id::get("biome_render_mode");
     const utils::id cultures_render_mode = utils::id::get("cultures_render_mode");
     const utils::id provinces_render_mode = utils::id::get("provinces_render_mode");
     const utils::id countries_render_mode = utils::id::get("countries_render_mode");
-    input::set_key(GLFW_KEY_F1, plate_render_mode);
+    const utils::id test_data_render_mode1 = utils::id::get("test_data_render_mode1");
+    const utils::id test_data_render_mode2 = utils::id::get("test_data_render_mode2");
+    const utils::id test_data_render_mode3 = utils::id::get("test_data_render_mode3");
+    input::set_key(GLFW_KEY_F1, plates_render_mode);
     input::set_key(GLFW_KEY_F2, elevation_render_mode);
     input::set_key(GLFW_KEY_F3, temperature_render_mode);
-    input::set_key(GLFW_KEY_F4, biome_render_mode);
-    input::set_key(GLFW_KEY_F5, cultures_render_mode);
-    input::set_key(GLFW_KEY_F6, provinces_render_mode);
-    input::set_key(GLFW_KEY_F7, countries_render_mode);
+    input::set_key(GLFW_KEY_F4, moisture_render_mode);
+    input::set_key(GLFW_KEY_F5, biome_render_mode);
+    input::set_key(GLFW_KEY_F6, cultures_render_mode);
+    input::set_key(GLFW_KEY_F7, provinces_render_mode);
+    input::set_key(GLFW_KEY_F8, countries_render_mode);
+    input::set_key(GLFW_KEY_F9, test_data_render_mode1);
+    input::set_key(GLFW_KEY_F10, test_data_render_mode2);
+    input::set_key(GLFW_KEY_F11, test_data_render_mode3);
   }
   
-  float hit_sphere(const glm::vec4 &center, const float &radius, const utils::ray &r){
+  float hit_sphere(const glm::vec4 &center, const float &radius, const utils::ray &r) {
     const glm::vec4 oc = r.pos - center;
     const float a = glm::dot(r.dir, r.dir);
     const float b = 2.0f * glm::dot(oc, r.dir);
@@ -143,7 +151,9 @@ namespace devils_engine {
     last_xpos = xpos;
     last_ypos = ypos;
     
-    const float sens = 5.0f;
+    const float zoom = camera->zoom();
+    const float zoom_k = zoom / components::camera::max_zoom;
+    const float sens = 5.0f * (1.0f + zoom_k * 0.5f);
     const float x_sens = 1.0f;
     const float y_sens = 1.0f;
     const float x_move = sens * x_sens * MCS_TO_SEC(time) * delta_xpos;
@@ -157,13 +167,19 @@ namespace devils_engine {
   
   void key_input(const size_t &time) {
     (void)time;
-    static const utils::id plate_render_mode = utils::id::get("plate_render_mode");
-    static const utils::id elevation_render_mode = utils::id::get("elevation_render_mode");
-    static const utils::id temperature_render_mode = utils::id::get("temperature_render_mode");
-    static const utils::id biome_render_mode = utils::id::get("biome_render_mode");
-    static const utils::id cultures_render_mode = utils::id::get("cultures_render_mode");
-    static const utils::id provinces_render_mode = utils::id::get("provinces_render_mode");
-    static const utils::id countries_render_mode = utils::id::get("countries_render_mode");
+    static const std::vector<utils::id> modes = {
+      utils::id::get("plates_render_mode"),
+      utils::id::get("elevation_render_mode"),
+      utils::id::get("temperature_render_mode"),
+      utils::id::get("moisture_render_mode"),
+      utils::id::get("biome_render_mode"),
+      utils::id::get("cultures_render_mode"),
+      utils::id::get("provinces_render_mode"),
+      utils::id::get("countries_render_mode"),
+      utils::id::get("test_data_render_mode1"),
+      utils::id::get("test_data_render_mode2"),
+      utils::id::get("test_data_render_mode3"),
+    };
     
     auto map = global::get<core::map>();
     auto container = global::get<map::generator::container>();
@@ -173,32 +189,11 @@ namespace devils_engine {
       auto change = input::next_input_event(mem, 1);
       while (change.id.valid()) {
         //PRINT_VAR("change id", change.id.name())
-        if (change.id == plate_render_mode && change.event != input::release) {
-          rendering_mode(container, map, map::debug::properties::tile::plate_index, 1, 0);
-        }
-        
-        if (change.id == elevation_render_mode && change.event != input::release) {
-          rendering_mode(container, map, map::debug::properties::tile::elevation, 2, 2);
-        }
-        
-        if (change.id == temperature_render_mode && change.event != input::release) {
-          rendering_mode(container, map, map::debug::properties::tile::heat, 2, 2);
-        }
-        
-        if (change.id == biome_render_mode && change.event != input::release) {
-          rendering_mode(container, map, map::debug::properties::tile::biome, 0, 0);
-        }
-        
-        if (change.id == cultures_render_mode && change.event != input::release) {
-          rendering_mode(container, map, map::debug::properties::tile::culture_id, 1, 1);
-        }
-        
-        if (change.id == provinces_render_mode && change.event != input::release) {
-          rendering_mode(container, map, map::debug::properties::tile::province_index, 1, 1);
-        }
-        
-        if (change.id == countries_render_mode && change.event != input::release) {
-          rendering_mode(container, map, map::debug::properties::tile::country_index, 1, 1);
+        if (change.event != input::release) {
+          for (const auto &mode_id : modes) {
+            if (change.id != mode_id) continue;
+            render::mode(mode_id.name());
+          }
         }
         
         change = input::next_input_event(mem, 1);
@@ -235,7 +230,7 @@ namespace devils_engine {
     const glm::mat4 inv_view = buffers->get_inv_view();
 
     float x = (2.0f * xpos) /  float(window->surface.extent.width) - 1.0f;
-    float y = (2.0f * ypos) / float(window->surface.extent.height) - 1.0f; // тут по идее должно быть обратное значение
+    float y = 1.0f - (2.0f * ypos) / float(window->surface.extent.height); // тут по идее должно быть обратное значение
     float z = 1.0f;
     
     ASSERT(x >= -1.0f && x <= 1.0f);
@@ -261,6 +256,8 @@ namespace devils_engine {
     const float hit = hit_sphere(glm::vec4(0.0f, 0.0f, 0.0f, 1.0f), 500.0f, intersect_sphere);
     if (hit < 0.0f) return UINT32_MAX;
     
+    //PRINT_VAR("hit", hit)
+    
     const glm::vec4 point_on_sphere = intersect_sphere.pos + intersect_sphere.dir * hit;
     const glm::vec4 new_dir = glm::normalize(-glm::vec4(glm::vec3(point_on_sphere), 0.0f));
     
@@ -271,6 +268,12 @@ namespace devils_engine {
     
     const uint32_t tile_index_local1 = global::get<core::map>()->cast_ray(casting_ray);
     //PRINT_VEC4("point_on_sphere", point_on_sphere)
+//     if (tile_index_local1 != UINT32_MAX) {
+//       const auto &tile_data = render::unpack_data(global::get<core::map>()->get_tile(tile_index_local1));
+//       const glm::vec4 center = global::get<core::map>()->get_point(tile_data.center);
+//       PRINT_VEC4("tile center     ", center)
+//       PRINT_VEC4("point_on_sphere ", point_on_sphere)
+//     }
     return tile_index_local1;
   }
   
@@ -409,10 +412,13 @@ namespace devils_engine {
       
       sizeof(render::tile_optimizer) +
       sizeof(render::tile_borders_optimizer) +
+      sizeof(render::tile_walls_optimizer) +
+      sizeof(render::barriers) +
 
       sizeof(render::render_pass_begin) +
       sizeof(render::tile_render) +
       sizeof(render::tile_border_render) +
+      sizeof(render::tile_connections_render) +
       sizeof(render::interface_stage) +
       sizeof(render::render_pass_end) +
 
@@ -478,10 +484,13 @@ namespace devils_engine {
                  
     auto opt     = system->add_stage<render::tile_optimizer>(render::tile_optimizer::create_info{device});
     auto opt2    = system->add_stage<render::tile_borders_optimizer>(render::tile_borders_optimizer::create_info{device});
+    auto opt3    = system->add_stage<render::tile_walls_optimizer>(render::tile_walls_optimizer::create_info{device});
+                   system->add_stage<render::barriers>();
                  
                    system->add_stage<render::render_pass_begin>();
     auto tiles   = system->add_stage<render::tile_render>(render::tile_render::create_info{device, opt});
     auto borders = system->add_stage<render::tile_border_render>(render::tile_border_render::create_info{device, opt2});
+    auto walls   = system->add_stage<render::tile_connections_render>(render::tile_connections_render::create_info{device, opt3});
                    system->add_stage<render::interface_stage>(render::interface_stage::create_info{device});
                    system->add_stage<render::render_pass_end>();
 
@@ -491,8 +500,10 @@ namespace devils_engine {
 
     global::get(start);
     global::get(tiles);
+    global::get(walls);
     global::get(buffers);
     global::get(opt2);
+    global::get(opt3);
     (void)borders;
     
     const float dist = 550.0f;
@@ -529,6 +540,9 @@ namespace devils_engine {
       map::generator::data_type::uint_t,   //       province_index,
       map::generator::data_type::uint_t,   //       culture_id,
       map::generator::data_type::uint_t,   //       country_index
+      map::generator::data_type::uint_t,   //       test_value_uint1
+      map::generator::data_type::uint_t,   //       test_value_uint2
+      map::generator::data_type::uint_t,   //       test_value_uint3
     };
     
     const std::vector<std::pair<utils::id, std::vector<map::generator::data_type>>> entities_types = {
@@ -554,6 +568,7 @@ namespace devils_engine {
       }),
       std::make_pair(utils::id::get("province"), std::vector<map::generator::data_type>{
         map::generator::data_type::uint_t,  // country_index,
+        map::generator::data_type::uint_t,  // title_index
       }),
       std::make_pair(utils::id::get("culture"), std::vector<map::generator::data_type>{}),
       std::make_pair(utils::id::get("country"), std::vector<map::generator::data_type>{}),
@@ -561,6 +576,290 @@ namespace devils_engine {
     
     systems.map_container = systems.container.create<map::generator::container>(map::generator::container::create_info{tiles_types, entities_types});
     global::get(systems.map_container);
+  }
+  
+  map::creator* setup_map_generator() {
+    auto ptr = new map::creator;
+    
+    {
+      const size_t step1_size = sizeof(map::property_int) + sizeof(map::property_float);
+      const std::vector<map::generator_pair> pairs = {
+        map::default_generator_pairs[0],
+        map::default_generator_pairs[1],
+        map::default_generator_pairs[2]
+      };
+      auto step = ptr->create(true, step1_size, "Tectonic plates generator", pairs, "plates_render_mode");
+      auto prop1 = step->add<map::property_int>(map::property_int::create_info{
+        40,
+        199,
+        300,
+        1,
+        0.5f,
+        "Plates count",
+        "plates_count"
+      });
+      prop1->set_default_value(ptr->get_table());
+      
+      auto prop2 = step->add<map::property_float>(map::property_float::create_info{
+        0.0f,
+        0.7f,
+        1.0f,
+        0.01f,
+        0.005f,
+        "Ocean ratio",
+        "ocean_percentage"
+      });
+      prop2->set_default_value(ptr->get_table());
+    }
+    
+    {
+      const size_t step1_size = sizeof(map::property_int) + sizeof(map::property_float) + sizeof(map::property_float) + sizeof(map::property_float);
+      const std::vector<map::generator_pair> pairs = {
+        map::default_generator_pairs[3],
+        map::default_generator_pairs[4],
+        map::default_generator_pairs[5],
+        map::default_generator_pairs[6],
+        map::default_generator_pairs[7],
+        map::default_generator_pairs[8],
+        map::default_generator_pairs[9],
+        map::default_generator_pairs[10],
+        map::default_generator_pairs[11],
+        map::default_generator_pairs[12]
+      };
+      
+      auto step = ptr->create(false, step1_size, "Biomes generator", pairs, "biome_render_mode");
+      auto prop1 = step->add<map::property_float>(map::property_float::create_info{
+        0.0f,
+        0.1f,
+        1.0f,
+        0.01f,
+        0.005f,
+        "Noise multiplier",
+        "noise_multiplier"
+      });
+      prop1->set_default_value(ptr->get_table());
+      
+      auto prop2 = step->add<map::property_float>(map::property_float::create_info{
+        0.0f,
+        0.7f,
+        1.0f,
+        0.01f,
+        0.005f,
+        "Blur ratio",
+        "blur_ratio"
+      });
+      prop2->set_default_value(ptr->get_table());
+      
+      auto prop3 = step->add<map::property_float>(map::property_float::create_info{
+        0.0f,
+        1.0f,
+        2.0f,
+        0.01f,
+        0.005f,
+        "Water blur ratio",
+        "blur_water_ratio"
+      });
+      prop3->set_default_value(ptr->get_table());
+      
+      auto prop4 = step->add<map::property_int>(map::property_int::create_info{
+        0,
+        2,
+        5,
+        1,
+        0.05f,
+        "Blur iterations count",
+        "blur_iterations_count"
+      });
+      prop4->set_default_value(ptr->get_table());
+    }
+    
+    {
+      const size_t step1_size = sizeof(map::property_int) + sizeof(map::property_int);
+      const std::vector<map::generator_pair> pairs = {
+        map::default_generator_pairs[13],
+        map::default_generator_pairs[14],
+        map::default_generator_pairs[15],
+        map::default_generator_pairs[16],
+        map::default_generator_pairs[17],
+        map::default_generator_pairs[18],
+      };
+      
+      auto step = ptr->create(false, step1_size, "Countries generator", pairs, "countries_render_mode");
+      auto prop1 = step->add<map::property_int>(map::property_int::create_info{
+        1000,
+        4000,
+        5000,
+        50,
+        float(5000 - 1000) / 400.0f,
+        "Province count",
+        "provinces_count"
+      });
+      prop1->set_default_value(ptr->get_table());
+      
+      auto prop2 = step->add<map::property_int>(map::property_int::create_info{
+        200,
+        300,
+        1000,
+        10,
+        float(1000 - 200) / 400.0f,
+        "History iterations count",
+        "history_iterations_count"
+      });
+      prop2->set_default_value(ptr->get_table());
+    }
+    
+    return ptr;
+  }
+  
+  void destroy_map_generator(map::creator** ptr) {
+    auto p = *ptr;
+    delete p;
+    *ptr = nullptr;
+  }
+  
+  void setup_rendering_modes(render::mode_container &container) {
+    container.insert(std::make_pair("plates_render_mode", [] () {
+      global::get<render::updater>()->set_render_mode(1);
+      global::get<render::updater>()->set_water_mode(0);
+      global::get<render::updater>()->update();
+      auto container = global::get<map::generator::container>();
+      auto map = global::get<core::map>();
+      
+      for (size_t i = 0; i < container->entities_count(map::debug::entities::tile); ++i) {
+        const uint32_t data = container->get_data<uint32_t>(map::debug::entities::tile, i, map::debug::properties::tile::plate_index);
+        map->set_tile_biom(i, data);
+      }
+    }));
+    
+    container.insert(std::make_pair("elevation_render_mode", [] () {
+      global::get<render::updater>()->set_render_mode(2);
+      global::get<render::updater>()->set_water_mode(2);
+      global::get<render::updater>()->update();
+      auto container = global::get<map::generator::container>();
+      auto map = global::get<core::map>();
+      
+      for (size_t i = 0; i < container->entities_count(map::debug::entities::tile); ++i) {
+        const float data = container->get_data<float>(map::debug::entities::tile, i, map::debug::properties::tile::elevation);
+        map->set_tile_biom(i, glm::floatBitsToUint(data));
+      }
+    }));
+    
+    container.insert(std::make_pair("temperature_render_mode", [] () {
+      global::get<render::updater>()->set_render_mode(2);
+      global::get<render::updater>()->set_water_mode(2);
+      global::get<render::updater>()->update();
+      auto container = global::get<map::generator::container>();
+      auto map = global::get<core::map>();
+      
+      for (size_t i = 0; i < container->entities_count(map::debug::entities::tile); ++i) {
+        const float data = container->get_data<float>(map::debug::entities::tile, i, map::debug::properties::tile::heat);
+        map->set_tile_biom(i, glm::floatBitsToUint(data));
+      }
+    }));
+    
+    container.insert(std::make_pair("moisture_render_mode", [] () {
+      global::get<render::updater>()->set_render_mode(2);
+      global::get<render::updater>()->set_water_mode(2);
+      global::get<render::updater>()->update();
+      auto container = global::get<map::generator::container>();
+      auto map = global::get<core::map>();
+      
+      for (size_t i = 0; i < container->entities_count(map::debug::entities::tile); ++i) {
+        const float data = container->get_data<float>(map::debug::entities::tile, i, map::debug::properties::tile::moisture);
+        map->set_tile_biom(i, glm::floatBitsToUint(data));
+      }
+    }));
+    
+    container.insert(std::make_pair("biome_render_mode", [] () {
+      global::get<render::updater>()->set_render_mode(0);
+      global::get<render::updater>()->set_water_mode(0);
+      global::get<render::updater>()->update();
+      auto container = global::get<map::generator::container>();
+      auto map = global::get<core::map>();
+      
+      for (size_t i = 0; i < container->entities_count(map::debug::entities::tile); ++i) {
+        const uint32_t data = container->get_data<uint32_t>(map::debug::entities::tile, i, map::debug::properties::tile::biome);
+        map->set_tile_biom(i, data);
+      }
+    }));
+    
+    container.insert(std::make_pair("cultures_render_mode", [] () {
+      global::get<render::updater>()->set_render_mode(1);
+      global::get<render::updater>()->set_water_mode(1);
+      global::get<render::updater>()->update();
+      auto container = global::get<map::generator::container>();
+      auto map = global::get<core::map>();
+      
+      for (size_t i = 0; i < container->entities_count(map::debug::entities::tile); ++i) {
+        const uint32_t data = container->get_data<uint32_t>(map::debug::entities::tile, i, map::debug::properties::tile::culture_id);
+        map->set_tile_biom(i, data);
+      }
+    }));
+    
+    container.insert(std::make_pair("provinces_render_mode", [] () {
+      global::get<render::updater>()->set_render_mode(1);
+      global::get<render::updater>()->set_water_mode(1);
+      global::get<render::updater>()->update();
+      auto container = global::get<map::generator::container>();
+      auto map = global::get<core::map>();
+      
+      for (size_t i = 0; i < container->entities_count(map::debug::entities::tile); ++i) {
+        const uint32_t data = container->get_data<uint32_t>(map::debug::entities::tile, i, map::debug::properties::tile::province_index);
+        map->set_tile_biom(i, data);
+      }
+    }));
+    
+    container.insert(std::make_pair("countries_render_mode", [] () {
+      global::get<render::updater>()->set_render_mode(1);
+      global::get<render::updater>()->set_water_mode(1);
+      global::get<render::updater>()->update();
+      auto container = global::get<map::generator::container>();
+      auto map = global::get<core::map>();
+      
+      for (size_t i = 0; i < container->entities_count(map::debug::entities::tile); ++i) {
+        const uint32_t data = container->get_data<uint32_t>(map::debug::entities::tile, i, map::debug::properties::tile::country_index);
+        map->set_tile_biom(i, data);
+      }
+    }));
+    
+    container.insert(std::make_pair("test_data_render_mode1", [] () {
+      global::get<render::updater>()->set_render_mode(1);
+      global::get<render::updater>()->set_water_mode(1);
+      global::get<render::updater>()->update();
+      auto container = global::get<map::generator::container>();
+      auto map = global::get<core::map>();
+      
+      for (size_t i = 0; i < container->entities_count(map::debug::entities::tile); ++i) {
+        const uint32_t data = container->get_data<uint32_t>(map::debug::entities::tile, i, map::debug::properties::tile::test_value_uint1);
+        map->set_tile_biom(i, data);
+      }
+    }));
+    
+    container.insert(std::make_pair("test_data_render_mode2", [] () {
+      global::get<render::updater>()->set_render_mode(1);
+      global::get<render::updater>()->set_water_mode(1);
+      global::get<render::updater>()->update();
+      auto container = global::get<map::generator::container>();
+      auto map = global::get<core::map>();
+      
+      for (size_t i = 0; i < container->entities_count(map::debug::entities::tile); ++i) {
+        const uint32_t data = container->get_data<uint32_t>(map::debug::entities::tile, i, map::debug::properties::tile::test_value_uint2);
+        map->set_tile_biom(i, data);
+      }
+    }));
+    
+    container.insert(std::make_pair("test_data_render_mode3", [] () {
+      global::get<render::updater>()->set_render_mode(1);
+      global::get<render::updater>()->set_water_mode(1);
+      global::get<render::updater>()->update();
+      auto container = global::get<map::generator::container>();
+      auto map = global::get<core::map>();
+      
+      for (size_t i = 0; i < container->entities_count(map::debug::entities::tile); ++i) {
+        const uint32_t data = container->get_data<uint32_t>(map::debug::entities::tile, i, map::debug::properties::tile::test_value_uint3);
+        map->set_tile_biom(i, data);
+      }
+    }));
   }
   
 //   void create_map_generator(system_container_t &systems, dt::thread_pool* pool, map::generator_context* context) {
@@ -922,7 +1221,7 @@ namespace devils_engine {
     table["userdata"]["plates_count"] = 199;
     table["userdata"]["ocean_percentage"] = 0.7f;
     table["userdata"]["noise_multiplier"] = 0.1f;
-    table["userdata"]["blur_ratio"] = 0.3f;
+    table["userdata"]["blur_ratio"] = 0.7f;
     table["userdata"]["blur_water_ratio"] = 1.0f;
     table["userdata"]["blur_iterations_count"] = 2;
     table["userdata"]["provinces_count"] = 4000;
@@ -1019,44 +1318,45 @@ namespace devils_engine {
   }
   
   // это мы делаем максимум раз в ход
-  void border_points_test(const std::vector<glm::vec4> &array) {
-    // точки должны быть замкнутыми
-    // точки должны быть последовательными (!)
-    // 
-    
-    std::vector<glm::vec4> out;
-    const float thickness = 0.7f;
-    for (size_t i = 0; i < array.size(); ++i) {
-      const glm::vec4 p0 = array[i+0];
-      const glm::vec4 p1 = array[(i+1)%array.size()];
-      const glm::vec4 p2 = array[(i+2)%array.size()];
-      // все точки должны быть ближайшими к соседям
-      
-      // некоторые нормализации отсюда можно убрать
-      const glm::vec4 p0p1 = glm::normalize(p1-p0);
-      const glm::vec4 p1p2 = glm::normalize(p2-p1);
-      const glm::vec4 np1 = glm::normalize(p1);
-      const glm::vec4 n0 = glm::normalize(glm::vec4(glm::cross(glm::vec3(p0p1), glm::vec3(glm::normalize(p0))), 0.0f));
-      const glm::vec4 n1 = glm::normalize(glm::vec4(glm::cross(glm::vec3(p1p2), glm::vec3(np1)), 0.0f));
-      const glm::vec4 t = glm::normalize(n1 + n0);
-      const glm::vec4 m = glm::normalize(glm::vec4(glm::cross(glm::vec3(t), glm::vec3(np1)), 0.0f));
-      
-      const float l = thickness / glm::dot(m, p0p1); // возможно в моем случае будет достаточно просто умножить thickness на m
-      
-      const glm::vec4 point1_near_p1 = p1 + m * l;
-      const glm::vec4 point2_near_p1 = p1 - m * l;
-      // как то так считается точка границы
-      // мне нужно еще взять как то только половину во внутренюю сторону
-      // то есть либо point1_near_p1 и p1 либо point2_near_p1 и p1
-      // как понять какая сторона внутренняя? по идее сторона будет строго определена 
-      // если мы выберем идти ли нам по часовой стрелке или против
-      // то есть точки должны быть строго последовательными по часовой стрелке
-      out.push_back(p1);
-      out.push_back(point1_near_p1);
-    }
-  }
+//   void border_points_test(const std::vector<glm::vec4> &array) {
+//     // точки должны быть замкнутыми
+//     // точки должны быть последовательными (!)
+//     // 
+//     
+//     std::vector<glm::vec4> out;
+//     const float thickness = 0.7f;
+//     for (size_t i = 0; i < array.size(); ++i) {
+//       const glm::vec4 p0 = array[i+0];
+//       const glm::vec4 p1 = array[(i+1)%array.size()];
+//       const glm::vec4 p2 = array[(i+2)%array.size()];
+//       // все точки должны быть ближайшими к соседям
+//       
+//       // некоторые нормализации отсюда можно убрать
+//       const glm::vec4 p0p1 = glm::normalize(p1-p0);
+//       const glm::vec4 p1p2 = glm::normalize(p2-p1);
+//       const glm::vec4 np1 = glm::normalize(p1);
+//       const glm::vec4 n0 = glm::normalize(glm::vec4(glm::cross(glm::vec3(p0p1), glm::vec3(glm::normalize(p0))), 0.0f));
+//       const glm::vec4 n1 = glm::normalize(glm::vec4(glm::cross(glm::vec3(p1p2), glm::vec3(np1)), 0.0f));
+//       const glm::vec4 t = glm::normalize(n1 + n0);
+//       const glm::vec4 m = glm::normalize(glm::vec4(glm::cross(glm::vec3(t), glm::vec3(np1)), 0.0f));
+//       
+//       const float l = thickness / glm::dot(m, p0p1); // возможно в моем случае будет достаточно просто умножить thickness на m
+//       
+//       const glm::vec4 point1_near_p1 = p1 + m * l;
+//       const glm::vec4 point2_near_p1 = p1 - m * l;
+//       // как то так считается точка границы
+//       // мне нужно еще взять как то только половину во внутренюю сторону
+//       // то есть либо point1_near_p1 и p1 либо point2_near_p1 и p1
+//       // как понять какая сторона внутренняя? по идее сторона будет строго определена 
+//       // если мы выберем идти ли нам по часовой стрелке или против
+//       // то есть точки должны быть строго последовательными по часовой стрелке
+//       out.push_back(p1);
+//       out.push_back(point1_near_p1);
+//     }
+//   }
   
   void find_border_points(const map::generator::container* container, const core::map* map, const sol::table &table) {
+    (void)table;
     // возможно нужно найти первый граничный тайл, а потом обходить его соседей
     // тут можно поступить несколькими способами
     // 1) попытаться обойти тайлы правильно
@@ -1355,9 +1655,12 @@ namespace devils_engine {
     for (size_t i = 0; i < provinces_count; ++i) {
       const uint32_t province_index = i;
       // нужен более строгий способ получать тайлы у провинций
-      const uint32_t tiles_count = container->get_childs(map::debug::entities::province, province_index).size();
+      const auto &childs = container->get_childs(map::debug::entities::province, province_index);
+      if (childs.empty()) throw std::runtime_error("Could not find province tiles");
+      
+      const uint32_t tiles_count = childs.size();
       for (size_t j = 0; j < tiles_count; ++j) {
-        const uint32_t tile_index = container->get_childs(map::debug::entities::province, province_index)[j]; 
+        const uint32_t tile_index = childs[j]; 
         
         const auto &data = render::unpack_data(map->get_tile(tile_index));
         const uint32_t n_count = render::is_pentagon(data) ? 5 : 6;
@@ -1569,6 +1872,78 @@ namespace devils_engine {
     ASSERT(ptr != nullptr);
     memcpy(ptr, types.data(), types.size() * sizeof(border_type2));
   }
+  
+  const uint32_t layers_count = 10;
+  const float mountain_height = 0.5f;
+  const float render_tile_height = 10.0f;
+  const float layer_height = mountain_height / float(layers_count);
+  void generate_tile_connections(const core::map* map, dt::thread_pool* pool) {
+    struct wall {
+      uint32_t tile1;
+      uint32_t tile2;
+      uint32_t point1;
+      uint32_t point2;
+    };
+    
+    std::vector<wall> walls;
+    std::mutex mutex;
+    
+    utils::submit_works(pool, map->tiles_count(), [map, &walls, &mutex] (const size_t &start, const size_t &count) {
+      for (size_t i = start; i < start+count; ++i) {
+        const uint32_t tile_index = i;
+        const auto &tile_data = render::unpack_data(map->get_tile(tile_index));
+        const uint32_t n_count = render::is_pentagon(tile_data) ? 5 : 6;
+        const float tile_height = tile_data.height;
+        const uint32_t height_layer = render::compute_height_layer(tile_height);
+        if (height_layer == 0) continue;
+                        
+        for (uint32_t j = 0; j < n_count; ++j) {
+          const uint32_t n_index = tile_data.neighbours[j];
+          const auto &n_tile_data = render::unpack_data(map->get_tile(n_index));
+          const float n_tile_height = n_tile_data.height;
+          const uint32_t n_height_layer = render::compute_height_layer(n_tile_height);
+          if (height_layer <= n_height_layer) continue;
+                        
+          // добавляем стенку 
+          // нам нужны две точки и индексы тайлов
+          
+          const uint32_t point1 = tile_data.points[j];
+          const uint32_t point2 = tile_data.points[(j+1)%n_count];
+          
+#ifndef _NDEBUG
+          {
+            std::unordered_set<uint32_t> tmp;
+            tmp.insert(point1);
+            tmp.insert(point2);
+            
+            uint32_t found = 0;
+            const uint32_t n_n_count = render::is_pentagon(n_tile_data) ? 5 : 6;
+            for (uint32_t k = 0; k < n_n_count; ++k) {
+              const uint32_t point_index = n_tile_data.points[k];
+              found += uint32_t(tmp.find(point_index) != tmp.end());
+              
+//               if (point1 == point_index) {
+//                 const bool a = (n_tile_data.points[(k+1)%n_n_count] == point2 || n_tile_data.points[k == 0 ? n_n_count-1 : k-1] == point2);
+//                 if (a) found = true;
+//               }
+            }
+            
+            ASSERT(found == 2);
+          }
+#endif
+
+          std::unique_lock<std::mutex> lock(mutex);
+          walls.push_back({tile_index, n_index, point1, point2});
+        }
+      }
+    });
+    
+    auto connections = global::get<render::buffers>()->tiles_connections;
+    connections->resize(walls.size() * sizeof(walls[0]));
+    auto ptr = connections->ptr();
+    memcpy(ptr, walls.data(), walls.size() * sizeof(walls[0]));
+    global::get<render::tile_walls_optimizer>()->set_connections_count(walls.size());
+  }
 
   void sync(utils::frame_time &frame_time, const size_t &time) {
     //auto start = std::chrono::steady_clock::now();
@@ -1690,3 +2065,4 @@ namespace devils_engine {
     glfwSetClipboardString(((render::window*)user_data)->handle, text);
   }
 }
+

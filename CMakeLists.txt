@@ -58,6 +58,8 @@ include_directories(
   include/stb/
   include/whereami/src/
   include/fmt/include/
+  include/memory/include/
+  include/magic_enum/include/
 )
 link_directories(
   ${CMAKE_CURRENT_BINARY_DIR}
@@ -91,6 +93,7 @@ if (WIN32)
   )
 else()
   set(CPPFS_LIB_PATH libs)
+  set(MEMORY_LIB_PATH include/memory/build/src/)
 
   # находим указанные зависимости (нужно чекнуть все ли это зависимости?)
   # вместо glm у меня установлен gli
@@ -111,6 +114,7 @@ else()
 
   link_directories(
     ${CPPFS_LIB_PATH}
+    ${MEMORY_LIB_PATH}
   )
 endif()
 
@@ -147,6 +151,10 @@ file(GLOB_RECURSE GLSL_SOURCE_FILES
   raw_shaders/borders.comp
   raw_shaders/borders.vert
   raw_shaders/borders.frag
+  raw_shaders/one_tile.vert
+  raw_shaders/one_tile.frag
+  raw_shaders/walls.comp
+  raw_shaders/walls.vert
 )
 
 foreach(GLSL ${GLSL_SOURCE_FILES})
@@ -209,7 +217,7 @@ set(HDR_LIST
 )
 
 add_library(utils ${SRC_LIST} ${HDR_LIST})
-target_link_libraries(utils)
+target_link_libraries(utils PUBLIC foonathan_memory)
 
 set(SRC_LIST
   render/container.cpp
@@ -223,6 +231,8 @@ set(SRC_LIST
   render/window.cpp
   render/stages.cpp
   render/targets.cpp
+  render/render_mode_container.cpp
+  render/pipeline_mode_updater.cpp
 )
 
 set(HDR_LIST
@@ -243,6 +253,8 @@ set(HDR_LIST
   render/Types.h
   render/window.h
   render/nuklear_header.h
+  render/render_mode_container.h
+  render/pipeline_mode_updater.h
 )
 
 add_library(render ${SRC_LIST} ${HDR_LIST})
@@ -263,6 +275,8 @@ set(SRC_LIST
   #include/lanes/src/deep.c
   #include/lanes/src/universe.c
   #include/lanes/src/compat.c
+  bin/character.cpp
+  bin/map_creator.cpp
 )
 
 set(HDR_LIST
@@ -278,6 +292,8 @@ set(HDR_LIST
   bin/generator_context2.h
   bin/generator_container.h
   bin/map_generator.h
+  bin/character.h
+  bin/map_creator.h
 )
 add_executable(${TARGET_NAME} ${SRC_LIST} ${HDR_LIST})
 target_link_libraries(${TARGET_NAME} render utils lua)

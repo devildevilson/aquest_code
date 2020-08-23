@@ -18,6 +18,7 @@ namespace devils_engine {
       yavf::Buffer* matrices;
       yavf::Buffer* border_buffer;
       yavf::Buffer* border_types;
+      yavf::Buffer* tiles_connections;
 
       buffers(yavf::Device* device);
       ~buffers();

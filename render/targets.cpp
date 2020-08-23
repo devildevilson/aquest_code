@@ -15,6 +15,7 @@ namespace devils_engine {
       matrices = device->create(yavf::BufferCreateInfo::buffer(sizeof(matrices_data), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT), VMA_MEMORY_USAGE_CPU_ONLY);
       border_buffer = device->create(yavf::BufferCreateInfo::buffer(sizeof(glm::vec4)*4, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT), VMA_MEMORY_USAGE_CPU_ONLY);
       border_types = device->create(yavf::BufferCreateInfo::buffer(sizeof(glm::vec4)*4, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT), VMA_MEMORY_USAGE_CPU_ONLY);
+      tiles_connections = device->create(yavf::BufferCreateInfo::buffer(sizeof(glm::uvec4)*4, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT), VMA_MEMORY_USAGE_CPU_ONLY);
 //       triangles = device->create(yavf::BufferCreateInfo::buffer(sizeof(packed_fast_triangle_t)*tri_count, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT), VMA_MEMORY_USAGE_CPU_ONLY);
 //       tile_indices = device->create(yavf::BufferCreateInfo::buffer(sizeof(uint32_t)*map->tiles.size(), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT), VMA_MEMORY_USAGE_CPU_ONLY);
 
@@ -122,6 +123,13 @@ namespace devils_engine {
         auto desc = dm.layout(storage_layout).create(pool)[0];
         size_t index = desc->add({border_types, 0, border_types->info().size, 0, 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER});
         border_types->setDescriptor(desc, index);
+      }
+      
+      {
+        yavf::DescriptorMaker dm(device);
+        auto desc = dm.layout(storage_layout).create(pool)[0];
+        size_t index = desc->add({tiles_connections, 0, tiles_connections->info().size, 0, 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER});
+        tiles_connections->setDescriptor(desc, index);
       }
       
 //       auto tiles_arr = reinterpret_cast<map::tile*>(tiles->ptr());

@@ -121,6 +121,47 @@ namespace devils_engine {
       yavf::DescriptorSet* set;
       yavf::Pipeline pipe;
     };
+    
+    class tile_walls_optimizer : public stage {
+    public:
+      static const uint32_t work_group_size = 256;
+      
+      struct indirect_buffer {
+        VkDrawIndirectCommand walls_command;
+        glm::uvec4 data;
+        utils::frustum frustum;
+      };
+      
+      static_assert(sizeof(indirect_buffer) % (sizeof(uint32_t)*4) == 0);
+      
+      struct create_info {
+        yavf::Device* device;
+      };
+      tile_walls_optimizer(const create_info &info);
+      ~tile_walls_optimizer();
+      
+      void begin() override;
+      void proccess(context* ctx) override;
+      void clear() override;
+      
+      yavf::Buffer* indirect_buffer() const;
+      yavf::Buffer* vertices_buffer() const;
+      
+      void set_connections_count(const uint32_t &count);
+    private:
+      yavf::Device* device;
+      yavf::Buffer* indirect;
+      yavf::Buffer* walls_indices;
+      yavf::DescriptorSet* set;
+      yavf::Pipeline pipe;
+    };
+    
+    class barriers : public stage {
+    public:
+      void begin() override;
+      void proccess(context* ctx) override;
+      void clear() override;
+    };
 
     class tile_render : public stage, public pipeline_stage {
     public:
@@ -138,14 +179,17 @@ namespace devils_engine {
       void recreate_pipelines(const game::image_resources_t* resource) override;
       void change_rendering_mode(const uint32_t &render_mode, const uint32_t &water_mode, const uint32_t &render_slot, const uint32_t &water_slot, const glm::vec3 &color);
       void add(const uint32_t &tile_index); // кажется только индекс тайла нам нужен
+      void picked_tile(const uint32_t &tile_index);
       
       yavf::Buffer* vertex_indices() const;
     private:
       yavf::Device* device;
       tile_optimizer* opt;
       yavf::Pipeline pipe;
+      yavf::Pipeline one_tile_pipe;
 //       yavf::Buffer* indices;
       yavf::Buffer* points_indices;
+      uint32_t picked_tile_index;
 
       void create_render_pass();
     };
@@ -170,6 +214,27 @@ namespace devils_engine {
       yavf::Device* device;
       tile_borders_optimizer* opt;
 //       tile_render* render;
+      yavf::Pipeline pipe;
+    };
+    
+    class tile_connections_render : public stage, public pipeline_stage {
+    public:
+      struct create_info {
+        yavf::Device* device;
+        tile_walls_optimizer* opt;
+      };
+      tile_connections_render(const create_info &info);
+      ~tile_connections_render();
+
+      void begin() override;
+      void proccess(context* ctx) override;
+      void clear() override;
+
+      void recreate_pipelines(const game::image_resources_t* resource) override;
+      void change_rendering_mode(const uint32_t &render_mode, const uint32_t &water_mode, const uint32_t &render_slot, const uint32_t &water_slot, const glm::vec3 &color);
+    private:
+      yavf::Device* device;
+      tile_walls_optimizer* opt;
       yavf::Pipeline pipe;
     };
     

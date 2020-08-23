@@ -72,6 +72,11 @@ const uint biome_conifer_forest   = 11;
 const uint biome_mountain         = 12;
 const uint biome_snowy_mountain   = 13;
 
+const uint layers_count = 20;
+const float render_tile_height = 7.0f;
+const float mountain_height = 0.5f;
+const float layer_height = 1.0f / float(layers_count);
+
 struct image_t {
   uint container;
 };
@@ -102,8 +107,6 @@ struct camera_data {
   mat4 view;
   vec4 pos;
   vec4 dir;
-  // uint width;
-  // uint height;
   uvec4 dim;
 };
 
@@ -160,6 +163,7 @@ struct packed_fast_triangle_t {
 // добавится индекс биома
 struct light_map_tile_t {
   uvec4 tile_indices;
+  //vec4 color;
   uvec4 packed_data1;
   uvec4 packed_data2;
   uvec4 packed_data3;
@@ -167,8 +171,8 @@ struct light_map_tile_t {
 
 struct map_tile_t {
   uint center;
-  uint biom_index;
-  uint unique_object_index; // шахты или еще какие постройки, но скорее всего это можно будет вынести в данные провинции
+  uint biom_index;          // тут мы можем задать цвет (и даже 10 бит на компоненту)
+  uint unique_object_index; // нам потребуется цвет и текстурка
   float height; // мне бы еще подъем какой
   uint points[6];
   uint neighbours[6];
@@ -177,6 +181,11 @@ struct map_tile_t {
   // что хорошо - закраску можно сгенерировать в screen space
   // там же мы должны сгенерить данные для отрисовки деревьев
 };
+
+// формула безье (2 порядок): vec = (1-t)*(1-t)*vec0+2*(1-t)*t*vec1+t*t*vec2, где
+// vec0 - начало линии, vec1 - контрольная точка, vec2 - конец линии,
+// t - переменная от 0 до 1 обозначающая участок линии безье
+// нужно выбрать подходящую степень разбиения и нарисовать кривую
 
 struct packed_biom_data_t {
   uvec4 uint_data;
@@ -447,6 +456,10 @@ INLINE bool is_pentagon(const light_map_tile_t tile) {
 
 INLINE bool is_pentagon(const map_tile_t tile) {
   return tile.neighbours[5] == GPU_UINT_MAX;
+}
+
+INLINE uint compute_height_layer(const float height) {
+  return height < 0.0f ? 0 : uint(height / layer_height);
 }
 
 const uint modulus = 1 << 31;

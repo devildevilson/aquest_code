@@ -29,6 +29,7 @@ namespace devils_engine {
 
       random_engine_st();
       random_engine_st(const uint32_t &seed);
+      void set_seed(const uint32_t &seed);
       uint32_t num();
       float norm();
       uint32_t index(const uint32_t &size);

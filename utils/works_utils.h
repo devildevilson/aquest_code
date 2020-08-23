@@ -28,6 +28,26 @@ namespace devils_engine {
       pool->compute();
       pool->wait();
     }
+    
+    template<typename T, typename... Args>
+    void submit_works_async(dt::thread_pool* pool, const size_t &count, T&& func, Args&& ...args) {
+      if (count == 0) return;
+
+      const size_t work_count = std::ceil(float(count) / float(pool->size()));
+      size_t start = 0;
+      for (size_t i = 0; i < pool->size(); ++i) {
+        const uint32_t jobCount = std::min(work_count, count-start);
+        if (jobCount == 0) break;
+
+        // тут все равно будет выделение памяти, видимо этого не избежать никак
+        pool->submitbase([start, jobCount, func, args...] () {
+          func(start, jobCount, args...);
+        });
+//         pool->submitnr(func, start, jobCount, std::forward<Args>(args)...);
+
+        start += jobCount;
+      }
+    }
   }
 }
 

@@ -80,6 +80,10 @@ namespace devils_engine {
     
     random_engine_st::random_engine_st() : gen(1) {}
     random_engine_st::random_engine_st(const uint32_t &seed) : gen(seed) {}
+    void random_engine_st::set_seed(const uint32_t &seed) {
+      gen = std::mt19937_64(seed);
+    }
+    
     uint32_t random_engine_st::num() {
       std::uniform_int_distribution<uint32_t> dis(0, UINT32_MAX-1);
       return dis(gen);

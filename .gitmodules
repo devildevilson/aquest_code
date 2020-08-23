@@ -31,3 +31,9 @@
 [submodule "include/lz4"]
 	path = include/lz4
 	url = https://github.com/lz4/lz4.git
+[submodule "include/memory"]
+	path = include/memory
+	url = https://github.com/foonathan/memory
+[submodule "include/magic_enum"]
+	path = include/magic_enum
+	url = https://github.com/Neargye/magic_enum.git

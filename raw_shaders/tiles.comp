@@ -97,17 +97,20 @@ void main() {
   const uint new_tiles_count = triangle.data[1] - triangle.data[2];
   const uint new_tiles_offset = atomicAdd(hexagon_indirect.y, new_tiles_count);
 
-  if (new_tiles_offset + new_tiles_count >= max_tiles_count) return;
+  if (new_tiles_offset + new_tiles_count + 12 >= max_tiles_count) return;
 
   for (uint i = 0; i < new_tiles_count; ++i) {
-    //tile_instances[12 + new_tiles_offset + i].index.x = triangles_tile_indices[triangle.data[0] + i];
-    tile_instances[12 + new_tiles_offset + i].index.x = get_accel_triangle_tile_index(triangle.data[0] + i);
+    const uint index = 12 + new_tiles_offset + i;
+    const uint vec_index = index / 4;
+    const uint slot_index = index % 4;
+    tile_instances[vec_index].index[slot_index] = get_accel_triangle_tile_index(triangle.data[0] + i);
   }
 
   if (bool(triangle.data[2])) {
     const uint offset = atomicAdd(pentagon_indirect.y, 1);
-    //tile_instances[offset].index.x = triangles_tile_indices[triangle.data[0] + triangle.data[1] - 1];
-    tile_instances[offset].index.x = get_accel_triangle_tile_index(triangle.data[0] + triangle.data[1] - 1);
+    const uint vec_index = offset / 4;
+    const uint slot_index = offset % 4;
+    tile_instances[vec_index].index[slot_index] = get_accel_triangle_tile_index(triangle.data[0] + triangle.data[1] - 1);
   }
 
   // uint index = 0;

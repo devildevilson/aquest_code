@@ -9,30 +9,6 @@
 // то есть требуется складывать данные
 // в структуры размер которых делится на 16 без остатка
 
-// struct neighbour_t {
-//   uint index;
-//   uint points[2];
-// };
-//
-// struct tile_t {
-//   uint center;
-//   neighbour_t neighbours[6];
-// };
-//
-// struct tile_memory_t {
-//   uint center;
-//   uvec3 neighbours_1;
-//   uvec3 neighbours_2;
-//   uvec3 neighbours_3;
-//   uvec3 neighbours_4;
-//   uvec3 neighbours_5;
-//   uvec3 neighbours_6;
-// };
-//
-// struct tile_memory2_t {
-//
-// };
-
 // гекс состоит из треугольников
 const vec2 uv_borders[] = {
   vec2(0.0f, 0.0f),
@@ -74,9 +50,11 @@ layout(location = 2) out flat float out_tile_height;
 // нет лучше здесь
 void main() {
   const map_tile_t tile = unpack_data(tiles[tile_index]);
+  //const uint tile_center = tile.center;
   const uint point_id = tile.points[point_index];
   //const uint point_id = tile.neighbours[point_index].points[0];
   const vec4 point = tile_points[point_id];
+  //const vec4 tile_norm = vec4(normalize(tile_points[tile_center].xyz), 0.0f);
   // if (point_index == 0) point = tile_points[tile.index]; // мне не обязательно брать здесь центральную точку
   // else {
   //   const uint final_point_index = point_index - 1;
@@ -86,8 +64,15 @@ void main() {
 
   const vec3 n = normalize(point.xyz);
   const vec2 uv = vec2(atan(n.x, n.z) / (PI_2) + 0.5f, n.y * 0.5f + 0.5f);
+  // const float layer_height = mountain_height / float(layers_count);
+  // const uint height_layer = tile.height < 0.0f ? 0 : (tile.height >= mountain_height ? layers_count : uint(tile.height / layer_height));
+  //const float layer_height = 1.0f / float(layers_count);
+  const uint height_layer = compute_height_layer(tile.height);
+  const float final_height = layer_height * height_layer;
 
-  gl_Position = camera.viewproj * point;
+  //const float final_height = tile.height < 0.0f ? 0.0f : tile.height;
+  gl_Position = camera.viewproj * (point + vec4(n, 0.0f) * final_height * render_tile_height); // возможно не 10, а еще чуть чуть поменьше
+  //gl_Position = camera.viewproj * point;
   out_uv = uv; // наверное на что нибудь нужно умножить
   //out_image = biomes[tile.biom_index].img;
   // image_t img;
@@ -97,3 +82,26 @@ void main() {
   //out_biom_index = tile.unique_object_index;
   out_tile_height = tile.height;
 }
+
+// для того чтобы сработал подъем на карте нужно три вещи
+// стенки между тайлами (закроют фон)
+// более адекватный рейкастинг (с учетом стенок по всей видимости)
+// более адекватный фрустум куллинг (я полагаю что нужно просто все треугольники засунуть в октодерево (?))
+
+// не уверен правда что это будет хорошо выглядеть
+// нужно поиграться с высотой, возможно ранжировать их по уровням
+// (несколько высот, последняя высота - непроходимые горы)
+// (так еще поменьше стенок можно делать, но и выглядеть это будет скоре всего не очень)
+// у меня горы начинаются от 0.5, мне наверное нужно еще нормализовать
+// хорошо будет выглядеть это все дело в случе если расстояния между тайлами будут небольшими,
+// маскимальное количество тайлов будет неоднородным и дополнительно графика будет отмечать особенности ландшафта
+// тут видимо нужно использовать комбинацию из разных методов
+
+// вопрос с структурой данных остается открытым
+// проблема в том что структура данных занимает место, у меня около 500к тайлов
+// какое нужно разбиение? ко всему прочему октодерево не особенно эффективно
+// у нас уже есть вообще то структура данных, нам нужно проверить значит максимумы и минимумы
+// то есть проверить условный 3-мерный треугольник с заданной толщиной
+// бокс? ну эт просто, фрустум также? до тайлов, как тайлы проверить?
+// в фрустум поди можно закинуть бокс, а проверку с лучем хотелось бы поточнее
+//

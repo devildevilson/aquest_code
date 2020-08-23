@@ -1,0 +1,115 @@
+#version 450
+
+#extension GL_GOOGLE_include_directive : enable
+#include "../render/shared_structures.h"
+#include "../utils/shared_mathematical_constant.h"
+
+layout(set = 0, binding = 0) uniform Camera {
+  mat4 viewproj;
+  mat4 view;
+  vec4 pos;
+  vec4 dir;
+  uvec4 dim;
+} camera;
+
+layout(std140, set = 1, binding = 0) readonly buffer tiles_buffer {
+  light_map_tile_t tiles[];
+};
+
+layout(std140, set = 1, binding = 2) readonly buffer tile_points_buffer {
+  vec4 tile_points[];
+};
+
+layout(std140, set = 2, binding = 0) buffer tile_indirect_buffer {
+  uvec4 border_indirect;
+  uvec4 counts;
+  frustum_t frustum;
+};
+
+layout(std140, set = 2, binding = 1) buffer border_indices_buffer {
+  uvec4 walls_indices[];
+};
+
+layout(std140, set = 3, binding = 0) readonly buffer walls_data_buffer {
+  uvec4 walls_datas[];
+};
+
+bool test_4points(const vec4 p1, const vec4 p2, const vec4 p3, const vec4 p4, const frustum_t frustum);
+
+#define FAR_PLANE 256.0f
+#define WORK_GROUP 256
+#define PACKED_INDEX_COEF 6
+
+layout(local_size_x = WORK_GROUP, local_size_y = 1, local_size_z = 1) in;
+
+void main() {
+  const uint walls_count = counts.x;
+  const uint walls_index = gl_GlobalInvocationID.x;
+  if (walls_index >= walls_count) return;
+
+  const uvec4 data = walls_datas[walls_index];
+  const uint tile_index = data[0];
+  const uint n_tile_index = data[1];
+  const vec4 point_a = tile_points[data[2]];
+  const vec4 point_b = tile_points[data[3]];
+  const float height1 = uintBitsToFloat(tiles[tile_index].tile_indices.w);
+  const float height2 = uintBitsToFloat(tiles[n_tile_index].tile_indices.w);
+
+  const uint height_layer1 = compute_height_layer(height1);
+  const float final_height1 = layer_height * height_layer1;
+  const uint height_layer2 = compute_height_layer(height2);
+  const float final_height2 = layer_height * height_layer2;
+
+  // к сожалению я по несколько раз буду вычислять точки
+  const vec4 n_a = vec4(normalize(point_a.xyz), 0.0f);
+  const vec4 n_b = vec4(normalize(point_b.xyz), 0.0f);
+  const vec4 point1 = point_a + n_a * final_height1 * render_tile_height;
+  const vec4 point2 = point_b + n_b * final_height1 * render_tile_height;
+  const vec4 point3 = point_a + n_a * final_height2 * render_tile_height;
+  const vec4 point4 = point_b + n_b * final_height2 * render_tile_height;
+
+  const bool test = test_4points(point1, point2, point3, point4, frustum);
+  if (test) {
+    const uint new_index = atomicAdd(border_indirect.x, PACKED_INDEX_COEF);
+    for (uint i = 0; i < PACKED_INDEX_COEF; ++i) {
+      const uint final_index = new_index+i;
+      const uint vec4_index = final_index / 4;
+      const uint slot_index = final_index % 4;
+
+      walls_indices[vec4_index][slot_index] = walls_index*PACKED_INDEX_COEF+i;
+    }
+  }
+}
+
+#define OUTSIDE 0
+#define INSIDE 1
+#define INTERSECT 2
+
+bool test_4points(const vec4 p1, const vec4 p2, const vec4 p3, const vec4 p4, const frustum_t frustum) {
+  const vec4 max_vec = max(p1, max(p2, max(p3, p4)));
+  const vec4 min_vec = min(p1, min(p2, min(p3, p4)));
+
+  const vec4 center =     (max_vec + min_vec) / 2.0f;
+  const vec4 extents = abs(max_vec - min_vec) / 2.0f;
+
+  uint result = INSIDE;
+  for (uint i = 0; i < 6; ++i) {
+    const vec4 plane = vec4(frustum.planes[i][0], frustum.planes[i][1], frustum.planes[i][2], 0.0f);
+    const float p3 = frustum.planes[i][3];
+
+    const float d = dot(center,      plane);
+
+    const float r = dot(extents, abs(plane));
+
+    const float d_p_r = d + r;
+    const float d_m_r = d - r;
+
+    //frustumPlane.w
+    if (d_p_r < -p3) {
+      result = OUTSIDE;
+      break;
+    } else if (d_m_r < -p3) result = INTERSECT;
+  }
+
+  return result != OUTSIDE;
+}

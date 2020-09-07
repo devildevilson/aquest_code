@@ -1172,6 +1172,7 @@ namespace devils_engine {
     
     void interface_stage::clear() {
       auto data = global::get<interface::context>();
+      nk_buffer_clear(&data->cmds);
       nk_clear(&data->ctx);
     }
 

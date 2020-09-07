@@ -2,6 +2,7 @@
 #define GLOBALS_H
 
 #include <string>
+#include <cstddef>
 
 namespace devils_engine {
   class global {
@@ -10,6 +11,7 @@ namespace devils_engine {
     static T* get(T* ptr = nullptr) {
       static T* cont = nullptr;
       if (ptr != nullptr) cont = ptr;
+      if (reinterpret_cast<size_t>(ptr) == SIZE_MAX) cont = nullptr;
       return cont;
     }
 

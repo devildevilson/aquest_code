@@ -5,7 +5,6 @@
 namespace dt {
   thread_pool::thread_pool(const size_t &size) {
     busyWorkersCount = size;
-    tasksCount = 0;
     stop = false;
 
     for (size_t i = 0; i < size; ++i) {
@@ -37,7 +36,6 @@ namespace dt {
 //             if (!barriers.empty()) --barriers.front().taskCount;
 
             ++busyWorkersCount;
-            --tasksCount;
           }
 
           task();
@@ -141,12 +139,12 @@ namespace dt {
   size_t thread_pool::tasks_count() const {
     // по идее тут должен быть мьютекс, но я не могу его сюда поставить потому что конст
     // будет ли переменная работать правильно? по стандарту (если я правильно понял) не должна
-    //std::unique_lock<std::mutex> lock(mutex);
-    return tasksCount;
+    std::unique_lock<std::mutex> lock(mutex);
+    return tasks.size();
   }
 
   size_t thread_pool::working_count() const {
-    //std::unique_lock<std::mutex> lock(mutex);
+    std::unique_lock<std::mutex> lock(mutex);
     return busyWorkersCount;
   }
 }

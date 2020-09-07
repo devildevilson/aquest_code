@@ -93,10 +93,9 @@ namespace dt {
     std::queue<std::function<void()>> tasks;
     std::queue<BarrierData> barriers;
 
-    std::mutex mutex;
+    mutable std::mutex mutex;
     std::condition_variable condition;
     std::condition_variable finish;
-    size_t tasksCount;
     size_t busyWorkersCount;
   };
 }

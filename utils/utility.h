@@ -25,5 +25,7 @@
 #define PRINT(var) std::cout << var << "\n";
 #define DELETE_PTR(ptr) delete ptr; ptr = nullptr;
 #define DELETE_ARR(arr) delete [] arr; arr = nullptr;
+#define STRINGIFY(a) #a
+#define CONCAT(a, b) a##b
 
 #endif

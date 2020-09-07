@@ -1,6 +1,8 @@
 #ifndef TRAITS_MODIFIER_ATTRIBS_H
 #define TRAITS_MODIFIER_ATTRIBS_H
 
+#include <cstdint>
+
 namespace devils_engine {
   namespace utils {
     namespace trait {

@@ -1,4 +1,4 @@
-#define ON_ACTION_TYPES_H
+#ifndef ON_ACTION_TYPES_H
 #define ON_ACTION_TYPES_H
 
 #include <vector>
@@ -231,6 +231,7 @@ namespace devils_engine {
         
         std::vector<const core::event*> events;
         std::vector<complex_event> complex_events;
+        // эффекты?
       };
       
       struct data data[action_type::count];

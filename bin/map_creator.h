@@ -10,6 +10,7 @@
 #include "utils/memory_pool.h"
 #include "utils/random_engine.h"
 #include "FastNoise.h"
+#include "utils/table_container.h"
 
 // нужен класс который соберет в себя несколько шагов создания карты
 // примерно тоже самое что и менюинг, но должно задаваться из json
@@ -115,6 +116,7 @@ namespace devils_engine {
       std::vector<step*> steps;
       utils::random_engine_st random;
       FastNoise noise;
+      utils::table_container table_container;
     };
   }
 }

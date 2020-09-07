@@ -156,6 +156,7 @@ namespace devils_engine {
     }
     
     creator::creator() : table(lua.create_table()), current_step(0), random(1), noise(1) {
+      lua.open_libraries(sol::lib::base, sol::lib::table, sol::lib::math, sol::lib::package);
       ctx.container = global::get<map::generator::container>();
       ctx.map = global::get<core::map>();
       ctx.noise = &noise;
@@ -163,12 +164,18 @@ namespace devils_engine {
       ctx.pool = global::get<dt::thread_pool>();
       
       table["userdata"] = lua.create_table();
+      global::get(&table_container);
+      global::get(&lua);
     }
     
     creator::~creator() {
       for (auto p : steps) {
         steps_pool.destroy(p);
       }
+      
+      global::get<utils::table_container>(reinterpret_cast<utils::table_container*>(SIZE_MAX));
+      global::get<sol::state>(reinterpret_cast<sol::state*>(SIZE_MAX));
+      ASSERT(global::get<utils::table_container>() == nullptr);
     }
     
     step* creator::create(const bool first, const size_t &container_size, const std::string &name, const std::vector<map::generator_pair> &pairs, const std::string &rendering_mode) {

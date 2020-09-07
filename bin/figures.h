@@ -30,18 +30,18 @@ namespace devils_engine {
       glm::vec4 planes[6];
     };
 
-    class timer {
-    public:
-      inline timer(const std::string &str) : tp(std::chrono::steady_clock::now()), str(str) {}
-      inline ~timer() {
-        auto end = std::chrono::steady_clock::now() - tp;
-        auto mcs = std::chrono::duration_cast<std::chrono::microseconds>(end).count();
-        std::cout << str << " took " << mcs << " mcs" << '\n';
-      }
-    private:
-      std::chrono::steady_clock::time_point tp;
-      std::string str;
-    };
+//     class timer {
+//     public:
+//       inline timer(const std::string &str) : tp(std::chrono::steady_clock::now()), str(str) {}
+//       inline ~timer() {
+//         auto end = std::chrono::steady_clock::now() - tp;
+//         auto mcs = std::chrono::duration_cast<std::chrono::microseconds>(end).count();
+//         std::cout << str << " took " << mcs << " mcs" << '\n';
+//       }
+//     private:
+//       std::chrono::steady_clock::time_point tp;
+//       std::string str;
+//     };
     
     utils::frustum compute_frustum(const glm::mat4 &matrix);
   }

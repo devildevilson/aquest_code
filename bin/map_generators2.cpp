@@ -9,6 +9,9 @@
 #include "generator_container.h"
 #include "map.h"
 #include "FastNoise.h"
+#include "data_parser.h"
+#include "utils/globals.h"
+#include "stats.h"
 
 const float radius_const = 500.0f;
 
@@ -3092,6 +3095,23 @@ namespace devils_engine {
           province_neighbours.push_back(n_index.container);
         }
       }
+      
+      const uint32_t provinces_creation_count = ctx->container->entities_count(debug::entities::province);
+      for (uint32_t i = 0; i < provinces_creation_count; ++i) {
+        //auto province = table.create<sol::table>();
+        auto province = global::get<sol::state>()->create_table(); // локальный стейт, после генерации нужно заменить
+        auto province_ns = province.create("neighbours");
+        const auto &province_neighbours = ctx->container->get_province_neighbours(i);
+        for (size_t index = 0; index < province_neighbours.size(); ++index) {
+          const auto n = province_neighbour(province_neighbours[index]);
+          province_ns[index] = n.index();
+        }
+        
+        province["max_cities_count"] = 1;
+        //province["title"] = "province" + std::to_string(i) + "_title";
+        province["title"] = "baron" + std::to_string(i) + "_title";
+        utils::add_province(province);
+      }
     }
     
     void generate_cultures(generator::context* ctx, sol::table &table) {
@@ -4985,36 +5005,222 @@ namespace devils_engine {
       // скорее всего история должна генерироваться на основе титулов
       // титулы - это отражение предыдущих и последующих достижений и амбиций
       
+      // как раздать титулы персонажам? нужно раздать покрайней мере несколько баронских титулов главе государства,
+      // один-два герцогства в зависимости от размера, королевство (размер > 20?) и империю (размер > 100?),
+      // желательно чтобы титулы находились все рядом друг с другом
+      // в цк2 на старте игры у всех императоров нет королевских титулов, все существующие королевские титулы независимы, 
+      // у муслимов спавняться сильные вассалы занимающие несколько провинций с герцогским титулом,
+      // у католиков в разнобой сильные вассалы со слабыми, у остальных в основном (!) сильные вассалы
+      // нужно начать с раздачи титулов верхнего уровня
+      
+      // титулы верхнего уровня не могут привести ко всем титулам нижнего уровня
+      
+      const size_t titles_counter = empires.size() + kingdoms.size() + duchies.size() + ctx->container->entities_count(debug::entities::province);
+      const size_t emp_offset = 0;
+      const size_t king_offset = empires.size();
+      const size_t duchy_offset = empires.size() + kingdoms.size();
+      const size_t baron_offset = empires.size() + kingdoms.size() + duchies.size();
+      ctx->container->set_entity_count(debug::entities::title, titles_counter);
+      
+      table["emp_offset"] = emp_offset;
+      table["king_offset"] = king_offset;
+      table["duchy_offset"] = duchy_offset;
+      table["baron_offset"] = baron_offset;
+      
+      for (size_t empire_index = 0; empire_index < empires.size(); ++empire_index) {
+        ctx->container->set_data<uint32_t>(debug::entities::title, emp_offset + empire_index, debug::properties::title::parent, UINT32_MAX);
+        ctx->container->set_data<uint32_t>(debug::entities::title, emp_offset + empire_index, debug::properties::title::owner, UINT32_MAX);
+      }
+      
+      for (size_t kingdom_index = 0; kingdom_index < kingdoms.size(); ++kingdom_index) {
+        ctx->container->set_data<uint32_t>(debug::entities::title, king_offset + kingdom_index, debug::properties::title::parent, UINT32_MAX);
+        ctx->container->set_data<uint32_t>(debug::entities::title, king_offset + kingdom_index, debug::properties::title::owner, UINT32_MAX);
+      }
+      
+      for (size_t duchy_index = 0; duchy_index < duchies.size(); ++duchy_index) {
+        ctx->container->set_data<uint32_t>(debug::entities::title, duchy_offset + duchy_index, debug::properties::title::parent, UINT32_MAX);
+        ctx->container->set_data<uint32_t>(debug::entities::title, duchy_offset + duchy_index, debug::properties::title::owner, UINT32_MAX);
+      }
+      
+      for (size_t baron_index = 0; baron_index < ctx->container->entities_count(debug::entities::province); ++baron_index) {
+        ctx->container->set_data<uint32_t>(debug::entities::title, baron_offset + baron_index, debug::properties::title::parent, UINT32_MAX);
+        ctx->container->set_data<uint32_t>(debug::entities::title, baron_offset + baron_index, debug::properties::title::owner, UINT32_MAX);
+      }
+      
       // начинаем создавать титулы
       for (size_t i = 0; i < empires.size(); ++i) {
         const uint32_t empire_index = i;
-        auto emp_t = ctx->container->create_titulus(core::titulus::type::imperial, empires[empire_index].size());
+//         auto emp_t = ctx->container->create_titulus(core::titulus::type::imperial, empires[empire_index].size());
+        auto emp_title = global::get<sol::state>()->create_table();
+        const std::string emp_id = "imperial" + std::to_string(empire_index) + "_title";
+        emp_title["id"] = emp_id;
+        emp_title["type"] = core::titulus::type::imperial;
+        utils::add_title(emp_title);
+//         emp_title["count"] = empires[empire_index].size();
+//         table[emp_id] = emp_title;
+        
+        // по сути мы используем индекс
+        // имя нужно будет генерировать на основе культур и местности, 
+        // я так понимаю нужно сначало сгенерировать какую то информацию о титулах,
+        // а потом собственно информацию о местности, возможно нужно придумать регион
+        // (например католический мир) в котором имена заспавним какие то католические
+        // регион распространения религии? что-то вроде
         
         for (size_t j = 0; j < empires[empire_index].size(); ++j) {
           const uint32_t kingdom_index = empires[empire_index][j];
-          auto king_t = ctx->container->create_titulus(core::titulus::type::king, kingdoms[kingdom_index].size());
-          emp_t->set_child(j, king_t);
-          king_t->parent = emp_t;
+//           auto king_t = ctx->container->create_titulus(core::titulus::type::king, kingdoms[kingdom_index].size());
+//           emp_t->set_child(j, king_t);
+//           king_t->parent = emp_t;
+          ctx->container->add_child(debug::entities::title, emp_offset + empire_index, king_offset + kingdom_index);
+          auto king_title = global::get<sol::state>()->create_table();
+          const std::string king_id = "king" + std::to_string(kingdom_index) + "_title";
+          king_title["id"] = king_id;
+          king_title["type"] = core::titulus::type::king;
+          king_title["parent"] = emp_id;
+          utils::add_title(king_title);
+//           king_title["count"] = kingdoms[kingdom_index].size();
+//           table[king_id] = king_title;
+          
+          ctx->container->set_data<uint32_t>(debug::entities::title, king_offset + kingdom_index, debug::properties::title::parent, emp_offset + empire_index);
+          ctx->container->set_data<uint32_t>(debug::entities::title, king_offset + kingdom_index, debug::properties::title::owner, UINT32_MAX);
           
           for (size_t k = 0; k < kingdoms[kingdom_index].size(); ++k) {
             const uint32_t duchy_index = kingdoms[kingdom_index][k];
-            auto duchy_t = ctx->container->create_titulus(core::titulus::type::duke, duchies[duchy_index].size());
-            king_t->set_child(k, duchy_t);
-            duchy_t->parent = king_t;
+//             auto duchy_t = ctx->container->create_titulus(core::titulus::type::duke, duchies[duchy_index].size());
+//             king_t->set_child(k, duchy_t);
+//             duchy_t->parent = king_t;
+            ctx->container->add_child(debug::entities::title, king_offset + kingdom_index, duchy_offset + duchy_index);
+            auto duchy_title = global::get<sol::state>()->create_table();
+            const std::string duchy_id = "duke" + std::to_string(duchy_index) + "_title";
+            duchy_title["id"] = duchy_id;
+            duchy_title["type"] = core::titulus::type::duke;
+            duchy_title["parent"] = king_id;
+            utils::add_title(duchy_title);
+//             duchy_title["count"] = duchies[duchy_index].size();
+//             table[duchy_id] = duchy_title;
+            
+            ctx->container->set_data<uint32_t>(debug::entities::title, duchy_offset + duchy_index, debug::properties::title::parent, king_offset + kingdom_index);
+            ctx->container->set_data<uint32_t>(debug::entities::title, duchy_offset + duchy_index, debug::properties::title::owner, UINT32_MAX);
             
             for (size_t c = 0; c < duchies[duchy_index].size(); ++c) {
-              const uint32_t baron_index = duchies[duchy_index][c];
-              auto baron_t = ctx->container->create_titulus(core::titulus::type::baron, 1);
-              duchy_t->set_child(c, baron_t);
-              baron_t->parent = duchy_t;
+              const uint32_t baron_index = duchies[duchy_index][c]; // по всей видимости я где то теряю провинцию, странно кажется я проверял
+//               auto baron_t = ctx->container->create_titulus(core::titulus::type::baron, 1);
+//               duchy_t->set_child(c, baron_t);
+//               baron_t->parent = duchy_t;
+//               
+//               ASSERT(baron_index < province_count);
+//               baron_t->set_province(baron_index);
               
-              ASSERT(baron_index < province_count);
-              baron_t->set_province(baron_index);
-              const uint32_t title_index = ctx->container->get_title_index(baron_t);
-              ctx->container->set_data<uint32_t>(debug::entities::province, baron_index, debug::properties::province::title_index, title_index);
+              ctx->container->add_child(debug::entities::title, duchy_offset + duchy_index, baron_offset + baron_index);
+              auto baron_title = global::get<sol::state>()->create_table();
+              const std::string baron_id = "baron" + std::to_string(baron_index) + "_title";
+              baron_title["id"] = baron_id;
+              baron_title["type"] = core::titulus::type::baron;
+              baron_title["parent"] = duchy_id;
+              baron_title["province"] = baron_index;
+              utils::add_title(baron_title);
+//               table[baron_id] = baron_title; // при 5000 провинций получится около 6000 титулов (в общем минус оперативная память)
+              
+              ctx->container->set_data<uint32_t>(debug::entities::title, baron_offset + baron_index, debug::properties::title::parent, duchy_offset + duchy_index);
+              ctx->container->set_data<uint32_t>(debug::entities::title, baron_offset + baron_index, debug::properties::title::owner, UINT32_MAX);
+              
+//               const uint32_t title_index = ctx->container->get_title_index(baron_t);
+//               ctx->container->set_data<uint32_t>(debug::entities::province, baron_index, debug::properties::province::title_index, title_index);
+              
+//               auto city_title = global::get<sol::state>()->create_table();
+//               const std::string city_id = "city" + std::to_string(baron_index) + "_title";
+//               city_title["id"] = city_id;
+//               city_title["type"] = core::titulus::type::baron;
+//               city_title["parent"] = baron_id;
+//               city_title["city"] = baron_index;
+//               utils::add_title(city_title);
             }
           }
         }
+      }
+      
+      for (size_t kingdom_index = 0; kingdom_index < kingdoms.size(); ++kingdom_index) {
+        const uint32_t parent = ctx->container->get_data<uint32_t>(debug::entities::title, king_offset + kingdom_index, debug::properties::title::parent);
+        if (parent != UINT32_MAX) continue;
+        
+        auto king_title = global::get<sol::state>()->create_table();
+        const std::string king_id = "king" + std::to_string(kingdom_index) + "_title";
+        king_title["id"] = king_id;
+        king_title["type"] = core::titulus::type::king;
+        utils::add_title(king_title);
+        
+        for (size_t i = 0; i < kingdoms[kingdom_index].size(); ++i) {
+          const uint32_t duchy_index = kingdoms[kingdom_index][i];
+          const uint32_t parent = ctx->container->get_data<uint32_t>(debug::entities::title, duchy_offset + duchy_index, debug::properties::title::parent);
+          ASSERT(parent == UINT32_MAX);
+          
+          ctx->container->add_child(debug::entities::title, king_offset + kingdom_index, duchy_offset + duchy_index);
+          auto duchy_title = global::get<sol::state>()->create_table();
+          const std::string duchy_id = "duke" + std::to_string(duchy_index) + "_title";
+          duchy_title["id"] = duchy_id;
+          duchy_title["type"] = core::titulus::type::duke;
+          duchy_title["parent"] = king_id;
+          utils::add_title(duchy_title);
+          
+          ctx->container->set_data<uint32_t>(debug::entities::title, duchy_offset + duchy_index, debug::properties::title::parent, king_offset + kingdom_index);
+          
+          for (size_t c = 0; c < duchies[duchy_index].size(); ++c) {
+            const uint32_t baron_index = duchies[duchy_index][c];
+            const uint32_t parent = ctx->container->get_data<uint32_t>(debug::entities::title, baron_offset + baron_index, debug::properties::title::parent);
+            ASSERT(parent == UINT32_MAX);
+            
+            ctx->container->add_child(debug::entities::title, duchy_offset + duchy_index, baron_offset + baron_index);
+            auto baron_title = global::get<sol::state>()->create_table();
+            const std::string baron_id = "baron" + std::to_string(baron_index) + "_title";
+            baron_title["id"] = baron_id;
+            baron_title["type"] = core::titulus::type::baron;
+            baron_title["parent"] = duchy_id;
+            baron_title["province"] = baron_index;
+            utils::add_title(baron_title);
+            
+            ctx->container->set_data<uint32_t>(debug::entities::title, baron_offset + baron_index, debug::properties::title::parent, duchy_offset + duchy_index);
+          }
+        }
+      }
+      
+      for (size_t duchy_index = 0; duchy_index < duchies.size(); ++duchy_index) {
+        const uint32_t parent = ctx->container->get_data<uint32_t>(debug::entities::title, duchy_offset + duchy_index, debug::properties::title::parent);
+        if (parent != UINT32_MAX) continue;
+        
+        auto duchy_title = global::get<sol::state>()->create_table();
+        const std::string duchy_id = "duke" + std::to_string(duchy_index) + "_title";
+        duchy_title["id"] = duchy_id;
+        duchy_title["type"] = core::titulus::type::duke;
+        utils::add_title(duchy_title);
+        
+        for (size_t c = 0; c < duchies[duchy_index].size(); ++c) {
+          const uint32_t baron_index = duchies[duchy_index][c];
+          const uint32_t parent = ctx->container->get_data<uint32_t>(debug::entities::title, baron_offset + baron_index, debug::properties::title::parent);
+          ASSERT(parent == UINT32_MAX);
+          
+          ctx->container->add_child(debug::entities::title, duchy_offset + duchy_index, baron_offset + baron_index);
+          auto baron_title = global::get<sol::state>()->create_table();
+          const std::string baron_id = "baron" + std::to_string(baron_index) + "_title";
+          baron_title["id"] = baron_id;
+          baron_title["type"] = core::titulus::type::baron;
+          baron_title["parent"] = duchy_id;
+          baron_title["province"] = baron_index;
+          utils::add_title(baron_title);
+          
+          ctx->container->set_data<uint32_t>(debug::entities::title, baron_offset + baron_index, debug::properties::title::parent, duchy_offset + duchy_index);
+        }
+      }
+      
+      for (size_t baron_index = 0; baron_index < ctx->container->entities_count(debug::entities::province); ++baron_index) {
+        const uint32_t parent = ctx->container->get_data<uint32_t>(debug::entities::title, baron_offset + baron_index, debug::properties::title::parent);
+        if (parent != UINT32_MAX) continue;
+        
+        auto baron_title = global::get<sol::state>()->create_table();
+        const std::string baron_id = "baron" + std::to_string(baron_index) + "_title";
+        baron_title["id"] = baron_id;
+        baron_title["type"] = core::titulus::type::baron;
+        baron_title["province"] = baron_index;
+        utils::add_title(baron_title);
       }
 
       // нам нужно каким то образом где то еще эти титулы запомнить
@@ -5027,6 +5233,11 @@ namespace devils_engine {
       // для того чтобы хранить какие то такие данные не в тайлах
       // нужно немного переделать функцию которая заполняет данными рендер
       // пользователь должен смочь сделать функцию в луа с любыми данными
+      
+      // тут есть одна проблема: как правильно выстроить иерархию данных, так чтобы было удобно заполнять данные
+      // титулы довольно удобно заполняются сверху вниз, но когда мы переходим к городам удобство заканчивается
+      // удобно при генерации городов сгенерировать и титул заодно (причем титул во многом будет "технический")
+      // (то есть там будут храниться названия городов)
     }
     
     void generate_characters(generator::context* ctx, sol::table &table) {
@@ -5041,7 +5252,7 @@ namespace devils_engine {
       // 2. ответственность органов власти
       // 3. разграничение полномочий
       // первый пункт более менее простой - это очевидно нужно сделать 
-      // ответственность? зависимость персонажа от чего то, перед советом
+      // ответственность? зависимость персонажа от чего то, перед советом (ну кстати изменяя набор механик мы можем подкорректировать ответственность и полномочия)
       // разграничение полномочий? тут по идее должна быть механика совета
       // тут есть две силы крупные монарх и совет (который состоит из вассалов)
       // они долны уравновешиваться армиями
@@ -5058,11 +5269,163 @@ namespace devils_engine {
       // герцогские еще более менее понятно, титулы вообще тоже зависят от тех уровня
       // думаю что нужно сначало тех уровень продумать
       
+      const uint32_t emp_offset = table["emp_offset"];
+      const uint32_t king_offset = table["king_offset"];
+      const uint32_t duchy_offset = table["duchy_offset"];
+      const uint32_t baron_offset = table["baron_offset"];
+      
+      const uint32_t titles_count = ctx->container->entities_count(debug::entities::title);
       const uint32_t country_count = ctx->container->entities_count(debug::entities::country);
+      std::vector<std::vector<size_t>> owners(country_count, std::vector<size_t>(ctx->container->entities_count(debug::entities::title), 0));
       for (size_t i = 0; i < country_count; ++i) {
         const uint32_t country_index = i;
         const auto &childs = ctx->container->get_childs(debug::entities::country, country_index);
-        auto character = ctx->container->create_character();
+        for (const uint32_t province_index : childs) {
+          const uint32_t baron_index = baron_offset + province_index;
+          const uint32_t duchy_index = ctx->container->get_data<uint32_t>(debug::entities::title, baron_index, debug::properties::title::parent);
+          const uint32_t king_index = ctx->container->get_data<uint32_t>(debug::entities::title, duchy_index, debug::properties::title::parent);
+          const uint32_t emp_index = ctx->container->get_data<uint32_t>(debug::entities::title, king_index, debug::properties::title::parent);
+          
+          ++owners[country_index][baron_index];
+          ++owners[country_index][duchy_index];
+          ++owners[country_index][king_index];
+          ++owners[country_index][emp_index];
+        }
+      }
+      
+      // так и что это нам дает? у нас теперь есть количество провинций принадлежащих титулам разных уровней
+      // так мы по идее можем определиться с титулом верхнего уровня
+      // я так понимаю нужно сделать тип в контейнере
+      
+      std::vector<std::vector<uint32_t>> titles(country_count);
+      for (size_t i = 0; i < country_count; ++i) {
+        const uint32_t country_index = i;
+        const auto &childs = ctx->container->get_childs(debug::entities::country, country_index);
+//         auto character_table = global::get<sol::state>()->create_table();
+//         character_table.create("family");
+//         character_table.create("stats");
+//         character_table.create("hero_stats");
+//         auto titles_table = character_table.create("titles");
+//         auto character = ctx->container->create_character();
+        
+        const auto &title_owned = owners[country_index];
+        for (uint32_t j = baron_offset; j < titles_count; ++j) {
+          if (title_owned[j] == 0) continue;
+          ASSERT(ctx->container->get_data<uint32_t>(debug::entities::title, j, debug::properties::title::owner) == UINT32_MAX);
+          //const uint32_t baron_index = j - baron_offset; // так у меня нет информации о том что это за титул
+          titles[country_index].push_back(j);
+          ctx->container->set_data<uint32_t>(debug::entities::title, j, debug::properties::title::owner, country_index);
+        }
+        
+        // числа 20/70 на 5000 провок выглядят более менее прилично (выглядит прилично и для 1600 на более мелкой карте)
+        // нужно ли корректировать эти цифры для меньшего количество провок
+        // (2500 = 10/35)? если и нужно то видимо как то иначе, должен быть наверное какой то минимум
+        // сколько провок в среднем в титулах? может так?
+        const size_t king_start = 20;
+        const size_t emp_start = 70;
+        
+        if (childs.size() < king_start) {
+          size_t max_prov = 0;
+          uint32_t index = UINT32_MAX;
+          for (uint32_t j = duchy_offset; j < baron_offset; ++j) {
+            const uint32_t duchy_index = j - duchy_offset;
+            if (ctx->container->get_data<uint32_t>(debug::entities::title, duchy_offset + duchy_index, debug::properties::title::owner) != UINT32_MAX) continue;
+            
+            if (max_prov < title_owned[j]) {
+              max_prov = title_owned[j];
+              index = duchy_index;
+            }
+          }
+          
+          // один титул?
+          ctx->container->set_data<uint32_t>(debug::entities::title, duchy_offset + index, debug::properties::title::owner, country_index);
+          titles[country_index].push_back(duchy_offset + index);
+          
+          continue;
+        }
+        
+        if (childs.size() >= king_start && childs.size() < emp_start) { // это королевства? в цк2 византийская империя (2 старт) примерно 65 провинций
+          size_t max_prov = 0;
+          uint32_t index = UINT32_MAX;
+          for (uint32_t j = king_offset; j < duchy_offset; ++j) {
+            const uint32_t king_index = j - king_offset;
+            if (ctx->container->get_data<uint32_t>(debug::entities::title, king_offset + king_index, debug::properties::title::owner) != UINT32_MAX) continue;
+            
+            if (max_prov < title_owned[j]) {
+              max_prov = title_owned[j];
+              index = king_index;
+            }
+          }
+          
+          // один титул?
+          ctx->container->set_data<uint32_t>(debug::entities::title, king_offset + index, debug::properties::title::owner, country_index);
+          titles[country_index].push_back(king_offset + index);
+        }
+        
+        if (childs.size() >= emp_start) {
+          size_t max_prov = 0;
+          uint32_t index = UINT32_MAX;
+          for (uint32_t j = emp_offset; j < king_offset; ++j) {
+            const uint32_t emp_index = j - emp_offset;
+            if (ctx->container->get_data<uint32_t>(debug::entities::title, emp_offset + emp_index, debug::properties::title::owner) != UINT32_MAX) continue;
+            
+            if (max_prov < title_owned[j]) {
+              max_prov = title_owned[j];
+              index = emp_index;
+            }
+          }
+          
+          // мы нашли индекс империи с которой у нас больше всего совпадений 
+          // другое дело что исторически так все радужно с империями не было
+          // они часто разваливались и поэтому сильно меняли форму
+          // я должен создать титулы до генерации истории, а потом в истории 
+          // раскидывать титулы (точнее искать максимальный титул для государства)
+          // но пока так
+          
+          ctx->container->set_data<uint32_t>(debug::entities::title, emp_offset + index, debug::properties::title::owner, country_index);
+          titles[country_index].push_back(emp_offset + index);
+        }
+        
+        // че с герцогствами? случайно их раскидать? выглядит идея еще ничего
+        for (uint32_t j = duchy_offset; j < baron_offset; ++j) {
+          if (title_owned[j] == 0) continue;
+          if (ctx->container->get_data<uint32_t>(debug::entities::title, j, debug::properties::title::owner) != UINT32_MAX) continue;
+          
+//           const uint32_t owned = title_owned[j];                                                    // количество провок которые имеются у государства
+//           const uint32_t title_size = ctx->container->get_childs(debug::entities::title, j).size(); // размер титула
+//           const uint32_t country_size = childs.size();
+          // по идее наличие герцогского титула мало зависит от размера и скорее зависит от поворота истории
+          // поэтому нужен какой то случайный коэффициент
+          // коэффициент наверное будет зависеть от размера страны (?)
+          // в империях наиболее вероятно что будет сделан герцогский титул
+          // менее вероятно в королевствах
+          // в герцогствах должен один титул
+          const float base = 0.3f;
+          const float final = base + base * float(childs.size() >= emp_start); // 0.6f норм или нет?
+          const bool prob = ctx->random->probability(final);
+          if (!prob) continue;
+          
+          titles[country_index].push_back(j);
+          ctx->container->set_data<uint32_t>(debug::entities::title, j, debug::properties::title::owner, country_index);
+        }
+        
+        // хочется все бросить и сделать просто через создание конкретных объектов
+        // но я так сделать не могу =( сериализация полных состояний луа невозможна 
+        // (в смысле я могу сохранить только конкретные данные (и кажется даже не ссылки))
+        // я могу попробовать запустить гарбадж коллектор, но скорее всего без особого успеха
+        // ко всему прочему мне бы выжать полный максимум производительности от проверки условий
+        // в том числе используя мультитрединг, это сложно используя только луа
+        // таким образом мне нужно правильно задать связи так чтобы при этом не сломался луа 
+        // и комп от обработки 20к титулов и столько же персонажей (а может и больше)
+        // в луа 176 000 000 чисел (индексы) в таблице занимает 4гб,
+        // мне надо чтобы ~5000 провинций, ~12000 городов, ~15000 персонажей, ~15000 титулов, 
+        // занимало желательно чтобы меньше 512 мб (ну мож гиг максимум)
+        // придется тогда некоторые таблицы сохранять (нужны указатели на родителей)
+        // мы можем положить индексы просто в ctx->container
+        // скорее всего нужно сделать обработку и индексов в парсере: так станет более менее полегче
+        // то есть вместо строки мы будем ожидать индекс или сделать и строку и индекс?
+        
+        // наверное просто сохраню в таблице все титулы
         
         ASSERT(childs.size() != 0);
 //         if (childs.size() == 1) {
@@ -5122,99 +5485,376 @@ namespace devils_engine {
 //           }
 //         }
         
-        for (const uint32_t province_index : childs) {
-          const uint32_t title_index = ctx->container->get_data<uint32_t>(debug::entities::province, province_index, debug::properties::province::title_index);
-          auto t = ctx->container->get_title(title_index);
-          character->add_title(t);
-        }
+//         for (const uint32_t province_index : childs) {
+//           titles_table.add("baron" + std::to_string(province_index) + "_title");
+//           
+//           const uint32_t title_index = ctx->container->get_data<uint32_t>(debug::entities::province, province_index, debug::properties::province::title_index);
+//           auto t = ctx->container->get_title(title_index);
+//           character->add_title(t);
+//         }
       }
       
-      const uint32_t province_count = ctx->container->entities_count(debug::entities::province);
-      for (uint32_t i = 0; i < province_count; ++i) {
-        const uint32_t province_index = i;
-        auto t = ctx->container->get_title(province_index);
-        auto owner = t->owner;
-        auto next_title = t->parent;
-        if (next_title->owner != nullptr) continue;
-        
-        uint32_t counter = 0;
-        for (uint32_t j = 0; j < next_title->count; ++j) {
-          auto child = next_title->get_child(j);
-          if (child->owner == owner) ++counter;
-        }
-        
-        if (counter > std::ceil(float(next_title->count) / 2.0f)) {
-          owner->add_title(next_title);
-        }
-      }
+      // как вообще в принципе раздать сгенерированные титулы сгенерированным персонажам?
+      // возможно даже сразу сгенерировать персонажей к титулам лучше чем генерировать сейчас отдельно
       
+      // теперь у нас есть как то раскиданные титулы государству, как раскидывать по персонажам?
+      // раскидывать нужно пока не кончатся провинции, отдавать в одни руки числом до герцогского (то есть от 1 до 6)
+      // (но 5-6 очень редко)
       for (size_t i = 0; i < country_count; ++i) {
         const uint32_t country_index = i;
-        const auto &childs = ctx->container->get_childs(debug::entities::country, country_index);
-        // текущий генератор выдает в среднем 26 провинций на королевство
-        // и 144 провинций на империю, около того что я предполагал (100 провок на империю)
-        if (childs.size() < 20) continue; // минимум 20 королевство? 
-        
-        const uint32_t titulus_index = ctx->container->get_data<uint32_t>(debug::entities::province, childs[0], debug::properties::province::title_index);
-        auto t = ctx->container->get_title(titulus_index);
-        auto owner = t->owner;
-        
-        {
-          std::unordered_map<core::titulus*, uint32_t> unique_kingdoms;
-          for (size_t j = 0; j < childs.size(); ++j) {
-            const uint32_t titulus_index = ctx->container->get_data<uint32_t>(debug::entities::province, childs[j], debug::properties::province::title_index);
-            auto t = ctx->container->get_title(titulus_index);
-            auto duchy = t->parent;
-            auto kingdom = duchy->parent;
-            ASSERT(kingdom->type == core::titulus::type::king);
-            if (kingdom->owner != nullptr) continue;
-            auto itr = unique_kingdoms.find(kingdom);
-            if (itr == unique_kingdoms.end()) itr = unique_kingdoms.insert(std::make_pair(kingdom, 0)).first;
-            ++itr->second;
-          }
-          
-          uint32_t max_kingdom_count = 0;
-          core::titulus* kingdom = nullptr;
-          for (const auto &pair : unique_kingdoms) {
-            if (max_kingdom_count < pair.second) {
-              max_kingdom_count = pair.second;
-              kingdom = pair.first;
-            }
-          }
-          
-          owner->add_title(kingdom);
+        // сначало нужно посчитать что имеем
+        std::unordered_set<uint32_t> baron_titles;
+        std::vector<uint32_t> duchy_titles;
+        std::vector<uint32_t> king_titles;
+        std::vector<uint32_t> emp_titles;
+        const auto &owned_titles = titles[country_index];
+        for (const uint32_t title_index : owned_titles) {
+          if (title_index >= baron_offset) baron_titles.insert(title_index);
+          else if (title_index >= duchy_offset) duchy_titles.push_back(title_index);
+          else if (title_index >= king_offset) king_titles.push_back(title_index);
+          else if (title_index >= emp_offset) emp_titles.push_back(title_index);
         }
         
-        if (childs.size() < 100) continue;
+        ASSERT(king_titles.size() + emp_titles.size() < 2);
         
+        // первым делаем господина, у господина должны быть все самые высокие титулы и покрайней мере одно герцогство
+        size_t liege_index = SIZE_MAX;
         {
-          std::unordered_map<core::titulus*, uint32_t> unique_empires;
-          for (size_t j = 0; j < childs.size(); ++j) {
-            const uint32_t titulus_index = ctx->container->get_data<uint32_t>(debug::entities::province, childs[j], debug::properties::province::title_index);
-            auto t = ctx->container->get_title(titulus_index);
-            auto duchy = t->parent;
-            auto kingdom = duchy->parent;
-            auto empire = kingdom->parent;
-            ASSERT(empire->type == core::titulus::type::imperial);
-            if (empire->owner != nullptr) continue;
-            auto itr = unique_empires.find(empire);
-            if (itr == unique_empires.end()) itr = unique_empires.insert(std::make_pair(empire, 0)).first;
-            ++itr->second;
+          std::vector<uint32_t> final_titles;
+          final_titles.insert(final_titles.end(), king_titles.begin(), king_titles.end());
+          final_titles.insert(final_titles.end(), emp_titles.begin(), emp_titles.end());
+          king_titles.clear();
+          emp_titles.clear();
+          
+          // герцогство выбираем случайно (герцогств может и не быть)
+          const uint32_t rand_index = ctx->random->index(duchy_titles.size());
+          const uint32_t duchy_index = duchy_titles[rand_index];
+          final_titles.push_back(duchy_index);
+          duchy_titles[rand_index] = duchy_titles.back();
+          duchy_titles.pop_back();
+          
+          ASSERT(duchy_index >= duchy_offset && duchy_index < baron_offset);
+          
+          // собираем баронские титулы
+          const uint32_t baron_titles_count = ctx->random->index(5) + 2; // от 2 до 6 (более менее нормальное распределение)
+          const auto &duchy_childs = ctx->container->get_childs(debug::entities::title, duchy_index);
+          uint32_t counter = 0;
+          // нам бы раздать случайные (?) соседние провки, 
+//           for (size_t j = 0; j < duchy_childs.size(); ++j) {
+//             const uint32_t baron_index = duchy_childs[j];
+//             
+//           }
+          
+          uint32_t choosen_baron_index = UINT32_MAX;
+          while (choosen_baron_index == UINT32_MAX) {
+            const uint32_t rand_index = ctx->random->index(duchy_childs.size());
+            const uint32_t baron_title_index = duchy_childs[rand_index];
+            if (ctx->container->get_data<uint32_t>(debug::entities::title, baron_title_index, debug::properties::title::owner) != country_index) continue;
+            auto itr = baron_titles.find(baron_title_index);
+            if (itr == baron_titles.end()) continue;
+            
+            baron_titles.erase(itr);
+            choosen_baron_index = baron_title_index;
           }
           
+          ASSERT(choosen_baron_index != UINT32_MAX);
+          final_titles.push_back(choosen_baron_index);
+          ++counter;
           
-          core::titulus* empire = nullptr;
-          uint32_t max_kingdom_count = 0;
-          for (const auto &pair : unique_empires) {
-            if (max_kingdom_count < pair.second) {
-              max_kingdom_count = pair.second;
-              empire = pair.first;
+          uint32_t last_title = choosen_baron_index;
+          while (counter < baron_titles_count) {
+            const uint32_t province_index = last_title - baron_offset;
+            const auto &neighbors = ctx->container->get_province_neighbours(province_index);
+            size_t index = 0;
+            while (counter < baron_titles_count && index < neighbors.size()) {
+              const uint32_t new_index = neighbors[index];
+              ++index;
+              const uint32_t baron_index = new_index + baron_offset;
+              if (ctx->container->get_data<uint32_t>(debug::entities::title, baron_index, debug::properties::title::owner) != country_index) continue;
+              auto itr = baron_titles.find(baron_index);
+              if (itr == baron_titles.end()) continue;
+              
+              final_titles.push_back(baron_index);
+              baron_titles.erase(itr);
+              ++counter;
+            }
+            
+            // если не добрали то че делаем
+            ASSERT(last_title != final_titles.back());
+            last_title = final_titles.back();
+          }
+          
+          auto character_table = global::get<sol::state>()->create_table();
+          character_table.create("family");
+          character_table.create("stats");
+          character_table.create("hero_stats");
+          character_table["male"] = true;
+          character_table["dead"] = false;
+          auto titles_table = character_table.create("titles");
+          for (const uint32_t title_index : final_titles) {
+            if (title_index >= baron_offset) {
+              const std::string &str = "baron" + std::to_string(title_index - baron_offset) + "_title";
+              titles_table.add(std::move(str));
+              const std::string &city_id = "city" + std::to_string(title_index - baron_offset) + "_title";
+              titles_table.add(std::move(city_id));
+            } else if (title_index >= duchy_offset) {
+              const std::string &str = "duke" + std::to_string(title_index - duchy_offset) + "_title";
+              titles_table.add(std::move(str));
+            } else if (title_index >= king_offset) {
+              const std::string &str = "king" + std::to_string(title_index - king_offset) + "_title";
+              titles_table.add(std::move(str));
+            } else if (title_index >= emp_offset) {
+              const std::string &str = "imperial" + std::to_string(title_index - emp_offset) + "_title";
+              titles_table.add(std::move(str));
             }
           }
           
-          owner->add_title(empire);
+          liege_index = utils::add_character(character_table);
+        }
+        
+        // теперь делаем вассалов, у них либо герцогство либо несколько просто владений
+        // поэтому сначало раздаем герцогства, так то у этих челиков могут быть свои вассалы
+        // возможно нужно взять больше баронских титулов
+        while (!duchy_titles.empty()) {
+          const uint32_t rand_index = ctx->random->index(duchy_titles.size());
+          const uint32_t duchy_index = duchy_titles[rand_index];
+          duchy_titles[rand_index] = duchy_titles.back();
+          duchy_titles.pop_back();
+          
+          std::vector<uint32_t> final_titles;
+          final_titles.push_back(duchy_index);
+          
+          // собираем баронские титулы (нужно взять больше для того чтобы сделать вассалов вассала)
+          const uint32_t baron_titles_count = ctx->random->index(5) + 2; // от 2 до 6 (более менее нормальное распределение)
+          const auto &duchy_childs = ctx->container->get_childs(debug::entities::title, duchy_index);
+          uint32_t counter = 0;
+          // нам бы раздать случайные (?) соседние провки, 
+//           for (size_t j = 0; j < duchy_childs.size(); ++j) {
+//             const uint32_t baron_index = duchy_childs[j];
+//             
+//           }
+          
+          uint32_t choosen_baron_index = UINT32_MAX;
+          while (choosen_baron_index == UINT32_MAX) {
+            const uint32_t rand_index = ctx->random->index(duchy_childs.size());
+            const uint32_t baron_title_index = duchy_childs[rand_index];
+            if (ctx->container->get_data<uint32_t>(debug::entities::title, baron_title_index, debug::properties::title::owner) != country_index) continue;
+            auto itr = baron_titles.find(baron_title_index);
+            if (itr == baron_titles.end()) continue;
+            
+            baron_titles.erase(itr);
+            choosen_baron_index = baron_title_index;
+          }
+          
+          ASSERT(choosen_baron_index != UINT32_MAX);
+          final_titles.push_back(choosen_baron_index);
+          ++counter;
+          
+          uint32_t last_title = choosen_baron_index;
+//           while (counter < baron_titles_count) {
+            const uint32_t province_index = last_title - baron_offset;
+            const auto &neighbors = ctx->container->get_province_neighbours(province_index);
+            size_t index = 0;
+            while (counter < baron_titles_count && index < neighbors.size()) {
+              const uint32_t new_index = neighbors[index];
+              ++index;
+              const uint32_t baron_index = new_index + baron_offset;
+              if (ctx->container->get_data<uint32_t>(debug::entities::title, baron_index, debug::properties::title::owner) != country_index) continue;
+              auto itr = baron_titles.find(baron_index);
+              if (itr == baron_titles.end()) continue;
+              
+              final_titles.push_back(baron_index);
+              baron_titles.erase(itr);
+              ++counter;
+            }
+            
+            // наверное здесь ограничимся тем что есть
+//             ASSERT(last_title != final_titles.back());
+//             last_title = final_titles.back();
+//           }
+
+          auto character_table = global::get<sol::state>()->create_table();
+          character_table.create("family");
+          character_table.create("stats");
+          character_table.create("hero_stats");
+          character_table["male"] = true;
+          character_table["dead"] = false;
+          character_table["liege"] = liege_index;
+          auto titles_table = character_table.create("titles");
+          for (const uint32_t title_index : final_titles) {
+            if (title_index >= baron_offset) {
+              const std::string &str = "baron" + std::to_string(title_index - baron_offset) + "_title";
+              titles_table.add(std::move(str));
+              const std::string &city_id = "city" + std::to_string(title_index - baron_offset) + "_title";
+              titles_table.add(std::move(city_id));
+            } else if (title_index >= duchy_offset) {
+              const std::string &str = "duke" + std::to_string(title_index - duchy_offset) + "_title";
+              titles_table.add(std::move(str));
+            } else assert(false);
+          }
+          
+          utils::add_character(character_table);
+        }
+        
+        // могут остаться баронские титулы еще
+        while (!baron_titles.empty()) {
+          auto itr = baron_titles.begin();
+          const uint32_t choosen_baron_index = *itr;
+          baron_titles.erase(itr);
+          
+          const uint32_t baron_titles_count = ctx->random->index(6) + 1;
+          uint32_t counter = 0;
+          std::vector<uint32_t> final_titles;
+          final_titles.push_back(choosen_baron_index);
+          ++counter;
+          
+          uint32_t last_title = choosen_baron_index;
+//           while (counter < baron_titles_count) {
+            const uint32_t province_index = last_title - baron_offset;
+            const auto &neighbors = ctx->container->get_province_neighbours(province_index);
+            size_t index = 0;
+            while (counter < baron_titles_count && index < neighbors.size()) {
+              const uint32_t new_index = neighbors[index];
+              ++index;
+              const uint32_t baron_index = new_index + baron_offset;
+              if (ctx->container->get_data<uint32_t>(debug::entities::title, baron_index, debug::properties::title::owner) != country_index) continue;
+              auto itr = baron_titles.find(baron_index);
+              if (itr == baron_titles.end()) continue;
+              
+              final_titles.push_back(baron_index);
+              baron_titles.erase(itr);
+              ++counter;
+            }
+            
+            // наверное здесь ограничимся тем что есть
+//             ASSERT(last_title != final_titles.back());
+//             last_title = final_titles.back();
+//           }
+
+          auto character_table = global::get<sol::state>()->create_table();
+          character_table.create("family");
+          character_table.create("stats");
+          character_table.create("hero_stats");
+          character_table["male"] = true;
+          character_table["dead"] = false;
+          character_table["liege"] = liege_index;
+          auto titles_table = character_table.create("titles");
+          for (const uint32_t title_index : final_titles) {
+            if (title_index >= baron_offset) {
+              const std::string &str = "baron" + std::to_string(title_index - baron_offset) + "_title";
+              titles_table.add(std::move(str));
+              const std::string &city_id = "city" + std::to_string(title_index - baron_offset) + "_title";
+              titles_table.add(std::move(city_id));
+            } else assert(false);
+          }
+          
+          utils::add_character(character_table);
         }
       }
+      
+      // как то раскидали титулы по персонажам
+      // по идее мы закончили с генерацией (нужно еще наверное задать какие нибудь константы (например шанс смерти))
+      // теперь нужно сделать парсинг
+      // мы обходим все таблицы, валидируем их, парсим,
+      // после парсинга начинаем собирать все связи между данными в кучу
+      // удаляем старый луа стейт, создаем новый (хотя до сих пор не знаю нужен ли он)
+      // делаем всю необходимую работу для рендера (границы, стены),
+      // переходим непосредственно к игре
+      // требуется обойти всех персонажей и посчитать ход, причем часть хода можно сделать в мультитрединге
+      // (например посчитать инком, пересчитать статы, строительство и проч)
+      // где то здесь же идет ход игрока, отрисовка интерфейса
+      // вообще дизайн интерфейса будет той еще задачкой для меня
+      
+      // как быть здесь? нужно получить id родительского титула
+//       const uint32_t province_count = ctx->container->entities_count(debug::entities::province);
+//       for (uint32_t i = 0; i < province_count; ++i) {
+//         const uint32_t province_index = i;
+//         const std::string &id = "baron" + std::to_string(province_index) + "_title";
+//         
+//         
+//         auto t = ctx->container->get_title(province_index);
+//         auto owner = t->owner;
+//         auto next_title = t->parent;
+//         if (next_title->owner != nullptr) continue;
+//         
+//         uint32_t counter = 0;
+//         for (uint32_t j = 0; j < next_title->count; ++j) {
+//           auto child = next_title->get_child(j);
+//           if (child->owner == owner) ++counter;
+//         }
+//         
+//         if (counter > std::ceil(float(next_title->count) / 2.0f)) {
+//           owner->add_title(next_title);
+//         }
+//       }
+//       
+//       for (size_t i = 0; i < country_count; ++i) {
+//         const uint32_t country_index = i;
+//         const auto &childs = ctx->container->get_childs(debug::entities::country, country_index);
+//         // текущий генератор выдает в среднем 26 провинций на королевство
+//         // и 144 провинций на империю, около того что я предполагал (100 провок на империю)
+//         if (childs.size() < 20) continue; // минимум 20 королевство? 
+//         
+//         const uint32_t titulus_index = ctx->container->get_data<uint32_t>(debug::entities::province, childs[0], debug::properties::province::title_index);
+//         auto t = ctx->container->get_title(titulus_index);
+//         auto owner = t->owner;
+//         
+//         {
+//           std::unordered_map<core::titulus*, uint32_t> unique_kingdoms;
+//           for (size_t j = 0; j < childs.size(); ++j) {
+//             const uint32_t titulus_index = ctx->container->get_data<uint32_t>(debug::entities::province, childs[j], debug::properties::province::title_index);
+//             auto t = ctx->container->get_title(titulus_index);
+//             auto duchy = t->parent;
+//             auto kingdom = duchy->parent;
+//             ASSERT(kingdom->type == core::titulus::type::king);
+//             if (kingdom->owner != nullptr) continue;
+//             auto itr = unique_kingdoms.find(kingdom);
+//             if (itr == unique_kingdoms.end()) itr = unique_kingdoms.insert(std::make_pair(kingdom, 0)).first;
+//             ++itr->second;
+//           }
+//           
+//           uint32_t max_kingdom_count = 0;
+//           core::titulus* kingdom = nullptr;
+//           for (const auto &pair : unique_kingdoms) {
+//             if (max_kingdom_count < pair.second) {
+//               max_kingdom_count = pair.second;
+//               kingdom = pair.first;
+//             }
+//           }
+//           
+//           owner->add_title(kingdom);
+//         }
+//         
+//         if (childs.size() < 100) continue; // в этом случае поди нужно несколько королевств найти
+//         
+//         {
+//           std::unordered_map<core::titulus*, uint32_t> unique_empires;
+//           for (size_t j = 0; j < childs.size(); ++j) {
+//             const uint32_t titulus_index = ctx->container->get_data<uint32_t>(debug::entities::province, childs[j], debug::properties::province::title_index);
+//             auto t = ctx->container->get_title(titulus_index);
+//             auto duchy = t->parent;
+//             auto kingdom = duchy->parent;
+//             auto empire = kingdom->parent;
+//             ASSERT(empire->type == core::titulus::type::imperial);
+//             if (empire->owner != nullptr) continue;
+//             auto itr = unique_empires.find(empire);
+//             if (itr == unique_empires.end()) itr = unique_empires.insert(std::make_pair(empire, 0)).first;
+//             ++itr->second;
+//           }
+//           
+//           
+//           core::titulus* empire = nullptr;
+//           uint32_t max_kingdom_count = 0;
+//           for (const auto &pair : unique_empires) {
+//             if (max_kingdom_count < pair.second) {
+//               max_kingdom_count = pair.second;
+//               empire = pair.first;
+//             }
+//           }
+//           
+//           owner->add_title(empire);
+//         }
+//       }
       
       // как то так раздали все титулы одному персонажу пока что
       // их нужно будет потом распределить по подельникам
@@ -5245,5 +5885,70 @@ namespace devils_engine {
       // как техи будут передавать свои бонусы? особые бонусы делать сложно
       // особые бонусы это что?
     }
+    
+    void generate_cities(generator::context* ctx, sol::table &table) {
+      utils::time_log log("generating tech level");
+      
+      // здания и тип города
+      {
+        auto building = global::get<sol::state>()->create_table();
+        building["id"] = "test_building1";
+        building["time"] = 4;
+        utils::add_building(building);
+      }
+      
+      {
+        auto building = global::get<sol::state>()->create_table();
+        building["id"] = "test_building2";
+        building["time"] = 4;
+        utils::add_building(building);
+      }
+      
+      {
+        auto city_type = global::get<sol::state>()->create_table();
+        city_type["id"] = "city_type1";
+        auto buildings = city_type.create<std::string>("buildings");
+        buildings[0] = "test_building1";
+        buildings[1] = "test_building2";
+        auto stats = city_type.create<std::string>("stats");
+        stats[magic_enum::enum_name<core::city_stats::values>(core::city_stats::tax_income)] = 1.0f;
+        utils::add_city_type(city_type);
+      }
+      
+      {
+        auto city_type = global::get<sol::state>()->create_table();
+        city_type["id"] = "city_type2";
+        auto buildings = city_type.create<std::string>("buildings");
+        buildings[0] = "test_building1";
+        buildings[1] = "test_building2";
+        auto stats = city_type.create<std::string>("stats");
+        stats[magic_enum::enum_name<core::city_stats::values>(core::city_stats::tax_income)] = 1.0f;
+        utils::add_city_type(city_type);
+      }
+      
+      const uint32_t provinces_creation_count = ctx->container->entities_count(debug::entities::province);
+      for (uint32_t i = 0; i < provinces_creation_count; ++i) {
+        const auto &province_tiles = ctx->container->get_childs(debug::entities::province, i);
+        const uint32_t rand_tile = ctx->random->index(province_tiles.size());
+        // id получаются совсем не информативными, они будут более информативными если генерировать имена
+        // в общем это проблема неединичной генерации, хочется использовать индексы, но они не информативные
+        const std::string city_id = "city" + std::to_string(i) + "_title";
+        auto city = global::get<sol::state>()->create_table(); // название города видимо будет храниться в титуле
+        city["province"] = i;
+        city["city_type"] = "city_type1";
+        city["tile_index"] = rand_tile;
+        city["title"] = city_id; // тут проще использовать индекс
+        utils::add_city(city);
+        
+        auto city_title = global::get<sol::state>()->create_table();
+        city_title["id"] = city_id;
+        city_title["type"] = core::titulus::type::city;
+//         city_title["parent"] = baron_id; // родителя найдем тогда из провинции
+//         city_title["city"] = baron_index;
+        utils::add_title(city_title);
+      }
+    }
+    
+    
   }
 }

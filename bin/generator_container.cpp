@@ -38,21 +38,21 @@ namespace devils_engine {
           }
         }
         
-        // скорее всего для персонажа нужно указать династию
-        // и удалять персонажей наверное будем только по династиям
-        // то есть если игровыми средствами до династии не добраться, то ее можно удалить
-        // в каких это случаях происходит?
-        for (auto c : characters) {
-          character_pool.destroy(c);
-        }
-        
-        // нужно ли удалять титулы? титул может никому не принадлежать или быть не создан (наверное это одно и тоже)
-        // если никому не принадлежит специальный титул, то что? наверное пусть остается, 
-        // но нужно будет проделать какие то дополнителльные действия чтобы вновь его получить
-        // к титулам еще необходимо быстро обращаться, использовать id и map?
-        for (auto t : titles) {
-          titulus_pool.destroy(t);
-        }
+//         // скорее всего для персонажа нужно указать династию
+//         // и удалять персонажей наверное будем только по династиям
+//         // то есть если игровыми средствами до династии не добраться, то ее можно удалить
+//         // в каких это случаях происходит?
+//         for (auto c : characters) {
+//           character_pool.destroy(c);
+//         }
+//         
+//         // нужно ли удалять титулы? титул может никому не принадлежать или быть не создан (наверное это одно и тоже)
+//         // если никому не принадлежит специальный титул, то что? наверное пусть остается, 
+//         // но нужно будет проделать какие то дополнителльные действия чтобы вновь его получить
+//         // к титулам еще необходимо быстро обращаться, использовать id и map?
+//         for (auto t : titles) {
+//           titulus_pool.destroy(t);
+//         }
       }
       
       uint32_t container::add_entity(const uint32_t &type) {
@@ -331,60 +331,60 @@ namespace devils_engine {
         return entities[final_type].first.types[property];
       }
       
-      core::character* container::create_character() {
-        auto c = character_pool.create();
-        characters.push_back(c);
-        return c;
-      }
-      
-      core::titulus* container::create_titulus(const enum core::titulus::type &t) {
-        auto title = titulus_pool.create(t);
-        titles.push_back(title);
-        return title;
-      }
-      
-      core::titulus* container::create_titulus(const enum core::titulus::type &t, const uint32_t &count) {
-        auto title = titulus_pool.create(t, count);
-        titles.push_back(title);
-        return title;
-      }
-      
-      uint32_t container::get_title_index(const core::titulus* title) const {
-        if (title == nullptr) return UINT32_MAX;
-        
-        for (size_t i = 0; i < titles.size(); ++i) {
-          if (titles[i] == title) return i;
-        }
-        
-        throw std::runtime_error("Could not find title");
-        return UINT32_MAX;
-      }
-      
-      core::titulus* container::get_title(const uint32_t &index) const {
-        if (index >= titles.size()) throw std::runtime_error("Could not find title"); // ошибка ли? скорее да
-        return titles[index];
-      }
-      
-      void container::add_playable_character(core::character* character) {
-        auto itr = turn_characters.find(character);
-        if (itr == turn_characters.end()) {
-          itr = turn_characters.insert(std::make_pair(character, uint32_t(0))).first;
-        }
-        
-        ++itr->second;
-      }
-      
-      void container::remove_playable_character(core::character* character) {
-        auto itr = turn_characters.find(character);
-        if (itr == turn_characters.end()) return;
-        
-        --itr->second;
-        if (itr->second == 0) turn_characters.erase(itr);
-      }
-      
-      const std::unordered_map<core::character*, uint32_t> & container::get_turn_characters() const {
-        return turn_characters;
-      }
+//       core::character* container::create_character() {
+//         auto c = character_pool.create();
+//         characters.push_back(c);
+//         return c;
+//       }
+//       
+//       core::titulus* container::create_titulus(const enum core::titulus::type &t) {
+//         auto title = titulus_pool.create(t);
+//         titles.push_back(title);
+//         return title;
+//       }
+//       
+//       core::titulus* container::create_titulus(const enum core::titulus::type &t, const uint32_t &count) {
+//         auto title = titulus_pool.create(t, count);
+//         titles.push_back(title);
+//         return title;
+//       }
+//       
+//       uint32_t container::get_title_index(const core::titulus* title) const {
+//         if (title == nullptr) return UINT32_MAX;
+//         
+//         for (size_t i = 0; i < titles.size(); ++i) {
+//           if (titles[i] == title) return i;
+//         }
+//         
+//         throw std::runtime_error("Could not find title");
+//         return UINT32_MAX;
+//       }
+//       
+//       core::titulus* container::get_title(const uint32_t &index) const {
+//         if (index >= titles.size()) throw std::runtime_error("Could not find title"); // ошибка ли? скорее да
+//         return titles[index];
+//       }
+//       
+//       void container::add_playable_character(core::character* character) {
+//         auto itr = turn_characters.find(character);
+//         if (itr == turn_characters.end()) {
+//           itr = turn_characters.insert(std::make_pair(character, uint32_t(0))).first;
+//         }
+//         
+//         ++itr->second;
+//       }
+//       
+//       void container::remove_playable_character(core::character* character) {
+//         auto itr = turn_characters.find(character);
+//         if (itr == turn_characters.end()) return;
+//         
+//         --itr->second;
+//         if (itr->second == 0) turn_characters.erase(itr);
+//       }
+//       
+//       const std::unordered_map<core::character*, uint32_t> & container::get_turn_characters() const {
+//         return turn_characters;
+//       }
       
       size_t container::compute_memory_size() const {
         size_t mem = 0;

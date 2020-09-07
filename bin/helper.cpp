@@ -22,13 +22,19 @@ namespace devils_engine {
       //sizeof(systems::generator<map::generator_context>) + 
       sizeof(core::map) + 
       sizeof(interface::context) +
-      sizeof(map::generator::container)
+      sizeof(map::generator::container) + 
+      sizeof(utils::interface) +
+      sizeof(core::context) +
+      sizeof(utils::data_string_container)
     ),
     graphics_container(nullptr),
     map(nullptr),
     //map_generator(nullptr),
     context(nullptr),
-    map_container(nullptr)
+    map_container(nullptr),
+    interface(nullptr),
+    core_context(nullptr),
+    string_container(nullptr)
   {}
 
   system_container_t::~system_container_t() {
@@ -37,6 +43,9 @@ namespace devils_engine {
     RELEASE_CONTAINER_DATA(graphics_container)
     RELEASE_CONTAINER_DATA(context)
     RELEASE_CONTAINER_DATA(map_container)
+    RELEASE_CONTAINER_DATA(interface)
+    RELEASE_CONTAINER_DATA(core_context)
+    RELEASE_CONTAINER_DATA(string_container)
   }
 
   glfw_t::glfw_t() {
@@ -71,7 +80,7 @@ namespace devils_engine {
     
     array[dirname+1] = '\0'; // путь до папки
     
-//     std::cout << array << "\n";
+    std::cout << array << "\n";
     
     const std::string dir_path = std::string(array);
     
@@ -401,7 +410,7 @@ namespace devils_engine {
   }
 
   void create_render_system(system_container_t &systems) {
-    const size_t stageContainerSize =
+    const size_t stage_container_size =
       sizeof(render::buffers) +
       //sizeof(render::images) +
       //sizeof(render::particles) +
@@ -452,7 +461,7 @@ namespace devils_engine {
     auto window = systems.graphics_container->create_window();
     systems.graphics_container->create_device();
     window->create_swapchain(systems.graphics_container->device);
-    auto render = systems.graphics_container->create_system(stageContainerSize);
+    auto render = systems.graphics_container->create_system(stage_container_size);
     systems.graphics_container->create_tasks();
     //container.decals_system = container.container.create<systems::decals>();
 
@@ -572,6 +581,10 @@ namespace devils_engine {
       }),
       std::make_pair(utils::id::get("culture"), std::vector<map::generator::data_type>{}),
       std::make_pair(utils::id::get("country"), std::vector<map::generator::data_type>{}),
+      std::make_pair(utils::id::get("title"), std::vector<map::generator::data_type>{
+        map::generator::data_type::uint_t,  // parent
+        map::generator::data_type::uint_t,  // owner
+      }),
     };
     
     systems.map_container = systems.container.create<map::generator::container>(map::generator::container::create_info{tiles_types, entities_types});
@@ -717,6 +730,9 @@ namespace devils_engine {
     *ptr = nullptr;
   }
   
+  // переделаю данные которые хранятся в тайле (цвет, текстура)
+  // эта часть полностью изменится, для некоторых данных нужно будет сгенерировать безье текст
+  // 
   void setup_rendering_modes(render::mode_container &container) {
     container.insert(std::make_pair("plates_render_mode", [] () {
       global::get<render::updater>()->set_render_mode(1);
@@ -861,202 +877,6 @@ namespace devils_engine {
       }
     }));
   }
-  
-//   void create_map_generator(system_container_t &systems, dt::thread_pool* pool, map::generator_context* context) {
-//     const size_t map_generator_size = 
-//       sizeof(map::beginner) +
-//       sizeof(map::plates_generator) + 
-//       sizeof(map::plate_datas_generator) + 
-//       sizeof(map::compute_boundary_edges) + 
-//       sizeof(map::compute_plate_boundary_stress) + 
-//       sizeof(map::blur_plate_boundary_stress) + 
-//       sizeof(map::calculate_plate_boundary_distances) + 
-//       sizeof(map::calculate_plate_root_distances) + 
-//       sizeof(map::calculate_vertex_elevation) + 
-//       sizeof(map::generate_air_whorls) + 
-//       sizeof(map::calculate_vertex_air_current) + 
-//       sizeof(map::calculate_air_current_outflows) + 
-//       sizeof(map::initialize_circulating_heat) + 
-//       sizeof(map::propagate_circulating_heat) + 
-//       sizeof(map::calculate_temperatures) + 
-//       sizeof(map::initialize_circulating_moisture) + 
-//       sizeof(map::propagate_circulating_moisture) + 
-//       sizeof(map::calculate_wetness) + 
-//       sizeof(map::calculate_biomes) + 
-//       sizeof(map::calculate_tile_distance) * 3 + 
-//       sizeof(map::modify_tile_elevation) + 
-//       sizeof(map::compute_tile_heat) + 
-//       sizeof(map::normalize_fractional_values) + 
-//       sizeof(map::initialize_circulating_moisture) + 
-//       sizeof(map::propagate_circulating_moisture) + 
-//       sizeof(map::calculate_wetness) + 
-//       sizeof(map::create_biomes) + 
-//       sizeof(map::generate_provinces) + 
-//       sizeof(map::generate_cultures);
-//       
-//     systems.map_generator = systems.container.create<systems::generator<map::generator_context>>(map_generator_size);
-//     global::get(systems.map_generator);
-//     
-//     systems.map_generator->add_generator<map::beginner>(map::beginner::create_info{pool});
-// //     systems.map_generator->add_generator<map::plates_generator>(map::plates_generator::create_info{pool});
-// //     systems.map_generator->add_generator<map::plate_datas_generator>(map::plate_datas_generator::create_info{pool});
-// //     systems.map_generator->add_generator<map::compute_boundary_edges>(map::compute_boundary_edges::create_info{pool});
-// //     systems.map_generator->add_generator<map::compute_plate_boundary_stress>(map::compute_plate_boundary_stress::create_info{pool});
-// //     systems.map_generator->add_generator<map::blur_plate_boundary_stress>(map::blur_plate_boundary_stress::create_info{pool});
-// //     systems.map_generator->add_generator<map::calculate_plate_boundary_distances>(map::calculate_plate_boundary_distances::create_info{pool});
-// //     systems.map_generator->add_generator<map::calculate_plate_root_distances>(map::calculate_plate_root_distances::create_info{pool});
-// //     //systems.map_generator->add_generator<map::modify_plate_datas>(map::modify_plate_datas::create_info{pool});
-// //     systems.map_generator->add_generator<map::calculate_vertex_elevation>(map::calculate_vertex_elevation::create_info{pool, 0.1f});
-// // //     systems.map_generator->add_generator<map::blur_tile_elevation>(map::blur_tile_elevation::create_info{
-// // //       pool,
-// // //       2,
-// // //       0.75f,
-// // //       1.1f
-// // //     });
-// //     
-// // //     systems.map_generator->add_generator<map::normalize_tile_elevation>(map::normalize_tile_elevation::create_info{pool});
-// //     systems.map_generator->add_generator<map::calculate_tile_distance>(map::calculate_tile_distance::create_info{
-// //       [] (const map::generator_context* context, const uint32_t &tile_index) -> bool {
-// //         const float height = context->tile_elevation[tile_index];
-// //         return height < 0.0f;
-// //       }, &context->water_distance, "calcutating water distances"});
-// //     systems.map_generator->add_generator<map::calculate_tile_distance>(map::calculate_tile_distance::create_info{
-// //       [] (const map::generator_context* context, const uint32_t &tile_index) -> bool {
-// //         const float height = context->tile_elevation[tile_index];
-// //         return height >= 0.0f;
-// //       }, &context->ground_distance, "calcutating ground distances"});
-// //     
-// //     systems.map_generator->add_generator<map::tile_postprocessing1>(map::tile_postprocessing1::create_info{pool});
-// //     systems.map_generator->add_generator<map::tile_postprocessing2>(map::tile_postprocessing2::create_info{pool});
-// // //     
-// // //     systems.map_generator->add_generator<map::calculate_tile_distance>(map::calculate_tile_distance::create_info{
-// // //       [] (const map::generator_context* context, const uint32_t &tile_index) -> bool {
-// // //         const float height = context->tile_elevation[tile_index];
-// // //         return height > 0.7f; // что является горой?
-// // //       }, &context->mountain_distance, "calcutating mountain distances"});
-// // //     
-// // //     systems.map_generator->add_generator<map::modify_tile_elevation>(map::modify_tile_elevation::create_info{
-// // //       pool,
-// // //       [] (const map::generator_context* context, const uint32_t &tile_index) -> float {
-// // //         const float height = context->tile_elevation[tile_index];
-// // //         if (height < 0.1f) return height - 0.05f;
-// // //         if (height > 0.7f) return 1.0f;
-// // //         return height + 0.05f;
-// // //       }, "calcutating mountain distances"});
-// // //     
-// // //     systems.map_generator->add_generator<map::blur_tile_elevation>(map::blur_tile_elevation::create_info{
-// // //       pool,
-// // //       1,
-// // //       0.6f,
-// // //       0.9f
-// // //     });
-// // //     
-// //     systems.map_generator->add_generator<map::normalize_tile_elevation>(map::normalize_tile_elevation::create_info{pool});
-// //     
-// //     
-// //     
-// // //     systems.map_generator->add_generator<map::connect_water_pools>();
-// // //     systems.map_generator->add_generator<map::generate_water_pools>();
-// //     systems.map_generator->add_generator<map::blur_tile_elevation>(map::blur_tile_elevation::create_info{
-// //       pool,
-// //       2,
-// //       0.75f,
-// //       1.1f
-// //     });
-// //     systems.map_generator->add_generator<map::normalize_tile_elevation>(map::normalize_tile_elevation::create_info{pool});
-// //     
-// //     systems.map_generator->add_generator<map::calculate_tile_distance>(map::calculate_tile_distance::create_info{
-// //       [] (const map::generator_context* context, const uint32_t &tile_index) -> bool {
-// //         const float height = context->tile_elevation[tile_index];
-// //         return height < 0.0f;
-// //       }, &context->water_distance, "calcutating water distances"});
-// //     systems.map_generator->add_generator<map::calculate_tile_distance>(map::calculate_tile_distance::create_info{
-// //       [] (const map::generator_context* context, const uint32_t &tile_index) -> bool {
-// //         const float height = context->tile_elevation[tile_index];
-// //         return height >= 0.0f;
-// //       }, &context->ground_distance, "calcutating ground distances"});
-// //     
-// //     systems.map_generator->add_generator<map::compute_tile_heat>(map::compute_tile_heat::create_info{pool});
-// //     systems.map_generator->add_generator<map::normalize_fractional_values>(map::normalize_fractional_values::create_info{
-// //       pool,
-// //       &context->tile_heat,
-// //       "normalizing tile heat"
-// //     });
-// //     
-// //     systems.map_generator->add_generator<map::generate_air_whorls>();
-// //     systems.map_generator->add_generator<map::calculate_vertex_air_current>(map::calculate_vertex_air_current::create_info{pool});
-// //     systems.map_generator->add_generator<map::calculate_air_current_outflows>(map::calculate_air_current_outflows::create_info{pool});
-// //     
-// // //     systems.map_generator->add_generator<map::initialize_circulating_moisture>(map::initialize_circulating_moisture::create_info{pool});
-// // //     systems.map_generator->add_generator<map::propagate_circulating_moisture>(map::propagate_circulating_moisture::create_info{pool});
-// // //     systems.map_generator->add_generator<map::calculate_wetness>(map::calculate_wetness::create_info{pool});
-// //     systems.map_generator->add_generator<map::compute_moisture>(map::compute_moisture::create_info{pool});
-// //     
-// //     systems.map_generator->add_generator<map::create_biomes>(map::create_biomes::create_info{pool});
-// //     systems.map_generator->add_generator<map::generate_provinces>(map::generate_provinces::create_info{pool});
-// //     systems.map_generator->add_generator<map::province_postprocessing>();
-// //     systems.map_generator->add_generator<map::calculating_province_neighbours>(map::calculating_province_neighbours::create_info{pool});
-// //     systems.map_generator->add_generator<map::generate_cultures>(map::generate_cultures::create_info{pool});
-// //     systems.map_generator->add_generator<map::generate_countries>(map::generate_countries::create_info{pool});
-//     systems.map_generator->add_generator<map::update_tile_data>(map::update_tile_data::create_info{pool});
-//     
-//     // что мне нужно для рек? высоты и горы, озера
-//     
-//     
-// //     systems.map_generator->add_generator<map::initialize_circulating_heat>(map::initialize_circulating_heat::create_info{pool});
-// //     systems.map_generator->add_generator<map::propagate_circulating_heat>(map::propagate_circulating_heat::create_info{pool});
-// //     systems.map_generator->add_generator<map::calculate_temperatures>(map::calculate_temperatures::create_info{pool});
-// 
-// //     systems.map_generator->add_generator<map::calculate_biomes>(map::calculate_biomes::create_info{pool});
-//   }
-  
-//   std::vector<systems::generator<map::generator_context>*> create_map_generators(system_container_t &systems, dt::thread_pool* pool, map::generator_context* context) {
-//     std::vector<systems::generator<map::generator_context>*> generators(3, nullptr);
-//     
-//     const size_t map_generator_size = 
-//       sizeof(map::beginner) +
-//       sizeof(map::plates_generator) + 
-//       sizeof(map::plate_datas_generator) + 
-//       sizeof(map::compute_boundary_edges) + 
-//       sizeof(map::compute_plate_boundary_stress) + 
-//       sizeof(map::blur_plate_boundary_stress) + 
-//       sizeof(map::calculate_plate_boundary_distances) + 
-//       sizeof(map::calculate_plate_root_distances) + 
-//       sizeof(map::calculate_vertex_elevation) + 
-//       sizeof(map::generate_air_whorls) + 
-//       sizeof(map::calculate_vertex_air_current) + 
-//       sizeof(map::calculate_air_current_outflows) + 
-//       sizeof(map::initialize_circulating_heat) + 
-//       sizeof(map::propagate_circulating_heat) + 
-//       sizeof(map::calculate_temperatures) + 
-//       sizeof(map::initialize_circulating_moisture) + 
-//       sizeof(map::propagate_circulating_moisture) + 
-//       sizeof(map::calculate_wetness) + 
-//       sizeof(map::calculate_biomes) + 
-//       sizeof(map::calculate_tile_distance) * 3 + 
-//       sizeof(map::modify_tile_elevation) + 
-//       sizeof(map::compute_tile_heat) + 
-//       sizeof(map::normalize_fractional_values) + 
-//       sizeof(map::initialize_circulating_moisture) + 
-//       sizeof(map::propagate_circulating_moisture) + 
-//       sizeof(map::calculate_wetness) + 
-//       sizeof(map::create_biomes) + 
-//       sizeof(map::generate_provinces) + 
-//       sizeof(map::generate_cultures);
-//       
-//     {
-//       generators[0] = new systems::generator<map::generator_context>(map_generator_size);
-//       
-//     }
-//     
-//     return generators;
-//   }
-
-//   void map_frustum_test(const map::container* map, const glm::mat4 &frustum, std::vector<uint32_t> &indices) {
-//     const utils::frustum fru = utils::compute_frustum(frustum);
-// 
-// 
-//   }
   
   #define OUTSIDE 0
   #define INSIDE 1
@@ -1233,6 +1053,56 @@ namespace devils_engine {
       table["tiles"][i] = lua.create_table();
       table["tiles"][i]["water_distance"] = lua.create_table();
     }
+  }
+  
+  int my_exception_handler(lua_State* L, sol::optional<const std::exception&> maybe_exception, sol::string_view description) {
+    // L is the lua state, which you can wrap in a state_view if necessary
+    // maybe_exception will contain exception, if it exists
+    // description will either be the what() of the exception or a description saying that we hit the general-case catch(...)
+    std::cout << "Lua throw an exception: ";
+    if (maybe_exception) {
+      const std::exception& ex = *maybe_exception;
+      std::cout << ex.what() << std::endl;
+    } else {
+      std::cout.write(description.data(), description.size());
+      std::cout << std::endl;
+    }
+
+    // you must push 1 element onto the stack to be 
+    // transported through as the error object in Lua
+    // note that Lua -- and 99.5% of all Lua users and libraries -- expects a string
+    // so we push a single string (in our case, the description of the error)
+    return sol::stack::push(L, description);
+  }
+  
+  void load_interface_functions(utils::interface* interface, sol::state &lua) {
+    const std::string script_dir = global::root_directory() + "scripts/";
+    //lua.script_file(script_dir + "interface1.lua");
+    //lua.set_panic(lua_panic);
+    auto script_from_file_result = lua.safe_script_file(script_dir + "interface1.lua");
+    if (!script_from_file_result.valid()) {
+      sol::error err = script_from_file_result;
+      throw std::runtime_error("Error in interface1.lua file: " + std::string(err.what()));
+    }
+    
+    {
+      sol::protected_function func = lua["test_interface"];
+//       func.error_handler = lua["got_problems"];
+      auto ctx = &global::get<interface::context>()->ctx;
+      auto res = func(ctx, nullptr, nullptr);
+      if (res.valid()) {
+        const bool test = res.get<bool>();
+        ASSERT(!test);
+      } else {
+        sol::error err = res;
+        std::string what = err.what();
+        std::cout << what << std::endl;
+        throw std::runtime_error("Function result is not valid");
+      }
+      interface->register_window("test_interface", {func, 0, core::structure::character});
+    }
+    
+    interface->open_window("test_interface", nullptr);
   }
 
   void rendering_mode(const map::generator::container* cont, core::map* map, const uint32_t &property, const uint32_t &render_mode, const uint32_t &water_mode) {
@@ -1845,7 +1715,7 @@ namespace devils_engine {
         }
         
         if (prop == map::debug::properties::tile::country_index) {
-          types[country_index+1] = {{0.0f, 0.0f, 0.0f}, UINT32_MAX, {0.0f, 0.0f, 0.0f}, 0.3f};
+          types[country_index+1] = {{0.0f, 0.0f, 0.0f}, UINT32_MAX, {0.0f, 0.0f, 0.0f}, 0.3f}; // это мы заполняем для каждого титула
           arr[i].dirs[1].w = glm::uintBitsToFloat(country_index+1);
         }
         
@@ -1943,6 +1813,412 @@ namespace devils_engine {
     auto ptr = connections->ptr();
     memcpy(ptr, walls.data(), walls.size() * sizeof(walls[0]));
     global::get<render::tile_walls_optimizer>()->set_connections_count(walls.size());
+  }
+  
+  template <typename T>
+  void create_entities_without_id() {
+    auto tables = global::get<utils::table_container>();
+    auto ctx = global::get<core::context>();
+    
+    const auto &data = tables->get_tables(T::s_type);
+    ctx->create_container<T>(data.size());
+  }
+  
+  template <typename T>
+  void create_entities() {
+    auto tables = global::get<utils::table_container>();
+    auto ctx = global::get<core::context>();
+    // это заполнить в валидации не выйдет (потому что string_view)
+    // в провинции нет id
+    auto to_data = global::get<utils::data_string_container>();
+    
+    const auto &data = tables->get_tables(T::s_type);
+    ctx->create_container<T>(data.size());
+    for (size_t i = 0; i < data.size(); ++i) {
+      auto ptr = ctx->get_entity<T>(i);
+      ptr->id = data[i]["id"];
+      const size_t index = to_data->get(ptr->id);
+      if (index != SIZE_MAX) throw std::runtime_error("Found duplicate id " + ptr->id + " while parsing " + std::string(magic_enum::enum_name<core::structure>(T::s_type)) + " type data");
+      to_data->insert(ptr->id, i);
+    }
+  }
+  
+  void create_characters() {
+    auto tables = global::get<utils::table_container>();
+    auto ctx = global::get<core::context>();
+    
+    const auto &data = tables->get_tables(core::structure::character);
+    for (const auto &table : data) {
+      bool male = true;
+      bool dead = false;
+      
+      if (const auto &proxy = table["male"]; proxy.valid()) {
+        male = proxy.get<bool>();
+      }
+      
+      if (const auto &proxy = table["dead"]; proxy.valid()) {
+        dead = proxy.get<bool>();
+      }
+      
+      ctx->create_character(male, dead);
+    }
+  }
+  
+  template <typename T>
+  void parse_entities(const std::function<void(T*, const sol::table&)> &parsing_func) {
+    auto tables = global::get<utils::table_container>();
+    auto ctx = global::get<core::context>();
+    const auto &data = tables->get_tables(T::s_type);
+    for (size_t i = 0; i < data.size(); ++i) {
+      auto ptr = ctx->get_entity<T>(i);
+      parsing_func(ptr, data[i]);
+    }
+  }
+  
+  void parse_characters(const std::function<void(core::character*, const sol::table&)> &parsing_func) {
+    auto tables = global::get<utils::table_container>();
+    auto ctx = global::get<core::context>();
+    
+    const auto &data = tables->get_tables(core::character::s_type);
+    for (size_t i = 0; i < data.size(); ++i) {
+      auto ptr = ctx->get_character(i);
+      parsing_func(ptr, data[i]);
+    }
+  }
+  
+  void validate_and_create_data(system_container_t &systems) {
+    systems.core_context = systems.container.create<core::context>();
+    global::get(systems.core_context);
+    systems.string_container = systems.container.create<utils::data_string_container>();
+    global::get(systems.string_container);
+    
+    const std::function<bool(const sol::table&)> validation_funcs[] = {
+      nullptr,                   // tile    : нужна ли тайлу валидация? я не уверен что хорошей идеей будет использовать луа таблицы для заполнения тайла
+      utils::validate_province,  // province
+      utils::validate_building,  // building_type,
+      utils::validate_city_type, // city_type,
+      utils::validate_city,      // city,
+      nullptr,                   // trait,
+      nullptr,                   // modificator,
+      nullptr,                   // troop_type,
+      nullptr,                   // decision,
+      nullptr,                   // religion_group,
+      nullptr,                   // religion,
+      nullptr,                   // culture,
+      nullptr,                   // law,
+      nullptr,                   // event,
+      utils::validate_title,     // titulus,
+      utils::validate_character, // character,
+      nullptr,                   // dynasty,
+      nullptr,                   // faction,    // это и далее делать не нужно по идее
+      nullptr,                   // hero_troop, 
+      nullptr,                   // army,       
+      
+    };
+    
+    auto tables = global::get<utils::table_container>();
+    const size_t count = static_cast<size_t>(core::structure::count);
+    bool ret = true;
+    for (size_t i = 0; i < count; ++i) {
+      if (!validation_funcs[i]) continue;
+      const auto &data = tables->get_tables(static_cast<core::structure>(i));
+      for (const auto &table : data) {
+        ret = ret && validation_funcs[i](table);
+      }
+    }
+    
+    if (!ret) throw std::runtime_error("There is validation errors");
+    
+    // нужно собрать инфу о дубликатах
+    create_entities_without_id<core::province>();
+    create_entities<core::building_type>();
+    create_entities<core::city_type>();
+    create_entities_without_id<core::city>();
+    create_entities<core::titulus>();
+    create_characters();
+    
+    parse_entities<core::titulus>(utils::parse_title);
+    parse_entities<core::province>(utils::parse_province);
+    parse_entities<core::building_type>(utils::parse_building);
+    parse_entities<core::city_type>(utils::parse_city_type);
+    parse_entities<core::city>(utils::parse_city);
+    parse_characters(utils::parse_character);
+    parse_characters(utils::parse_character_goverment);
+    
+    // по идее в этой точке все игровые объекты созданы
+    // и можно непосредственно переходить к геймплею
+    // если валидация и парсинг успешны это повод сохранить мир на диск
+    // это означает: сериализация данных карты + записать на диск все таблицы + сериализация персонажей и династий (первых)
+    // могу ли я сериализовать конкретные типы? скорее да чем нет, 
+    // но при этом мне придется делать отдельный сериализатор для каждого типа
+    // понятное дело делать отдельный сериализатор не с руки
+  }
+  
+  void create_interface(system_container_t &systems) {
+    systems.interface = systems.container.create<utils::interface>();
+    global::get(systems.interface);
+    
+    auto &lua = systems.interface->get_state();
+    load_interface_functions(systems.interface, lua);
+  }
+  
+  void post_generation_work(system_container_t &systems) {
+    find_border_points(global::get<map::generator::container>(), global::get<core::map>(), sol::table()); // после генерации нужно сделать много вещей
+    generate_tile_connections(global::get<core::map>(), global::get<dt::thread_pool>());
+    validate_and_create_data(systems); // создаем объекты
+    // по идее создать границы нужно сейчас, так как в титулах появились данные о цвете
+    
+    // создать нужно здесь луа интерфейс
+    create_interface(systems);
+  }
+  
+  enum class gameplay_state {
+    turn_advancing,
+    ai_turn,
+    player_turn,
+    next_player,
+  };
+  
+  static std::atomic<gameplay_state> new_state = gameplay_state::turn_advancing;
+  static gameplay_state current_state = gameplay_state::turn_advancing;
+  void player_has_ended_turn() { // перед этим мы должны проверить сделал ли игрок все вещи (ответил на все эвенты, всеми походил)
+    if (current_state != gameplay_state::player_turn) throw std::runtime_error("Current game state isnt player turn");
+    new_state = gameplay_state::next_player;
+  }
+  
+  bool player_end_turn(core::character* c) {
+    // тут мы должны проверить все ли сделал игрок (резолв битвы (вобзможно какого события) и эвенты)
+    // наверное нужно запилить функцию дополнительной проверки
+    ASSERT(c != nullptr);
+    
+    player_has_ended_turn();
+    return true;
+  }
+  
+  void advance_state() {
+    if (current_state == new_state) return;
+    
+    // к сожалению видимо никак кроме последовательности игрок -> комп -> следующий ход
+    // сделать не получится, нам нужно правильно и быстро обработать подсистемы
+    // а это означает что дробить вычисления компа - это плохая идея
+    
+    switch (new_state) {
+      case gameplay_state::turn_advancing: {
+        auto pool = global::get<dt::thread_pool>();
+        pool->submitbase([pool] () {
+          auto ctx = global::get<core::context>();
+          ctx->sort_characters();
+          const size_t first_not_dead = ctx->first_not_dead_character();
+          const size_t first_playable = ctx->first_playable_character();
+          const size_t count_not_dead = ctx->characters_count() - first_not_dead;
+          const size_t count_playable = ctx->characters_count() - first_playable;
+          
+          // статы у городов, провинций, фракций, армий и героев (возможно сначало нужно посчитать эвенты)
+          
+          utils::submit_works_async(pool, count_not_dead, [ctx, first_not_dead] (const size_t &start, const size_t &count) {
+            for (size_t i = start; i < start+count; ++i) {
+              const size_t index = i + first_not_dead;
+              auto c = ctx->get_character(index);
+              ASSERT(!c->is_dead());
+              // нужно наверное добавить флажок необходимости обновляться
+              
+              std::this_thread::sleep_for(std::chrono::microseconds(10)); // пока что моделируем какую то бурную деятельность
+            }
+          });
+          
+          pool->compute();
+          
+          // должно сработать (текущий тред занят этой конкретной функцией)
+          while (pool->working_count() != 1) { std::this_thread::sleep_for(std::chrono::microseconds(1)); }
+          
+          // вычислить эвенты (?)
+          // вычислить рождения/смерти (тут же нужно посчитать наследство)
+          // распространение техов/религии
+          
+          // делаем работу дальше 
+          global::get<utils::calendar>()->advance_turn();
+          
+          new_state = gameplay_state::player_turn; // ?
+        });
+        
+        break;
+      }
+      
+      case gameplay_state::ai_turn: {
+        auto pool = global::get<dt::thread_pool>();
+        pool->submitbase([pool] () {
+          // тут мы должны вычислить ии и сложный луа ии
+          // интеллект должен понять ситуацию вокруг, посмотреть дипломатию,
+          // можно ли что-то построить и куда то сходить героями и армиями
+          // оценить ситуацию можно и параллельно
+          // а вот более конкретные действия требуют какой то последовательности
+          // на такого рода последовательности у меня аллергия
+          // можно как то все сделать параллельно? тут надо понять что все
+          // поиск пути нужно сделать, мы вполне можем найти пути для всех армий заранее
+          // (другое дело что нам возможно потребуется очень много памяти) 
+          // нашел статейку которая кратко описывает как работает ии
+          // основная вещь в том что ии большое количество времени находится в паузе
+          // то есть не выполняет никаких действий или выполняет какую то одну легкую подсистему
+          // существует множество подсистем с которыми взаимодействуют персонажи
+          // некоторые из них выполняются чаще чем другие (например в европке дипломатия обновляется каждый месяц)
+          // я так понимаю происходит распределение на основе весов + неких общих ограничителей?
+          // мы вполне можем распределить веса параллельно, к весам нужно еще распределить нагрузку
+          // подсистемы должны обладать неким коэффициентом вычислительной сложности, которая повлияет на развесовку 
+          // (точнее на распределение нагрузки: более тяжелые персонажи с большей вероятностью получат вычислительное время)
+          // (но при этом всего вычисляемых персонажей будет ограниченное количество)
+          // какие то подсистемы можем посчитать параллельно, какие то нужно считать последовательно
+          // (например передвижение войск должно быть более менее последовательно)
+          // (но при этом передвижение войск можно считать менее часто, и не во всех странах идет сейчас война)
+          // (параллельно можно определить какие то долгосрочные цели, найти супруга, сделать вклад в дипломатию (тут посчитаем отношения соседей))
+          // каждому персонажу должно быть выдано вычислительное время, не каждый ход, скорее всего зависит и от максимального титула
+          // то есть хотелки императора должны вычисляться чаще, у зависимых персонажей видимо меньше всего должно быть вычислительного времени (?)
+          // (относительно меньше всего, так или иначе вычислять мы должны всех хотя бы по разу в год (?))
+          // одно хорошо - у нас не реалтайм, где то рядом нужно посчитать луа ии
+          // луа ии отличается тем что у нас будет гораздо больше опций по оптимизации и рационализации поведения персонажей
+          // но при этом мы должны предоставить возможность какие то части моделировать с помощью с++ кода
+          // (например оставить возможность с++ вычислять женитьбу, так как она чаще всего сопряжена с поиском среди всех персонажей)
+          // как то так
+          
+          // вот хорошая статья про это https://www.rockpapershotgun.com/2016/11/11/crusader-kings-2-characters/
+          
+          // сейчас нужно сделать пока что одну подсистему которая должна отвечать за строительство
+          
+          auto ctx = global::get<core::context>();
+          const size_t first_not_dead = ctx->first_not_dead_character();
+          const size_t first_playable = ctx->first_playable_character();
+          const size_t count_not_dead = ctx->characters_count() - first_not_dead;
+          const size_t count_playable = ctx->characters_count() - first_playable;
+          
+          uint32_t systems_data[count_not_dead];
+          uint32_t* systems_data_ptr = systems_data;
+          
+          const auto &systems = global::get<systems::ai>()->get_subsystems();
+          for (auto s : systems) {
+            // по идее всегда должно быть true
+            // скорее всего иное какое то серьезное исключение
+            //if (!s->get_attrib(ai::sub_system::attrib_threadsave_check)) continue;
+            ASSERT(s->get_attrib(ai::sub_system::attrib_threadsave_check));
+            
+            memset(systems_data_ptr, 0, sizeof(uint32_t) * count_not_dead);
+            const size_t count = s->get_attrib(ai::sub_system::attrib_playable_characters) ? count_playable : count_not_dead;
+            const size_t first = s->get_attrib(ai::sub_system::attrib_playable_characters) ? first_playable : first_not_dead;
+            
+            utils::submit_works_async(pool, count, [ctx, first, s, systems_data_ptr] (const size_t &start, const size_t &count) {
+              for (size_t i = start; i < start+count; ++i) {
+                const size_t index = i + first;
+                auto c = ctx->get_character(index);
+                ASSERT(!c->is_dead());
+                
+                systems_data_ptr[i] = s->check(c);
+                if (systems_data_ptr[i] == SUB_SYSTEM_SKIP) continue;
+                // а зачем мне тогда массив? мне он нужен когда ai::sub_system::attrib_threadsave_process == false 
+                if (s->get_attrib(ai::sub_system::attrib_threadsave_process)) {
+                  s->process(c, systems_data_ptr[i]);
+                }
+              }
+            });
+            
+            pool->compute();
+            
+            // должно сработать (текущий тред занят этой конкретной функцией)
+            while (pool->working_count() != 1) { std::this_thread::sleep_for(std::chrono::microseconds(1)); }
+            
+            if (!s->get_attrib(ai::sub_system::attrib_threadsave_process)) { // такая ситуация должна быть очень редкой
+              const size_t start = 0;
+              for (size_t i = start; i < start+count; ++i) {
+                const size_t index = i + first;
+                if (systems_data_ptr[i] == SUB_SYSTEM_SKIP) continue;
+                         
+                auto c = ctx->get_character(index);
+                ASSERT(!c->is_dead());
+                
+                s->process(c, systems_data_ptr[i]);
+              }
+            }
+          }
+          
+          new_state = gameplay_state::turn_advancing;
+        });
+        break;
+      }
+      
+      case gameplay_state::player_turn: {
+        // мы как то должны переключить стейт отсюда
+        break;
+      }
+      
+      case gameplay_state::next_player: {
+        // выбираем следующего игрока (сейчас понятное дело никакого другого игрока нет)
+        new_state = gameplay_state::ai_turn;
+        break;
+      }
+    }
+    
+    current_state = new_state;
+  }
+  
+  void update(const size_t &time) {
+    // у нас есть список персонажей 
+    // как выглядит непосредственно геймплей? обходим всех персонажей которые не мертвы и играбельны
+    // и делаем какие то действия
+    // во всех пошаговых стратегий хорошим тоном будет сделать ход игрока первым
+    // но мне кажется более хорошим решением будет сделать ход по возрасту (по интеллекту?)
+    // то есть ход будет начинаться не от игрока, нужно это для того чтобы подчеркнуть очередность хода
+    // ну и на мой взгляд так будет интереснее (правда от этого пострадает мультитрединг)
+    // 
+    
+    advance_state();
+    
+    // здесь рид онли стейт
+    global::get<utils::interface>()->draw(time); // весь интерфейс рисуем здесь
+    // нужно отключить все окна кроме базового + както ограничить некоторые элементы интерфейса
+    // хотя возможно отключить нужно только окна эвентов, решений и еще парочку
+    // должно быть примерно так же как это было в эндлесс леджент
+    // параллельное вычисление хода может накрыться 
+    // потому что я хочу некоторым династиям сделать продвинутый ии
+    // с другой стороны здесь можно использовать корутины
+    // или делать параллельный луа стейт? корутин из коробки, к сожалению, запускается
+    // в том же треде, но при этом можно делать некоторые задачи паралельно
+    // нет, корутины не так работают (это просто функции с прерываниями), 
+    // нужно сделать отдельный луа стейт для интерфейса
+    // 
+    
+    
+    // рисуем интерфейс, ждем пока игрок нажмет какие то кнопки и реагируем на них
+    // тут нужно видимо сделать некий класс который это все в себя соберет
+    // интерфейс нарисовать бы в луа, чтобы быстро можно было бы менять данные интерфейса
+    // нашел библиотечку MoonNuklear - биндинг для наклира (простой пример оказался лучше чем такой же у самого наклира, лол)
+    // я так понимаю в примерах наклира где то утечка, эту библиотечку можно использовать для быстрого прототипирования интерфейса
+    // что нам нужно для интерфейса? типы окон, нужно ли как то ограничить возможности наклира в луа? 
+    // (в интерфейсах не должно быть прямого доступа к данным игры, все данные только для чтения)
+    // если мы переключимся на другой стейт, то мы не отрисуем интерфейс
+    // то есть интерфейс рисуем во всех стейтах + некую анимацию хода (вращающиеся песочные часы например)
+    // следует передать в интерфейс еще время (возможно сделать какую то анимацию)
+    
+    // интерфейс состоит из нескольких окон, которые мы зададим через луа
+    // это означает необходимо последовательно вызвать несколько луа функций
+    // по порядку в зависимости от типа (есть базовый интерфейс: кнопки сверху/снизу, ресурсы и проч)
+    // (есть окно персонажа: иконки, портреты, статы + тултипы)
+    // (есть окно эвента: картинка текст) (снизу база, окно перса, над этим всем эвент)
+    // приоритетов не сказать чтобы очень много, возможно стоит просто выделить два типа окна
+    // как сделать ориентир окна по клавиатуре? нужно зарегистрировать какие то эвенты для интерфейса
+    // и использовать функции для проверки эвентов
+    // только теперь нужно делать две функции: инициализация и собственно интерфейс, 
+    // нужно ли несколько эвентов прилеплять на одну кнопку? можно
+    // нужно ли вешать один эвент на несколько кнопок? фиг знает
+    
+    // интерфейс главного меню тоже сделать в луа? с этим нужно быть аккуратнее, каким то образом нужно 
+    // очень оптимально сделать окно загрузки и сохранения (нужно будет загрузить какую то информацию с диска)
+    
+    // как мы узнаем что игрок сделал ход? по идее мы должны самостоятельно вызвать функцию адванс тюрн
+    // необходимо ограничить адванс тюрн так чтобы мы не могли прожать это дело без того чтобы игрок отреагировал на какие то эвенты
+    // на битвы игроку тоже нужно реагировать
+    
+    // все структуры нужно сделать только для чтения для луа, как тогда делать изменения?
+    // во первых какие изменения в луа? в интерфейсе точно не будет изменений
+    // изменения будут в битвах, например, но там по идее изменяются другие типы (отряды)
+    // 
+//     }
   }
 
   void sync(utils::frame_time &frame_time, const size_t &time) {

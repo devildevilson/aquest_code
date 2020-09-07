@@ -11,6 +11,8 @@
 #include "utils/random_engine.h"
 #include "utils/utility.h"
 #include "utils/works_utils.h"
+#include "utils/table_container.h"
+#include "utils/string_container.h"
 //#include "utils/perlin.h"
 #include "FastNoise.h"
 
@@ -22,6 +24,10 @@
 #include "render/shared_structures.h"
 #include "render/render_mode_container.h"
 #include "render/pipeline_mode_updater.h"
+
+#include "ai/sub_system.h"
+#include "ai/build_subsystem.h"
+#include "ai/ai_system.h"
 
 #include "figures.h"
 #include "camera.h"
@@ -37,9 +43,14 @@
 #include "interface_context.h"
 #include "overlay.h"
 #include "map_creator.h"
+#include "core_structures.h"
+#include "core_context.h"
+#include "interface2.h"
+#include "game_time.h"
 
 #include <set>
 #include <vector>
+#include <atomic>
 
 //#include "render/image_container.h"
 //#include "render/particles.h"
@@ -59,6 +70,9 @@ namespace devils_engine {
 //     systems::generator<map::generator_context>* map_generator;
     interface::context* context;
     map::generator::container* map_container;
+    utils::interface* interface;
+    core::context* core_context;
+    utils::data_string_container* string_container;
 
     system_container_t();
     ~system_container_t();
@@ -99,17 +113,25 @@ namespace devils_engine {
 //   void map_triangle_test2(dt::thread_pool* pool, const map::container* map, const utils::frustum &fru, const uint32_t &triangle_index, std::atomic<uint32_t> &counter);
   
   void set_default_values(sol::state &lua, sol::table &table);
+  void load_interface_functions(sol::state &lua);
   void rendering_mode(const map::generator::container* cont, core::map* map, const uint32_t &property, const uint32_t &render_mode, const uint32_t &water_mode);
   void border_points_test(const std::vector<glm::vec4> &array);
   void find_border_points(const map::generator::container* container, const core::map* map, const sol::table &table);
   
   void generate_tile_connections(const core::map* map, dt::thread_pool* pool);
+  void validate_and_create_data(system_container_t &systems);
+  void create_interface(system_container_t &systems);
+  void post_generation_work(system_container_t &systems);
+  
+  bool player_end_turn(core::character* c);
+  void update(const size_t &time);
 
   void sync(utils::frame_time &frame_time, const size_t &time);
   
   void check_tile(const map::container* map, const uint32_t &tile_index);
 
   void callback(int error, const char* description);
+  int lua_panic(lua_State* s);
   void scrollCallback(GLFWwindow*, double xoffset, double yoffset);
   void charCallback(GLFWwindow*, unsigned int c);
   void mouseButtonCallback(GLFWwindow*, int button, int action, int mods);

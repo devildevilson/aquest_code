@@ -7,8 +7,13 @@
 #include <algorithm>
 //#include "core_structures.h"
 #include <unordered_map>
+#include <unordered_set>
 #include <any>
 #include <stack>
+#include "declare_structures.h"
+
+#define UINT_VALUE_NOT_FOUND SIZE_MAX
+#define UINT_VALUE_NOT_VALID (UINT_VALUE_NOT_FOUND-1)
 
 // я хочу из входных данных вида
 // {
@@ -98,25 +103,6 @@
 struct nk_context;
 
 namespace devils_engine {
-  namespace core {
-    struct character;
-    struct tile;
-    struct province;
-    struct city;
-    struct faction;
-    struct army;
-    struct hero_troop;
-    struct decision;
-    struct religion;
-    struct culture;
-    struct law;
-    struct right;
-    struct dynasty;
-    struct event;
-    struct troop;
-    struct party_member;
-  };
-  
   namespace utils {
     // желательно все строки все же убрать
     // я могу это сделать и более менее даже нормально сериализавать если сохранять последовательность загрузки данных
@@ -143,7 +129,7 @@ namespace devils_engine {
         dynasty,
 //         event,
         troop,
-        party_member,
+//         party_member,
         count
       };
       
@@ -162,7 +148,7 @@ namespace devils_engine {
         struct core::dynasty* dynasty;
 //         struct core::event* event;
         struct core::troop* troop;
-        struct core::party_member* party_member;
+//         struct core::party_member* party_member;
       };
     };
     
@@ -175,6 +161,7 @@ namespace devils_engine {
         double dval;
         size_t uval;
         int64_t ival;
+        void* pval;
         //std::string_view view; // нельзя запихать в union
       };
       
@@ -240,6 +227,7 @@ namespace devils_engine {
       using create_effect = std::function<void(const std::string &, const sol::table &, const enum target_data::type &, std::vector<operation> &)>;
       using create_context_changer = std::function<void(const std::string &, const sol::table &, const enum target_data::type &, std::vector<operation> &)>;
       using creation_func = std::function<void(const std::string &, const sol::table &, const enum target_data::type &, std::vector<operation> &)>;
+      using validation_func = std::function<bool(const std::string &, const sol::table &, const enum target_data::type &, size_t &)>;
       
       struct condition_cont {
         enum logic_operation logic_operation;
@@ -272,6 +260,7 @@ namespace devils_engine {
 //         enum target_data::type type; // если переключение контекста
 //         enum target_data::type new_type;
         creation_func func;
+        validation_func validator;
       };
       
 //       std::unordered_map<std::string, condition_cont> conditions;
@@ -300,8 +289,58 @@ namespace devils_engine {
     
     using action_container = const functions_container;
     
-    std::pair<const core::event*, uint32_t> parse_event(const sol::table &table);
+    // думаю что мы вообще ничего не валидируем сначала, после окончания генерации сразу проверяем все объекты
+    size_t add_event(const sol::table &table);
+    bool validate_event(const sol::table &table); // только проверка на валидность
+    bool validate_event_and_save(sol::this_state lua, const sol::table &table); // сохранить результат в сериализаторе
+    void parse_event(core::event* event, const sol::table &table); // распарсить эвент
+    
+    size_t add_building(const sol::table &table);
+    bool validate_building(const sol::table &table);
+    bool validate_building_and_save(sol::this_state lua, const sol::table &table);
+    void parse_building(core::building_type* building_type, const sol::table &table);
+    
+    size_t add_city_type(const sol::table &table);
+    bool validate_city_type(const sol::table &table);
+    bool validate_city_type_and_save(sol::this_state lua, const sol::table &table);
+    void parse_city_type(core::city_type* city_type, const sol::table &table);
+    
+    size_t add_city(const sol::table &table);
+    bool validate_city(const sol::table &table);
+    bool validate_city_and_save(sol::this_state lua, const sol::table &table);
+    void parse_city(core::city* city, const sol::table &table);
+    
+    size_t add_province(const sol::table &table);
+    size_t register_province();
+    size_t register_provinces(const size_t &count);
+    void set_province(const size_t &index, const sol::table &table);
+    bool validate_province(const sol::table &table);
+    bool validate_province_and_save(sol::this_state lua, const sol::table &table);
+    void parse_province(core::province* province, const sol::table &table);
+    
+    size_t add_title(const sol::table &table);
+    bool validate_title(const sol::table &table);
+    bool validate_title_and_save(sol::this_state lua, const sol::table &table);
+    void parse_title(core::titulus* title, const sol::table &table);
+    
+    // может сначало зарегистрировать персонажа
+    // а потом присвоить табличку в индекс
+    // нужно ли регистрировать сразу нескольких персонажей? это было бы полезно в том числе не только для персонажей
+    size_t add_character(const sol::table &table);
+    size_t register_character();
+    size_t register_characters(const size_t &count);
+    void set_character(const size_t &index, const sol::table &table);
+    bool validate_character(const sol::table &table);
+    bool validate_character_and_save(sol::this_state lua, const sol::table &table);
+    void parse_character(core::character* character, const sol::table &table);
+    void parse_character_goverment(core::character* character, const sol::table &table);
   }
 }
+
+// как то так выглядит, персонаж самая сложная часть
+// нужно потом еще сделать систему правления (набор механик)
+// теперь у нас более менее ясная картина того как это все выглядит
+// теперь по идее мне всего хватает для того чтобы сделать первых персонажей
+// и первый ход, мне не дают покоя константы в классе персонажа (размеры контейнеров)
 
 #endif

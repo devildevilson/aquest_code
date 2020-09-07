@@ -3,20 +3,28 @@
 
 #include <cstdint>
 #include "render/shared_structures.h"
+#define MAGIC_ENUM_RANGE_MIN 0
+#define MAGIC_ENUM_RANGE_MAX 256
 #include <magic_enum.hpp>
 #include "utils/bit_field.h"
 
+#define CONCAT(a, b) a##b
+#define PENALTY_STAT(stat) CONCAT(stat, _penalty)
+
 // ко всем статам еще нужны иконки, названия, описания
+// по всей видимости должны быть четкие разделения на статы фракции -> персонажа -> провинции -> города -> здания
 namespace devils_engine {
   namespace core {
+    struct troop_type;
+    
     enum class unit_type {
+      invalid,
       troop,
       hero,
       character,
       faction,
       city,
-      province,
-      invalid
+      province
     };
     
     namespace stat_type {
@@ -74,7 +82,13 @@ namespace devils_engine {
     // в баннер саге используется такой стат как виллповер, позволяет делать какие то экстра вещи (дальше бегать например)
     // не думаю что мне нужен виллповер
     // у юнитов должны быть еще какие то пассивки (например всегда отвечать, атака на все тайлы вокруг и проч)
-    // или активки
+    // или активки, может ли здание давать эти статы? при посещении (так лучше не делать) или владельцу и его пати?
+    // всем пати под знаменами владельца? (то есть у нас может быть партия при дворе, поэтому получает бонус)
+    // какие то партии мы можем отправить ко двору, например, сюзерена и получать бонус от него, но контролировать партию
+    // так можно сделать, соответственно такие здания должны быть редки, можем ли мы отправить героя ко двору вассала?
+    // наверное да только за какой то ресурс (например так может уменьшаться влияние), кому даются какие статы?
+    // у нас видимо должно быть разделение на типы героев в этом случае 
+    // (типы героев вообще вещь полезная: стартовые статы героя, пассивки, активки, условия генерации и прочее)
     namespace hero_stats {
       enum values {
 //         current_hp,
@@ -108,6 +122,9 @@ namespace devils_engine {
     // эти статы не наследуются (есть трейты которые могут унаследоваться)
     // наследуются только титулы и деньги + кровь 
     // модификаторы отношений к дворянству и церкови?
+    // как пересчитывать статы? нужны ли дефолтные статы? 
+    // выяснил что в цк2 показаны дефолтные статы + показано какой трейт как воздействует
+    // 
     namespace character_stats {
       enum values {
         // статы правителя
@@ -118,18 +135,19 @@ namespace devils_engine {
         // хотя с этим частично могут справиться и другие статы
         health,
         fertility,
-        // авторитет, уважение и влияние: расходники в эвентах и решениях
-        authority,
-        esteem,
-        influence,
-        // прибавка к авторитету, уважению и влиянию каждый ход
-        authority_increase_mod,
-        esteem_increase_mod,
-        influence_increase_mod,
         // геройские статы
         strength,
         agility,
         intellect,
+        
+        PENALTY_STAT(military),
+        PENALTY_STAT(managment),
+        PENALTY_STAT(diplomacy),
+        PENALTY_STAT(health),
+        PENALTY_STAT(fertility),
+        PENALTY_STAT(strength),
+        PENALTY_STAT(agility),
+        PENALTY_STAT(intellect),
         
         demesne_size,
         culture_flex,  // толерантность к другим культурам, это я так полагаю для ии
@@ -148,27 +166,58 @@ namespace devils_engine {
         ai_honor,
         ai_ambition,
         
+        // увеличение или уменьшение прибавки, супер мощный бафф/дебафф
+        authority_increase_mod,
+        esteem_increase_mod,
+        influence_increase_mod,
+        income_mod,
+        
+        // прибавка к авторитету, уважению и влиянию каждый ход (приходит в основном от треитов)
+        authority_increase,
+        esteem_increase,
+        influence_increase,
+        income, // инком может быть из других источников (должность), инком от налогов расчитывается во фракции
+        
+        // авторитет, уважение и влияние: расходники в эвентах и решениях
+        authority,
+        esteem,
+        influence,
+        money,
+        
+        // в зданиях можно указать тип объекта, стат которого мы увеличиваем (то есть character_modificators и проч)
+        // и тогда не придется отделять здесь фракционные статы от статов персонажа по названиям
+        // с другой стороны можно отделить и тогда не придется разделять character_modificators и faction_modificators
+        // нет, почти для всех модификаторов лучше отделить, в цк2 названия модификаторов не пересекаются
+        // статы персонажа и статы фракции можно совместить, другое дело что какие то модификаторы наследуются и статы фракции персонажам без нее вобщем то не нужны
+        //CONCAT(character_, authority_increase_mod),
+        
         // мнение о персонаже, думаю что нужно все мнения собрать в отдельную кучу
         
-        count
+        count,
+        resources_start = authority, // все что не ресурс можно свободно использовать в треитах
       };
       
       const stat_type::values types[] = {
         stat_type::uint_t,
         stat_type::uint_t,
         stat_type::uint_t,
-        stat_type::float_t,
-        stat_type::float_t,
-        stat_type::float_t,
-        stat_type::float_t,
-        stat_type::float_t,
-        stat_type::float_t,
-        stat_type::float_t,
-        stat_type::float_t,
+        stat_type::float_t, // health
+        stat_type::float_t, // fertility
         stat_type::uint_t,
         stat_type::uint_t,
         stat_type::uint_t,
+        
+        // пенальти
         stat_type::uint_t,
+        stat_type::uint_t,
+        stat_type::uint_t,
+        stat_type::float_t, // health
+        stat_type::float_t, // fertility
+        stat_type::uint_t,
+        stat_type::uint_t,
+        stat_type::uint_t,
+        
+        stat_type::uint_t,  // demesne_size
         stat_type::float_t,
         stat_type::float_t,
         
@@ -176,13 +225,28 @@ namespace devils_engine {
         stat_type::float_t,
         stat_type::float_t,
         stat_type::float_t,
-        stat_type::float_t,
+        stat_type::float_t, // plot_discovery_chance
         
         stat_type::int_t,
         stat_type::int_t,
         stat_type::int_t,
         stat_type::int_t,
-        stat_type::int_t,
+        stat_type::int_t,   // ai_ambition
+        
+        stat_type::float_t,
+        stat_type::float_t,
+        stat_type::float_t,
+        stat_type::float_t, // income_mod
+        
+        stat_type::float_t,
+        stat_type::float_t,
+        stat_type::float_t,
+        stat_type::float_t, // income
+        
+        stat_type::float_t,
+        stat_type::float_t,
+        stat_type::float_t,
+        stat_type::float_t, // money
       };
       
       static_assert(sizeof(types)/sizeof(stat_type::values) == count-1);
@@ -233,22 +297,35 @@ namespace devils_engine {
     namespace faction_stats {
       enum values {
         tax_income_mod,
+        trade_income_mod,
+        
         provision_mod,
-        army_recovery_mod,
-        hero_recovery_mod,
-        morale_recovery_mod,
-        authority_increase_mod,
-        esteem_increase_mod,
-        influence_increase_mod,
+        
+        army_recovery_mod, // модификатор для восстановления юнитов
+        army_morale_recovery_mod,
+        army_discipline,   // все армии из этого города стартуют с такой прибавкой дисциплины
+        army_maintenance_mod,
+        army_morale,
+        casualties_mod,    // прибавка к модификатору потерь
+        army_speed,
+        army_vision,
+        
+        hero_recovery_mod, // модификатор восстановления героя в принципе (например между противникамим в данже)
+        hero_discipline,   // модификатор дисциплины для всех героев под этими знаменами
+//         authority_increase_mod, // положим в персонажа
+//         esteem_increase_mod,
+//         influence_increase_mod,
 //         church_opinion,         // прибавка к отношению церкви
 //         vassal_opinion,         // прибавка к отношению вассалов
         build_cost_mod,
         build_time_mod,
         population_growth_mod,
-        max_population_mod,     // может ли государство модифицировать максимальное количество жителей?
+        max_population_mod,     // может ли государство модифицировать максимальное количество жителей? например тех?
         tech_spread_mod,
         global_revolt_risk,     // риск восстания в государстве
         revolt_risk_mod,
+        
+        vassal_limit,           //
         
         // глобальные характеристики для торговли
         
@@ -260,16 +337,28 @@ namespace devils_engine {
       enum values {
         tax_income_mod,
         provision_mod,
-        army_recovery_mod,
-        hero_recovery_mod,
-        morale_recovery_mod,
+        
+        army_recovery_mod, // модификатор для восстановления юнитов
+        army_morale_recovery_mod,
+        army_discipline,   // все армии из этого города стартуют с такой прибавкой дисциплины
+        army_maintenance_mod,
+        army_morale,
+        casualties_mod,    // прибавка к модификатору потерь
+        army_speed,
+        army_vision,
+        
         authority_increase_mod, // модификация для всех владельцев титулов в этой провинции
-        esteem_increase_mod,
+        esteem_increase_mod,    // модификация для владельца или для господина?
         influence_increase_mod,
+        authority_increase_liege_mod,
+        esteem_increase_liege_mod,    
+        influence_increase_liege_mod,
+        
         local_revolt_risk,
         disease_defence,
         culture_flex,
         religion_flex,
+        
         short_reign_length, // нужно ли?
         attrition, // наверное небоевые потери будем расчитывать по всей провинции
         max_attrition,
@@ -290,20 +379,15 @@ namespace devils_engine {
       enum values {
         tax_income,
         tax_income_mod,
-        provision,
-        winter_provision,
-        provision_mod,
-        army_recovery_mod,
-        hero_recovery_mod,
-        morale_recovery_mod,
+        
         authority_increase, // владельцу
         esteem_increase,
         influence_increase,
         authority_increase_liege, // владельцу и господину? наверное только господину
         esteem_increase_liege,
-        influence_increase_liege,
-        church_opinion,
-        vassal_opinion,
+        influence_increase_liege, // нужны тут модификаторы?
+//         church_opinion, // мнение отдельно модифицируется
+//         vassal_opinion,
         // бонусы для всех войск из этого города
         build_cost_mod,
         build_time_mod,
@@ -319,7 +403,28 @@ namespace devils_engine {
         // в европке только два стата для торговли по сути
         // остальное это куча различных модификаторов для этих статов в разных условиях
         
+        // армейские статы
+        provision,         // сколько отрядов может прокормить армия
+        winter_provision,  // возможно нужно контролировать модификатором
+        provision_mod,
+        army_recovery_mod, // модификатор для восстановления юнитов
+        army_morale_recovery_mod,
+        army_discipline,   // все армии из этого города стартуют с такой прибавкой дисциплины
+        army_maintenance_mod,
+        army_morale,
+        casualties_mod,    // прибавка к модификатору потерь
+        army_speed,
+        army_vision,
+        
+        // геройские статы
+//         hero_speed, // непонятно как герою дать этот стат в городе, герой если "отдыхает" то скорее всего находится при дворе какого то правителя
+//         hero_vision,
+//         hero_recovery_mod, // глобальный модификатор
+//         hero_discipline,   // глобальный модификатор
+        
         // можно еще добавить несколько аттрибутов с окончанием _penalty, для того чтобы моделировать ущерб от болезни (который не может быть вылечен больше чем заболел)
+        
+        // может быть нужно добавить температуру провинции? или какой то такой аттрибут чтобы контролировать провизию
         
         count
       };
@@ -363,11 +468,11 @@ namespace devils_engine {
     
     struct stat_data {
       enum flags {
-        show_as_percent,
-        is_good,
-        is_monthly,
-        is_hidden,
-        show_value,
+        show_as_percent, // стат от нуля до единицы
+        is_good,         // положительный стат рисуется зеленым
+        is_monthly,      // ежемесячный
+        is_hidden,       // скрытый от игрока стат
+        show_value,      // используется для того чтобы не показывать значение для какой то переменной
         count
       };
       
@@ -414,6 +519,16 @@ namespace devils_engine {
       unit_type type;
       uint32_t stat;
       stat_container mod;
+      
+      inline stat_modifier() : type(unit_type::invalid), stat(UINT32_MAX), mod{0} {}
+    };
+    
+    struct unit_stat_modifier {
+      const troop_type* type;
+      uint32_t stat;
+      stat_container mod;
+      
+      inline unit_stat_modifier() : type(nullptr), stat(UINT32_MAX), mod{0} {}
     };
     
     // что делать войсками? я хочу чтобы тип войска можно было бы определить

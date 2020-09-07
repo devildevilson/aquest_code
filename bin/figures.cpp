@@ -104,7 +104,7 @@ namespace devils_engine {
     }
 
     container::container(const float &radius, const size_t &detail, const glm::mat3 &rotation) {
-      utils::timer time("tiles generation");
+//       utils::timer time("tiles generation");
 
       std::unordered_map<size_t, uint32_t> edges_point;
       std::unordered_map<size_t, std::pair<uint32_t, uint32_t>> edges_hex;

@@ -28,6 +28,7 @@ namespace devils_engine {
           province,
           culture,
           country,
+          title,
         };
       }
       
@@ -99,6 +100,14 @@ namespace devils_engine {
             count
           };
         }
+        
+        namespace title {
+          enum values {
+            parent,
+            owner,
+            count
+          };
+        }
       }
     }
     
@@ -132,6 +141,7 @@ namespace devils_engine {
     void generate_titles(generator::context* ctx, sol::table &table);
     void generate_characters(generator::context* ctx, sol::table &table);
     void generate_tech_level(generator::context* ctx, sol::table &table);
+    void generate_cities(generator::context* ctx, sol::table &table);
   }
 }
 

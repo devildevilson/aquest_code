@@ -3,6 +3,7 @@
 #include "utils/globals.h"
 #include "utils/assert.h"
 #include "core_structures.h"
+#include "utils/table_container.h"
 
 namespace devils_engine {
   namespace utils {
@@ -464,6 +465,159 @@ namespace devils_engine {
       }
     }
     
+    size_t add_event(const sol::table &table) {
+      return global::get<utils::table_container>()->add_table(core::structure::event, table);
+    }
+    
+    bool validate_event(const sol::table &table) {
+      size_t counter = 0;
+      auto cont = global::get<action_container>();
+      
+      // у нас могут быть эвенты разных типов (например эвент провинции и эвент предложения войны, разное оформление)
+      
+      // здесь мы уже должны получить указатели на созданные структуры
+      
+      // должен быть уникальный id, по нему я вызываю эвент в триггерах
+      std::string id;
+      {
+        auto proxy = table["id"];
+        if (!proxy.valid()) pass_error(counter, "Event table must have an id");
+        const std::string str = proxy.get_or<std::string, std::string>(std::string());
+        if (str.empty()) pass_error(counter, "Event id must be a valid string");
+        id = str;
+      }
+      
+      auto current_target = target_data::type::count;
+      {
+        auto proxy = table["target"];
+        if (!proxy.valid()) pass_error(counter, "Event table must specify the target");
+        // тут все же скорее всего будет число
+        const auto target = proxy.get_or<enum target_data::type, enum target_data::type>(target_data::type::count);
+        if (target >= target_data::type::count) pass_error(counter, "Event " + id + " target must be a valid enumeration");
+        current_target = target;
+      }
+      
+      {
+        auto proxy = table["name"];
+        if (!proxy.valid()) pass_error(counter, "Event " + id + " table must have a name");
+        const auto str = proxy.get_or<std::string, std::string>(std::string());
+        if (str.empty()) pass_error(counter, "Event " + id + " name must be a valid string");
+      }
+      
+      {
+        auto proxy = table["desc"];
+        if (!proxy.valid()) pass_error(counter, "Event " + id + " table must have a description");
+        const auto str = proxy.get_or<std::string, std::string>(std::string());
+        if (str.empty()) pass_error(counter, "Event " + id + " description must be a valid string");
+      }
+      
+      {
+        auto proxy = table["picture"];
+        if (!proxy.valid()) pass_error(counter, "Event " + id + " must have a picture");
+        const auto str = proxy.get_or<std::string, std::string>(std::string());
+        if (str.empty()) pass_error(counter, "Event " + id + " picture must be a valid string");
+      }
+      
+      {
+        auto proxy = table["mean_time"];
+        if (proxy.valid()) {
+          const uint32_t opt = proxy.get_or<uint32_t, uint32_t>(UINT32_MAX);
+          if (opt == UINT32_MAX) pass_error(counter, "Event " + id + " mean time must be a number");
+        }
+      }
+      
+      if (current_target == target_data::type::count) return false;
+      
+      {
+        auto proxy = table["options"]; // может и не быть
+        if (proxy.valid()) {
+          const auto opt = proxy.get_or<sol::table, std::nullptr_t>(nullptr);
+          if (opt.get_type() != sol::type::table) pass_error(counter, "Event " + id + " options must be a table");
+          size_t opt_counter = 0;
+          for (auto itr = opt.begin(); itr != opt.end(); ++itr) {
+            if (!(*itr).second.is<sol::table>()) continue;
+            
+            ++opt_counter;
+            const auto &nested_table = (*itr).second.as<sol::table>();
+            std::string option_id;
+            {
+              auto proxy = nested_table["id"]; // только для дебага?
+              if (proxy.valid()) {
+                const auto str = proxy.get_or<std::string, std::string>(std::string());
+                if (str.empty()) pass_error(counter, "Option id must be a valid string");
+                option_id = str;
+              }
+            }
+            
+            {
+              auto proxy = nested_table["name"];
+              if (!proxy.valid()) pass_error(counter, "Event " + id + " option must have a name");
+              const auto str = proxy.get_or<std::string, std::string>(std::string());
+              if (str.empty()) pass_error(counter, "Event " + id + " option " + option_id + " name must be a valid string");
+            }
+            
+            {
+              // описание
+            }
+            
+            {
+              auto proxy = nested_table["potential"];
+              if (proxy.valid()) {
+                const auto &table = proxy.get_or<sol::table, std::nullptr_t>(nullptr);
+                if (table.get_type() != sol::type::table) pass_error(counter, "Event " + id + " option " + option_id + " potential contditions must be a table");
+                cont->creation_funcs.at("potential").validator("potential", table.as<sol::table>(), current_target, counter);
+              }
+            }
+            
+            {
+              auto proxy = nested_table["effects"];
+              if (proxy.valid()) {
+                const auto &table = proxy.get_or<sol::table, std::nullptr_t>(nullptr);
+                if (table.get_type() != sol::type::table) pass_error(counter, "Event " + id + " option " + option_id + " effects must be a table");
+                cont->creation_funcs.at("effects").validator("effects", table.as<sol::table>(), current_target, counter);
+              }
+            }
+          }
+        }
+      }
+      
+      bool trigger_only = false;
+      {
+        auto proxy = table["trigger_only"];
+        if (proxy.valid()) {
+          const uint32_t opt = proxy.get_or<bool, uint32_t>(UINT32_MAX);
+          if (opt == UINT32_MAX) {
+            pass_error(counter, "Event " + id + " mean time must be a boolean");
+            return false;
+          } else trigger_only = bool(opt);
+        }
+      }
+      
+      {
+        auto proxy = table["potential"]; // если мы вызываем откуда то эвент, то нужны ли нам эти условия?
+        if (proxy.valid()) {
+          const auto opt = proxy.get_or<sol::table, std::nullptr_t>(nullptr);
+          if (opt.get_type() != sol::type::table) pass_error(counter, "Event " + id + " potential contditions must be a table");
+          cont->creation_funcs.at("potential").validator("potential", opt.as<sol::table>(), current_target, counter);
+        } else if (!trigger_only) {
+          pass_error(counter, "Event " + id + " table must specify potential contditions");
+        }
+      }
+      
+      return counter == 0;
+    }
+    
+    bool validate_event_and_save(sol::this_state lua, const sol::table &table) {
+      const bool ret = validate_event(table);
+      if (!ret) return false;
+      
+      sol::state_view l(lua);
+      auto serializator = l["serpent"];
+      if (!serializator.valid()) throw std::runtime_error("Serpent not loaded!");
+      sol::function block = serializator["block"]; // нужно покрутить настройки
+      std::string content = block(table); // теперь легко запихиваем в протобаф
+    }
+    
     std::pair<const core::event*, uint32_t> parse_event(const sol::table &table) {
       const bool ret = check_valid_event(table);
       if (!ret) return std::make_pair(nullptr, UINT32_MAX);
@@ -487,10 +641,11 @@ namespace devils_engine {
       
       ASSERT(conditions.size() < core::max_conditions_count);
       
-      for (uint32_t i = 0; i < conditions.size(); ++i) {
-        ev->conditions[i] = std::move(conditions[i]);
-      }
-      ev->conditions_count = conditions.size();
+//       for (uint32_t i = 0; i < conditions.size(); ++i) {
+//         ev->conditions[i] = std::move(conditions[i]);
+//       }
+//       ev->conditions_count = conditions.size();
+      ev->conditions = std::move(conditions);
       
       size_t counter = 0;
       const auto &opt_table = table["options"].get<sol::table>();
@@ -561,30 +716,30 @@ namespace devils_engine {
 //       }
     }
     
-    std::pair<const core::event*, uint32_t> parse_event_and_save(sol::this_state lua, const sol::table &table) {
-      const auto &pair = parse_event(table);
-      if (pair.first == nullptr) throw std::runtime_error("Could not parse event");
-      
-      // можно сериалиазовать луа таблицу вместо непосредственного core::event
-      // нормального способа сериализовать std function нет
-      // как перестроить core::event для целей сериализации я не понимаю (нужно делать вложенность и хранилище данных)
-      // самым легким способом будет использовать https://github.com/pkulchenko/serpent для сериализации
-      // можно ли чекать эвент в луа? мы не можем чекать эвент в луа потому что я хочу часть вычислений сделать в мультитрединге
-      // мы можем использовать мультитрединг в луа только если напишем всю игру в луа, что очень не хотелось бы
-      // возможно когда нибудь я и преведу игру в луа, но не сегодня!
-      
-      //const std::string id = table["id"];
-      
-      sol::state_view l(lua);
-      auto serializator = l["serpent"];
-      if (!serializator.valid()) throw std::runtime_error("Serpent not loaded!");
-      sol::function block = serializator["block"]; // нужно покрутить настройки
-      std::string content = block(table); // теперь легко запихиваем в протобаф
-      
-      // нужно решить пихать ли все в один сейв (информация об использованных модах, сгенерированные данные, состояние игры)
-      // или же создавать папочки с конфигурацией и с сейвами
-      
-      return pair;
-    }
+//     std::pair<const core::event*, uint32_t> parse_event_and_save(sol::this_state lua, const sol::table &table) {
+//       const auto &pair = parse_event(table);
+//       if (pair.first == nullptr) throw std::runtime_error("Could not parse event");
+//       
+//       // можно сериалиазовать луа таблицу вместо непосредственного core::event
+//       // нормального способа сериализовать std function нет
+//       // как перестроить core::event для целей сериализации я не понимаю (нужно делать вложенность и хранилище данных)
+//       // самым легким способом будет использовать https://github.com/pkulchenko/serpent для сериализации
+//       // можно ли чекать эвент в луа? мы не можем чекать эвент в луа потому что я хочу часть вычислений сделать в мультитрединге
+//       // мы можем использовать мультитрединг в луа только если напишем всю игру в луа, что очень не хотелось бы
+//       // возможно когда нибудь я и преведу игру в луа, но не сегодня!
+//       
+//       //const std::string id = table["id"];
+//       
+//       sol::state_view l(lua);
+//       auto serializator = l["serpent"];
+//       if (!serializator.valid()) throw std::runtime_error("Serpent not loaded!");
+//       sol::function block = serializator["block"]; // нужно покрутить настройки
+//       std::string content = block(table); // теперь легко запихиваем в протобаф
+//       
+//       // нужно решить пихать ли все в один сейв (информация об использованных модах, сгенерированные данные, состояние игры)
+//       // или же создавать папочки с конфигурацией и с сейвами
+//       
+//       return pair;
+//     }
   }
 }

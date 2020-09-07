@@ -20,7 +20,8 @@ int main(int argc, char const *argv[]) {
 //   std::this_thread::sleep_for(std::chrono::seconds(5));
 
   glfw_t glfw;
-
+  
+  // насколько адекватно создавать луа стейт для каждого потока?
   const uint32_t thread_pool_size = std::max(std::thread::hardware_concurrency()-1, uint32_t(1));
   //const uint32_t threads_count = thread_pool_size+1;
   dt::thread_pool pool(thread_pool_size);
@@ -77,6 +78,8 @@ int main(int argc, char const *argv[]) {
 //   systems::generator* gen = nullptr;
   map::creator* creator = nullptr;
   
+  // нужно наверное сделать пока что меню? посмотреть что по сериализации 
+  
   game_state current_state = game_state::create_map;
   global::get<render::window>()->show();
   utils::frame_time frame_time;
@@ -103,50 +106,6 @@ int main(int argc, char const *argv[]) {
       }
       
       case game_state::create_map: {
-        // тут или ранее мы должны создать несколько генераторов
-//         if (generators.empty()) {
-//           generators = ;
-//         }
-        
-        // рисуем интерфейс
-        // если в данный момент мы генерируем карту 
-        // то у нас должен быть интерфейс генерации 
-        // (то есть прогресс бар с описанием что происходит)
-        // для того чтобы это правильно сделать нужно будет 
-        // вынести генерацию в отдельный поток
-        // поэтому пока наверное не буду это делать
-        
-//         if (gen == nullptr) {
-//           gen = new systems::generator;
-//         }
-//         
-// //         sol::table table; // эта таблица не должна пересоздаваться каждый раз
-//         const auto status = overlay::debug_generator(gen, &ctx, table);
-//         
-//         if (status == overlay::state::constructed_generator) {
-//           gen->generate(&ctx, table);
-//           rendering_mode(ctx.container, ctx.map, map::debug::properties::tile::plate_index, 1, 0); // должна быть функция от строки
-//           //render::mode("plate_rendering");
-//         }
-//         
-//         // если карта сгенерирована то мы должны перейти к следующему шагу
-//         if (status == overlay::state::end) {
-//           find_border_points(ctx.container, ctx.map, table);
-//           current_state = game_state::map;
-//           DELETE_PTR(ctx.random)
-//           DELETE_PTR(ctx.noise)
-//           DELETE_PTR(gen)
-//           {
-//             const size_t mem = ctx.container->compute_memory_size();
-//             std::cout << "Container size: " << mem << " bytes (" << (float(mem)/1024.0f/1024.0f) << " mb)" << "\n";
-//           }
-//           
-//           {
-//             const size_t mem = ctx.map->memory_size();
-//             std::cout << "Game map  size: " << mem << " bytes (" << (float(mem)/1024.0f/1024.0f) << " mb)" << "\n";
-//           }
-//         }
-        
         if (creator == nullptr) {
           creator = setup_map_generator();
         }
@@ -154,9 +113,8 @@ int main(int argc, char const *argv[]) {
         creator->generate();
         
         if (creator->finished()) {
+          post_generation_work(systems);
           destroy_map_generator(&creator);
-          find_border_points(global::get<map::generator::container>(), global::get<core::map>(), sol::table());
-          generate_tile_connections(global::get<core::map>(), &pool);
           current_state = game_state::map;
         }
         
@@ -164,8 +122,7 @@ int main(int argc, char const *argv[]) {
       }
       
       case game_state::map: {
-        // когда игра загружена у нас должен быть список персонажей
-        // по идее достаточно обойти список и вызвать функцию поведения
+        update(time);
         break;
       }
     }

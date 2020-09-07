@@ -103,15 +103,15 @@ namespace devils_engine {
         size_t entities_count(const uint32_t &type) const;
         data_type type(const uint32_t &entity, const uint32_t &property) const;
         
-        core::character* create_character();
-        core::titulus* create_titulus(const enum core::titulus::type &t);
-        core::titulus* create_titulus(const enum core::titulus::type &t, const uint32_t &count);
-        uint32_t get_title_index(const core::titulus* title) const;
-        core::titulus* get_title(const uint32_t &index) const;
-        
-        void add_playable_character(core::character* character);
-        void remove_playable_character(core::character* character);
-        const std::unordered_map<core::character*, uint32_t> & get_turn_characters() const;
+//         core::character* create_character();
+//         core::titulus* create_titulus(const enum core::titulus::type &t);
+//         core::titulus* create_titulus(const enum core::titulus::type &t, const uint32_t &count);
+//         uint32_t get_title_index(const core::titulus* title) const;
+//         core::titulus* get_title(const uint32_t &index) const;
+//         
+//         void add_playable_character(core::character* character);
+//         void remove_playable_character(core::character* character);
+//         const std::unordered_map<core::character*, uint32_t> & get_turn_characters() const;
         
         size_t compute_memory_size() const;
       private:
@@ -122,14 +122,14 @@ namespace devils_engine {
         
         // нужно ли помнить всех персонажей? нужно, но наверное невозможно
         // как хранить историю? короче нужно просто проверить какого это будет
-        utils::memory_pool<core::character, sizeof(core::character)*5000> character_pool;
-        utils::memory_pool<core::titulus, sizeof(core::titulus)*5000> titulus_pool;
-        std::vector<core::character*> characters;
-        std::vector<core::titulus*> titles;
-        
-        std::unordered_map<core::character*, uint32_t> turn_characters;
-        
-        std::vector<std::string> string_stack;
+//         utils::memory_pool<core::character, sizeof(core::character)*5000> character_pool;
+//         utils::memory_pool<core::titulus, sizeof(core::titulus)*5000> titulus_pool;
+//         std::vector<core::character*> characters;
+//         std::vector<core::titulus*> titles;
+//         
+//         std::unordered_map<core::character*, uint32_t> turn_characters;
+//         
+//         std::vector<std::string> string_stack;
         
         // block_allocator? мне кажется что врядли пригодится
       };

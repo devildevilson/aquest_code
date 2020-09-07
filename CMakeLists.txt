@@ -6,9 +6,9 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME})
 
 set(TARGET_NAME ${PROJECT_NAME})
 
-set(PROJECT_VERSION_MAJOR "0")
-set(PROJECT_VERSION_MINOR "0")
-set(PROJECT_VERSION_PATCH "1")
+set(PROJECT_VERSION_MAJOR 0)
+set(PROJECT_VERSION_MINOR 0)
+set(PROJECT_VERSION_PATCH 1)
 set(PROJECT_VERSION "${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}")
 set(PROJECT_VERSION_FULL "${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}.${PROJECT_VERSION_PATCH}")
 
@@ -26,24 +26,24 @@ if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/.git")
   endif(GIT_DESCRIBE_TAGS)
 endif(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/.git")
 
-# find_package(git QUIET)
-# if(GIT_FOUND AND EXISTS "${PROJECT_SOURCE_DIR}/.git")
-# # Update submodules as needed
-#   option(GIT_SUBMODULE "Check submodules during build" ON)
-#   if(GIT_SUBMODULE)
-#     message(STATUS "Submodule update")
-#     execute_process(COMMAND ${GIT_EXECUTABLE} submodule update --init --recursive
-#                     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-#                     RESULT_VARIABLE GIT_SUBMOD_RESULT)
-#     if(NOT GIT_SUBMOD_RESULT EQUAL "0")
-#       message(FATAL_ERROR "git submodule update --init failed with ${GIT_SUBMOD_RESULT}, please checkout submodules")
-#     endif()
-#   endif()
-# endif()
-#
-# if(NOT EXISTS "${PROJECT_SOURCE_DIR}/include/fmt/CMakeLists.txt")
-#   message(FATAL_ERROR "The submodules were not downloaded! GIT_SUBMODULE was turned off or failed. Please update submodules and try again.")
-# endif()
+find_package(git QUIET)
+if(GIT_FOUND AND EXISTS "${PROJECT_SOURCE_DIR}/.git")
+# Update submodules as needed
+  option(GIT_SUBMODULE "Check submodules during build" ON)
+  if(GIT_SUBMODULE)
+    message(STATUS "Submodule update")
+    execute_process(COMMAND ${GIT_EXECUTABLE} submodule update --init --recursive
+                    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+                    RESULT_VARIABLE GIT_SUBMOD_RESULT)
+    if(NOT GIT_SUBMOD_RESULT EQUAL "0")
+      message(FATAL_ERROR "git submodule update --init failed with ${GIT_SUBMOD_RESULT}, please checkout submodules")
+    endif()
+  endif()
+endif()
+
+if(NOT EXISTS "${PROJECT_SOURCE_DIR}/include/fmt/CMakeLists.txt")
+  message(FATAL_ERROR "The submodules were not downloaded! GIT_SUBMODULE was turned off or failed. Please update submodules and try again.")
+endif()
 
 set(STB_INCLUDE_PATH include/stb)
 
@@ -185,6 +185,8 @@ set(SRC_LIST
   utils/frame_time.cpp
   utils/ecs.cpp
   utils/random_engine.cpp
+  utils/linear_rng.cpp
+  utils/lua_initialization.cpp
   #utils/perlin.cpp
   include/FastNoise/FastNoise.cpp
   include/whereami/src/whereami.c
@@ -211,13 +213,19 @@ set(HDR_LIST
   utils/yacs_component.h
   utils/random_engine.h
   utils/concurrent_vector.h
-  #utils/perlin.h
+  utils/linear_rng.h
+  utils/serializator_helper.h
+  utils/table_container.h
+  utils/bit_field.h
+  utils/on_action_types.h
+  utils/traits_modifier_attribs.h
+  utils/lua_initialization.h
   include/FastNoise/FastNoise.h
   include/whereami/src/whereami.h
 )
 
 add_library(utils ${SRC_LIST} ${HDR_LIST})
-target_link_libraries(utils PUBLIC foonathan_memory)
+target_link_libraries(utils) # PUBLIC foonathan_memory
 
 set(SRC_LIST
   render/container.cpp
@@ -261,6 +269,18 @@ add_library(render ${SRC_LIST} ${HDR_LIST})
 target_link_libraries(render utils ${VULKAN_LIB_NAME} ${GLFW3_LIBRARIES})
 
 set(SRC_LIST
+  ai/build_subsystem.cpp
+)
+
+set(HDR_LIST
+  ai/sub_system.h
+  ai/build_subsystem.h
+)
+
+add_library(ai ${SRC_LIST} ${HDR_LIST})
+target_link_libraries(ai utils)
+
+set(SRC_LIST
   bin/interface_context.cpp
   #bin/interfaces.cpp
   bin/overlay.cpp
@@ -277,6 +297,15 @@ set(SRC_LIST
   #include/lanes/src/compat.c
   bin/character.cpp
   bin/map_creator.cpp
+  bin/interface2.cpp
+  bin/game_time.cpp
+  bin/core_context.cpp
+  bin/titulus_data_parser.cpp
+  bin/province_data_parser.cpp
+  bin/city_type_data_parser.cpp
+  bin/city_data_parser.cpp
+  bin/character_data_parser.cpp
+  bin/building_data_parser.cpp
 )
 
 set(HDR_LIST
@@ -293,8 +322,15 @@ set(HDR_LIST
   bin/generator_container.h
   bin/map_generator.h
   bin/character.h
+  bin/core_structures.h
+  bin/declare_structures.h
   bin/map_creator.h
+  bin/interface2.h
+  bin/game_time.h
+  bin/core_context.h
+  bin/stats.h
+  bin/data_parser.h
 )
 add_executable(${TARGET_NAME} ${SRC_LIST} ${HDR_LIST})
-target_link_libraries(${TARGET_NAME} render utils lua)
+target_link_libraries(${TARGET_NAME} ai render utils lua)
 add_dependencies(${TARGET_NAME} shaders)

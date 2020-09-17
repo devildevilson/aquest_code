@@ -24,6 +24,7 @@ namespace devils_engine {
       const auto current_state = c->rng_state;
       c->rng_state = utils::rng::next(c->rng_state);
       const double val = utils::rng::normalize(utils::rng::value(current_state));
+      ASSERT(val >= 0.0 && val <= 1.0);
       
       // какая вероятность?
       const double build_probability = 1.0 / 70.0; // должно вызываться в среднем раз в 70 ходов
@@ -103,6 +104,8 @@ namespace devils_engine {
           
           if (val < probabilities[k][i]) {
             if (cities[k]->start_build(c, i)) { // здесь мы отнимаем денюжку
+              const std::string str = "Character " + std::to_string(size_t(c)) + " builds in " + std::to_string(size_t(cities[k])) + " building " + cities[k]->type->buildings[i]->id + "\n";
+              std::cout << str;
               found = true;
               break;
             }

@@ -37,9 +37,9 @@ namespace devils_engine {
     
     namespace rng {
       using state = xoroshiro128starstar::state;
-      const auto next = xoroshiro128starstar::rng;
-      const auto value = xoroshiro128starstar::get_value;
-      const auto normalize = xoroshiro128starstar::normalize;
+      constexpr const auto next = xoroshiro128starstar::rng;
+      constexpr const auto value = xoroshiro128starstar::get_value;
+      constexpr const auto normalize = xoroshiro128starstar::normalize;
     }
   }
 }

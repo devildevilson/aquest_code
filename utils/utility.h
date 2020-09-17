@@ -28,4 +28,29 @@
 #define STRINGIFY(a) #a
 #define CONCAT(a, b) a##b
 
+namespace devils_engine {
+  namespace utils {
+    // как задавать состояния игрока? поидее мы меняем эти состояния в зависимости от ситуации в игре
+    enum player_states {
+      player_in_menu,
+    //   player_on_global_map,
+    //   player_on_battle_map,
+    //   player_on_hero_battle_map,
+      player_states_count
+    };
+
+    player_states current_player_state();
+    void set_player_state(const player_states &state);
+  }
+
+  enum class game_state {
+    loading,
+    menu,
+    create_map,
+    map,
+    battle,  
+    encounter // геройская битва
+  };
+}
+
 #endif

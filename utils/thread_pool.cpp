@@ -137,7 +137,6 @@ namespace dt {
   }
 
   size_t thread_pool::tasks_count() const {
-    // по идее тут должен быть мьютекс, но я не могу его сюда поставить потому что конст
     // будет ли переменная работать правильно? по стандарту (если я правильно понял) не должна
     std::unique_lock<std::mutex> lock(mutex);
     return tasks.size();

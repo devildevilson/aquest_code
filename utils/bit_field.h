@@ -13,10 +13,7 @@ namespace devils_engine {
       size_t copy_N;
       size_t container[N]; // атомарность? вряд ли
       
-      inline bit_field() : copy_N(N) {
-        memset(container, 0, sizeof(size_t) * copy_N);
-      }
-      
+      inline bit_field() : copy_N(N) { reset(); }
       inline bool set(const size_t &index, const bool value) {
         ASSERT(index < SIZE_WIDTH * copy_N);
         const size_t container_index = index / SIZE_WIDTH;
@@ -38,6 +35,10 @@ namespace devils_engine {
       constexpr size_t capacity() const {
         return SIZE_WIDTH * copy_N;
       }
+      
+      inline void reset() {
+        memset(container, 0, sizeof(size_t) * copy_N);
+      }
     };
     
     template <uint32_t N>
@@ -45,10 +46,7 @@ namespace devils_engine {
       uint32_t copy_N;
       uint32_t container[N];
       
-      inline bit_field_32() : copy_N(N) {
-        memset(container, 0, sizeof(uint32_t) * copy_N);
-      }
-      
+      inline bit_field_32() : copy_N(N) { reset(); }
       inline bool set(const size_t &index, const bool value) {
         ASSERT(index < UINT32_WIDTH * copy_N);
         const size_t container_index = index / UINT32_WIDTH;
@@ -69,6 +67,10 @@ namespace devils_engine {
       
       constexpr size_t capacity() const {
         return UINT32_WIDTH * copy_N;
+      }
+      
+      inline void reset() {
+        memset(container, 0, sizeof(uint32_t) * copy_N);
       }
     };
   }

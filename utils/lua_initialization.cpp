@@ -2,23 +2,15 @@
 
 #include "globals.h"
 #include "bin/core_structures.h"
-#include "bin/helper.h"
+// #include "bin/helper.h"
+#include "utility.h"
+#include "bin/logic.h"
+#include "input.h"
+#include "progress_container.h"
 
 namespace devils_engine {
   namespace utils {
-    template <typename T>
-    sol::table create_enum(sol::table &core, const std::string &name) {
-      sol::table target = core.create(static_cast<int>(T::count), static_cast<int>(0));
-      for (size_t i = 0; i < T::count; ++i) {
-        target.set(magic_enum::enum_name<T>(static_cast<T>(i)), i);
-      }
-      
-      sol::table x = core.create_with(sol::meta_function::new_index, sol::detail::fail_on_newindex, sol::meta_function::index, target);
-      sol::table shim = core.create_named(name, sol::metatable_key, x);
-      return shim;
-    }
-    
-    void setup_lua_types(sol::state &lua) {
+    void setup_lua_package_path(sol::state &lua) {
       {
         const std::string default_path = lua["package"]["path"];
         const std::string new_path = 
@@ -39,20 +31,75 @@ namespace devils_engine {
           default_path;
         lua["package"]["cpath"] = new_path;
       }
+    }
+    
+    void setup_lua_constants(sol::state &lua) {
+      //auto constants = lua["constants"].get_or_create<sol::table>();
+      auto target = lua.create_table_with(
+        "time_precision", TIME_PRECISION,
+        "one_second", ONE_SECOND,
+        "half_second", HALF_SECOND,
+        "third_second", THIRD_SECOND,
+        "quarter_second", QUARTER_SECOND,
+        "fifth_second", FIFTH_SECOND,
+        "tenth_second", TENTH_SECOND,
+        "time_string", TIME_STRING,
+        "app_name", APP_NAME,
+        //"app_version_str", APP_VERSION_STR,
+        "technical_name", TECHNICAL_NAME,
+        "engine_name", ENGINE_NAME,
+        "engine_version", ENGINE_VERSION,
+        //"engine_version_str", ENGINE_VERSION_STR,
+        "pi", PI,
+        "pi_2", PI_2,
+        "pi_h", PI_H,
+        "pi_q", PI_Q,
+        "pi_e", PI_E,
+        "epsilon", EPSILON,
+        "size_max", -1,
+        "uint32_max", UINT32_MAX
+      );
       
+      target.set_function("deg_to_rad", [] (const double &deg) { return DEG_TO_RAD(deg); });
+      target.set_function("rad_to_deg", [] (const double &rad) { return RAD_TO_DEG(rad); });
+      
+      sol::table x = lua.create_table_with(sol::meta_function::new_index, sol::detail::fail_on_newindex, sol::meta_function::index, target);
+      lua["constants"] = lua.create_table(0, 0, sol::metatable_key, x);
+      
+//       auto progress = lua.new_usertype<utils::progress_container>("progress_container",
+//         "current_progress", &utils::progress_container::current_progress,
+//         "steps_count", &utils::progress_container::steps_count,
+//         "hint", &utils::progress_container::hint,
+//         "is_finished", &utils::progress_container::is_finished
+//       );
+    }
+    
+    template <typename T>
+    sol::table create_enum(sol::table &core, const std::string &name) {
+      sol::table target = core.create(static_cast<int>(T::count), static_cast<int>(0));
+      for (size_t i = 0; i < T::count; ++i) {
+        target.set(magic_enum::enum_name<T>(static_cast<T>(i)), i);
+      }
+      
+      sol::table x = core.create_with(sol::meta_function::new_index, sol::detail::fail_on_newindex, sol::meta_function::index, target);
+      sol::table shim = core.create_named(name, sol::metatable_key, x);
+      return shim;
+    }
+    
+    void setup_lua_types(sol::state &lua) {
       //lua["ctx"] = &global::get<interface::context>()->ctx;
       
       // тут видимо тоже нужно задать энумы
       auto core = lua["core"].get_or_create<sol::table>();
-      create_enum<core::character_stats::values>(core, "character_stats");
-      create_enum<core::troop_stats::values>(core, "troop_stats");
-      create_enum<core::hero_stats::values>(core, "hero_stats");
-      create_enum<core::opinion_stats::values>(core, "opinion_stats");
-      create_enum<core::faction_stats::values>(core, "faction_stats");
-      create_enum<core::province_stats::values>(core, "province_stats");
-      create_enum<core::city_stats::values>(core, "city_stats");
-      create_enum<core::army_stats::values>(core, "army_stats");
-      create_enum<core::hero_troop_stats::values>(core, "hero_troop_stats");
+      core["character_stats"] = create_enum<core::character_stats::values>(core, "character_stats");
+      core["troop_stats"] = create_enum<core::troop_stats::values>(core, "troop_stats");
+      core["hero_stats"] = create_enum<core::hero_stats::values>(core, "hero_stats");
+      core["opinion_stats"] = create_enum<core::opinion_stats::values>(core, "opinion_stats");
+      core["faction_stats"] = create_enum<core::faction_stats::values>(core, "faction_stats");
+      core["province_stats"] = create_enum<core::province_stats::values>(core, "province_stats");
+      core["city_stats"] = create_enum<core::city_stats::values>(core, "city_stats");
+      core["army_stats"] = create_enum<core::army_stats::values>(core, "army_stats");
+      core["hero_troop_stats"] = create_enum<core::hero_troop_stats::values>(core, "hero_troop_stats");
       
 //       {
 //         auto enum_table = core.new_enum("character_stats");
@@ -335,7 +382,68 @@ namespace devils_engine {
       }
       
       // нужно еще сделать несколько функций: например поиск персонажей, доступные решения и проч
-      core.set_function("player_end_turn", player_end_turn);
+//       core.set_function("player_end_turn", player_end_turn);
+    }
+    
+    void setup_lua_input(sol::state &lua) {
+      {
+        auto utils = lua["utils"].get_or_create<sol::table>();
+        auto id = utils.new_usertype<utils::id>("id",
+          "valid", &utils::id::valid,
+          "name", &utils::id::name,
+          "num", &utils::id::num,
+          "get", &utils::id::get
+        );
+      }
+      
+      {
+        auto target = lua.create_table_with(
+          "release", input::release,
+          "press", input::press,
+          "repeated", input::repeated,
+          
+          "state_initial", input::state_initial,
+          "state_press", input::state_press,
+          "state_click", input::state_click,
+          "state_double_press", input::state_double_press,
+          "state_double_click", input::state_double_click,
+          "state_long_press", input::state_long_press,
+          "state_long_click", input::state_long_click,
+          
+          "long_press_time", input::long_press_time,
+          "double_press_time", input::double_press_time,
+          
+          "event_key_slots", input::event_key_slots
+        );
+        
+        target.set_function("check_event", input::check_event);
+        target.set_function("timed_check_event", input::timed_check_event);
+        target.set_function("input_event_state", input::input_event_state);
+        target.set_function("is_event_pressed", input::is_event_pressed);
+        target.set_function("is_event_released", input::is_event_released);
+        target.set_function("get_event_key_name", input::get_event_key_name);
+        target.set_function("get_event", input::get_event);
+        target.set_function("get_framebuffer_size", input::get_framebuffer_size);
+        target.set_function("get_window_content_scale", input::get_window_content_scale);
+        target.set_function("get_monitor_content_scale", input::get_monitor_content_scale);
+        target.set_function("get_monitor_physical_size", input::get_monitor_physical_size);
+        
+        // тут добавятся несколько функций для того чтобы задать клавишу в настройках
+        sol::table x = lua.create_table_with(sol::meta_function::new_index, sol::detail::fail_on_newindex, sol::meta_function::index, target);
+        lua["input"] = lua.create_table(0, 0, sol::metatable_key, x);
+      }
+    }
+    
+    void setup_lua_game_logic(sol::state &lua) {
+      {
+        auto target = lua.create_table();
+        target.set_function("player_end_turn", game::player_end_turn);
+        target.set_function("current_player_turn", game::current_player_turn);
+        
+        // тут добавятся несколько функций для того чтобы задать клавишу в настройках
+        sol::table x = lua.create_table_with(sol::meta_function::new_index, sol::detail::fail_on_newindex, sol::meta_function::index, target);
+        lua["game"] = lua.create_table(0, 0, sol::metatable_key, x);
+      }
     }
   }
 }

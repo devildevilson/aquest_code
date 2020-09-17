@@ -7,30 +7,38 @@
 
 namespace devils_engine {
   namespace utils {
+    class sequential_string_container;
     class id {
     public:
-      static id get(const std::string &name);
+      static void set_container(sequential_string_container* cont);
+      static id get(const std::string_view &name);
       
       id();
+      id(const id &a) = default;
+      id(id &&a) = default;
       
       bool valid() const;
-      std::string name() const;
+      std::string_view name() const;
       size_t num() const;
       
-      bool operator==(const id &other) const;
-      bool operator!=(const id &other) const;
-      bool operator>(const id &other) const;
-      bool operator<(const id &other) const;
-      bool operator>=(const id &other) const;
-      bool operator<=(const id &other) const;
+      id & operator=(const id &a) = default;
+      id & operator=(id &&a) = default;
     private:
       size_t m_id;
       
       id(const size_t &id);
       
       //static std::atomic<size_t> current_id;
-      static std::vector<std::string> names;
+//       static std::vector<std::string> names;
+      static sequential_string_container* container;
     };
+    
+    bool operator==(const id &a, const id &b);
+    bool operator!=(const id &a, const id &b);
+    bool operator>(const id &a, const id &b);
+    bool operator<(const id &a, const id &b);
+    bool operator>=(const id &a, const id &b);
+    bool operator<=(const id &a, const id &b);
   }
 }
 

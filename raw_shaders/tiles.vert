@@ -42,9 +42,11 @@ out gl_PerVertex {
 
 layout(location = 0) in uint tile_index;  // инстансный буфер
 layout(location = 1) in uint point_index; // буфер вида [0,...,4,0,...,5], указываем оффсет
-layout(location = 0) out flat uint out_biom_index;
-layout(location = 1) out vec2 out_uv;
-layout(location = 2) out flat float out_tile_height;
+//layout(location = 0) out flat uint out_biom_index;
+layout(location = 0) out flat image_t out_biom_texture;
+layout(location = 1) out flat color_t out_biom_color;
+layout(location = 2) out vec2 out_uv;
+layout(location = 3) out flat float out_tile_height;
 
 // либо мы uv координаты можем посчитать в скрин спейсе
 // нет лучше здесь
@@ -78,8 +80,10 @@ void main() {
   // image_t img;
   // img.container = 0;
   // out_image = img;
-  out_biom_index = tile.biom_index;
+  //out_biom_index = tile.biom_index;
   //out_biom_index = tile.unique_object_index;
+  out_biom_texture = tile.texture;
+  out_biom_color = tile.color;
   out_tile_height = tile.height;
 }
 

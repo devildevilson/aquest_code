@@ -25,9 +25,11 @@ layout(std140, set = 2, binding = 2) readonly buffer tile_points_buffer {
 
 // наверное из вершинного буфера приходят индексы
 layout(location = 0) in uint current_index;
-layout(location = 0) out flat uint out_biom_index;
-layout(location = 1) out vec2 out_uv;
-layout(location = 2) out flat float out_tile_height;
+//layout(location = 0) out flat uint out_biom_index;
+layout(location = 0) out flat image_t out_biom_texture;
+layout(location = 1) out flat color_t out_biom_color;
+layout(location = 2) out vec2 out_uv;
+layout(location = 3) out flat float out_tile_height;
 
 #define PACKED_INDEX_COEF 6
 
@@ -93,6 +95,13 @@ void main() {
   }
 
   out_tile_height = tile_height1;
-  out_biom_index = tiles[tile1_index].tile_indices.y;
+  //out_biom_index = tiles[tile1_index].tile_indices.y;
+  color_t color;
+  color.container = tiles[tile1_index].tile_indices.z;
+  const float r = get_color_r(color) * 0.85f; // возможно чуть побольше значения сделать
+  const float g = get_color_g(color) * 0.85f;
+  const float b = get_color_b(color) * 0.85f;
+  out_biom_texture.container = tiles[tile1_index].tile_indices.y;
+  out_biom_color = make_color1(r, g, b, 1.0f);
   out_uv = vec2(0.0f, 0.0f);
 }

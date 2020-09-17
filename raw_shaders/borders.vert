@@ -19,8 +19,7 @@ struct border_data {
 };
 
 struct border_type {
-  vec4 color1;
-  vec4 color2;
+  uvec4 data;
 };
 
 layout(set = 0, binding = 0) uniform Camera {
@@ -56,11 +55,12 @@ out gl_PerVertex {
 
 void main() {
   const uint border_index = current_index / 6;
-  const border_data current_data = datas[border_index];
+  border_data current_data = datas[border_index];
   const uint index_border = current_index % 6; // [0,5]
   const uint type_index = floatBitsToUint(current_data.dirs[1].w); // так прячем тип границы
   const border_type type = types[type_index];
-  const float thickness = type.color2.w;
+  const float thickness = current_data.points[0].w;
+  current_data.points[0].w = 1.0f;
 
   const uint tile_index = floatBitsToUint(current_data.dirs[0].w);
   const float tile_height = uintBitsToFloat(tiles[tile_index].tile_indices.w);

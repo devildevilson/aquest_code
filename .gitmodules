@@ -37,3 +37,9 @@
 [submodule "include/magic_enum"]
 	path = include/magic_enum
 	url = https://github.com/Neargye/magic_enum.git
+[submodule "include/serpent"]
+	path = include/serpent
+	url = https://github.com/pkulchenko/serpent.git
+[submodule "include/protobuf"]
+	path = include/protobuf
+	url = https://github.com/protocolbuffers/protobuf.git

@@ -46,6 +46,7 @@ if(NOT EXISTS "${PROJECT_SOURCE_DIR}/include/fmt/CMakeLists.txt")
 endif()
 
 set(STB_INCLUDE_PATH include/stb)
+set(LUA_LIB_PATH ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/scripts)
 
 include_directories(
   .
@@ -60,10 +61,13 @@ include_directories(
   include/fmt/include/
   include/memory/include/
   include/magic_enum/include/
+  include/lz4/lib/
+  include/protobuf/src/
 )
 link_directories(
   ${CMAKE_CURRENT_BINARY_DIR}
   ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}
+  #${LUA_LIB_PATH} # требуется для moonnuklear
   libs/
 )
 
@@ -176,6 +180,21 @@ add_custom_target(
 )
 
 set(SRC_LIST
+  utils/sha256.cpp
+  utils/serializator_helper.cpp
+  protobuf/test1.pb.cc
+)
+
+set(HDR_LIST
+  utils/sha256.h
+  utils/serializator_helper.h
+  protobuf/test1.pb.h
+)
+
+add_library(serialization ${SRC_LIST} ${HDR_LIST})
+target_link_libraries(serialization lz4 protobuf) #protobuf-lite
+
+set(SRC_LIST
   utils/thread_pool.cpp
   utils/stack_allocator.cpp
   utils/input.cpp
@@ -187,6 +206,9 @@ set(SRC_LIST
   utils/random_engine.cpp
   utils/linear_rng.cpp
   utils/lua_initialization.cpp
+  utils/string_container.cpp
+  utils/string_bank.cpp
+  utils/progress_container.cpp
   #utils/perlin.cpp
   include/FastNoise/FastNoise.cpp
   include/whereami/src/whereami.c
@@ -214,18 +236,20 @@ set(HDR_LIST
   utils/random_engine.h
   utils/concurrent_vector.h
   utils/linear_rng.h
-  utils/serializator_helper.h
   utils/table_container.h
   utils/bit_field.h
   utils/on_action_types.h
   utils/traits_modifier_attribs.h
   utils/lua_initialization.h
+  utils/string_container.h
+  utils/string_bank.h
+  utils/progress_container.h
   include/FastNoise/FastNoise.h
   include/whereami/src/whereami.h
 )
 
 add_library(utils ${SRC_LIST} ${HDR_LIST})
-target_link_libraries(utils) # PUBLIC foonathan_memory
+target_link_libraries(utils) # PUBLIC foonathan_memory moonnuklear
 
 set(SRC_LIST
   render/container.cpp
@@ -241,6 +265,7 @@ set(SRC_LIST
   render/targets.cpp
   render/render_mode_container.cpp
   render/pipeline_mode_updater.cpp
+  render/image_container.cpp
 )
 
 set(HDR_LIST
@@ -263,6 +288,7 @@ set(HDR_LIST
   render/nuklear_header.h
   render/render_mode_container.h
   render/pipeline_mode_updater.h
+  render/image_container.h
 )
 
 add_library(render ${SRC_LIST} ${HDR_LIST})
@@ -306,6 +332,7 @@ set(SRC_LIST
   bin/city_data_parser.cpp
   bin/character_data_parser.cpp
   bin/building_data_parser.cpp
+  bin/logic.cpp
 )
 
 set(HDR_LIST
@@ -330,7 +357,14 @@ set(HDR_LIST
   bin/core_context.h
   bin/stats.h
   bin/data_parser.h
+  bin/logic.h
 )
 add_executable(${TARGET_NAME} ${SRC_LIST} ${HDR_LIST})
-target_link_libraries(${TARGET_NAME} ai render utils lua)
+target_link_libraries(${TARGET_NAME} ai render utils serialization lua)
 add_dependencies(${TARGET_NAME} shaders)
+
+# Strip binary for release builds
+if (CMAKE_BUILD_TYPE STREQUAL Release)
+    add_custom_command(TARGET ${TARGET_NAME} POST_BUILD
+            COMMAND ${CMAKE_STRIP} -s "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${TARGET_NAME}")
+endif()

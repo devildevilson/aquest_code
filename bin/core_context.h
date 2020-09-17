@@ -5,6 +5,7 @@
 #include "core_structures.h"
 #include <vector>
 #include <array>
+#include "map.h"
 
 // #include <foonathan/memory/container.hpp> // vector, list, list_node_size
 // #include <foonathan/memory/memory_pool.hpp> // memory_pool
@@ -56,6 +57,16 @@ namespace devils_engine {
         return &mem[index];
       }
       
+      template <typename T>
+      size_t get_entity_count() const {
+        static_assert(T::s_type < structure::static_types_count);
+        const auto &c = containers[static_cast<size_t>(T::s_type)];
+        return c.count;
+      }
+      
+      void set_tile(const uint32_t &index, const tile &tile_data);
+      tile get_tile(const uint32_t &index) const;
+      
       dynasty* create_dynasty();
       character* create_character(const bool male, const bool dead);
       army* create_army();
@@ -94,6 +105,7 @@ namespace devils_engine {
 //       static_pool_t pointer_static_pool;
       
       // это будет сериализовано с помощью таблиц
+      std::array<tile, core::map::hex_count_d(core::map::detail_level)> tile_array;
       std::array<container, static_cast<size_t>(structure::static_types_count)> containers; // титулам нужно добавить еще немного памяти, чтобы создать особые титулы
       
       utils::memory_pool<dynasty, sizeof(dynasty)*5000> dynasties_pool;

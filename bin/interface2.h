@@ -10,9 +10,9 @@
 #include <unordered_map>
 #include "utils/bit_field.h"
 #include "declare_structures.h"
+#include "interface_context.h"
 
-#define SOL_ALL_SAFETIES_ON 1
-#include <sol/sol.hpp>
+#include "utils/sol.h"
 
 // тут должны быть указаны интерфейсы + инициализация
 // единовременно может быть нарисовано несколько интерфейсов
@@ -69,25 +69,39 @@ namespace devils_engine {
       timer* create_timer(const size_t &end_time);
       void release_timer(timer* t);
       
-      bool is_window_type_visible(const uint32_t &index) const;
-      void close_window(const uint32_t &index);
+      bool is_layer_visible(const uint32_t &index) const;
+      void close_layer(const uint32_t &index);
       
       // как открыть окно? по идее нам достаточно передать название окна, нужно еще передать какой то объект, как проверить тип?
       // проверить можно если только на все структуры прилепить специальную переменную с типом структуры (как в вулкане)
       // думаю что так можно сделать, но потом
-      void open_window(const std::string &window_id, const void* data); // тут чаще всего персонаж, но не всегда
+      void open_layer(const std::string &window_id, sol::object data); // тут чаще всего персонаж, но не всегда
+      bool update_data(const uint32_t &layer_id, sol::object data);
       
       void draw(const size_t &time);
-      void register_window(const std::string &name, const window_info &window);
+      void register_layer(const std::string &name, const window_info &window);
+      const window_info* get_data(const std::string &name) const;
+      void clear();
       
       sol::state & get_state();
+      sol::object & get_ctx();
+      
+      void init_constants();
+      void init_input();
+      void init_types();
+      void init_game_logic();
     private:
       sol::state lua; // большинство вещей в этом стейте будут рид онли
+      sol::object moonnuklear_ctx;
+      // фонты? неплохо было бы сделать доступ к ним по произвольному имени
+      // но лучше все же по слотам, 
+      sol::object fonts[fonts::count];
       
-      std::array<std::pair<const void*, const window_info*>, window_types_count> current_windows;
+      // тут мы можем передавать sol::object, и кстати проверять что у нас пришло тоже
+      std::array<std::pair<sol::object, const window_info*>, window_types_count> current_windows; // const void*
       bit_field_32<bit_field_32_size> windows;
       bit_field_32<bit_field_32_size> close_windows;
-      std::array<std::pair<const void*, const window_info*>, window_types_count> open_windows;
+      std::array<std::pair<sol::object, const window_info*>, window_types_count> open_windows;
       std::array<timer, timers_count> timers;
       bit_field<bit_field_size> used_timers;
       

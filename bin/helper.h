@@ -3,6 +3,7 @@
 
 #include "utils/globals.h"
 #include "utils/typeless_container.h"
+#include "utils/slot_container.h"
 #include "utils/input.h"
 #include "utils/logging.h"
 #include "utils/frame_time.h"
@@ -13,6 +14,9 @@
 #include "utils/works_utils.h"
 #include "utils/table_container.h"
 #include "utils/string_container.h"
+#include "utils/sol.h"
+#include "utils/serializator_helper.h"
+#include "utils/progress_container.h"
 //#include "utils/perlin.h"
 #include "FastNoise.h"
 
@@ -47,6 +51,8 @@
 #include "core_context.h"
 #include "interface2.h"
 #include "game_time.h"
+#include "logic.h"
+#include "seasons.h"
 
 #include <set>
 #include <vector>
@@ -69,13 +75,61 @@ namespace devils_engine {
     core::map* map;
 //     systems::generator<map::generator_context>* map_generator;
     interface::context* context;
-    map::generator::container* map_container;
+//     map::generator::container* map_container;
     utils::interface* interface;
     core::context* core_context;
     utils::data_string_container* string_container;
+    utils::sequential_string_container* sequential_string_container;
+    utils::calendar* game_calendar;
+    systems::ai* ai_systems;
+    core::seasons* seasons; // нужен при генерации и самой игре, в главном меню не особенно нужен, может все таки отдельно?
 
     system_container_t();
     ~system_container_t();
+  };
+  
+  // только данные глобальной карты, их мы максимально плотно сериализуем при загрузках
+  // нам скорее всего потребуется еще сделать уникальный рендер, буферы
+  struct game_map_data {
+    utils::slot_container container;
+    core::map* map;
+    // запуская рендеры друг за другом, мы можем составить более сложный рендер
+    // хотя лучше наверное отключать часть единственного рендера 
+    // (так очевидней, но теперь нужно придумать хороший способ переключаться)
+    systems::render* render;
+    core::context* core_context;
+    core::seasons* seasons;
+    systems::ai* ai_systems;
+    // тут наверное поместим std string в котором будем хранить данные которые сериализуем при загрузке
+    
+    game_map_data();
+    ~game_map_data();
+    bool is_init() const;
+  };
+  
+  // так же нужны данные битвы и столкновения
+  struct game_battle_data {
+    utils::slot_container container;
+    systems::render* render;
+    // карта, контекст (отряды, их состояния, небольшая инфа о персонажах и титулах), биомы 
+    // ии (будет использовать совсем другие системы нежели чем на общей карте)
+    systems::ai* ai_systems;
+    
+    game_battle_data();
+    ~game_battle_data();
+    bool is_init() const;
+  };
+  
+  struct game_encounter_data {
+    utils::slot_container container;
+    systems::render* render;
+    // карта, контекст (герои и их состояния), биомы
+    // ии (другие системы, не такие как в битвах или на глобальной карте)
+    systems::ai* ai_systems;
+    
+    game_encounter_data();
+    ~game_encounter_data();
+    bool is_init() const;
   };
 
   struct glfw_t {
@@ -98,6 +152,8 @@ namespace devils_engine {
   void create_render_system(system_container_t &systems);
   void create_render_stages(system_container_t &systems);
   void create_map_container(system_container_t &systems);
+  void create_ai_systems(system_container_t &systems);
+  void create_game_state();
   map::creator* setup_map_generator();
   void destroy_map_generator(map::creator** ptr);
   void setup_rendering_modes(render::mode_container &container);
@@ -113,17 +169,16 @@ namespace devils_engine {
 //   void map_triangle_test2(dt::thread_pool* pool, const map::container* map, const utils::frustum &fru, const uint32_t &triangle_index, std::atomic<uint32_t> &counter);
   
   void set_default_values(sol::state &lua, sol::table &table);
-  void load_interface_functions(sol::state &lua);
-  void rendering_mode(const map::generator::container* cont, core::map* map, const uint32_t &property, const uint32_t &render_mode, const uint32_t &water_mode);
+  void load_interface_functions(utils::interface* interface, sol::state &lua);
+//   void rendering_mode(const map::generator::container* cont, core::map* map, const uint32_t &property, const uint32_t &render_mode, const uint32_t &water_mode);
   void border_points_test(const std::vector<glm::vec4> &array);
-  void find_border_points(const map::generator::container* container, const core::map* map, const sol::table &table);
+  void find_border_points(const core::map* map);
   
   void generate_tile_connections(const core::map* map, dt::thread_pool* pool);
-  void validate_and_create_data(system_container_t &systems);
+  void validate_and_create_data(map::creator* creator, system_container_t &systems);
   void create_interface(system_container_t &systems);
-  void post_generation_work(system_container_t &systems);
+  void post_generation_work(map::creator* creator, system_container_t &systems);
   
-  bool player_end_turn(core::character* c);
   void update(const size_t &time);
 
   void sync(utils::frame_time &frame_time, const size_t &time);

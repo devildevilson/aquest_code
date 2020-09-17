@@ -460,6 +460,21 @@ namespace devils_engine {
       };
     }
     
+    namespace offsets {
+      enum values {
+        character_stats = 0,
+        faction_stats = character_stats + character_stats::count,
+        province_stats = faction_stats + faction_stats::count,
+        city_stats = province_stats + province_stats::count,
+        army_stats = city_stats + city_stats::count,
+        hero_troop_stats = army_stats + army_stats::count,
+        troop_stats = hero_troop_stats + hero_troop_stats::count,
+        hero_stats = troop_stats + troop_stats::count,
+        
+        count
+      };
+    }
+    
     union stat_container {
       uint32_t uval;
       int32_t ival;

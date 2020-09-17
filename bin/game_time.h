@@ -36,10 +36,13 @@ namespace devils_engine {
         int16_t m_month;
         int16_t m_day;
         
+        date();
+        date(const int32_t &m_year, const int16_t &m_month, const uint16_t &m_day, const bool before_zero);
         uint32_t year() const;
         uint32_t month() const;
         uint32_t day() const;
         bool before_zero() const;
+        bool valid() const;
       };
       
       size_t m_name_str;
@@ -49,6 +52,7 @@ namespace devils_engine {
       size_t m_years_days;
       std::vector<month_data> m_months;
       
+      calendar();
       void set_start_date(const bool before_zero, const uint32_t &year, const uint32_t &month, const uint32_t &day);
       void set_current_date(const bool before_zero, const uint32_t &year, const uint32_t &month, const uint32_t &day);
       void set_week_days_count(const uint32_t &count);
@@ -66,6 +70,8 @@ namespace devils_engine {
       size_t convert_date_to_turn(const struct date &date) const;
       date convert_days_to_date(const int64_t &days) const;
       int64_t convert_date_to_days(const struct date &date) const;
+      
+      void validate();
     };
     
     bool operator==(const calendar::date &date1, const calendar::date &date2);

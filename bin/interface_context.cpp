@@ -144,6 +144,8 @@ namespace devils_engine {
       uint32_t window_height = window->surface.extent.height;
       static const float data_window_height = 720.0f;
       
+      memset(fonts, 0, sizeof(fonts[0]) * fonts::count);
+      
       std::vector<fonts_settings2> fonts_data(fonts::count);
       load_font_settings(j, fonts_data);
 
@@ -172,10 +174,11 @@ namespace devils_engine {
 //             fonts[i] = nk_font_atlas_add_from_memory(&atlas, font_mem, font_size, size, &config);
             fonts[i] = nk_font_atlas_add_from_memory(&atlas, font_mem, font_size, size, nullptr);
           } else {
-            fonts[i] = fonts[fonts::technical];
-            ASSERT(fonts[i] != nullptr);
+//             fonts[i] = fonts[fonts::technical];
+//             ASSERT(fonts[i] != nullptr);
           }
         }
+        if (fonts[fonts::technical] == nullptr) throw std::runtime_error("System font must exist");
         image = nk_font_atlas_bake(&atlas, &w, &h, NK_FONT_ATLAS_RGBA32);
 //         std::cout << "backed atlas width " << w << " height " << h << "\n";
         
@@ -268,6 +271,7 @@ namespace devils_engine {
     void context::remake_font_atlas(const uint32_t &window_width, const uint32_t &window_height) {
       nk_font_atlas_clear(&atlas);
       device->destroy(view->image());
+      memset(fonts, 0, sizeof(fonts[0]) * fonts::count);
       
       // нужно определиться к каким размерам экрана подгонять размер шрифта
       static const float data_window_height = 720.0f;
@@ -305,10 +309,11 @@ namespace devils_engine {
 //             fonts[i] = nk_font_atlas_add_from_memory(&atlas, font_mem, font_size, size, &config);
             fonts[i] = nk_font_atlas_add_from_memory(&atlas, font_mem, font_size, size, nullptr);
           } else {
-            fonts[i] = fonts[fonts::technical];
-            ASSERT(fonts[i] != nullptr);
+//             fonts[i] = fonts[fonts::technical];
+//             ASSERT(fonts[i] != nullptr);
           }
         }
+        if (fonts[fonts::technical] == nullptr) throw std::runtime_error("System font must exist");
         image = nk_font_atlas_bake(&atlas, &w, &h, NK_FONT_ATLAS_RGBA32);
 //         std::cout << "backed atlas width " << w << " height " << h << "\n";
         

@@ -102,8 +102,16 @@
 
 struct nk_context;
 
+#define ID_ARRAY "id_array"
+#define STATS_ARRAY "stats_array"
+#define MODIFIERS_ARRAY "modifiers_array"
+#define STAT_ID "stat"
+#define INDEX_ARRAY "index_array"
+
 namespace devils_engine {
   namespace utils {
+    class world_serializator;
+    
     // желательно все строки все же убрать
     // я могу это сделать и более менее даже нормально сериализавать если сохранять последовательность загрузки данных
     // то есть у меня нескоторые эвенты приходят из конфига и конфиг мы загружаем первым, затем мы генерируем карту 
@@ -289,38 +297,67 @@ namespace devils_engine {
     
     using action_container = const functions_container;
     
+    struct check_table_value {
+      enum class type {
+        bool_t,
+        int_t,
+        float_t,
+        string_t,
+        array_t,
+      };
+      
+      enum flags_bits {
+        value_required = (1 << 0),
+        
+      };
+      
+      const std::string_view key;
+      const type value_type;
+      const uint32_t flags;
+      const uint32_t max_count;
+      const std::initializer_list<check_table_value> nested_array_data;
+    };
+    
+//     #define SAME_TYPE 1
+//     #define DIFFERENT_TYPE 0
+//     #define DONT_CARE 2
+//     int check_sol_type(const sol::type &t, const sol::object &obj);
+    void recursive_check(const std::string_view &id, const std::string_view &data_type, const sol::table &table, const check_table_value* current_check, const check_table_value* array_check, const size_t &size, size_t &counter);
+    
     // думаю что мы вообще ничего не валидируем сначала, после окончания генерации сразу проверяем все объекты
     size_t add_event(const sol::table &table);
     bool validate_event(const sol::table &table); // только проверка на валидность
     bool validate_event_and_save(sol::this_state lua, const sol::table &table); // сохранить результат в сериализаторе
     void parse_event(core::event* event, const sol::table &table); // распарсить эвент
     
+    std::string table_to_string(sol::this_state lua, const sol::table &table, const sol::table &keyallow);
+    
     size_t add_building(const sol::table &table);
-    bool validate_building(const sol::table &table);
-    bool validate_building_and_save(sol::this_state lua, const sol::table &table);
+    bool validate_building(const size_t &index, const sol::table &table);
+    bool validate_building_and_save(const size_t &index, sol::this_state lua, const sol::table &table, utils::world_serializator* container);
     void parse_building(core::building_type* building_type, const sol::table &table);
     
     size_t add_city_type(const sol::table &table);
-    bool validate_city_type(const sol::table &table);
-    bool validate_city_type_and_save(sol::this_state lua, const sol::table &table);
+    bool validate_city_type(const size_t &index, const sol::table &table);
+    bool validate_city_type_and_save(const size_t &index, sol::this_state lua, const sol::table &table, utils::world_serializator* container);
     void parse_city_type(core::city_type* city_type, const sol::table &table);
     
     size_t add_city(const sol::table &table);
-    bool validate_city(const sol::table &table);
-    bool validate_city_and_save(sol::this_state lua, const sol::table &table);
+    bool validate_city(const size_t &index, const sol::table &table);
+    bool validate_city_and_save(const size_t &index, sol::this_state lua, const sol::table &table, utils::world_serializator* container);
     void parse_city(core::city* city, const sol::table &table);
     
     size_t add_province(const sol::table &table);
     size_t register_province();
     size_t register_provinces(const size_t &count);
     void set_province(const size_t &index, const sol::table &table);
-    bool validate_province(const sol::table &table);
-    bool validate_province_and_save(sol::this_state lua, const sol::table &table);
+    bool validate_province(const size_t &index, const sol::table &table);
+    bool validate_province_and_save(const size_t &index, sol::this_state lua, const sol::table &table, utils::world_serializator* container);
     void parse_province(core::province* province, const sol::table &table);
     
     size_t add_title(const sol::table &table);
-    bool validate_title(const sol::table &table);
-    bool validate_title_and_save(sol::this_state lua, const sol::table &table);
+    bool validate_title(const size_t &index, const sol::table &table);
+    bool validate_title_and_save(const size_t &index, sol::this_state lua, const sol::table &table, utils::world_serializator* container);
     void parse_title(core::titulus* title, const sol::table &table);
     
     // может сначало зарегистрировать персонажа
@@ -330,8 +367,8 @@ namespace devils_engine {
     size_t register_character();
     size_t register_characters(const size_t &count);
     void set_character(const size_t &index, const sol::table &table);
-    bool validate_character(const sol::table &table);
-    bool validate_character_and_save(sol::this_state lua, const sol::table &table);
+    bool validate_character(const size_t &index, const sol::table &table);
+    bool validate_character_and_save(const size_t &index, sol::this_state lua, const sol::table &table, utils::world_serializator* container);
     void parse_character(core::character* character, const sol::table &table);
     void parse_character_goverment(core::character* character, const sol::table &table);
   }

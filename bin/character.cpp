@@ -14,6 +14,7 @@ namespace devils_engine {
     const size_t province::events_container_size;
     const size_t province::flags_container_size;
     const size_t province::cities_max_game_count;
+    tile::tile() : height(0.0f), province(UINT32_MAX) {}
     province::province() : title(nullptr), cities_max_count(0), cities_count(0), cities{nullptr} {}
     const structure building_type::s_type;
     const size_t building_type::maximum_prev_buildings;
@@ -32,7 +33,7 @@ namespace devils_engine {
     const size_t city::flags_container_size;
     const size_t city::bit_field_size;
     city::city() : province(nullptr), title(nullptr), type(nullptr), start_building(SIZE_MAX), building_index(UINT32_MAX), tile_index(UINT32_MAX) { 
-      memset(current_stats, 0, sizeof(current_stats) * city_stats::count);
+      memset(current_stats, 0, sizeof(current_stats[0]) * city_stats::count);
     }
     
     bool city::check_build(character* c, const uint32_t &building_index) const {
@@ -458,6 +459,7 @@ namespace devils_engine {
       ASSERT(factions[self] != nullptr);
       ASSERT(courtier->factions[self] == nullptr);
       
+      if (courtier->suzerain == this) return;
       if (courtier->suzerain != nullptr) courtier->suzerain->remove_courtier(courtier);
       
       ASSERT(courtier->suzerain == nullptr);
@@ -465,6 +467,15 @@ namespace devils_engine {
       ASSERT(courtier->prev_courtier == nullptr);
       
       courtier->suzerain = this;
+      courtier->next_courtier = factions[self]->courtiers;
+      if (factions[self]->courtiers != nullptr) factions[self]->courtiers->prev_courtier = courtier;
+      factions[self]->courtiers = courtier;
+    }
+    
+    void character::add_courtier_raw(character* courtier) {
+      ASSERT(courtier->suzerain == this);
+      ASSERT(factions[self] != nullptr);
+      ASSERT(courtier->factions[self] == nullptr);
       courtier->next_courtier = factions[self]->courtiers;
       if (factions[self]->courtiers != nullptr) factions[self]->courtiers->prev_courtier = courtier;
       factions[self]->courtiers = courtier;
@@ -504,6 +515,52 @@ namespace devils_engine {
       ASSERT(factions[self] != nullptr);
       factions[self]->remove_prisoner(prisoner);
     }
+    
+    void character::add_concubine(character* concubine) {
+      if (concubine->family.owner == this) return;
+      concubine->family.concubines = family.concubines;
+      family.concubines = concubine;
+      concubine->family.owner = this;
+      // надо ли делать обход в обратную сторону?
+    }
+    
+    void character::add_concubine_raw(character* concubine) {
+      ASSERT(concubine->family.owner == this);
+      concubine->family.concubines = family.concubines;
+      family.concubines = concubine;
+    }
+    
+    void character::remove_concubine(character* concubine) {
+      ASSERT(concubine != nullptr);
+      ASSERT(concubine->family.owner == this);
+      character* prev_concubine = family.concubines;
+      character* current_concubine = family.concubines;
+      ASSERT(current_concubine != nullptr);
+      while (current_concubine != nullptr) {
+        if (current_concubine == concubine) break;
+        prev_concubine = current_concubine;
+        current_concubine = current_concubine->family.concubines;
+      }
+      
+      ASSERT(current_concubine != nullptr);
+      if (current_concubine != family.concubines) prev_concubine->family.concubines = current_concubine->family.concubines;
+      if (current_concubine == family.concubines) family.concubines = current_concubine->family.concubines;
+    }
+    
+//     void character::add_child(character* child) {
+//       
+//     }
+    
+    void character::add_child_raw(character* child) {
+      ASSERT(child->family.parents[0] == this || child->family.parents[1] == this);
+      child->family.next_sibling = family.children;
+      if (family.children != nullptr) family.children->family.prev_sibling = child;
+      family.children = child;
+    }
+    
+//     void character::remove_child(character* child) {
+//       
+//     }
     
     float character::stat(const uint32_t &index) const {
       ASSERT(index < character_stats::count);
@@ -765,6 +822,13 @@ namespace devils_engine {
       vassals = vassal;
     }
     
+    void faction::add_vassal_raw(faction* vassal) {
+      ASSERT(vassal->liege == this);
+      vassal->next_vassal = vassals;
+      if (vassals != nullptr) vassals->prev_vassal = vassal;
+      vassals = vassal;
+    }
+    
     void faction::remove_vassal(faction* vassal) {
       if (vassal->liege != this) return;
       
@@ -797,6 +861,13 @@ namespace devils_engine {
       ASSERT(prisoner->prev_prisoner == nullptr);
       
       prisoner->imprisoner = this;
+      prisoner->next_prisoner = prisoners;
+      if (prisoners != nullptr) prisoners->prev_prisoner = prisoner;
+      prisoners = prisoner;
+    }
+    
+    void faction::add_prisoner_raw(character* prisoner) {
+      ASSERT(prisoner->imprisoner == this);
       prisoner->next_prisoner = prisoners;
       if (prisoners != nullptr) prisoners->prev_prisoner = prisoner;
       prisoners = prisoner;

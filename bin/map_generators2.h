@@ -1,8 +1,7 @@
 #ifndef MAP_GENERATORS2_H
 #define MAP_GENERATORS2_H
 
-#define SOL_ALL_SAFETIES_ON 1
-#include <sol/sol.hpp>
+#include "utils/sol.h"
 
 #include "generator_context2.h"
 #include <string>
@@ -16,6 +15,13 @@
 // скорее всего асинхроно запустить генерацию из главного треда у меня не выйдет
 // поэтому придется убрать весь мультитрединг отсюда
 // может ли он мне вообще пригодиться в игре?
+
+struct biome_data { // чет пока ничего не приходит в голову
+  uint32_t color;
+  uint32_t image;
+  uint32_t object;
+  float density;
+};
 
 namespace devils_engine {
   namespace map {
@@ -120,7 +126,8 @@ namespace devils_engine {
     
     void update_noise_seed(generator::context* ctx);
     
-    void begin(generator::context* ctx, sol::table &table);
+    void begin(generator::context* ctx, sol::table &table); // эта функция всегда должна вызываться
+    void setup_generator(generator::context* ctx, sol::table &table);
     void generate_plates(generator::context* ctx, sol::table &table);
     void generate_plate_datas(generator::context* ctx, sol::table &table);
     void compute_boundary_edges(generator::context* ctx, sol::table &table);

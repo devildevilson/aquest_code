@@ -19,6 +19,7 @@ namespace devils_engine {
       size_t current() const;
       std::string hint() const;
       void clear();
+      bool finished() const;
     private:
       std::vector<map::generator_pair> generators;
       std::atomic<size_t> current_step;

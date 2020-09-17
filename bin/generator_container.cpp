@@ -6,26 +6,31 @@
 namespace devils_engine {
   namespace map {
     namespace generator {
-      container::container(const create_info &info) : 
-        tile_type{info.tile_types.size(), new data_type[info.tile_types.size()], new float[core::map::hex_count_d(core::map::detail_level) * info.tile_types.size()]}, 
-        tiles(core::map::hex_count_d(core::map::detail_level)),
-        entities(info.entities_types.size())
-      {
-        ASSERT(info.tile_types.size() != 0);
-        memcpy(tile_type.types, info.tile_types.data(), info.tile_types.size() * sizeof(data_type));
-        memset(tile_type.data_container, 0, core::map::hex_count_d(core::map::detail_level) * info.tile_types.size() * sizeof(float));
-        
-        for (size_t i = 0; i < core::map::hex_count_d(core::map::detail_level); ++i) {
-          tiles[i].data = &tile_type.data_container[i * info.tile_types.size()];
-        }
-        
-        for (size_t i = 0; i < info.entities_types.size(); ++i) {
-          entities[i].first.id = info.entities_types[i].first;
-          entities[i].first.types_count = info.entities_types[i].second.size();
-          entities[i].first.types = entities[i].first.types_count == 0 ? nullptr : new data_type[entities[i].first.types_count];
-          if (entities[i].first.types != nullptr) memcpy(entities[i].first.types, info.entities_types[i].second.data(), entities[i].first.types_count * sizeof(data_type));
-        }
-      }
+//       container::container(const create_info &info) : 
+//         tile_type{info.tile_types.size(), new data_type[info.tile_types.size()], new float[core::map::hex_count_d(core::map::detail_level) * info.tile_types.size()]}, 
+//         tiles(core::map::hex_count_d(core::map::detail_level)),
+//         entities(info.entities_types.size())
+//       {
+//         ASSERT(info.tile_types.size() != 0);
+//         memcpy(tile_type.types, info.tile_types.data(), info.tile_types.size() * sizeof(data_type));
+//         memset(tile_type.data_container, 0, core::map::hex_count_d(core::map::detail_level) * info.tile_types.size() * sizeof(float));
+//         
+//         for (size_t i = 0; i < core::map::hex_count_d(core::map::detail_level); ++i) {
+//           tiles[i].data = &tile_type.data_container[i * info.tile_types.size()];
+//         }
+//         
+//         for (size_t i = 0; i < info.entities_types.size(); ++i) {
+//           entities[i].first.id = info.entities_types[i].first;
+//           entities[i].first.types_count = info.entities_types[i].second.size();
+//           entities[i].first.types = entities[i].first.types_count == 0 ? nullptr : new data_type[entities[i].first.types_count];
+//           if (entities[i].first.types != nullptr) memcpy(entities[i].first.types, info.entities_types[i].second.data(), entities[i].first.types_count * sizeof(data_type));
+//         }
+//       }
+      
+      container::container() :
+        tile_type{0, nullptr, nullptr},
+        tiles(core::map::hex_count_d(core::map::detail_level))
+      {}
       
       container::~container() {
         delete [] tile_type.types;
@@ -70,15 +75,20 @@ namespace devils_engine {
       
       void container::set_entity_count(const uint32_t &type, const uint32_t &size) {
         if (type == 0) throw std::runtime_error("Tiles count is constant value");
+        
         const uint32_t final_type = type-1;
-        if (entities.size() <= final_type) throw std::runtime_error("Bad entity type");
+        if (final_type >= entities.size()) throw std::runtime_error("Bad entity type");
+        if (entities[final_type].second.size() != 0) throw std::runtime_error("Resizing entity count is not allowed");
         ASSERT(entities[final_type].second.size() == 0); // щас пока не понятно нужно ли копировать
+        
         entities[final_type].second.resize(size, {{}, nullptr});
+        const bool empty = entities[final_type].first.types_count == 0;
         for (size_t i = 0; i < entities[final_type].second.size(); ++i) {
-          entities[final_type].second[i].data = new float[entities[final_type].first.types_count];
+          entities[final_type].second[i].data = empty ? nullptr : new float[entities[final_type].first.types_count];
+          if (!empty) memset(entities[final_type].second[i].data, 0, sizeof(entities[final_type].second[i].data[0]) * entities[final_type].first.types_count);
         }
         
-        if (type == 3) {
+        if (type == 3) { // это нужно будет убрать
           province_neighbours.resize(size);
         }
       }
@@ -331,60 +341,31 @@ namespace devils_engine {
         return entities[final_type].first.types[property];
       }
       
-//       core::character* container::create_character() {
-//         auto c = character_pool.create();
-//         characters.push_back(c);
-//         return c;
-//       }
-//       
-//       core::titulus* container::create_titulus(const enum core::titulus::type &t) {
-//         auto title = titulus_pool.create(t);
-//         titles.push_back(title);
-//         return title;
-//       }
-//       
-//       core::titulus* container::create_titulus(const enum core::titulus::type &t, const uint32_t &count) {
-//         auto title = titulus_pool.create(t, count);
-//         titles.push_back(title);
-//         return title;
-//       }
-//       
-//       uint32_t container::get_title_index(const core::titulus* title) const {
-//         if (title == nullptr) return UINT32_MAX;
-//         
-//         for (size_t i = 0; i < titles.size(); ++i) {
-//           if (titles[i] == title) return i;
-//         }
-//         
-//         throw std::runtime_error("Could not find title");
-//         return UINT32_MAX;
-//       }
-//       
-//       core::titulus* container::get_title(const uint32_t &index) const {
-//         if (index >= titles.size()) throw std::runtime_error("Could not find title"); // ошибка ли? скорее да
-//         return titles[index];
-//       }
-//       
-//       void container::add_playable_character(core::character* character) {
-//         auto itr = turn_characters.find(character);
-//         if (itr == turn_characters.end()) {
-//           itr = turn_characters.insert(std::make_pair(character, uint32_t(0))).first;
-//         }
-//         
-//         ++itr->second;
-//       }
-//       
-//       void container::remove_playable_character(core::character* character) {
-//         auto itr = turn_characters.find(character);
-//         if (itr == turn_characters.end()) return;
-//         
-//         --itr->second;
-//         if (itr->second == 0) turn_characters.erase(itr);
-//       }
-//       
-//       const std::unordered_map<core::character*, uint32_t> & container::get_turn_characters() const {
-//         return turn_characters;
-//       }
+      size_t container::set_tile_template(const std::vector<data_type> &template_data) {
+        if (tile_type.types != nullptr) throw std::runtime_error("Could not set tile template twice");
+        if (template_data.empty()) throw std::runtime_error("Empty tile template");
+        
+        tile_type.types = new data_type[template_data.size()];
+        tile_type.types_count = template_data.size();
+        memcpy(tile_type.types, template_data.data(), sizeof(template_data[0]) * template_data.size());
+        tile_type.data_container = new float[core::map::hex_count_d(core::map::detail_level) * template_data.size()];
+        memset(tile_type.data_container, 0, sizeof(tile_type.data_container[0]) * core::map::hex_count_d(core::map::detail_level) * template_data.size());
+        
+        for (size_t i = 0; i < core::map::hex_count_d(core::map::detail_level); ++i) {
+          tiles[i].data = &tile_type.data_container[i * template_data.size()];
+        }
+        
+        return 0;
+      }
+      
+      size_t container::set_entity_template(const std::vector<data_type> &template_data) {
+        const size_t current_index = entities.size();
+        entities.emplace_back();
+        entities[current_index].first.types_count = template_data.size();
+        entities[current_index].first.types = template_data.empty() ? nullptr : new data_type[template_data.size()];
+        if (!template_data.empty()) memcpy(entities[current_index].first.types, template_data.data(), sizeof(template_data[0]) * template_data.size());
+        return current_index+1;
+      }
       
       size_t container::compute_memory_size() const {
         size_t mem = 0;

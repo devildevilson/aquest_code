@@ -1,32 +1,26 @@
 #include "game_time.h"
+#include <iostream>
 
 namespace devils_engine {
   namespace utils {
+    calendar::date::date() : m_year(INT32_MAX), m_month(INT16_MAX), m_day(INT16_MAX) {}
+    calendar::date::date(const int32_t &m_year, const int16_t &m_month, const uint16_t &m_day, const bool before_zero) : m_year(m_year), m_month(m_month), m_day(before_zero ? -int16_t(m_day) : m_day) {}
     uint32_t calendar::date::year() const { return m_year; }
     uint32_t calendar::date::month() const { return m_month; }
     uint32_t calendar::date::day() const { return std::abs(m_day); }
     bool calendar::date::before_zero() const { return m_day < 0; }
+    bool calendar::date::valid() const { return m_year != INT32_MAX; }
     
+    static calendar::date load_start_date;
+    static calendar::date load_current_date;
+    
+    calendar::calendar() : m_name_str(SIZE_MAX), m_week_days_count(7), m_start_day(INT64_MAX), m_current_turn(SIZE_MAX), m_years_days(SIZE_MAX) {}
     void calendar::set_start_date(const bool before_zero, const uint32_t &year, const uint32_t &month, const uint32_t &day) {
-      const int16_t final_day = before_zero ? -int16_t(day) : int16_t(day);
-      const date tmp {
-        int32_t(year),
-        int16_t(month),
-        final_day
-      };
-      
-      m_start_day = convert_date_to_days(tmp);
+      load_start_date = calendar::date(year, month, day, before_zero);
     }
     
     void calendar::set_current_date(const bool before_zero, const uint32_t &year, const uint32_t &month, const uint32_t &day) {
-      const int16_t final_day = before_zero ? -int16_t(day) : int16_t(day);
-      const date tmp {
-        int32_t(year),
-        int16_t(month),
-        final_day
-      };
-      
-      m_current_turn = convert_date_to_turn(tmp);
+      load_current_date = calendar::date(year, month, day, before_zero);
     }
     
     void calendar::set_week_days_count(const uint32_t &count) { m_week_days_count = count; }
@@ -55,6 +49,7 @@ namespace devils_engine {
     }
     
     calendar::date calendar::convert_days_to_date(const int64_t &days) const {
+      ASSERT(m_years_days != SIZE_MAX);
       const uint32_t cur_year = std::abs(days) / m_years_days;
       size_t current_year_day = std::abs(days) - cur_year * m_years_days;
       ASSERT(current_year_day < m_years_days);
@@ -66,12 +61,7 @@ namespace devils_engine {
       }
       
       const int16_t final_days = days < 0 ? -int16_t(current_year_day) : int16_t(current_year_day);
-      const date current_date{
-        int32_t(cur_year),
-        int16_t(month_index),
-        final_days
-      };
-      
+      const date current_date(int32_t(cur_year), int16_t(month_index), final_days, days < 0);
       return current_date;
     }
     
@@ -85,6 +75,40 @@ namespace devils_engine {
       
       days_count += date.year() * m_years_days; // это количество дней прошедшее от 0 года
       return std::abs(m_start_day) + (date.before_zero() ? -1 * days_count : days_count);
+    }
+    
+    void calendar::validate() {
+      size_t counter = 0;
+      if (m_months.empty()) {
+        ++counter;
+        PRINT("Missing game months data")
+      }
+      
+      if (!load_start_date.valid()) {
+        ++counter;
+        PRINT("Missing game statring date")
+      }
+      
+      if (!load_current_date.valid()) {
+        ++counter;
+        PRINT("Missing game current date")
+      }
+      
+      m_years_days = 0;
+      for (const auto &data : m_months) {
+        m_years_days += data.days_count;
+      }
+      
+      m_start_day = convert_date_to_days(load_start_date);
+      m_current_turn = convert_date_to_turn(load_current_date);
+      
+      const int64_t current_day = convert_turn_to_days(m_current_turn);
+      if (m_start_day > current_day) {
+        ++counter;
+        PRINT("Bad current date. Start date must not be later then current date")
+      }
+      
+      if (counter != 0) throw std::runtime_error("Calendar validation failed");
     }
     
     bool operator==(const calendar::date &date1, const calendar::date &date2) {

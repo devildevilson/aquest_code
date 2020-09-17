@@ -12,6 +12,9 @@
 #include "data_parser.h"
 #include "utils/globals.h"
 #include "stats.h"
+#include "game_time.h"
+#include "seasons.h"
+#include "render/shared_structures.h"
 
 const float radius_const = 500.0f;
 
@@ -19,6 +22,7 @@ namespace devils_engine {
   namespace map {
     const generator_pair default_generator_pairs[] = {
       generator_pair("begin", begin),
+      generator_pair("seting up generator", setup_generator),
       generator_pair("generating plates", generate_plates),
       generator_pair("generating plate datas", generate_plate_datas),
       generator_pair("computing boundary edges", compute_boundary_edges),
@@ -43,8 +47,20 @@ namespace devils_engine {
       generator_pair("calculating province neighbours", calculating_province_neighbours),
       generator_pair("generating cultures", generate_cultures),
       generator_pair("generating countries", generate_countries),
-      generator_pair("generating titles", generate_titles)
+      generator_pair("generating titles", generate_titles),
+      generator_pair("generate cities", generate_cities),
+      generator_pair("generate characters", generate_characters)
     };
+    
+    render::color_t make_color_from_index(const uint32_t &index) {
+      const uint32_t val1 = render::lcg(index);
+      const uint32_t val2 = render::lcg(val1);
+      const uint32_t val3 = render::lcg(val2);
+      const float f1 = render::lcg_normalize(val1);
+      const float f2 = render::lcg_normalize(val2);
+      const float f3 = render::lcg_normalize(val3);
+      return render::make_color(f1, f2, f3, 1.0f);
+    }
     
     province_neighbour::province_neighbour() : container(UINT32_MAX) {}
     province_neighbour::province_neighbour(const bool across_water, const uint32_t &index) : container(UINT32_MAX) {
@@ -200,23 +216,30 @@ namespace devils_engine {
       ASSERT(generated_core.tiles.size() == map->tiles_count());
       ASSERT(generated_core.triangles.size() == map->triangles_count());
       
-      utils::submit_works(ctx->pool, generated_core.tiles.size(), [&generated_core] (const size_t &start, const size_t &count) {
+      // придется переделать функции и добавить ожидание треду
+      utils::submit_works_async(ctx->pool, generated_core.tiles.size(), [&generated_core] (const size_t &start, const size_t &count) {
         for (size_t i = start; i < start+count; ++i) {
           generated_core.fix_tile(i);
         }
       });
+      ctx->pool->compute();
+      while (ctx->pool->working_count() != 1 || ctx->pool->tasks_count() != 0) { std::this_thread::sleep_for(std::chrono::microseconds(1)); }
       
-      utils::submit_works(ctx->pool, generated_core.tiles.size(), [&generated_core, map] (const size_t &start, const size_t &count) {
+      utils::submit_works_async(ctx->pool, generated_core.tiles.size(), [&generated_core, map] (const size_t &start, const size_t &count) {
         for (size_t i = start; i < start+count; ++i) {
           map->set_tile_data(&generated_core.tiles[i], i);
         }
       });
+      ctx->pool->compute();
+      while (ctx->pool->working_count() != 1 || ctx->pool->tasks_count() != 0) { std::this_thread::sleep_for(std::chrono::microseconds(1)); }
       
-      utils::submit_works(ctx->pool, generated_core.points.size(), [&generated_core, map] (const size_t &start, const size_t &count) {
+      utils::submit_works_async(ctx->pool, generated_core.points.size(), [&generated_core, map] (const size_t &start, const size_t &count) {
         for (size_t i = start; i < start+count; ++i) {
           map->set_point_data(generated_core.points[i], i);
         }
       });
+      ctx->pool->compute();
+      while (ctx->pool->working_count() != 1 || ctx->pool->tasks_count() != 0) { std::this_thread::sleep_for(std::chrono::microseconds(1)); }
       
       const size_t tri_count = core::map::tri_count_d(core::map::accel_struct_detail_level);
       ASSERT(tri_count == map->accel_triangles_count());
@@ -225,7 +248,7 @@ namespace devils_engine {
       std::unordered_set<uint32_t> unique_tiles;
       std::atomic<uint32_t> tiles_counter(0);
       
-      utils::submit_works(ctx->pool, tri_count, [&mutex, &unique_tiles, &generated_core, &tiles_counter, map] (const size_t &start, const size_t &count) {
+      utils::submit_works_async(ctx->pool, tri_count, [&mutex, &unique_tiles, &generated_core, &tiles_counter, map] (const size_t &start, const size_t &count) {
         std::vector<uint32_t> tiles_array;
         size_t offset = 0;
         for (size_t i = 0; i < core::map::accel_struct_detail_level; ++i) {
@@ -256,6 +279,10 @@ namespace devils_engine {
           tiles_array.clear();
         }
       });
+      ctx->pool->compute();
+      while (ctx->pool->working_count() != 1 || ctx->pool->tasks_count() != 0) { std::this_thread::sleep_for(std::chrono::microseconds(1)); }
+      
+      ASSERT(ctx->pool->working_count() == 1 && ctx->pool->tasks_count() == 0);
       
       ASSERT(generated_core.triangles.size() == map->triangles.size());
       ASSERT(sizeof(core::map::triangle) == sizeof(map::triangle));
@@ -265,6 +292,88 @@ namespace devils_engine {
       
 //       ctx->container->set_entity_count(debug::entities::tile, map->tiles_count());
       ctx->map->set_status(core::map::status::valid);
+    }
+    
+    void setup_generator(generator::context* ctx, sol::table &table) {
+      ctx->container->set_tile_template({
+        map::generator::data_type::uint_t,    //       plate_index,
+        map::generator::data_type::uint_t,    //       edge_index,
+        map::generator::data_type::float_t,   //       edge_dist,
+        map::generator::data_type::uint_t,    //       mountain_index,
+        map::generator::data_type::float_t,   //       mountain_dist,
+        map::generator::data_type::uint_t,    //       ocean_index,
+        map::generator::data_type::float_t,   //       ocean_dist,
+        map::generator::data_type::uint_t,    //       coastline_index,
+        map::generator::data_type::float_t,   //       coastline_dist,
+        map::generator::data_type::float_t,   //       elevation,
+        map::generator::data_type::float_t,   //       heat,
+        map::generator::data_type::float_t,   //       moisture,
+        map::generator::data_type::uint_t,    //       biome,
+        map::generator::data_type::uint_t,    //       province_index,
+        map::generator::data_type::uint_t,    //       culture_id,
+        map::generator::data_type::uint_t,    //       country_index
+        map::generator::data_type::uint_t,    //       test_value_uint1
+        map::generator::data_type::uint_t,    //       test_value_uint2
+        map::generator::data_type::uint_t,    //       test_value_uint3
+      });
+      
+      {
+        const size_t index = ctx->container->set_entity_template({
+          map::generator::data_type::float_t,  // drift_axis,
+          map::generator::data_type::float_t,  // drift_axis1,
+          map::generator::data_type::float_t,  // drift_axis2,
+          map::generator::data_type::float_t,  // drift_rate,
+          map::generator::data_type::float_t,  // spin_axis,
+          map::generator::data_type::float_t,  // spin_axis1,
+          map::generator::data_type::float_t,  // spin_axis2,
+          map::generator::data_type::float_t,  // spin_rate,
+          map::generator::data_type::float_t,  // base_elevation,
+          map::generator::data_type::uint_t    // oceanic
+        });
+        
+        ASSERT(index == debug::entities::plate);
+      }
+      
+      {
+        const size_t index = ctx->container->set_entity_template({
+          map::generator::data_type::float_t,  // plate0_movement,
+          map::generator::data_type::float_t,  // plate0_movement1,
+          map::generator::data_type::float_t,  // plate0_movement2,
+          map::generator::data_type::float_t,  // plate1_movement,
+          map::generator::data_type::float_t,  // plate1_movement1,
+          map::generator::data_type::float_t,  // plate1_movement2,
+        });
+        
+        ASSERT(index == debug::entities::edge);
+      }
+      
+      {
+        const size_t index = ctx->container->set_entity_template({
+          map::generator::data_type::uint_t,  // country_index,
+          map::generator::data_type::uint_t   // title_index
+        });
+        
+        ASSERT(index == debug::entities::province);
+      }
+      
+      {
+        const size_t index = ctx->container->set_entity_template({});
+        ASSERT(index == debug::entities::culture);
+      }
+      
+      {
+        const size_t index = ctx->container->set_entity_template({});
+        ASSERT(index == debug::entities::country);
+      }
+      
+      {
+        const size_t index = ctx->container->set_entity_template({
+          map::generator::data_type::uint_t,  // parent
+          map::generator::data_type::uint_t,  // owner
+        });
+        
+        ASSERT(index == debug::entities::title);
+      }
     }
     
     void generate_plates(generator::context* ctx, sol::table &table) {
@@ -524,7 +633,7 @@ namespace devils_engine {
 //         utils::random_engine_st local_random;
 //         rand = &local_random;
         std::vector<next_plates_data> next_plates(plates_count);
-        utils::submit_works(ctx->pool, tiles_count, [&next_plates, &tile_plates_local] (const size_t &start, const size_t &count, const generator::context* ctx) {
+        utils::submit_works_async(ctx->pool, tiles_count, [&next_plates, &tile_plates_local] (const size_t &start, const size_t &count, const generator::context* ctx) {
           for (size_t i = start; i < start+count; ++i) {
             const auto &tile = render::unpack_data(ctx->map->get_tile(i));
             for (uint32_t j = 0; j < 6; ++j) {
@@ -548,6 +657,8 @@ namespace devils_engine {
             }
           }
         }, ctx);
+        ctx->pool->compute();
+        while (ctx->pool->working_count() != 1 || ctx->pool->tasks_count() != 0) { std::this_thread::sleep_for(std::chrono::microseconds(1)); }
         
         //ASSERT(false);
         
@@ -703,9 +814,17 @@ namespace devils_engine {
       }
       
       // это нужно организовать как функцию переключения вида карты
-      for (uint32_t i = 0; i < ctx->map->tiles_count(); ++i) {
-        ctx->map->set_tile_tectonic_plate(i, ctx->container->get_data<uint32_t>(debug::entities::tile, i, debug::properties::tile::plate_index));
-      }
+//       for (uint32_t i = 0; i < ctx->map->tiles_count(); ++i) {
+//         //ctx->map->set_tile_tectonic_plate(i, ctx->container->get_data<uint32_t>(debug::entities::tile, i, debug::properties::tile::plate_index));
+//         const uint32_t index = ctx->container->get_data<uint32_t>(debug::entities::tile, i, debug::properties::tile::plate_index);
+//         const uint32_t rand_num1 = render::lcg(index);
+//         const uint32_t rand_num2 = render::lcg(rand_num1);
+//         const uint32_t rand_num3 = render::lcg(rand_num2);
+//         const float color_r = render::lcg_normalize(rand_num1);
+//         const float color_g = render::lcg_normalize(rand_num2);
+//         const float color_b = render::lcg_normalize(rand_num3);
+//         ctx->map->set_tile_color(i, render::make_color(color_r, color_b, color_g, 1.0f));
+//       }
       
 //       std::swap(context->tile_plate_indices, tile_plates_local);
 //       std::swap(context->plate_tile_indices, plate_tiles_local);
@@ -869,9 +988,16 @@ namespace devils_engine {
         const bool oceanic = bool(ctx->container->get_data<uint32_t>(debug::entities::plate, plate_index, debug::properties::plate::oceanic));
         const float height = ctx->container->get_data<float>(debug::entities::plate, plate_index, debug::properties::plate::base_elevation);
         ASSERT(plate_index < plates_count);
-        ctx->map->set_tile_tectonic_plate(i, oceanic);
+//         ctx->map->set_tile_tectonic_plate(i, oceanic);
         ctx->map->set_tile_height(i, height);
-        ctx->map->set_tile_biom(i, plate_index);
+//         ctx->map->set_tile_biom(i, plate_index);
+        const uint32_t rand_num1 = render::lcg(plate_index);
+        const uint32_t rand_num2 = render::lcg(rand_num1);
+        const uint32_t rand_num3 = render::lcg(rand_num2);
+        const float color_r = render::lcg_normalize(rand_num1);
+        const float color_g = render::lcg_normalize(rand_num2);
+        const float color_b = render::lcg_normalize(rand_num3);
+        ctx->map->set_tile_color(i, render::make_color(color_r, color_b, color_g, 1.0f));
         water_counter += uint32_t(oceanic);
       }
       
@@ -891,7 +1017,7 @@ namespace devils_engine {
       const uint32_t plates_count = table["final_plates_count"];
       //const uint32_t plates_count = table["userdata"]["plates_count"];
       
-      utils::submit_works(ctx->pool, ctx->map->tiles_count(), [&pairs_set, &mutex, plates_count] (const size_t &start, const size_t &count, const generator::context* context) {
+      utils::submit_works_async(ctx->pool, ctx->map->tiles_count(), [&pairs_set, &mutex, plates_count] (const size_t &start, const size_t &count, const generator::context* context) {
         for (size_t i = start; i < start+count; ++i) {
           const uint32_t current_tile_index = i;
           const uint32_t current_plate_index = context->container->get_data<uint32_t>(debug::entities::tile, current_tile_index, debug::properties::tile::plate_index);
@@ -914,6 +1040,8 @@ namespace devils_engine {
           }
         }
       }, ctx);
+      ctx->pool->compute();
+      while (ctx->pool->working_count() != 1 || ctx->pool->tasks_count() != 0) { std::this_thread::sleep_for(std::chrono::microseconds(1)); }
       
       PRINT_VAR("edges count", pairs_set.size())
       
@@ -958,7 +1086,7 @@ namespace devils_engine {
       const size_t size = ctx->container->entities_count(debug::entities::edge);
       std::vector<boundary_stress_t> boundary_stresses(size);
       const uint32_t plates_count = table["final_plates_count"];
-      utils::submit_works(ctx->pool, size, [&boundary_stresses, plates_count] (const size_t &start, const size_t &count, const generator::context* context) {
+      utils::submit_works_async(ctx->pool, size, [&boundary_stresses, plates_count] (const size_t &start, const size_t &count, const generator::context* context) {
         for (size_t i = start; i < start+count; ++i) {
           const auto &childs = context->container->get_childs(debug::entities::edge, i);
           ASSERT(childs.size() == 2);
@@ -1020,6 +1148,8 @@ namespace devils_engine {
           boundary_stresses[i] = stress;
         }
       }, ctx);
+      ctx->pool->compute();
+      while (ctx->pool->working_count() != 1 || ctx->pool->tasks_count() != 0) { std::this_thread::sleep_for(std::chrono::microseconds(1)); }
       
       for (size_t i = 0; i < boundary_stresses.size(); ++i) {
         ctx->container->set_data<glm::vec3>(debug::entities::edge, i, debug::properties::edge::plate0_movement, glm::vec3(boundary_stresses[i].pressure_vector));
@@ -1272,7 +1402,7 @@ namespace devils_engine {
       std::mutex m1;
       std::mutex m2;
       std::mutex m3;
-      utils::submit_works(ctx->pool, ctx->container->entities_count(debug::entities::edge), [&mountains, &oceans, &coastlines, &m1, &m2, &m3] (const size_t &start, const size_t &count, const generator::context* ctx) {
+      utils::submit_works_async(ctx->pool, ctx->container->entities_count(debug::entities::edge), [&mountains, &oceans, &coastlines, &m1, &m2, &m3] (const size_t &start, const size_t &count, const generator::context* ctx) {
 //         const size_t start = 0;
 //         const size_t count = context->boundary_edges.size();
         for (size_t i = start; i < start+count; ++i) {
@@ -1368,6 +1498,8 @@ namespace devils_engine {
           }
         }
       }, ctx);
+      ctx->pool->compute();
+      while (ctx->pool->working_count() != 1 || ctx->pool->tasks_count() != 0) { std::this_thread::sleep_for(std::chrono::microseconds(1)); }
       
       std::vector<std::pair<uint32_t, float>> mountain_dist(ctx->map->tiles_count(), std::make_pair(UINT32_MAX, 100000.0f));
       std::vector<std::pair<uint32_t, float>> ocean_dist(ctx->map->tiles_count(), std::make_pair(UINT32_MAX, 100000.0f));
@@ -1411,7 +1543,7 @@ namespace devils_engine {
       }
       
       const uint32_t plates_count = table["final_plates_count"];
-      utils::submit_works(ctx->pool, plates_count, [&mountains, &oceans, &coastlines, &ocean_stops, &coastline_stops, &stops, &mountain_dist, &ocean_dist, &coastline_dist] (const size_t &start, const size_t &count, const generator::context* context) {
+      utils::submit_works_async(ctx->pool, plates_count, [&mountains, &oceans, &coastlines, &ocean_stops, &coastline_stops, &stops, &mountain_dist, &ocean_dist, &coastline_dist] (const size_t &start, const size_t &count, const generator::context* context) {
 //         const size_t start = 0;
 //         const size_t count = context->plate_tile_indices.size();
         for (size_t i = start; i < start+count; ++i) {
@@ -1423,6 +1555,8 @@ namespace devils_engine {
           assign_distance_field(context, plate_index, coastlines, stops, &eng, coastline_dist);
         }
       }, ctx);
+      ctx->pool->compute();
+      while (ctx->pool->working_count() != 1 || ctx->pool->tasks_count() != 0) { std::this_thread::sleep_for(std::chrono::microseconds(1)); }
       
       for (size_t i = 0; i < edge_index_dist.size(); ++i) {
         ctx->container->set_data<uint32_t>(debug::entities::tile, i, debug::properties::tile::edge_index, edge_index_dist[i].first);
@@ -1455,7 +1589,7 @@ namespace devils_engine {
       // но тем не менее здесь есть еще что изменить
       
       const float noise_multiplier_local = table["userdata"]["noise_multiplier"];
-      utils::submit_works(ctx->pool, ctx->map->tiles_count(), [&tile_elevation, noise_multiplier_local] (const size_t &start, const size_t &count, const generator::context* context) {
+      utils::submit_works_async(ctx->pool, ctx->map->tiles_count(), [&tile_elevation, noise_multiplier_local] (const size_t &start, const size_t &count, const generator::context* context) {
         for (size_t i = start; i < start+count; ++i) {
           float accum_elevation = 0.0f;
           uint32_t elevations_count = 0;
@@ -1627,6 +1761,8 @@ namespace devils_engine {
           tile_elevation[i] = accum_elevation / float(elevations_count);
         }
       }, ctx);
+      ctx->pool->compute();
+      while (ctx->pool->working_count() != 1 || ctx->pool->tasks_count() != 0) { std::this_thread::sleep_for(std::chrono::microseconds(1)); }
       
       for (size_t i = 0; i < tile_elevation.size(); ++i) {
         ctx->container->set_data<float>(debug::entities::tile, i, debug::properties::tile::elevation, tile_elevation[i]);
@@ -1646,7 +1782,7 @@ namespace devils_engine {
       const float water_ground_ratio_local = table["userdata"]["blur_water_ratio"];
       const uint32_t iterations_count = table["userdata"]["blur_iterations_count"];
       for (uint32_t i = 0; i < iterations_count; ++i) {
-        utils::submit_works(ctx->pool, ctx->map->tiles_count(), [&new_elevations, new_old_ratio_local, water_ground_ratio_local] (
+        utils::submit_works_async(ctx->pool, ctx->map->tiles_count(), [&new_elevations, new_old_ratio_local, water_ground_ratio_local] (
           const size_t &start, 
           const size_t &count, 
           const generator::context* context
@@ -1682,6 +1818,8 @@ namespace devils_engine {
             
           }
         }, ctx);
+        ctx->pool->compute();
+        while (ctx->pool->working_count() != 1 || ctx->pool->tasks_count() != 0) { std::this_thread::sleep_for(std::chrono::microseconds(1)); }
         
         for (size_t i = 0; i < ctx->map->tiles_count(); ++i) {
           ctx->container->set_data<float>(debug::entities::tile, i, debug::properties::tile::elevation, new_elevations[i]);
@@ -1717,7 +1855,7 @@ namespace devils_engine {
       std::atomic<int32_t> max_height_mem(-INT32_MAX);
       
       std::vector<float> new_data(ctx->container->entities_count(entity_id));
-      utils::submit_works(ctx->pool, ctx->container->entities_count(entity_id), [&min_height_mem, &max_height_mem, entity_id, property_id] (const size_t &start, const size_t &count, const generator::context* context) {
+      utils::submit_works_async(ctx->pool, ctx->container->entities_count(entity_id), [&min_height_mem, &max_height_mem, entity_id, property_id] (const size_t &start, const size_t &count, const generator::context* context) {
         for (size_t i = start; i < start+count; ++i) {
           const uint32_t tile_index = i;
           //float data = new_data[tile_index];
@@ -1730,8 +1868,10 @@ namespace devils_engine {
           update_minimum(min_height_mem, glm::floatBitsToInt(data));
         }
       }, ctx);
+      ctx->pool->compute();
+      while (ctx->pool->working_count() != 1 || ctx->pool->tasks_count() != 0) { std::this_thread::sleep_for(std::chrono::microseconds(1)); }
       
-      utils::submit_works(ctx->pool, ctx->container->entities_count(entity_id), [&min_height_mem, &max_height_mem, entity_id, property_id] (const size_t &start, const size_t &count, const generator::context* context) {
+      utils::submit_works_async(ctx->pool, ctx->container->entities_count(entity_id), [&min_height_mem, &max_height_mem, entity_id, property_id] (const size_t &start, const size_t &count, const generator::context* context) {
         float max_height = glm::intBitsToFloat(max_height_mem);
         float min_height = glm::intBitsToFloat(min_height_mem);
         //max_height = max_height - 1.0f;
@@ -1764,6 +1904,8 @@ namespace devils_engine {
           //new_data[tile_index] = new_tile_height;
         }
       }, ctx);
+      ctx->pool->compute();
+      while (ctx->pool->working_count() != 1 || ctx->pool->tasks_count() != 0) { std::this_thread::sleep_for(std::chrono::microseconds(1)); }
       
       //std::swap(*data_container, new_data);
     }
@@ -1797,7 +1939,7 @@ namespace devils_engine {
         tile_heat[i] = 0.1f * tile_heat[i];
       }
       
-      utils::submit_works(ctx->pool, ctx->map->tiles_count(), [&tile_heat] (const size_t &start, const size_t &count, const generator::context* context) {
+      utils::submit_works_async(ctx->pool, ctx->map->tiles_count(), [&tile_heat] (const size_t &start, const size_t &count, const generator::context* context) {
         for (size_t i = start; i < start+count; ++i) {
           const uint32_t current_tile = i;
           const float height = context->container->get_data<float>(debug::entities::tile, current_tile, debug::properties::tile::elevation);
@@ -1838,6 +1980,8 @@ namespace devils_engine {
 //           }
         }
       }, ctx);
+      ctx->pool->compute();
+      while (ctx->pool->working_count() != 1 || ctx->pool->tasks_count() != 0) { std::this_thread::sleep_for(std::chrono::microseconds(1)); }
       
       for (size_t i = 0; i < tile_heat.size(); ++i) {
         ctx->container->set_data<float>(debug::entities::tile, i, debug::properties::tile::heat, tile_heat[i]);
@@ -1974,8 +2118,78 @@ namespace devils_engine {
       (void)table;
       utils::time_log log("creating biomes");
       
+      global::get<core::seasons>()->biomes[render::biome_ocean] = {
+        { GPU_UINT_MAX }, render::make_color(0.2f, 0.2f, 0.8f, 1.0f), { GPU_UINT_MAX }, { GPU_UINT_MAX },
+        0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f
+      };
+      
+      global::get<core::seasons>()->biomes[render::biome_ocean_glacier] = {
+        { GPU_UINT_MAX }, render::make_color(0.8f, 0.8f, 1.0f, 1.0f), { GPU_UINT_MAX }, { GPU_UINT_MAX },
+        0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f
+      };
+      
+      global::get<core::seasons>()->biomes[render::biome_desert] = {
+        { GPU_UINT_MAX }, render::make_color(1.0f, 1.0f, 0.0f, 1.0f), { GPU_UINT_MAX }, { GPU_UINT_MAX },
+        0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f
+      };
+      
+      global::get<core::seasons>()->biomes[render::biome_rain_forest] = {
+        { GPU_UINT_MAX }, render::make_color(0.0f, 0.7f, 0.2f, 1.0f), { GPU_UINT_MAX }, { GPU_UINT_MAX },
+        0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f
+      };
+      
+      global::get<core::seasons>()->biomes[render::biome_rocky] = {
+        { GPU_UINT_MAX }, render::make_color(1.0f, 0.2f, 0.2f, 1.0f), { GPU_UINT_MAX }, { GPU_UINT_MAX },
+        0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f
+      };
+      
+      global::get<core::seasons>()->biomes[render::biome_plains] = {
+        { GPU_UINT_MAX }, render::make_color(0.0f, 1.0f, 0.2f, 1.0f), { GPU_UINT_MAX }, { GPU_UINT_MAX },
+        0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f
+      };
+      
+      global::get<core::seasons>()->biomes[render::biome_swamp] = {
+        { GPU_UINT_MAX }, render::make_color(0.0f, 1.0f, 0.0f, 1.0f), { GPU_UINT_MAX }, { GPU_UINT_MAX },
+        0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f
+      };
+      
+      global::get<core::seasons>()->biomes[render::biome_grassland] = {
+        { GPU_UINT_MAX }, render::make_color(0.2f, 1.0f, 0.2f, 1.0f), { GPU_UINT_MAX }, { GPU_UINT_MAX },
+        0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f
+      };
+      
+      global::get<core::seasons>()->biomes[render::biome_deciduous_forest] = {
+        { GPU_UINT_MAX }, render::make_color(0.0f, 0.8f, 0.0f, 1.0f), { GPU_UINT_MAX }, { GPU_UINT_MAX },
+        0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f
+      };
+      
+      global::get<core::seasons>()->biomes[render::biome_tundra] = {
+        { GPU_UINT_MAX }, render::make_color(0.6f, 0.6f, 0.6f, 1.0f), { GPU_UINT_MAX }, { GPU_UINT_MAX },
+        0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f
+      };
+      
+      global::get<core::seasons>()->biomes[render::biome_land_glacier] = {
+        { GPU_UINT_MAX }, render::make_color(0.9f, 0.9f, 0.9f, 1.0f), { GPU_UINT_MAX }, { GPU_UINT_MAX },
+        0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f
+      };
+      
+      global::get<core::seasons>()->biomes[render::biome_conifer_forest] = {
+        { GPU_UINT_MAX }, render::make_color(0.0f, 0.6f, 0.0f, 1.0f), { GPU_UINT_MAX }, { GPU_UINT_MAX },
+        0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f
+      };
+      
+      global::get<core::seasons>()->biomes[render::biome_mountain] = {
+        { GPU_UINT_MAX }, render::make_color(0.2f, 0.2f, 0.2f, 1.0f), { GPU_UINT_MAX }, { GPU_UINT_MAX },
+        0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f
+      };
+      
+      global::get<core::seasons>()->biomes[render::biome_snowy_mountain] = {
+        { GPU_UINT_MAX }, render::make_color(1.0f, 1.0f, 1.0f, 1.0f), { GPU_UINT_MAX }, { GPU_UINT_MAX },
+        0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f
+      };
+      
       std::vector<uint32_t> tile_biome(ctx->map->tiles_count(), UINT32_MAX);
-      utils::submit_works(ctx->pool, ctx->map->tiles_count(), [&tile_biome] (const size_t &start, const size_t &count, const generator::context* ctx) {
+      utils::submit_works_async(ctx->pool, ctx->map->tiles_count(), [&tile_biome] (const size_t &start, const size_t &count, const generator::context* ctx) {
         for (size_t i = start; i < start+count; ++i) {
           const uint32_t tile_index = i;
           const float elevation = ctx->container->get_data<float>(debug::entities::tile, tile_index, debug::properties::tile::elevation);
@@ -1984,11 +2198,16 @@ namespace devils_engine {
           const uint32_t biome_id = calcutate_biome2(elevation, temperature, wetness);
           ASSERT(biome_id != UINT32_MAX);
           tile_biome[tile_index] = biome_id;
+          global::get<core::seasons>()->set_tile_biome(tile_index, biome_id);
         }
       }, ctx);
+      ctx->pool->compute();
+      while (ctx->pool->working_count() != 1 || ctx->pool->tasks_count() != 0) { std::this_thread::sleep_for(std::chrono::microseconds(1)); }
       
       for (size_t i = 0; i < tile_biome.size(); ++i) {
         ctx->container->set_data<uint32_t>(debug::entities::tile, i, debug::properties::tile::biome, tile_biome[i]);
+        const auto &biome = global::get<core::seasons>()->biomes[tile_biome[i]];
+        ctx->map->set_tile_color(i, biome.color);
       }
     }
     
@@ -2314,7 +2533,7 @@ namespace devils_engine {
       
       while (current_iter < max_iterations) { // current_plates_count > min_plates_count &&
         std::vector<next_provinces_data> next_provinces(province_tiles.size());
-        utils::submit_works(ctx->pool, ctx->map->tiles_count(), [&next_provinces, &tile_provinces_local] (const size_t &start, const size_t &count, const generator::context* context) {
+        utils::submit_works_async(ctx->pool, ctx->map->tiles_count(), [&next_provinces, &tile_provinces_local] (const size_t &start, const size_t &count, const generator::context* context) {
           for (size_t i = start; i < start+count; ++i) {
             const auto &tile = render::unpack_data(context->map->get_tile(i));
             const uint32_t province1 = tile_provinces_local[i].first;
@@ -2340,6 +2559,8 @@ namespace devils_engine {
             }
           }
         }, ctx);
+        ctx->pool->compute();
+        while (ctx->pool->working_count() != 1 || ctx->pool->tasks_count() != 0) { std::this_thread::sleep_for(std::chrono::microseconds(1)); }
         
         uint32_t max_tiles_count = 0;
         uint32_t min_tiles_count = 121523152;
@@ -2975,7 +3196,7 @@ namespace devils_engine {
       const uint32_t provinces_count = ctx->container->entities_count(debug::entities::province);
       std::vector<neighbours_set> province_n(provinces_count);
       
-      utils::submit_works(ctx->pool, ctx->map->tiles_count(), [&province_n] (const size_t &start, const size_t &count, const generator::context* context) {
+      utils::submit_works_async(ctx->pool, ctx->map->tiles_count(), [&province_n] (const size_t &start, const size_t &count, const generator::context* context) {
         for (size_t i = start; i < start+count; ++i) {
           const uint32_t current_tile_index = i;
           const uint32_t current_province_index = context->container->get_data<uint32_t>(debug::entities::tile, current_tile_index, debug::properties::tile::province_index);
@@ -3011,6 +3232,8 @@ namespace devils_engine {
           }
         }
       }, ctx);
+      ctx->pool->compute();
+      while (ctx->pool->working_count() != 1 || ctx->pool->tasks_count() != 0) { std::this_thread::sleep_for(std::chrono::microseconds(1)); }
       
       // вот у меня есть все соседи на земле
       // теперь мне нужно найти соседей по морю так, чтобы я не брал соседей на континенте
@@ -3020,7 +3243,7 @@ namespace devils_engine {
       // ее нужно както посчитать
       const uint32_t max_neighbour_dist = 5;
       
-      utils::submit_works(ctx->pool, provinces_count, [&province_n, &table] (const size_t &start, const size_t &count, const generator::context* context) {
+      utils::submit_works_async(ctx->pool, provinces_count, [&province_n, &table] (const size_t &start, const size_t &count, const generator::context* context) {
         for (size_t i = start; i < start+count; ++i) {
           const uint32_t current_province_index = i;
           
@@ -3082,6 +3305,8 @@ namespace devils_engine {
           // ???
         }
       }, ctx);
+      ctx->pool->compute();
+      while (ctx->pool->working_count() != 1 || ctx->pool->tasks_count() != 0) { std::this_thread::sleep_for(std::chrono::microseconds(1)); }
       
       //context->province_neighbours.resize(context->province_tile.size());
       for (size_t i = 0; i < province_n.size(); ++i) {
@@ -3104,7 +3329,13 @@ namespace devils_engine {
         const auto &province_neighbours = ctx->container->get_province_neighbours(i);
         for (size_t index = 0; index < province_neighbours.size(); ++index) {
           const auto n = province_neighbour(province_neighbours[index]);
-          province_ns[index] = n.index();
+          province_ns[index+1] = n.index();
+        }
+        
+        auto province_t = province.create("tiles");
+        const auto &province_tiles = ctx->container->get_childs(debug::entities::province, i);
+        for (const uint32_t &tile_index : province_tiles) {
+          province_t.add(tile_index);
         }
         
         province["max_cities_count"] = 1;
@@ -3953,11 +4184,28 @@ namespace devils_engine {
         }
       }
       
+      size_t new_country_counter = 0;
       ctx->container->set_entity_count(debug::entities::country, country_province.size());
       for (size_t i = 0; i < country_province.size(); ++i) {
         auto &childs = ctx->container->get_childs(debug::entities::country, i);
+        if (country_province[i].empty()) continue;
         std::swap(childs, country_province[i]);
+        ++new_country_counter;
       }
+      
+      const uint32_t tiles_count_color = ctx->container->entities_count(debug::entities::tile);
+      for (size_t i = 0; i < tiles_count_color; ++i) {
+        const uint32_t country_index = ctx->container->get_data<uint32_t>(debug::entities::tile, i, debug::properties::tile::country_index);
+        const uint32_t rand_num1 = render::lcg(country_index);
+        const uint32_t rand_num2 = render::lcg(rand_num1);
+        const uint32_t rand_num3 = render::lcg(rand_num2);
+        const float color_r = render::lcg_normalize(rand_num1);
+        const float color_g = render::lcg_normalize(rand_num2);
+        const float color_b = render::lcg_normalize(rand_num3);
+        ctx->map->set_tile_color(i, render::make_color(color_r, color_b, color_g, 1.0f));
+      }
+      
+      table["country_count"] = new_country_counter;
       
       // меня уже более менее устраивает результат
       // на следующих шагах мне нужно как использовать историю сгененированную здесь
@@ -3996,6 +4244,22 @@ namespace devils_engine {
       // 
       
       // нужно создать где то рядом персонажей и раздать им титулы
+    }
+    
+    void gen_title_color(sol::table &table, const uint32_t &index) {
+      const uint32_t val1 = render::lcg(index);
+      const uint32_t val2 = render::lcg(val1);
+      const uint32_t val3 = render::lcg(val2);
+      const uint32_t val4 = render::lcg(val3);
+      const uint32_t val5 = render::lcg(val4);
+      const float f1 = render::lcg_normalize(val1);
+      const float f2 = render::lcg_normalize(val2);
+      const float f3 = render::lcg_normalize(val3);
+      const float f4 = render::lcg_normalize(val4);
+      const float f5 = render::lcg_normalize(val5);
+      table["main_color"] = render::make_color(f1, f2, f3, 1.0f).container;
+      table["border_color1"] = render::make_color(f2, f3, f4, 1.0f).container;
+      table["border_color2"] = render::make_color(f3, f4, f5, 1.0f).container;
     }
     
     void generate_titles(generator::context* ctx, sol::table &table) {
@@ -5027,6 +5291,12 @@ namespace devils_engine {
       table["duchy_offset"] = duchy_offset;
       table["baron_offset"] = baron_offset;
       
+      PRINT_VAR("emp_offset  ", emp_offset)
+      PRINT_VAR("king_offset ", king_offset)
+      PRINT_VAR("duchy_offset", duchy_offset)
+      PRINT_VAR("baron_offset", baron_offset)
+      PRINT_VAR("titles_count", titles_counter)
+      
       for (size_t empire_index = 0; empire_index < empires.size(); ++empire_index) {
         ctx->container->set_data<uint32_t>(debug::entities::title, emp_offset + empire_index, debug::properties::title::parent, UINT32_MAX);
         ctx->container->set_data<uint32_t>(debug::entities::title, emp_offset + empire_index, debug::properties::title::owner, UINT32_MAX);
@@ -5045,6 +5315,7 @@ namespace devils_engine {
       for (size_t baron_index = 0; baron_index < ctx->container->entities_count(debug::entities::province); ++baron_index) {
         ctx->container->set_data<uint32_t>(debug::entities::title, baron_offset + baron_index, debug::properties::title::parent, UINT32_MAX);
         ctx->container->set_data<uint32_t>(debug::entities::title, baron_offset + baron_index, debug::properties::title::owner, UINT32_MAX);
+        
       }
       
       // начинаем создавать титулы
@@ -5055,7 +5326,15 @@ namespace devils_engine {
         const std::string emp_id = "imperial" + std::to_string(empire_index) + "_title";
         emp_title["id"] = emp_id;
         emp_title["type"] = core::titulus::type::imperial;
-        utils::add_title(emp_title);
+        gen_title_color(emp_title, empire_index);
+        const size_t emp_dbg_index = utils::add_title(emp_title);
+        
+        if (empire_index == 14) {
+          PRINT_VAR("emp_dbg_index", emp_dbg_index)
+          PRINT_VAR("emp_id", emp_id)
+        }
+        
+//         ASSERT(empire_index != 14);
 //         emp_title["count"] = empires[empire_index].size();
 //         table[emp_id] = emp_title;
         
@@ -5077,6 +5356,7 @@ namespace devils_engine {
           king_title["id"] = king_id;
           king_title["type"] = core::titulus::type::king;
           king_title["parent"] = emp_id;
+          gen_title_color(king_title, king_offset + kingdom_index);
           utils::add_title(king_title);
 //           king_title["count"] = kingdoms[kingdom_index].size();
 //           table[king_id] = king_title;
@@ -5095,6 +5375,7 @@ namespace devils_engine {
             duchy_title["id"] = duchy_id;
             duchy_title["type"] = core::titulus::type::duke;
             duchy_title["parent"] = king_id;
+            gen_title_color(duchy_title, duchy_offset + duchy_index);
             utils::add_title(duchy_title);
 //             duchy_title["count"] = duchies[duchy_index].size();
 //             table[duchy_id] = duchy_title;
@@ -5118,6 +5399,7 @@ namespace devils_engine {
               baron_title["type"] = core::titulus::type::baron;
               baron_title["parent"] = duchy_id;
               baron_title["province"] = baron_index;
+              gen_title_color(baron_title, baron_offset + baron_index);
               utils::add_title(baron_title);
 //               table[baron_id] = baron_title; // при 5000 провинций получится около 6000 титулов (в общем минус оперативная память)
               
@@ -5147,6 +5429,7 @@ namespace devils_engine {
         const std::string king_id = "king" + std::to_string(kingdom_index) + "_title";
         king_title["id"] = king_id;
         king_title["type"] = core::titulus::type::king;
+        gen_title_color(king_title, king_offset + kingdom_index);
         utils::add_title(king_title);
         
         for (size_t i = 0; i < kingdoms[kingdom_index].size(); ++i) {
@@ -5160,6 +5443,7 @@ namespace devils_engine {
           duchy_title["id"] = duchy_id;
           duchy_title["type"] = core::titulus::type::duke;
           duchy_title["parent"] = king_id;
+          gen_title_color(duchy_title, duchy_offset + duchy_index);
           utils::add_title(duchy_title);
           
           ctx->container->set_data<uint32_t>(debug::entities::title, duchy_offset + duchy_index, debug::properties::title::parent, king_offset + kingdom_index);
@@ -5176,6 +5460,7 @@ namespace devils_engine {
             baron_title["type"] = core::titulus::type::baron;
             baron_title["parent"] = duchy_id;
             baron_title["province"] = baron_index;
+            gen_title_color(baron_title, baron_offset + baron_index);
             utils::add_title(baron_title);
             
             ctx->container->set_data<uint32_t>(debug::entities::title, baron_offset + baron_index, debug::properties::title::parent, duchy_offset + duchy_index);
@@ -5191,6 +5476,7 @@ namespace devils_engine {
         const std::string duchy_id = "duke" + std::to_string(duchy_index) + "_title";
         duchy_title["id"] = duchy_id;
         duchy_title["type"] = core::titulus::type::duke;
+        gen_title_color(duchy_title, duchy_offset + duchy_index);
         utils::add_title(duchy_title);
         
         for (size_t c = 0; c < duchies[duchy_index].size(); ++c) {
@@ -5205,6 +5491,7 @@ namespace devils_engine {
           baron_title["type"] = core::titulus::type::baron;
           baron_title["parent"] = duchy_id;
           baron_title["province"] = baron_index;
+          gen_title_color(baron_title, baron_offset + baron_index);
           utils::add_title(baron_title);
           
           ctx->container->set_data<uint32_t>(debug::entities::title, baron_offset + baron_index, debug::properties::title::parent, duchy_offset + duchy_index);
@@ -5220,6 +5507,7 @@ namespace devils_engine {
         baron_title["id"] = baron_id;
         baron_title["type"] = core::titulus::type::baron;
         baron_title["province"] = baron_index;
+        gen_title_color(baron_title, baron_offset + baron_index);
         utils::add_title(baron_title);
       }
 
@@ -5273,34 +5561,62 @@ namespace devils_engine {
       const uint32_t king_offset = table["king_offset"];
       const uint32_t duchy_offset = table["duchy_offset"];
       const uint32_t baron_offset = table["baron_offset"];
+      const uint32_t real_country_count = table["country_count"];
+      PRINT_VAR("real_country_count", real_country_count)
+      ASSERT(real_country_count != 0);
       
       const uint32_t titles_count = ctx->container->entities_count(debug::entities::title);
       const uint32_t country_count = ctx->container->entities_count(debug::entities::country);
-      std::vector<std::vector<size_t>> owners(country_count, std::vector<size_t>(ctx->container->entities_count(debug::entities::title), 0));
-      for (size_t i = 0; i < country_count; ++i) {
+      std::vector<std::vector<size_t>> owners(real_country_count, std::vector<size_t>(ctx->container->entities_count(debug::entities::title), 0));
+      size_t country_index_counter = 0;
+      for (size_t i = 0; i < country_count; ++i) { // некоторые страны пустые, почему то я не очистил их 
         const uint32_t country_index = i;
         const auto &childs = ctx->container->get_childs(debug::entities::country, country_index);
+        //ASSERT(!childs.empty());
+        if (childs.empty()) continue;
+        
+        const uint32_t real_country_index = country_index_counter;
         for (const uint32_t province_index : childs) {
           const uint32_t baron_index = baron_offset + province_index;
-          const uint32_t duchy_index = ctx->container->get_data<uint32_t>(debug::entities::title, baron_index, debug::properties::title::parent);
-          const uint32_t king_index = ctx->container->get_data<uint32_t>(debug::entities::title, duchy_index, debug::properties::title::parent);
-          const uint32_t emp_index = ctx->container->get_data<uint32_t>(debug::entities::title, king_index, debug::properties::title::parent);
+          ++owners[real_country_index][baron_index];
           
-          ++owners[country_index][baron_index];
-          ++owners[country_index][duchy_index];
-          ++owners[country_index][king_index];
-          ++owners[country_index][emp_index];
+          const uint32_t duchy_index = ctx->container->get_data<uint32_t>(debug::entities::title, baron_index, debug::properties::title::parent);
+          if (duchy_index == UINT32_MAX) continue;
+          ++owners[real_country_index][duchy_index];
+          
+          const uint32_t king_index = ctx->container->get_data<uint32_t>(debug::entities::title, duchy_index, debug::properties::title::parent);
+          if (king_index == UINT32_MAX) continue;
+          ++owners[real_country_index][king_index];
+          
+          const uint32_t emp_index = ctx->container->get_data<uint32_t>(debug::entities::title, king_index, debug::properties::title::parent);
+          if (emp_index == UINT32_MAX) continue;
+          ++owners[real_country_index][emp_index];
         }
+        
+        ++country_index_counter;
       }
+      
+//       ASSERT(counter == 0); // у меня остаются пустые страны после генерации
       
       // так и что это нам дает? у нас теперь есть количество провинций принадлежащих титулам разных уровней
       // так мы по идее можем определиться с титулом верхнего уровня
       // я так понимаю нужно сделать тип в контейнере
       
-      std::vector<std::vector<uint32_t>> titles(country_count);
+//       size_t computed_province_count = 0;
+//       for (size_t i = 0; i < country_count; ++i) {
+//         const uint32_t country_index = i;
+//         const auto &childs = ctx->container->get_childs(debug::entities::country, country_index);
+//         computed_province_count += childs.size();
+//       }
+//       PRINT(computed_province_count)
+//       ASSERT(computed_province_count == ctx->container->entities_count(debug::entities::province));
+      
+      country_index_counter = 0;
+      std::vector<std::vector<uint32_t>> titles(real_country_count);
       for (size_t i = 0; i < country_count; ++i) {
         const uint32_t country_index = i;
         const auto &childs = ctx->container->get_childs(debug::entities::country, country_index);
+        if (childs.empty()) continue;
 //         auto character_table = global::get<sol::state>()->create_table();
 //         character_table.create("family");
 //         character_table.create("stats");
@@ -5308,13 +5624,16 @@ namespace devils_engine {
 //         auto titles_table = character_table.create("titles");
 //         auto character = ctx->container->create_character();
         
-        const auto &title_owned = owners[country_index];
+        const uint32_t real_country_index = country_index_counter;
+        ++country_index_counter;
+        const auto &title_owned = owners[real_country_index];
         for (uint32_t j = baron_offset; j < titles_count; ++j) {
           if (title_owned[j] == 0) continue;
-          ASSERT(ctx->container->get_data<uint32_t>(debug::entities::title, j, debug::properties::title::owner) == UINT32_MAX);
+          const uint32_t tmp = ctx->container->get_data<uint32_t>(debug::entities::title, j, debug::properties::title::owner);  
+          ASSERT(tmp == UINT32_MAX);
           //const uint32_t baron_index = j - baron_offset; // так у меня нет информации о том что это за титул
-          titles[country_index].push_back(j);
-          ctx->container->set_data<uint32_t>(debug::entities::title, j, debug::properties::title::owner, country_index);
+          titles[real_country_index].push_back(j);
+          ctx->container->set_data<uint32_t>(debug::entities::title, j, debug::properties::title::owner, real_country_index);
         }
         
         // числа 20/70 на 5000 провок выглядят более менее прилично (выглядит прилично и для 1600 на более мелкой карте)
@@ -5338,8 +5657,8 @@ namespace devils_engine {
           }
           
           // один титул?
-          ctx->container->set_data<uint32_t>(debug::entities::title, duchy_offset + index, debug::properties::title::owner, country_index);
-          titles[country_index].push_back(duchy_offset + index);
+          ctx->container->set_data<uint32_t>(debug::entities::title, duchy_offset + index, debug::properties::title::owner, real_country_index);
+          titles[real_country_index].push_back(duchy_offset + index);
           
           continue;
         }
@@ -5358,8 +5677,8 @@ namespace devils_engine {
           }
           
           // один титул?
-          ctx->container->set_data<uint32_t>(debug::entities::title, king_offset + index, debug::properties::title::owner, country_index);
-          titles[country_index].push_back(king_offset + index);
+          ctx->container->set_data<uint32_t>(debug::entities::title, king_offset + index, debug::properties::title::owner, real_country_index);
+          titles[real_country_index].push_back(king_offset + index);
         }
         
         if (childs.size() >= emp_start) {
@@ -5382,8 +5701,8 @@ namespace devils_engine {
           // раскидывать титулы (точнее искать максимальный титул для государства)
           // но пока так
           
-          ctx->container->set_data<uint32_t>(debug::entities::title, emp_offset + index, debug::properties::title::owner, country_index);
-          titles[country_index].push_back(emp_offset + index);
+          ctx->container->set_data<uint32_t>(debug::entities::title, emp_offset + index, debug::properties::title::owner, real_country_index);
+          titles[real_country_index].push_back(emp_offset + index);
         }
         
         // че с герцогствами? случайно их раскидать? выглядит идея еще ничего
@@ -5405,8 +5724,8 @@ namespace devils_engine {
           const bool prob = ctx->random->probability(final);
           if (!prob) continue;
           
-          titles[country_index].push_back(j);
-          ctx->container->set_data<uint32_t>(debug::entities::title, j, debug::properties::title::owner, country_index);
+          titles[real_country_index].push_back(j);
+          ctx->container->set_data<uint32_t>(debug::entities::title, j, debug::properties::title::owner, real_country_index);
         }
         
         // хочется все бросить и сделать просто через создание конкретных объектов
@@ -5500,7 +5819,7 @@ namespace devils_engine {
       // теперь у нас есть как то раскиданные титулы государству, как раскидывать по персонажам?
       // раскидывать нужно пока не кончатся провинции, отдавать в одни руки числом до герцогского (то есть от 1 до 6)
       // (но 5-6 очень редко)
-      for (size_t i = 0; i < country_count; ++i) {
+      for (size_t i = 0; i < real_country_count; ++i) {
         const uint32_t country_index = i;
         // сначало нужно посчитать что имеем
         std::unordered_set<uint32_t> baron_titles;
@@ -5520,41 +5839,54 @@ namespace devils_engine {
         // первым делаем господина, у господина должны быть все самые высокие титулы и покрайней мере одно герцогство
         size_t liege_index = SIZE_MAX;
         {
-          std::vector<uint32_t> final_titles;
-          final_titles.insert(final_titles.end(), king_titles.begin(), king_titles.end());
-          final_titles.insert(final_titles.end(), emp_titles.begin(), emp_titles.end());
-          king_titles.clear();
-          emp_titles.clear();
-          
-          // герцогство выбираем случайно (герцогств может и не быть)
-          const uint32_t rand_index = ctx->random->index(duchy_titles.size());
-          const uint32_t duchy_index = duchy_titles[rand_index];
-          final_titles.push_back(duchy_index);
-          duchy_titles[rand_index] = duchy_titles.back();
-          duchy_titles.pop_back();
-          
-          ASSERT(duchy_index >= duchy_offset && duchy_index < baron_offset);
-          
-          // собираем баронские титулы
           const uint32_t baron_titles_count = ctx->random->index(5) + 2; // от 2 до 6 (более менее нормальное распределение)
-          const auto &duchy_childs = ctx->container->get_childs(debug::entities::title, duchy_index);
           uint32_t counter = 0;
-          // нам бы раздать случайные (?) соседние провки, 
-//           for (size_t j = 0; j < duchy_childs.size(); ++j) {
-//             const uint32_t baron_index = duchy_childs[j];
-//             
-//           }
-          
           uint32_t choosen_baron_index = UINT32_MAX;
-          while (choosen_baron_index == UINT32_MAX) {
-            const uint32_t rand_index = ctx->random->index(duchy_childs.size());
-            const uint32_t baron_title_index = duchy_childs[rand_index];
-            if (ctx->container->get_data<uint32_t>(debug::entities::title, baron_title_index, debug::properties::title::owner) != country_index) continue;
-            auto itr = baron_titles.find(baron_title_index);
-            if (itr == baron_titles.end()) continue;
+          std::vector<uint32_t> final_titles;
+          if (!duchy_titles.empty()) {
+            final_titles.insert(final_titles.end(), king_titles.begin(), king_titles.end());
+            final_titles.insert(final_titles.end(), emp_titles.begin(), emp_titles.end());
+            king_titles.clear();
+            emp_titles.clear();
             
-            baron_titles.erase(itr);
-            choosen_baron_index = baron_title_index;
+            // герцогство выбираем случайно (герцогств может и не быть)
+            const uint32_t rand_index = ctx->random->index(duchy_titles.size());
+            const uint32_t duchy_index = duchy_titles[rand_index];
+            final_titles.push_back(duchy_index);
+            duchy_titles[rand_index] = duchy_titles.back();
+            duchy_titles.pop_back();
+            
+            ASSERT(duchy_index >= duchy_offset && duchy_index < baron_offset);
+            
+            // собираем баронские титулы
+            const auto &duchy_childs = ctx->container->get_childs(debug::entities::title, duchy_index);
+            // нам бы раздать случайные (?) соседние провки, 
+  //           for (size_t j = 0; j < duchy_childs.size(); ++j) {
+  //             const uint32_t baron_index = duchy_childs[j];
+  //             
+  //           }
+            
+            while (choosen_baron_index == UINT32_MAX) {
+              const uint32_t rand_index = ctx->random->index(duchy_childs.size());
+              const uint32_t baron_title_index = duchy_childs[rand_index];
+              if (ctx->container->get_data<uint32_t>(debug::entities::title, baron_title_index, debug::properties::title::owner) != country_index) continue;
+              auto itr = baron_titles.find(baron_title_index);
+              if (itr == baron_titles.end()) continue;
+              
+              baron_titles.erase(itr);
+              choosen_baron_index = baron_title_index;
+            }
+          } else {
+            while (choosen_baron_index == UINT32_MAX) {
+              auto itr = baron_titles.begin();
+              const uint32_t baron_title_index = *itr;
+              if (ctx->container->get_data<uint32_t>(debug::entities::title, baron_title_index, debug::properties::title::owner) != country_index) continue;
+              //auto itr = baron_titles.find(baron_title_index);
+              //if (itr == baron_titles.end()) continue;
+              
+              baron_titles.erase(itr);
+              choosen_baron_index = baron_title_index;
+            }
           }
           
           ASSERT(choosen_baron_index != UINT32_MAX);
@@ -5567,9 +5899,9 @@ namespace devils_engine {
             const auto &neighbors = ctx->container->get_province_neighbours(province_index);
             size_t index = 0;
             while (counter < baron_titles_count && index < neighbors.size()) {
-              const uint32_t new_index = neighbors[index];
+              const auto new_index = province_neighbour(neighbors[index]);
               ++index;
-              const uint32_t baron_index = new_index + baron_offset;
+              const uint32_t baron_index = new_index.index() + baron_offset;
               if (ctx->container->get_data<uint32_t>(debug::entities::title, baron_index, debug::properties::title::owner) != country_index) continue;
               auto itr = baron_titles.find(baron_index);
               if (itr == baron_titles.end()) continue;
@@ -5580,13 +5912,17 @@ namespace devils_engine {
             }
             
             // если не добрали то че делаем
-            ASSERT(last_title != final_titles.back());
+            // у нас может быть ситуация когда у государства очень мало провинций
+            // тогда нужно выходить, че делать то
+            //ASSERT(last_title != final_titles.back());
+            if (last_title == final_titles.back()) break;
             last_title = final_titles.back();
           }
           
           auto character_table = global::get<sol::state>()->create_table();
           character_table.create("family");
-          character_table.create("stats");
+          auto char_stats = character_table.create("stats");
+          char_stats[core::character_stats::money] = 400.0f;
           character_table.create("hero_stats");
           character_table["male"] = true;
           character_table["dead"] = false;
@@ -5612,6 +5948,10 @@ namespace devils_engine {
           liege_index = utils::add_character(character_table);
         }
         
+        // тут может быть что соседние вассалы разобрали все баронские титулы у текущего герцогства
+        // что делать в этом случае? 2 варианта: либо мы считаем что это герцогство не создано
+        // либо мы гарантируем каждому владельцу титула что у него будет баронство
+        
         // теперь делаем вассалов, у них либо герцогство либо несколько просто владений
         // поэтому сначало раздаем герцогства, так то у этих челиков могут быть свои вассалы
         // возможно нужно взять больше баронских титулов
@@ -5624,9 +5964,22 @@ namespace devils_engine {
           std::vector<uint32_t> final_titles;
           final_titles.push_back(duchy_index);
           
+          // пока что наверное выберем первый вариант
+          size_t baron_counter = 0;
+          const auto &duchy_childs = ctx->container->get_childs(debug::entities::title, duchy_index);
+          for (size_t i = 0; i < duchy_childs.size(); ++i) {
+            const uint32_t index = duchy_childs[i];
+            if (ctx->container->get_data<uint32_t>(debug::entities::title, index, debug::properties::title::owner) != country_index) continue;
+            auto itr = baron_titles.find(index);
+            if (itr == baron_titles.end()) continue;
+            
+            ++baron_counter;
+          }
+          
+          if (baron_counter == 0) continue;
+          
           // собираем баронские титулы (нужно взять больше для того чтобы сделать вассалов вассала)
           const uint32_t baron_titles_count = ctx->random->index(5) + 2; // от 2 до 6 (более менее нормальное распределение)
-          const auto &duchy_childs = ctx->container->get_childs(debug::entities::title, duchy_index);
           uint32_t counter = 0;
           // нам бы раздать случайные (?) соседние провки, 
 //           for (size_t j = 0; j < duchy_childs.size(); ++j) {
@@ -5656,9 +6009,9 @@ namespace devils_engine {
             const auto &neighbors = ctx->container->get_province_neighbours(province_index);
             size_t index = 0;
             while (counter < baron_titles_count && index < neighbors.size()) {
-              const uint32_t new_index = neighbors[index];
+              const auto new_index = province_neighbour(neighbors[index]);
               ++index;
-              const uint32_t baron_index = new_index + baron_offset;
+              const uint32_t baron_index = new_index.index() + baron_offset;
               if (ctx->container->get_data<uint32_t>(debug::entities::title, baron_index, debug::properties::title::owner) != country_index) continue;
               auto itr = baron_titles.find(baron_index);
               if (itr == baron_titles.end()) continue;
@@ -5675,7 +6028,8 @@ namespace devils_engine {
 
           auto character_table = global::get<sol::state>()->create_table();
           character_table.create("family");
-          character_table.create("stats");
+          auto char_stats = character_table.create("stats");
+          char_stats[core::character_stats::money] = 400.0f;
           character_table.create("hero_stats");
           character_table["male"] = true;
           character_table["dead"] = false;
@@ -5714,9 +6068,9 @@ namespace devils_engine {
             const auto &neighbors = ctx->container->get_province_neighbours(province_index);
             size_t index = 0;
             while (counter < baron_titles_count && index < neighbors.size()) {
-              const uint32_t new_index = neighbors[index];
+              const auto new_index = province_neighbour(neighbors[index]);
               ++index;
-              const uint32_t baron_index = new_index + baron_offset;
+              const uint32_t baron_index = new_index.index() + baron_offset;
               if (ctx->container->get_data<uint32_t>(debug::entities::title, baron_index, debug::properties::title::owner) != country_index) continue;
               auto itr = baron_titles.find(baron_index);
               if (itr == baron_titles.end()) continue;
@@ -5733,7 +6087,8 @@ namespace devils_engine {
 
           auto character_table = global::get<sol::state>()->create_table();
           character_table.create("family");
-          character_table.create("stats");
+          auto char_stats = character_table.create("stats");
+          char_stats[core::character_stats::money] = 400.0f;
           character_table.create("hero_stats");
           character_table["male"] = true;
           character_table["dead"] = false;
@@ -5945,8 +6300,24 @@ namespace devils_engine {
         city_title["type"] = core::titulus::type::city;
 //         city_title["parent"] = baron_id; // родителя найдем тогда из провинции
 //         city_title["city"] = baron_index;
+        gen_title_color(city_title, i);
         utils::add_title(city_title);
       }
+      
+      global::get<utils::calendar>()->set_start_date(false, 865, 3, 25);
+      global::get<utils::calendar>()->set_current_date(false, 865, 3, 25);
+      global::get<utils::calendar>()->add_month_data({SIZE_MAX, 31}); // январь
+      global::get<utils::calendar>()->add_month_data({SIZE_MAX, 29});
+      global::get<utils::calendar>()->add_month_data({SIZE_MAX, 31});
+      global::get<utils::calendar>()->add_month_data({SIZE_MAX, 30});
+      global::get<utils::calendar>()->add_month_data({SIZE_MAX, 31}); // май
+      global::get<utils::calendar>()->add_month_data({SIZE_MAX, 30});
+      global::get<utils::calendar>()->add_month_data({SIZE_MAX, 31});
+      global::get<utils::calendar>()->add_month_data({SIZE_MAX, 31});
+      global::get<utils::calendar>()->add_month_data({SIZE_MAX, 30}); // сентябрь
+      global::get<utils::calendar>()->add_month_data({SIZE_MAX, 31});
+      global::get<utils::calendar>()->add_month_data({SIZE_MAX, 30});
+      global::get<utils::calendar>()->add_month_data({SIZE_MAX, 31});
     }
     
     

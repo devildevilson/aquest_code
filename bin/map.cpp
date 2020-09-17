@@ -2,6 +2,8 @@
 #include "render/yavf.h"
 #include "render/shared_structures.h"
 #include "figures.h"
+#include <thread>
+#include <chrono>
 
 namespace devils_engine {
   namespace core {
@@ -324,6 +326,8 @@ namespace devils_engine {
     }
     
     void map::set_tile_data(const devils_engine::map::tile* tile, const uint32_t &index) {
+      while (s == status::rendering) { std::this_thread::sleep_for(std::chrono::microseconds(1)); }
+      
       auto tiles_arr = reinterpret_cast<render::light_map_tile_t*>(tiles->ptr());
       const render::map_tile_t map_tile{
         tile->index,
@@ -337,11 +341,13 @@ namespace devils_engine {
     }
     
     void map::set_point_data(const glm::vec3 &point, const uint32_t &index) {
+      while (s == status::rendering) { std::this_thread::sleep_for(std::chrono::microseconds(1)); }
       auto points_arr = reinterpret_cast<glm::vec4*>(points->ptr());
       points_arr[index] = glm::vec4(point, 1.0f);
     }
     
     void map::set_tile_indices(const uint32_t &triangle_index, const glm::uvec3 &points, const std::vector<uint32_t> &indices, const uint32_t &offset, const uint32_t &count, const bool has_pentagon) {
+      while (s == status::rendering) { std::this_thread::sleep_for(std::chrono::microseconds(1)); }
       auto triangles_arr = reinterpret_cast<render::packed_fast_triangle_t*>(accel_triangles->ptr());
       auto tile_indices_arr = reinterpret_cast<uint32_t*>(tile_indices->ptr()); // важно не забыть как мы храним индексы
       
@@ -358,6 +364,7 @@ namespace devils_engine {
     }
     
     void map::flush_data() {
+      while (s == status::rendering) { std::this_thread::sleep_for(std::chrono::microseconds(1)); }
       auto accel_triangles_gpu = device->create(yavf::BufferCreateInfo::buffer(accel_triangles->info().size, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT), VMA_MEMORY_USAGE_GPU_ONLY);
       auto tile_indices_gpu = device->create(yavf::BufferCreateInfo::buffer(tile_indices->info().size, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT), VMA_MEMORY_USAGE_GPU_ONLY);
       
@@ -410,19 +417,37 @@ namespace devils_engine {
       }
     }
     
-    void map::set_tile_biom(const uint32_t &tile_index, const uint32_t &biom_index) {
+//     void map::set_tile_biom(const uint32_t &tile_index, const uint32_t &biom_index) {
+//       auto tiles_arr = reinterpret_cast<render::light_map_tile_t*>(tiles->ptr());
+//       tiles_arr[tile_index].tile_indices.y = biom_index;
+//     }
+//     
+//     void map::set_tile_tectonic_plate(const uint32_t &tile_index, const uint32_t &tectonic_plate_index) {
+//       auto tiles_arr = reinterpret_cast<render::light_map_tile_t*>(tiles->ptr());
+//       tiles_arr[tile_index].tile_indices.z = tectonic_plate_index;
+//     }
+
+    void map::set_tile_color(const uint32_t &tile_index, const render::color_t &color) {
+      while (s == status::rendering) { std::this_thread::sleep_for(std::chrono::microseconds(1)); }
       auto tiles_arr = reinterpret_cast<render::light_map_tile_t*>(tiles->ptr());
-      tiles_arr[tile_index].tile_indices.y = biom_index;
+      tiles_arr[tile_index].tile_indices.z = color.container;
     }
     
-    void map::set_tile_tectonic_plate(const uint32_t &tile_index, const uint32_t &tectonic_plate_index) {
+    void map::set_tile_texture(const uint32_t &tile_index, const render::image_t &texture) {
+      while (s == status::rendering) { std::this_thread::sleep_for(std::chrono::microseconds(1)); }
       auto tiles_arr = reinterpret_cast<render::light_map_tile_t*>(tiles->ptr());
-      tiles_arr[tile_index].tile_indices.z = tectonic_plate_index;
+      tiles_arr[tile_index].tile_indices.y = texture.container;
     }
     
     void map::set_tile_height(const uint32_t &tile_index, const float &tile_hight) {
+      while (s == status::rendering) { std::this_thread::sleep_for(std::chrono::microseconds(1)); }
       auto tiles_arr = reinterpret_cast<render::light_map_tile_t*>(tiles->ptr());
       tiles_arr[tile_index].tile_indices.w = glm::floatBitsToUint(tile_hight);
+    }
+    
+    float map::get_tile_height(const uint32_t &tile_index) const {
+      auto tiles_arr = reinterpret_cast<render::light_map_tile_t*>(tiles->ptr());
+      return glm::uintBitsToFloat(tiles_arr[tile_index].tile_indices.w);
     }
     
     enum map::status map::status() const {

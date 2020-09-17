@@ -233,6 +233,9 @@ namespace devils_engine {
       size_t adjective_str;
       titulus* next;
       titulus* prev;
+      render::color_t main_color;    // цвет будет использоваться на глобальной карте для страны
+      render::color_t border_color1; // думаю двух цветов достаточно, нужно посмотреть как сделано в цк2
+      render::color_t border_color2;
       // герб
       
       // думаю что в титулах маленькие контейнеры потребуются
@@ -406,11 +409,20 @@ namespace devils_engine {
       void remove_vassal(character* vassal);
       
       void add_courtier(character* courtier);
+      void add_courtier_raw(character* courtier);
       void remove_courtier(character* courtier);
       character* get_last_courtier() const;
       
       void add_prisoner(character* prisoner);
       void remove_prisoner(character* prisoner);
+      
+      void add_concubine(character* concubine);
+      void add_concubine_raw(character* concubine);
+      void remove_concubine(character* concubine);
+      
+//       void add_child(character* child); // ребенок должен быть чей то
+      void add_child_raw(character* child); // возможно будет только эта функция 
+//       void remove_child(character* child); // врядли вообще когда нибудь я этим воспользуюсь
       
       // это работа я так понимаю с базовыми статами, текущие обновляются в другом месте
       // может ли вообще потребоваться из луа что то изменять?
@@ -529,10 +541,12 @@ namespace devils_engine {
       titulus* get_last_title() const;
       
       void add_vassal(faction* vassal);
+      void add_vassal_raw(faction* vassal);
       void remove_vassal(faction* vassal);
       faction* get_last_vassal() const;
       
       void add_prisoner(character* prisoner);
+      void add_prisoner_raw(character* prisoner);
       void remove_prisoner(character* prisoner);
       character* get_last_prisoner() const;
     };

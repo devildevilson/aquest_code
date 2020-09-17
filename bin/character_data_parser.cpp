@@ -4,9 +4,146 @@
 #include "utils/table_container.h"
 #include "utils/string_container.h"
 #include "core_context.h"
+#include "utils/serializator_helper.h"
 
 namespace devils_engine {
   namespace utils {
+    const check_table_value character_table[] = {
+      {
+        "family",
+        check_table_value::type::array_t,
+        check_table_value::value_required, 0, 
+        {
+          {
+            "parents",
+            check_table_value::type::array_t,
+            0, 2, 
+            {
+              {
+                STATS_ARRAY,
+                check_table_value::type::int_t,
+                0, UINT32_MAX, {}
+              }
+            }
+          },
+          {
+            "owner",
+            check_table_value::type::int_t,
+            0, 0, {}
+          },
+          {
+            "consort",
+            check_table_value::type::int_t,
+            0, 0, {}
+          },
+          {
+            "dynasty",
+            check_table_value::type::int_t,
+            0, 0, {}
+          }
+        }
+      },
+      {
+        "relations",
+        check_table_value::type::array_t,
+        0, 0, 
+        {
+          {
+            "friends",
+            check_table_value::type::array_t,
+            0, core::character::relations::max_game_friends, 
+            {
+              {
+                STATS_ARRAY,
+                check_table_value::type::int_t,
+                0, UINT32_MAX, {}
+              }
+            }
+          },
+          {
+            "rivals",
+            check_table_value::type::array_t,
+            0, core::character::relations::max_game_rivals, 
+            {
+              {
+                STATS_ARRAY,
+                check_table_value::type::int_t,
+                0, UINT32_MAX, {}
+              }
+            }
+          },
+          {
+            "lovers",
+            check_table_value::type::array_t,
+            0, core::character::relations::max_game_lovers, 
+            {
+              {
+                STATS_ARRAY,
+                check_table_value::type::int_t,
+                0, UINT32_MAX, {}
+              }
+            }
+          }
+        }
+      },
+      {
+        "hero_stats",
+        check_table_value::type::array_t,
+        0, core::hero_stats::count, 
+        {
+          {
+            STATS_ARRAY,
+            check_table_value::type::int_t,
+            core::offsets::hero_stats, core::offsets::hero_stats + core::hero_stats::count, {}
+          }
+        }
+      },
+      {
+        "hidden_religion",
+        check_table_value::type::string_t,
+        0, 0, {}
+      },
+      {
+        "suzerain",
+        check_table_value::type::int_t,
+        0, 0, {}
+      },
+      {
+        "imprisoner",
+        check_table_value::type::int_t,
+        0, 0, {}
+      },
+      {
+        "stats",
+        check_table_value::type::array_t,
+        check_table_value::value_required, 0, 
+        {
+          {
+            STATS_ARRAY,
+            check_table_value::type::int_t,
+            core::offsets::character_stats, core::offsets::faction_stats + core::faction_stats::count, {}
+          }
+        }
+      },
+      {
+        "liege",
+        check_table_value::type::int_t,
+        0, 0, {}
+      },
+      {
+        "titles",
+        check_table_value::type::array_t,
+        0, 0, 
+        {
+          {
+            ID_ARRAY,
+            check_table_value::type::string_t,
+            0, 0, {}
+          }
+        }
+      }
+    };
+    
     size_t add_character(const sol::table &table) {
       return global::get<utils::table_container>()->add_table(core::structure::character, table);
     }
@@ -23,11 +160,31 @@ namespace devils_engine {
       global::get<utils::table_container>()->set_table(core::structure::character, index, table);
     }
     
-    bool validate_character(const sol::table &table) {
-      return true;
+    bool validate_character(const size_t &index, const sol::table &table) {
+      size_t counter = 0;
+      auto id = table["id"];
+      std::string check_str;
+      if (id.valid()) {
+        check_str = id;
+      } else {
+        check_str = "character" + std::to_string(index);
+      }
+      
+      const size_t size = sizeof(character_table) / sizeof(character_table[0]);
+      recursive_check(check_str, "character", table, nullptr, character_table, size, counter);
+      
+      return counter == 0;
     }
     
-    bool validate_character_and_save(sol::this_state lua, const sol::table &table) {
+    bool validate_character_and_save(const size_t &index, sol::this_state lua, const sol::table &table, utils::world_serializator* container) {
+      const bool ret = validate_character(index, table);
+      if (!ret) return false;
+      
+      sol::state_view state(lua);
+      auto str = table_to_string(lua, table, sol::table());
+      if (str.empty()) throw std::runtime_error("Could not serialize character table");
+      container->add_data(core::structure::character, std::move(str));
+      
       return true;
     }
     

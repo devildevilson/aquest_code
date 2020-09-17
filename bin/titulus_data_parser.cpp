@@ -4,18 +4,67 @@
 #include "utils/table_container.h"
 #include "utils/string_container.h"
 #include "core_context.h"
+#include "utils/serializator_helper.h"
 
 namespace devils_engine {
   namespace utils {
+    const check_table_value title_table[] = {
+      {
+        "type",
+        check_table_value::type::int_t,
+        check_table_value::value_required, static_cast<int32_t>(core::titulus::type::count), {}
+      },
+      {
+        "parent",
+        check_table_value::type::string_t,
+        0, 0, {}
+      },
+      {
+        "main_color",
+        check_table_value::type::int_t,
+        check_table_value::value_required, UINT32_MAX, {}
+      }, 
+      {
+        "border_color1",
+        check_table_value::type::int_t,
+        check_table_value::value_required, UINT32_MAX, {}
+      }, 
+      {
+        "border_color2",
+        check_table_value::type::int_t,
+        check_table_value::value_required, UINT32_MAX, {}
+      }, 
+    };
+    
     size_t add_title(const sol::table &table) {
       return global::get<utils::table_container>()->add_table(core::structure::titulus, table);
     }
     
-    bool validate_title(const sol::table &table) {
-      return true;
+    bool validate_title(const size_t &index, const sol::table &table) {
+      size_t counter = 0;
+      auto id = table["id"];
+      std::string check_str;
+      if (id.valid()) {
+        check_str = id;
+      } else {
+        check_str = "title" + std::to_string(index);
+      }
+      
+      const size_t size = sizeof(title_table) / sizeof(title_table[0]);
+      recursive_check(check_str, "title", table, nullptr, title_table, size, counter);
+      
+      return counter == 0;
     }
     
-    bool validate_title_and_save(sol::this_state lua, const sol::table &table) {
+    bool validate_title_and_save(const size_t &index, sol::this_state lua, const sol::table &table, utils::world_serializator* container) {
+      const bool ret = validate_title(index, table);
+      if (!ret) return false;
+      
+      sol::state_view state(lua);
+      auto str = table_to_string(lua, table, sol::table());
+      if (str.empty()) throw std::runtime_error("Could not serialize title table");
+      container->add_data(core::structure::titulus, std::move(str));
+      
       return true;
     }
     
@@ -24,7 +73,7 @@ namespace devils_engine {
       auto ctx = global::get<core::context>();
       
       // мы создаем титул до городов? наверное сначало город, тогда нам можно не заполнять детей
-      title->id = table["id"];
+      //title->id = table["id"];
       
       {
         const int32_t lua_val = table["type"];
@@ -92,6 +141,24 @@ namespace devils_engine {
         }
         
         default: throw std::runtime_error("Bad title type");
+      }
+      
+      {
+        const uint32_t col = table["main_color"];
+        render::color_t c{col};
+        title->main_color = c;
+      }
+      
+      {
+        const uint32_t col = table["border_color1"];
+        render::color_t c{col};
+        title->border_color1 = c;
+      }
+      
+      {
+        const uint32_t col = table["border_color2"];
+        render::color_t c{col};
+        title->border_color2 = c;
       }
       
       // добавится герб

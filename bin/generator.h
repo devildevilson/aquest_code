@@ -34,6 +34,7 @@ namespace devils_engine {
       std::string hint() const;
       size_t size() const;
       size_t current() const;
+      bool finished() const;
     private:
       std::vector<part> parts;
       std::atomic<size_t> current_part;

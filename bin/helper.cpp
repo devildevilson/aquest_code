@@ -22,19 +22,27 @@ namespace devils_engine {
       //sizeof(systems::generator<map::generator_context>) + 
       sizeof(core::map) + 
       sizeof(interface::context) +
-      sizeof(map::generator::container) + 
+//       sizeof(map::generator::container) + 
       sizeof(utils::interface) +
       sizeof(core::context) +
-      sizeof(utils::data_string_container)
+      sizeof(utils::data_string_container) +
+      sizeof(utils::sequential_string_container) +
+      sizeof(utils::calendar) +
+      sizeof(systems::ai) +
+      sizeof(core::seasons)
     ),
     graphics_container(nullptr),
     map(nullptr),
     //map_generator(nullptr),
     context(nullptr),
-    map_container(nullptr),
+//     map_container(nullptr),
     interface(nullptr),
     core_context(nullptr),
-    string_container(nullptr)
+    string_container(nullptr),
+    sequential_string_container(nullptr),
+    game_calendar(nullptr),
+    ai_systems(nullptr),
+    seasons(nullptr)
   {}
 
   system_container_t::~system_container_t() {
@@ -42,10 +50,80 @@ namespace devils_engine {
     //RELEASE_CONTAINER_DATA(map_generator)
     RELEASE_CONTAINER_DATA(graphics_container)
     RELEASE_CONTAINER_DATA(context)
-    RELEASE_CONTAINER_DATA(map_container)
+//     RELEASE_CONTAINER_DATA(map_container)
     RELEASE_CONTAINER_DATA(interface)
     RELEASE_CONTAINER_DATA(core_context)
     RELEASE_CONTAINER_DATA(string_container)
+    RELEASE_CONTAINER_DATA(sequential_string_container)
+    RELEASE_CONTAINER_DATA(game_calendar)
+    RELEASE_CONTAINER_DATA(ai_systems)
+    RELEASE_CONTAINER_DATA(seasons)
+  }
+  
+  game_map_data::game_map_data() : 
+    container({
+      sizeof(core::map),
+      sizeof(systems::render),
+      sizeof(core::context),
+      sizeof(core::seasons),
+      sizeof(systems::ai)
+    }),
+    map(nullptr),
+    render(nullptr),
+    core_context(nullptr),
+    seasons(nullptr),
+    ai_systems(nullptr)
+  {}
+  
+  game_map_data::~game_map_data() {
+    RELEASE_CONTAINER_DATA(map)
+    RELEASE_CONTAINER_DATA(core_context)
+    RELEASE_CONTAINER_DATA(seasons)
+    RELEASE_CONTAINER_DATA(ai_systems)
+  }
+  
+  bool game_map_data::is_init() const { return map != nullptr; }
+  
+  game_battle_data::game_battle_data() :
+    container({
+      sizeof(core::map),
+      sizeof(systems::render),
+      sizeof(core::context),
+      sizeof(core::seasons),
+      sizeof(systems::ai)
+    }),
+//     map(nullptr),
+//     core_context(nullptr),
+//     seasons(nullptr),
+    ai_systems(nullptr)
+  {}
+  
+  game_battle_data::~game_battle_data() {
+//     RELEASE_CONTAINER_DATA(map)
+//     RELEASE_CONTAINER_DATA(core_context)
+//     RELEASE_CONTAINER_DATA(seasons)
+    RELEASE_CONTAINER_DATA(ai_systems)
+  }
+  
+  game_encounter_data::game_encounter_data() : 
+    container({
+      sizeof(core::map),
+      sizeof(systems::render),
+      sizeof(core::context),
+      sizeof(core::seasons),
+      sizeof(systems::ai)
+    }),
+//     map(nullptr),
+//     core_context(nullptr),
+//     seasons(nullptr),
+    ai_systems(nullptr)
+  {}
+  
+  game_encounter_data::~game_encounter_data() {
+//     RELEASE_CONTAINER_DATA(map)
+//     RELEASE_CONTAINER_DATA(core_context)
+//     RELEASE_CONTAINER_DATA(seasons)
+    RELEASE_CONTAINER_DATA(ai_systems)
   }
 
   glfw_t::glfw_t() {
@@ -80,7 +158,7 @@ namespace devils_engine {
     
     array[dirname+1] = '\0'; // путь до папки
     
-    std::cout << array << "\n";
+//     std::cout << array << "\n";
     
     const std::string dir_path = std::string(array);
     
@@ -102,28 +180,39 @@ namespace devils_engine {
     const utils::id map_move = utils::id::get("map_move");
     input::set_key(GLFW_MOUSE_BUTTON_RIGHT, map_move);
     
-    const utils::id plates_render_mode = utils::id::get("plates_render_mode");
-    const utils::id elevation_render_mode = utils::id::get("elevation_render_mode");
-    const utils::id temperature_render_mode = utils::id::get("temperature_render_mode");
-    const utils::id moisture_render_mode = utils::id::get("moisture_render_mode");
-    const utils::id biome_render_mode = utils::id::get("biome_render_mode");
-    const utils::id cultures_render_mode = utils::id::get("cultures_render_mode");
-    const utils::id provinces_render_mode = utils::id::get("provinces_render_mode");
-    const utils::id countries_render_mode = utils::id::get("countries_render_mode");
-    const utils::id test_data_render_mode1 = utils::id::get("test_data_render_mode1");
-    const utils::id test_data_render_mode2 = utils::id::get("test_data_render_mode2");
-    const utils::id test_data_render_mode3 = utils::id::get("test_data_render_mode3");
-    input::set_key(GLFW_KEY_F1, plates_render_mode);
-    input::set_key(GLFW_KEY_F2, elevation_render_mode);
-    input::set_key(GLFW_KEY_F3, temperature_render_mode);
-    input::set_key(GLFW_KEY_F4, moisture_render_mode);
-    input::set_key(GLFW_KEY_F5, biome_render_mode);
-    input::set_key(GLFW_KEY_F6, cultures_render_mode);
-    input::set_key(GLFW_KEY_F7, provinces_render_mode);
-    input::set_key(GLFW_KEY_F8, countries_render_mode);
-    input::set_key(GLFW_KEY_F9, test_data_render_mode1);
-    input::set_key(GLFW_KEY_F10, test_data_render_mode2);
-    input::set_key(GLFW_KEY_F11, test_data_render_mode3);
+    const auto biome_render_mode = utils::id::get("biome_render_mode");
+    const auto cultures_render_mode = utils::id::get("cultures_render_mode");
+    const auto culture_groups_render_mode = utils::id::get("culture_groups_render_mode");
+    const auto religions_render_mode = utils::id::get("religions_render_mode");
+    const auto religion_groups_render_mode = utils::id::get("religion_groups_render_mode");
+    const auto provinces_render_mode = utils::id::get("provinces_render_mode");
+    const auto countries_render_mode = utils::id::get("countries_render_mode");
+    const auto duchies_render_mode = utils::id::get("duchies_render_mode");
+    const auto kingdoms_render_mode = utils::id::get("kingdoms_render_mode");
+    const auto empires_render_mode = utils::id::get("empires_render_mode");
+    input::set_key(GLFW_KEY_F1, biome_render_mode);
+    input::set_key(GLFW_KEY_F2, cultures_render_mode);
+    input::set_key(GLFW_KEY_F3, culture_groups_render_mode);
+    input::set_key(GLFW_KEY_F4, religions_render_mode);
+    input::set_key(GLFW_KEY_F5, religion_groups_render_mode);
+    input::set_key(GLFW_KEY_F6, provinces_render_mode);
+    input::set_key(GLFW_KEY_F7, countries_render_mode);
+    input::set_key(GLFW_KEY_F8, duchies_render_mode);
+    input::set_key(GLFW_KEY_F9, kingdoms_render_mode);
+    input::set_key(GLFW_KEY_F10, empires_render_mode);
+    
+    const utils::id menu_next = utils::id::get("menu_next");
+    const utils::id menu_prev = utils::id::get("menu_prev");
+    const utils::id menu_increase = utils::id::get("menu_increase");
+    const utils::id menu_decrease = utils::id::get("menu_decrease");
+    const utils::id menu_choose = utils::id::get("menu_choose");
+    const utils::id escape = utils::id::get("escape");
+    input::set_key(GLFW_KEY_DOWN, menu_next);
+    input::set_key(GLFW_KEY_UP, menu_prev);
+    input::set_key(GLFW_KEY_RIGHT, menu_increase);
+    input::set_key(GLFW_KEY_LEFT, menu_decrease);
+    input::set_key(GLFW_KEY_ENTER, menu_choose);
+    input::set_key(GLFW_KEY_ESCAPE, escape);
   }
   
   float hit_sphere(const glm::vec4 &center, const float &radius, const utils::ray &r) {
@@ -149,7 +238,14 @@ namespace devils_engine {
   void mouse_input(yacs::entity* ent, const size_t &time) {
     auto camera = ent->get<components::camera>();
     auto window = global::get<render::window>();
+    auto ctx = global::get<interface::context>();
 //     auto buffers = global::get<render::buffers>();
+    
+    // если мы изначально нажали на карту то тогда двигаем
+    // иначе ничего не делаем
+    
+    static bool was_pressed_on_map = false;
+    static bool was_pressed = false;
     
     double xpos, ypos;
     static double last_xpos = 0.0, last_ypos = 0.0;
@@ -169,29 +265,38 @@ namespace devils_engine {
     const float y_move = sens * y_sens * MCS_TO_SEC(time) * delta_ypos;
     
     static const utils::id map_move = utils::id::get("map_move");
-    if (input::is_event_pressed(map_move)) {
+    const bool current_pressed = input::is_event_pressed(map_move);
+    if (current_pressed && !was_pressed) {
+      was_pressed_on_map = !nk_window_is_any_hovered(&ctx->ctx);
+    }
+    
+    if (current_pressed && was_pressed_on_map) {
       camera->move(x_move, y_move);
     }
+    
+    was_pressed = current_pressed;
+    if (!current_pressed) was_pressed_on_map = false;
   }
   
   void key_input(const size_t &time) {
     (void)time;
-    static const std::vector<utils::id> modes = {
-      utils::id::get("plates_render_mode"),
-      utils::id::get("elevation_render_mode"),
-      utils::id::get("temperature_render_mode"),
-      utils::id::get("moisture_render_mode"),
+    static const utils::id modes[] = {
       utils::id::get("biome_render_mode"),
       utils::id::get("cultures_render_mode"),
+      utils::id::get("culture_groups_render_mode"),
+      utils::id::get("religions_render_mode"),
+      utils::id::get("religion_groups_render_mode"),
       utils::id::get("provinces_render_mode"),
       utils::id::get("countries_render_mode"),
-      utils::id::get("test_data_render_mode1"),
-      utils::id::get("test_data_render_mode2"),
-      utils::id::get("test_data_render_mode3"),
+      utils::id::get("duchies_render_mode"),
+      utils::id::get("kingdoms_render_mode"),
+      utils::id::get("empires_render_mode"),
     };
     
-    auto map = global::get<core::map>();
-    auto container = global::get<map::generator::container>();
+    static_assert(sizeof(modes) / sizeof(modes[0]) == render::modes::count);
+    
+//     auto map = global::get<core::map>();
+//     auto container = global::get<map::generator::container>();
     
     {
       size_t mem = 0;
@@ -199,9 +304,9 @@ namespace devils_engine {
       while (change.id.valid()) {
         //PRINT_VAR("change id", change.id.name())
         if (change.event != input::release) {
-          for (const auto &mode_id : modes) {
-            if (change.id != mode_id) continue;
-            render::mode(mode_id.name());
+          for (size_t i = 0; i < render::modes::count; ++i) {
+            if (change.id != modes[i]) continue;
+            render::mode(static_cast<render::modes::values>(i));
           }
         }
         
@@ -213,6 +318,9 @@ namespace devils_engine {
   void zoom_input(yacs::entity* ent) {
     auto input_data = global::get<input::data>();
     auto camera = ent->get<components::camera>();
+    auto ctx = global::get<interface::context>();
+    const bool window_focus = nk_window_is_any_hovered(&ctx->ctx);
+    if (window_focus) return;
     
     // зум нужно ограничить когда мы выделяем хотя бы одно наклир окно
     
@@ -287,7 +395,9 @@ namespace devils_engine {
   }
   
   bool long_key(const int &key, const size_t &time) {
-    return input::timed_check_key(key, input::state_press, 0, SIZE_MAX, time) || input::timed_check_key(key, input::state_long_press, ONE_SECOND / 2, ONE_SECOND / 15, time);
+    UNUSED_VARIABLE(time);
+    return input::timed_check_key(key, input::state_press | input::state_double_press, 0, SIZE_MAX) || 
+      input::timed_check_key(key, input::state_long_press | input::state_double_press, ONE_SECOND / 2, ONE_SECOND / 15);
   }
   
   void next_nk_frame(const size_t &time) {
@@ -452,7 +562,7 @@ namespace devils_engine {
       //APP_VERSION,
       MAKE_VERSION(0, 0, 1),
       ENGINE_NAME,
-      EGINE_VERSION,
+      ENGINE_VERSION,
       VK_API_VERSION_1_0
     };
 
@@ -500,6 +610,7 @@ namespace devils_engine {
     auto tiles   = system->add_stage<render::tile_render>(render::tile_render::create_info{device, opt});
     auto borders = system->add_stage<render::tile_border_render>(render::tile_border_render::create_info{device, opt2});
     auto walls   = system->add_stage<render::tile_connections_render>(render::tile_connections_render::create_info{device, opt3});
+                   // тут мы можем добавить особые стартеры, которые будем отключать когда у нас полный рендер пайплайн
                    system->add_stage<render::interface_stage>(render::interface_stage::create_info{device});
                    system->add_stage<render::render_pass_end>();
 
@@ -531,104 +642,88 @@ namespace devils_engine {
   void create_map_container(system_container_t &systems) {
     systems.map = systems.container.create<core::map>(core::map::create_info{systems.graphics_container->device});
     global::get(systems.map);
+    systems.sequential_string_container = systems.container.create<utils::sequential_string_container>();
+    utils::id::set_container(systems.sequential_string_container);
+    systems.game_calendar = systems.container.create<utils::calendar>();
+    global::get(systems.game_calendar);
+//     systems.map_container = systems.container.create<map::generator::container>(); // это мы смело перемещаем в мап креатор
+//     global::get(systems.map_container);
+    systems.seasons = systems.container.create<core::seasons>();
+    global::get(systems.seasons);
     
-    const std::vector<map::generator::data_type> tiles_types = {
-      map::generator::data_type::uint_t,   //       plate_index,
-      map::generator::data_type::uint_t,   //       edge_index,
-      map::generator::data_type::float_t,   //       edge_dist,
-      map::generator::data_type::uint_t,   //       mountain_index,
-      map::generator::data_type::float_t,   //       mountain_dist,
-      map::generator::data_type::uint_t,   //       ocean_index,
-      map::generator::data_type::float_t,   //       ocean_dist,
-      map::generator::data_type::uint_t,   //       coastline_index,
-      map::generator::data_type::float_t,   //       coastline_dist,
-      map::generator::data_type::float_t,   //       elevation,
-      map::generator::data_type::float_t,   //       heat,
-      map::generator::data_type::float_t,   //       moisture,
-      map::generator::data_type::uint_t,   //       biome,
-      map::generator::data_type::uint_t,   //       province_index,
-      map::generator::data_type::uint_t,   //       culture_id,
-      map::generator::data_type::uint_t,   //       country_index
-      map::generator::data_type::uint_t,   //       test_value_uint1
-      map::generator::data_type::uint_t,   //       test_value_uint2
-      map::generator::data_type::uint_t,   //       test_value_uint3
-    };
+    // этот интерфейс наверное используем для описания интерфейса создания карты
+    // не можем потому что он не предназначен для этого, хотя мы можем хранить вместо указателя объект
+    // как записать в объект юзердату? ну по идее как то передаю в функцию юзердату
+//     create_interface(systems);
+  }
+  
+  void create_ai_systems(system_container_t &systems) {
+    const size_t container_size = sizeof(ai::build_subsystem);
+    systems.ai_systems = systems.container.create<systems::ai>(container_size);
+    systems.ai_systems->add<ai::build_subsystem>();
     
-    const std::vector<std::pair<utils::id, std::vector<map::generator::data_type>>> entities_types = {
-      std::make_pair(utils::id::get("plate"), std::vector<map::generator::data_type>{
-        map::generator::data_type::float_t,  // drift_axis,
-        map::generator::data_type::float_t,  // drift_axis1,
-        map::generator::data_type::float_t,  // drift_axis2,
-        map::generator::data_type::float_t,  // drift_rate,
-        map::generator::data_type::float_t,  // spin_axis,
-        map::generator::data_type::float_t,  // spin_axis1,
-        map::generator::data_type::float_t,  // spin_axis2,
-        map::generator::data_type::float_t,  // spin_rate,
-        map::generator::data_type::float_t,  // base_elevation,
-        map::generator::data_type::uint_t    // oceanic
-      }),
-      std::make_pair(utils::id::get("edge"), std::vector<map::generator::data_type>{
-        map::generator::data_type::float_t,  // plate0_movement,
-        map::generator::data_type::float_t,  // plate0_movement1,
-        map::generator::data_type::float_t,  // plate0_movement2,
-        map::generator::data_type::float_t,  // plate1_movement,
-        map::generator::data_type::float_t,  // plate1_movement1,
-        map::generator::data_type::float_t,  // plate1_movement2,
-      }),
-      std::make_pair(utils::id::get("province"), std::vector<map::generator::data_type>{
-        map::generator::data_type::uint_t,  // country_index,
-        map::generator::data_type::uint_t,  // title_index
-      }),
-      std::make_pair(utils::id::get("culture"), std::vector<map::generator::data_type>{}),
-      std::make_pair(utils::id::get("country"), std::vector<map::generator::data_type>{}),
-      std::make_pair(utils::id::get("title"), std::vector<map::generator::data_type>{
-        map::generator::data_type::uint_t,  // parent
-        map::generator::data_type::uint_t,  // owner
-      }),
-    };
-    
-    systems.map_container = systems.container.create<map::generator::container>(map::generator::container::create_info{tiles_types, entities_types});
-    global::get(systems.map_container);
+    global::get(systems.ai_systems);
+  }
+  
+  void create_game_state() {
+    // в идеале, сейчас сделаем иначе
+//     std::random_device dev;
+//     const uint32_t v1 = dev();
+//     const uint32_t v2 = dev();
+//     const size_t seed = (size_t(v2) << 32) | size_t(v1);
+//     global g;
+//     g.initialize_state(seed);
+    global g;
+    g.initialize_state(1);
   }
   
   map::creator* setup_map_generator() {
-    auto ptr = new map::creator;
+    auto interface = global::get<utils::interface>();
+    ASSERT(interface != nullptr);
+    auto ptr = new map::creator(interface);
+    
+    ptr->run_interface_script(global::root_directory() + "scripts/gen_part1.lua");
+    ptr->run_interface_script(global::root_directory() + "scripts/gen_part2.lua");
+    ptr->run_interface_script(global::root_directory() + "scripts/gen_part3.lua");
+    ptr->run_interface_script(global::root_directory() + "scripts/generator_progress.lua");
+    ptr->progress_interface("gen_progress");
     
     {
-      const size_t step1_size = sizeof(map::property_int) + sizeof(map::property_float);
+//       const size_t step1_size = sizeof(map::property_int) + sizeof(map::property_float);
       const std::vector<map::generator_pair> pairs = {
-        map::default_generator_pairs[0],
+//         map::default_generator_pairs[0],
         map::default_generator_pairs[1],
-        map::default_generator_pairs[2]
+        map::default_generator_pairs[2],
+        map::default_generator_pairs[3]
       };
-      auto step = ptr->create(true, step1_size, "Tectonic plates generator", pairs, "plates_render_mode");
-      auto prop1 = step->add<map::property_int>(map::property_int::create_info{
-        40,
-        199,
-        300,
-        1,
-        0.5f,
-        "Plates count",
-        "plates_count"
-      });
-      prop1->set_default_value(ptr->get_table());
-      
-      auto prop2 = step->add<map::property_float>(map::property_float::create_info{
-        0.0f,
-        0.7f,
-        1.0f,
-        0.01f,
-        0.005f,
-        "Ocean ratio",
-        "ocean_percentage"
-      });
-      prop2->set_default_value(ptr->get_table());
+      ptr->create("gen_part1_fun", pairs);
+//       auto step = ptr->create(true, step1_size, "Tectonic plates generator", pairs, "plates_render_mode");
+//       auto prop1 = step->add<map::property_int>(map::property_int::create_info{
+//         40,
+//         199,
+//         300,
+//         1,
+//         0.5f,
+//         "Plates count",
+//         "plates_count"
+//       });
+//       prop1->set_default_value(ptr->get_table());
+//       
+//       auto prop2 = step->add<map::property_float>(map::property_float::create_info{
+//         0.0f,
+//         0.7f,
+//         1.0f,
+//         0.01f,
+//         0.005f,
+//         "Ocean ratio",
+//         "ocean_percentage"
+//       });
+//       prop2->set_default_value(ptr->get_table());
     }
     
     {
-      const size_t step1_size = sizeof(map::property_int) + sizeof(map::property_float) + sizeof(map::property_float) + sizeof(map::property_float);
+//       const size_t step1_size = sizeof(map::property_int) + sizeof(map::property_float) + sizeof(map::property_float) + sizeof(map::property_float);
       const std::vector<map::generator_pair> pairs = {
-        map::default_generator_pairs[3],
         map::default_generator_pairs[4],
         map::default_generator_pairs[5],
         map::default_generator_pairs[6],
@@ -637,88 +732,93 @@ namespace devils_engine {
         map::default_generator_pairs[9],
         map::default_generator_pairs[10],
         map::default_generator_pairs[11],
-        map::default_generator_pairs[12]
+        map::default_generator_pairs[12],
+        map::default_generator_pairs[13]
       };
       
-      auto step = ptr->create(false, step1_size, "Biomes generator", pairs, "biome_render_mode");
-      auto prop1 = step->add<map::property_float>(map::property_float::create_info{
-        0.0f,
-        0.1f,
-        1.0f,
-        0.01f,
-        0.005f,
-        "Noise multiplier",
-        "noise_multiplier"
-      });
-      prop1->set_default_value(ptr->get_table());
-      
-      auto prop2 = step->add<map::property_float>(map::property_float::create_info{
-        0.0f,
-        0.7f,
-        1.0f,
-        0.01f,
-        0.005f,
-        "Blur ratio",
-        "blur_ratio"
-      });
-      prop2->set_default_value(ptr->get_table());
-      
-      auto prop3 = step->add<map::property_float>(map::property_float::create_info{
-        0.0f,
-        1.0f,
-        2.0f,
-        0.01f,
-        0.005f,
-        "Water blur ratio",
-        "blur_water_ratio"
-      });
-      prop3->set_default_value(ptr->get_table());
-      
-      auto prop4 = step->add<map::property_int>(map::property_int::create_info{
-        0,
-        2,
-        5,
-        1,
-        0.05f,
-        "Blur iterations count",
-        "blur_iterations_count"
-      });
-      prop4->set_default_value(ptr->get_table());
+      ptr->create("gen_part2_fun", pairs);
+//       auto step = ptr->create(false, step1_size, "Biomes generator", pairs, "biome_render_mode");
+//       auto prop1 = step->add<map::property_float>(map::property_float::create_info{
+//         0.0f,
+//         0.1f,
+//         1.0f,
+//         0.01f,
+//         0.005f,
+//         "Noise multiplier",
+//         "noise_multiplier"
+//       });
+//       prop1->set_default_value(ptr->get_table());
+//       
+//       auto prop2 = step->add<map::property_float>(map::property_float::create_info{
+//         0.0f,
+//         0.7f,
+//         1.0f,
+//         0.01f,
+//         0.005f,
+//         "Blur ratio",
+//         "blur_ratio"
+//       });
+//       prop2->set_default_value(ptr->get_table());
+//       
+//       auto prop3 = step->add<map::property_float>(map::property_float::create_info{
+//         0.0f,
+//         1.0f,
+//         2.0f,
+//         0.01f,
+//         0.005f,
+//         "Water blur ratio",
+//         "blur_water_ratio"
+//       });
+//       prop3->set_default_value(ptr->get_table());
+//       
+//       auto prop4 = step->add<map::property_int>(map::property_int::create_info{
+//         0,
+//         2,
+//         5,
+//         1,
+//         0.05f,
+//         "Blur iterations count",
+//         "blur_iterations_count"
+//       });
+//       prop4->set_default_value(ptr->get_table());
     }
     
     {
-      const size_t step1_size = sizeof(map::property_int) + sizeof(map::property_int);
+//       const size_t step1_size = sizeof(map::property_int) + sizeof(map::property_int);
       const std::vector<map::generator_pair> pairs = {
-        map::default_generator_pairs[13],
         map::default_generator_pairs[14],
         map::default_generator_pairs[15],
         map::default_generator_pairs[16],
         map::default_generator_pairs[17],
         map::default_generator_pairs[18],
+        map::default_generator_pairs[19],
+        map::default_generator_pairs[20],
+        map::default_generator_pairs[21],
       };
       
-      auto step = ptr->create(false, step1_size, "Countries generator", pairs, "countries_render_mode");
-      auto prop1 = step->add<map::property_int>(map::property_int::create_info{
-        1000,
-        4000,
-        5000,
-        50,
-        float(5000 - 1000) / 400.0f,
-        "Province count",
-        "provinces_count"
-      });
-      prop1->set_default_value(ptr->get_table());
-      
-      auto prop2 = step->add<map::property_int>(map::property_int::create_info{
-        200,
-        300,
-        1000,
-        10,
-        float(1000 - 200) / 400.0f,
-        "History iterations count",
-        "history_iterations_count"
-      });
-      prop2->set_default_value(ptr->get_table());
+      ptr->create("gen_part3_fun", pairs);
+//       auto step = ptr->create(false, step1_size, "Countries generator", pairs, "countries_render_mode");
+//       auto prop1 = step->add<map::property_int>(map::property_int::create_info{
+//         1000,
+//         4000,
+//         5000,
+//         50,
+//         float(5000 - 1000) / 400.0f,
+//         "Province count",
+//         "provinces_count"
+//       });
+//       prop1->set_default_value(ptr->get_table());
+//       
+//       auto prop2 = step->add<map::property_int>(map::property_int::create_info{
+//         200,
+//         300,
+//         1000,
+//         10,
+//         float(1000 - 200) / 400.0f,
+//         "History iterations count",
+//         "history_iterations_count"
+//       });
+//       prop2->set_default_value(ptr->get_table());
     }
     
     return ptr;
@@ -734,148 +834,260 @@ namespace devils_engine {
   // эта часть полностью изменится, для некоторых данных нужно будет сгенерировать безье текст
   // 
   void setup_rendering_modes(render::mode_container &container) {
-    container.insert(std::make_pair("plates_render_mode", [] () {
-      global::get<render::updater>()->set_render_mode(1);
-      global::get<render::updater>()->set_water_mode(0);
-      global::get<render::updater>()->update();
-      auto container = global::get<map::generator::container>();
+    container[render::modes::biome] = [] () {
+      auto ptr = global::get<core::seasons>();
       auto map = global::get<core::map>();
-      
-      for (size_t i = 0; i < container->entities_count(map::debug::entities::tile); ++i) {
-        const uint32_t data = container->get_data<uint32_t>(map::debug::entities::tile, i, map::debug::properties::tile::plate_index);
-        map->set_tile_biom(i, data);
+      for (size_t i = 0; i < core::map::hex_count_d(core::map::detail_level); ++i) {
+        const auto &current_biome = ptr->biomes[ptr->get_tile_biome(i)];
+        map->set_tile_color(i, current_biome.color);
+        map->set_tile_texture(i, current_biome.texture);
       }
-    }));
+    };
     
-    container.insert(std::make_pair("elevation_render_mode", [] () {
-      global::get<render::updater>()->set_render_mode(2);
-      global::get<render::updater>()->set_water_mode(2);
-      global::get<render::updater>()->update();
-      auto container = global::get<map::generator::container>();
+    container[render::modes::cultures] = [] () {
+      auto ctx = global::get<core::context>();
       auto map = global::get<core::map>();
-      
-      for (size_t i = 0; i < container->entities_count(map::debug::entities::tile); ++i) {
-        const float data = container->get_data<float>(map::debug::entities::tile, i, map::debug::properties::tile::elevation);
-        map->set_tile_biom(i, glm::floatBitsToUint(data));
+      for (size_t i = 0; i < ctx->get_entity_count<core::province>(); ++i) {
+        auto province = ctx->get_entity<core::province>(i);
+        auto culture = nullptr;
+        for (const uint32_t tile_index : province->tiles) {
+          const uint32_t rand_num1 = render::lcg(size_t(culture));
+          const uint32_t rand_num2 = render::lcg(rand_num1);
+          const uint32_t rand_num3 = render::lcg(rand_num2);
+          const float color_r = render::lcg_normalize(rand_num1);
+          const float color_g = render::lcg_normalize(rand_num2);
+          const float color_b = render::lcg_normalize(rand_num3);
+          map->set_tile_color(tile_index, render::make_color(color_r, color_b, color_g, 1.0f));
+          map->set_tile_texture(tile_index, {GPU_UINT_MAX});
+        }
       }
-    }));
+    };
     
-    container.insert(std::make_pair("temperature_render_mode", [] () {
-      global::get<render::updater>()->set_render_mode(2);
-      global::get<render::updater>()->set_water_mode(2);
-      global::get<render::updater>()->update();
-      auto container = global::get<map::generator::container>();
+    container[render::modes::culture_groups] = [] () {
+      auto ctx = global::get<core::context>();
       auto map = global::get<core::map>();
-      
-      for (size_t i = 0; i < container->entities_count(map::debug::entities::tile); ++i) {
-        const float data = container->get_data<float>(map::debug::entities::tile, i, map::debug::properties::tile::heat);
-        map->set_tile_biom(i, glm::floatBitsToUint(data));
+      for (size_t i = 0; i < ctx->get_entity_count<core::province>(); ++i) {
+        auto province = ctx->get_entity<core::province>(i);
+        auto culture = nullptr;
+        for (const uint32_t tile_index : province->tiles) {
+          const uint32_t rand_num1 = render::lcg(size_t(culture));
+          const uint32_t rand_num2 = render::lcg(rand_num1);
+          const uint32_t rand_num3 = render::lcg(rand_num2);
+          const float color_r = render::lcg_normalize(rand_num1);
+          const float color_g = render::lcg_normalize(rand_num2);
+          const float color_b = render::lcg_normalize(rand_num3);
+          map->set_tile_color(tile_index, render::make_color(color_r, color_b, color_g, 1.0f));
+          map->set_tile_texture(tile_index, {GPU_UINT_MAX});
+        }
       }
-    }));
+    };
     
-    container.insert(std::make_pair("moisture_render_mode", [] () {
-      global::get<render::updater>()->set_render_mode(2);
-      global::get<render::updater>()->set_water_mode(2);
-      global::get<render::updater>()->update();
-      auto container = global::get<map::generator::container>();
+    container[render::modes::religions] = [] () {
+      auto ctx = global::get<core::context>();
       auto map = global::get<core::map>();
-      
-      for (size_t i = 0; i < container->entities_count(map::debug::entities::tile); ++i) {
-        const float data = container->get_data<float>(map::debug::entities::tile, i, map::debug::properties::tile::moisture);
-        map->set_tile_biom(i, glm::floatBitsToUint(data));
+      for (size_t i = 0; i < ctx->get_entity_count<core::province>(); ++i) {
+        auto province = ctx->get_entity<core::province>(i);
+        auto religion = nullptr;
+        for (const uint32_t tile_index : province->tiles) {
+          const uint32_t rand_num1 = render::lcg(size_t(religion));
+          const uint32_t rand_num2 = render::lcg(rand_num1);
+          const uint32_t rand_num3 = render::lcg(rand_num2);
+          const float color_r = render::lcg_normalize(rand_num1);
+          const float color_g = render::lcg_normalize(rand_num2);
+          const float color_b = render::lcg_normalize(rand_num3);
+          map->set_tile_color(tile_index, render::make_color(color_r, color_b, color_g, 1.0f));
+          map->set_tile_texture(tile_index, {GPU_UINT_MAX});
+        }
       }
-    }));
+    };
     
-    container.insert(std::make_pair("biome_render_mode", [] () {
-      global::get<render::updater>()->set_render_mode(0);
-      global::get<render::updater>()->set_water_mode(0);
-      global::get<render::updater>()->update();
-      auto container = global::get<map::generator::container>();
+    container[render::modes::religion_groups] = [] () {
+      auto ctx = global::get<core::context>();
       auto map = global::get<core::map>();
-      
-      for (size_t i = 0; i < container->entities_count(map::debug::entities::tile); ++i) {
-        const uint32_t data = container->get_data<uint32_t>(map::debug::entities::tile, i, map::debug::properties::tile::biome);
-        map->set_tile_biom(i, data);
+      for (size_t i = 0; i < ctx->get_entity_count<core::province>(); ++i) {
+        auto province = ctx->get_entity<core::province>(i);
+        auto religion = nullptr;
+        for (const uint32_t tile_index : province->tiles) {
+          const uint32_t rand_num1 = render::lcg(size_t(religion));
+          const uint32_t rand_num2 = render::lcg(rand_num1);
+          const uint32_t rand_num3 = render::lcg(rand_num2);
+          const float color_r = render::lcg_normalize(rand_num1);
+          const float color_g = render::lcg_normalize(rand_num2);
+          const float color_b = render::lcg_normalize(rand_num3);
+          map->set_tile_color(tile_index, render::make_color(color_r, color_b, color_g, 1.0f));
+          map->set_tile_texture(tile_index, {GPU_UINT_MAX});
+        }
       }
-    }));
+    };
     
-    container.insert(std::make_pair("cultures_render_mode", [] () {
-      global::get<render::updater>()->set_render_mode(1);
-      global::get<render::updater>()->set_water_mode(1);
-      global::get<render::updater>()->update();
-      auto container = global::get<map::generator::container>();
+    container[render::modes::provinces] = [] () { // не уверен что это вооще нужно
+      auto ctx = global::get<core::context>();
       auto map = global::get<core::map>();
-      
-      for (size_t i = 0; i < container->entities_count(map::debug::entities::tile); ++i) {
-        const uint32_t data = container->get_data<uint32_t>(map::debug::entities::tile, i, map::debug::properties::tile::culture_id);
-        map->set_tile_biom(i, data);
+      ASSERT(ctx->get_entity_count<core::province>() != 0);
+      for (size_t i = 0; i < ctx->get_entity_count<core::province>(); ++i) {
+        auto province = ctx->get_entity<core::province>(i);
+        ASSERT(!province->tiles.empty());
+        for (const uint32_t tile_index : province->tiles) {
+          const uint32_t rand_num1 = render::lcg(i);
+          const uint32_t rand_num2 = render::lcg(rand_num1);
+          const uint32_t rand_num3 = render::lcg(rand_num2);
+          const float color_r = render::lcg_normalize(rand_num1);
+          const float color_g = render::lcg_normalize(rand_num2);
+          const float color_b = render::lcg_normalize(rand_num3);
+          map->set_tile_color(tile_index, render::make_color(color_r, color_b, color_g, 1.0f));
+          map->set_tile_texture(tile_index, {GPU_UINT_MAX});
+        }
       }
-    }));
+    };
     
-    container.insert(std::make_pair("provinces_render_mode", [] () {
-      global::get<render::updater>()->set_render_mode(1);
-      global::get<render::updater>()->set_water_mode(1);
-      global::get<render::updater>()->update();
-      auto container = global::get<map::generator::container>();
+    container[render::modes::countries] = [] () {
+      auto ctx = global::get<core::context>();
       auto map = global::get<core::map>();
-      
-      for (size_t i = 0; i < container->entities_count(map::debug::entities::tile); ++i) {
-        const uint32_t data = container->get_data<uint32_t>(map::debug::entities::tile, i, map::debug::properties::tile::province_index);
-        map->set_tile_biom(i, data);
+      for (size_t i = 0; i < ctx->get_entity_count<core::province>(); ++i) {
+        auto province = ctx->get_entity<core::province>(i);
+        auto faction = province->title->owner;
+        ASSERT(faction != nullptr);
+        auto final_faction = faction;
+        while (faction != nullptr) {
+          final_faction = faction;
+          faction = faction->liege;
+        }
+        ASSERT(final_faction != nullptr);
+        
+        // какое то число? пока что приведем указатель
+        const auto color = final_faction->main_title->main_color;
+        
+        for (const uint32_t tile_index : province->tiles) {
+          map->set_tile_color(tile_index, color);
+          map->set_tile_texture(tile_index, {GPU_UINT_MAX});
+        }
       }
-    }));
+    };
     
-    container.insert(std::make_pair("countries_render_mode", [] () {
-      global::get<render::updater>()->set_render_mode(1);
-      global::get<render::updater>()->set_water_mode(1);
-      global::get<render::updater>()->update();
-      auto container = global::get<map::generator::container>();
-      auto map = global::get<core::map>();
+    container[render::modes::duchies] = [] () {
+      static bool deure = false;
+      if (render::get_current_mode() == render::modes::duchies) deure = !deure;
+      if (render::get_current_mode() != render::modes::duchies) deure = false;
       
-      for (size_t i = 0; i < container->entities_count(map::debug::entities::tile); ++i) {
-        const uint32_t data = container->get_data<uint32_t>(map::debug::entities::tile, i, map::debug::properties::tile::country_index);
-        map->set_tile_biom(i, data);
+      auto ctx = global::get<core::context>();
+      auto map = global::get<core::map>();
+      for (size_t i = 0; i < ctx->get_entity_count<core::province>(); ++i) {
+        auto province = ctx->get_entity<core::province>(i);
+        core::titulus* duchy_title = nullptr;
+        if (deure) {
+          auto title = province->title;
+          ASSERT(title != nullptr);
+          duchy_title = title->parent;
+        } else {
+          auto owner = province->title->owner;
+          while (owner != nullptr) {
+            if (owner->main_title->type == core::titulus::type::duke) duchy_title = owner->main_title;
+            owner = owner->liege;
+          }
+        }
+        
+        if (duchy_title != nullptr && duchy_title->owner != nullptr) {
+//           const size_t num = reinterpret_cast<size_t>(duchy_title);
+          const render::color_t color = duchy_title->main_color;
+          
+          for (const uint32_t tile_index : province->tiles) {
+//             const uint32_t rand_num1 = render::lcg(num);
+//             const uint32_t rand_num2 = render::lcg(rand_num1);
+//             const uint32_t rand_num3 = render::lcg(rand_num2);
+//             const float color_r = render::lcg_normalize(rand_num1);
+//             const float color_g = render::lcg_normalize(rand_num2);
+//             const float color_b = render::lcg_normalize(rand_num3);
+//             map->set_tile_color(tile_index, render::make_color(color_r, color_b, color_g, 1.0f));
+            map->set_tile_color(tile_index, color);
+            map->set_tile_texture(tile_index, {GPU_UINT_MAX});
+          }
+        } else {
+          for (const uint32_t tile_index : province->tiles) {
+            map->set_tile_color(tile_index, render::make_color(0.3f, 0.3f, 0.3f, 1.0f));
+            map->set_tile_texture(tile_index, {GPU_UINT_MAX});
+          }
+        }
       }
-    }));
+    };
     
-    container.insert(std::make_pair("test_data_render_mode1", [] () {
-      global::get<render::updater>()->set_render_mode(1);
-      global::get<render::updater>()->set_water_mode(1);
-      global::get<render::updater>()->update();
-      auto container = global::get<map::generator::container>();
-      auto map = global::get<core::map>();
+    container[render::modes::kingdoms] = [] () {
+      static bool deure = false;
+      if (render::get_current_mode() == render::modes::kingdoms) deure = !deure;
+      if (render::get_current_mode() != render::modes::kingdoms) deure = false;
       
-      for (size_t i = 0; i < container->entities_count(map::debug::entities::tile); ++i) {
-        const uint32_t data = container->get_data<uint32_t>(map::debug::entities::tile, i, map::debug::properties::tile::test_value_uint1);
-        map->set_tile_biom(i, data);
+      auto ctx = global::get<core::context>();
+      auto map = global::get<core::map>();
+      for (size_t i = 0; i < ctx->get_entity_count<core::province>(); ++i) {
+        auto province = ctx->get_entity<core::province>(i);
+        core::titulus* king_title = nullptr;
+        if (deure) {
+          auto title = province->title;
+          ASSERT(title != nullptr);
+          auto duchy_title = title->parent;
+          king_title = duchy_title == nullptr ? nullptr : duchy_title->parent;
+        } else {
+          auto owner = province->title->owner;
+          while (owner != nullptr) {
+            if (owner->main_title->type == core::titulus::type::king) king_title = owner->main_title;
+            owner = owner->liege;
+          }
+        }
+        
+        if (king_title != nullptr && king_title->owner != nullptr) {
+          const render::color_t color = king_title->main_color;
+          
+          for (const uint32_t tile_index : province->tiles) {
+            map->set_tile_color(tile_index, color);
+            map->set_tile_texture(tile_index, {GPU_UINT_MAX});
+          }
+        } else {
+          for (const uint32_t tile_index : province->tiles) {
+            map->set_tile_color(tile_index, render::make_color(0.3f, 0.3f, 0.3f, 1.0f));
+            map->set_tile_texture(tile_index, {GPU_UINT_MAX});
+          }
+        }
       }
-    }));
+    };
     
-    container.insert(std::make_pair("test_data_render_mode2", [] () {
-      global::get<render::updater>()->set_render_mode(1);
-      global::get<render::updater>()->set_water_mode(1);
-      global::get<render::updater>()->update();
-      auto container = global::get<map::generator::container>();
-      auto map = global::get<core::map>();
+    container[render::modes::empires] = [] () {
+      static bool deure = false;
+      if (render::get_current_mode() == render::modes::empires) deure = !deure;
+      if (render::get_current_mode() != render::modes::empires) deure = false;
       
-      for (size_t i = 0; i < container->entities_count(map::debug::entities::tile); ++i) {
-        const uint32_t data = container->get_data<uint32_t>(map::debug::entities::tile, i, map::debug::properties::tile::test_value_uint2);
-        map->set_tile_biom(i, data);
-      }
-    }));
-    
-    container.insert(std::make_pair("test_data_render_mode3", [] () {
-      global::get<render::updater>()->set_render_mode(1);
-      global::get<render::updater>()->set_water_mode(1);
-      global::get<render::updater>()->update();
-      auto container = global::get<map::generator::container>();
+      auto ctx = global::get<core::context>();
       auto map = global::get<core::map>();
-      
-      for (size_t i = 0; i < container->entities_count(map::debug::entities::tile); ++i) {
-        const uint32_t data = container->get_data<uint32_t>(map::debug::entities::tile, i, map::debug::properties::tile::test_value_uint3);
-        map->set_tile_biom(i, data);
+      for (size_t i = 0; i < ctx->get_entity_count<core::province>(); ++i) {
+        auto province = ctx->get_entity<core::province>(i);
+        core::titulus* emp_title = nullptr;
+        if (deure) {
+          auto title = province->title;
+          ASSERT(title != nullptr);
+          auto duchy_title = title->parent;
+          auto king_title = duchy_title == nullptr ? nullptr : duchy_title->parent;
+          emp_title = king_title == nullptr ? nullptr : king_title->parent;
+        } else {
+          auto owner = province->title->owner;
+          while (owner != nullptr) {
+            if (owner->main_title->type == core::titulus::type::imperial) emp_title = owner->main_title;
+            owner = owner->liege;
+          }
+        }
+        
+        if (emp_title != nullptr && emp_title->owner != nullptr) {
+          const render::color_t color = emp_title->main_color;
+          
+          for (const uint32_t tile_index : province->tiles) {
+            map->set_tile_color(tile_index, color);
+            map->set_tile_texture(tile_index, {GPU_UINT_MAX});
+          }
+        } else {
+          for (const uint32_t tile_index : province->tiles) {
+            map->set_tile_color(tile_index, render::make_color(0.3f, 0.3f, 0.3f, 1.0f));
+            map->set_tile_texture(tile_index, {GPU_UINT_MAX});
+          }
+        }
       }
-    }));
+    };
   }
   
   #define OUTSIDE 0
@@ -1079,154 +1291,48 @@ namespace devils_engine {
     const std::string script_dir = global::root_directory() + "scripts/";
     //lua.script_file(script_dir + "interface1.lua");
     //lua.set_panic(lua_panic);
-    auto script_from_file_result = lua.safe_script_file(script_dir + "interface1.lua");
-    if (!script_from_file_result.valid()) {
-      sol::error err = script_from_file_result;
-      throw std::runtime_error("Error in interface1.lua file: " + std::string(err.what()));
+    {
+      auto script_from_file_result = lua.safe_script_file(script_dir + "interface1.lua");
+      if (!script_from_file_result.valid()) {
+        sol::error err = script_from_file_result;
+        throw std::runtime_error("Error in interface1.lua file: " + std::string(err.what()));
+      }
+      
+      {
+        sol::protected_function func = lua["test_interface"];
+        ASSERT(func != sol::nil);
+        interface->register_layer("test_interface", {func, 1, core::structure::character});
+      }
+      
+      interface->open_layer("test_interface", sol::nil);
     }
     
     {
-      sol::protected_function func = lua["test_interface"];
-//       func.error_handler = lua["got_problems"];
-      auto ctx = &global::get<interface::context>()->ctx;
-      auto res = func(ctx, nullptr, nullptr);
-      if (res.valid()) {
-        const bool test = res.get<bool>();
-        ASSERT(!test);
-      } else {
-        sol::error err = res;
-        std::string what = err.what();
-        std::cout << what << std::endl;
-        throw std::runtime_error("Function result is not valid");
-      }
-      interface->register_window("test_interface", {func, 0, core::structure::character});
-    }
-    
-    interface->open_window("test_interface", nullptr);
-  }
-
-  void rendering_mode(const map::generator::container* cont, core::map* map, const uint32_t &property, const uint32_t &render_mode, const uint32_t &water_mode) {
-    const auto type = cont->type(map::debug::entities::tile, property);
-    
-    global::get<render::tile_render>()->change_rendering_mode(render_mode, water_mode, 0, 3, glm::vec3(0.0f, 0.0f, 0.0f));
-    
-    // по идее у нас может потребоваться не только взять данные из тайла, но и выше по иерархии
-    // (например текущий тех государства (или провинции))
-    // + может потребоваться дополнительная информация в тултипе
-    // тут не обойтись без задаваемого скрипта обновления информации походу
-    // вообще нам еще нужны границы, как они должны выглядеть?
-    // я думал что достаточно нарисовать толстую линию между двумя точками 
-    // у тайла, другое дело что не понятно какие именно границы должны быть отрисованы
-    // я так понимаю что границы всегда одни и теже (провинция, герцогство, королество, империя)
-    // как то визуально граница объекта выше по иерархии должна быть больше
-    // как определить эти самые объекты, после создания карты, мы должны запустить 
-    // функцию со списком типов свойств у тайла, по которым будут генерироваться границы
-    // короче более менее постоянные границы есть у провинций
-    // остальные границы должны генерироваться на основе текущей ситуации
-    // фиксированные границы герцогств, королеств и проч нас интересуют когда мы хотим 
-    // получить дополнительную информацию об конкретном титуле
-    // государство + границы вассалов первого уровня
-    // как генерировать эти границы? граница меняется не чаще чем 1 раз за ход
-    // а то и реже, значит можно добавить все эти данные в какой-то буфер
-    // вообще граница делается по провинциям, как это может мне помочь?
-    // да никак особенно, мне нужно придумать как быстро заполнять информацию для границ
-    // граница - это всегда два тайла в разных странах (у вассалов)
-    // по всей видимости нужно пересобирать каждый раз при изменении границ
-    // нжно придумать какой то мультитрединговый алгоритм
-    // как рисовать цветную границу? есть алгоритм https://forum.libcinder.org/topic/smooth-thick-lines-using-geometry-shader
-    // другое дело что я не могу использовать геометрический шейдер
-    // да и он по идее не нужен
-    // мне нужно сгенерировать половину границы и покрасить ее в какой то цвет
-    // граница - кольцо из точек составляемых как?
-    // разные страны, в стране есть вассалы, причем у игрока может не быть независимости
-    // тогда нужно рисовать вассалов игрока и вассалов соседних вассалов?
-    
-//     const std::vector<uint32_t> border_props = {
-//       map::debug::properties::tile::province_index,
-//       map::debug::properties::tile::gerz_index,
-//       map::debug::properties::tile::kingdom_index,
-//       map::debug::properties::tile::empire_index,
-//     };
-    
-    // получаем рендер стейдж и меняем ему режим
-    switch (type) {
-      case map::generator::data_type::float_t: {
-        for (size_t i = 0; i < map->tiles_count(); ++i) { // понятное дело легко параллелится
-          const float val = cont->get_data<float>(map::debug::entities::tile, i, property);
-          map->set_tile_biom(i, glm::floatBitsToUint(val));
-        }
-        break;
+//       auto script_from_file_result = lua.safe_script_file(script_dir + "user_interface.lua");
+//       if (!script_from_file_result.valid()) {
+//         sol::error err = script_from_file_result;
+//         throw std::runtime_error("Error in interface1.lua file: " + std::string(err.what()));
+//       }
+//       
+//       sol::protected_function func = lua["main_menu_window"];
+//       ASSERT(func != sol::nil);
+//       interface->register_window("main_menu_window", {func, 0, core::structure::character});
+//       interface->open_window("main_menu_window", sol::nil);
+      
+      auto script_from_file_result = lua.safe_script_file(script_dir + "player_layer.lua");
+      if (!script_from_file_result.valid()) {
+        sol::error err = script_from_file_result;
+        throw std::runtime_error("Error in player_layer.lua file: " + std::string(err.what()));
       }
       
-      case map::generator::data_type::uint_t: {
-        for (size_t i = 0; i < map->tiles_count(); ++i) { // понятное дело легко параллелится
-          const uint32_t val = cont->get_data<uint32_t>(map::debug::entities::tile, i, property);
-          map->set_tile_biom(i, val);
-        }
-        break;
-      }
-      
-      // тут может потребоваться как сгенерировать цвет так и взять уже существующий
-      case map::generator::data_type::int_t: {
-        for (size_t i = 0; i < map->tiles_count(); ++i) {
-          union convertor {
-            uint32_t uval;
-            int32_t ival;
-          };
-          const int32_t val = cont->get_data<int32_t>(map::debug::entities::tile, i, property);
-          convertor c;
-          c.ival = val;
-          map->set_tile_biom(i, c.uval);
-        }
-        break;
-      }
+      sol::protected_function func = lua["main_interface_layer"];
+      ASSERT(func != sol::nil);
+      interface->register_layer("main_interface_layer", {func, 0, core::structure::character});
+      interface->open_layer("main_interface_layer", sol::nil);
     }
-    
-    // по идее всегда флоат значения означают последний режим 
-    // нужно только решить вопрос с водой 
-    // 
   }
   
-  // это мы делаем максимум раз в ход
-//   void border_points_test(const std::vector<glm::vec4> &array) {
-//     // точки должны быть замкнутыми
-//     // точки должны быть последовательными (!)
-//     // 
-//     
-//     std::vector<glm::vec4> out;
-//     const float thickness = 0.7f;
-//     for (size_t i = 0; i < array.size(); ++i) {
-//       const glm::vec4 p0 = array[i+0];
-//       const glm::vec4 p1 = array[(i+1)%array.size()];
-//       const glm::vec4 p2 = array[(i+2)%array.size()];
-//       // все точки должны быть ближайшими к соседям
-//       
-//       // некоторые нормализации отсюда можно убрать
-//       const glm::vec4 p0p1 = glm::normalize(p1-p0);
-//       const glm::vec4 p1p2 = glm::normalize(p2-p1);
-//       const glm::vec4 np1 = glm::normalize(p1);
-//       const glm::vec4 n0 = glm::normalize(glm::vec4(glm::cross(glm::vec3(p0p1), glm::vec3(glm::normalize(p0))), 0.0f));
-//       const glm::vec4 n1 = glm::normalize(glm::vec4(glm::cross(glm::vec3(p1p2), glm::vec3(np1)), 0.0f));
-//       const glm::vec4 t = glm::normalize(n1 + n0);
-//       const glm::vec4 m = glm::normalize(glm::vec4(glm::cross(glm::vec3(t), glm::vec3(np1)), 0.0f));
-//       
-//       const float l = thickness / glm::dot(m, p0p1); // возможно в моем случае будет достаточно просто умножить thickness на m
-//       
-//       const glm::vec4 point1_near_p1 = p1 + m * l;
-//       const glm::vec4 point2_near_p1 = p1 - m * l;
-//       // как то так считается точка границы
-//       // мне нужно еще взять как то только половину во внутренюю сторону
-//       // то есть либо point1_near_p1 и p1 либо point2_near_p1 и p1
-//       // как понять какая сторона внутренняя? по идее сторона будет строго определена 
-//       // если мы выберем идти ли нам по часовой стрелке или против
-//       // то есть точки должны быть строго последовательными по часовой стрелке
-//       out.push_back(p1);
-//       out.push_back(point1_near_p1);
-//     }
-//   }
-  
-  void find_border_points(const map::generator::container* container, const core::map* map, const sol::table &table) {
-    (void)table;
+  void find_border_points(const core::map* map) {
     // возможно нужно найти первый граничный тайл, а потом обходить его соседей
     // тут можно поступить несколькими способами
     // 1) попытаться обойти тайлы правильно
@@ -1251,38 +1357,6 @@ namespace devils_engine {
     // у ребра две стороны: мы должны рисовать границы разных свойств на каждой стороне
     // все точки ребер мы добавляем в буфер, ребро - треугольник, каждому ребру нужно передать 
     // верную текстурку и какие то дополнительные данные
-    struct border_type {
-      // особая текстурка для разных типов границ
-      // должна быть сплошная прямая и какие то более сложные рисунки
-      // пунктир? его нужно правильно задавать, в цк используется
-      // двухцветный пунктир, для этого нужно совместить алгоритмы этот и выше
-      uint32_t type;
-      float size;
-      glm::vec4 color;
-    };
-    
-    struct border_data {
-      glm::vec4 point;
-      glm::vec4 dir;
-//       glm::vec4 dir2;
-//       uint32_t tile_index;
-    };
-    
-//     struct edge_point {
-//       uint32_t container;
-//       
-//       edge_point(const bool index, const uint32_t &point_index) {
-//         
-//       }
-//     };
-    
-    struct border_gen_data {
-      uint32_t point1; // edge
-      uint32_t point2;
-      uint32_t tile_index;
-      // ??
-      uint32_t edge_index;
-    };
     
     // тайлы нам сильно помогут сгенерить границы
     // границы делаем по ребрам провинции, нам их нужно верно соединить
@@ -1295,193 +1369,6 @@ namespace devils_engine {
     // тайл состоит из равносторонних треугольников + у нас имеется размер границы
     // uv для внутренней расчитываются с использованием размера
     // остается только последовательность гарантировать
-    
-//     std::vector<glm::vec4> triangles;
-//     std::unordered_map<size_t, std::vector<uint32_t>> edges_indices;
-//     std::unordered_map<size_t, std::vector<border_gen_data>> edges_indices2;
-//     //const uint32_t tiles_count = map->tiles_count();
-//     const uint32_t provinces_count = container->entities_count(map::debug::entities::province);
-//     std::vector<std::vector<std::pair<uint32_t, std::vector<border_data>>>> provinces_borders(provinces_count);
-//     for (size_t i = 0; i < provinces_count; ++i) {
-//       const uint32_t province_index = i;
-//       // нужен более строгий способ получать тайлы у провинций
-//       const uint32_t tiles_count = table["provinces"][province_index]["tiles_count"];
-//       for (size_t j = 0; j < tiles_count; ++j) {
-//         const uint32_t tile_index = table["provinces"][province_index]["tiles"][j];
-//         
-//         const auto &data = render::unpack_data(map->get_tile(tile_index));
-//         const uint32_t n_count = render::is_pentagon(data) ? 5 : 6;
-//         for (size_t k = 0; k < n_count; ++k) {
-//           const uint32_t n_index = data.neighbours[k];
-//           
-//           const uint32_t n_province_index = container->get_data<uint32_t>(map::debug::entities::tile, n_index, map::debug::properties::tile::province_index);
-//           if (province_index == n_province_index) continue;
-//           
-//           // ребро, по идее точки это
-//           const auto &n_data = render::unpack_data(map->get_tile(n_index));
-//           const uint32_t k2 = k == 0 ? n_count-1 : k-1;
-//           const uint32_t point1_index = data.points[k];
-//           const uint32_t point2_index = data.points[k2];
-//           const glm::vec4 point1 = map->get_point(point1_index);
-//           const glm::vec4 point2 = map->get_point(point2_index);
-//           // тут надо еще както определить соседей для правильного рендеринга
-//           // пока так
-//           
-//           // теперь у нас есть два треугольника, рисовать лучше наверное листом
-//           const uint32_t index1 = triangles.size();
-//           triangles.push_back(point1);
-//           triangles.push_back(point2);
-//           triangles.push_back(map->get_point(data.center));
-//           const uint32_t index2 = triangles.size();
-//           triangles.push_back(point1);
-//           triangles.push_back(point2);
-//           triangles.push_back(map->get_point(n_data.center));
-//           
-// //           const uint32_t min_index = std::min(province_index, n_province_index);
-// //           const uint32_t max_index = std::max(province_index, n_province_index);
-// //           const size_t key = (size_t(min_index) << 32) | max_index;
-//           const size_t key = (size_t(n_province_index) << 32) | province_index;
-//           edges_indices[key].push_back(index1);
-//           edges_indices[key].push_back(index2); 
-//           edges_indices2[key].push_back({point2_index, point1_index, tile_index, UINT32_MAX});
-//         }
-//       }
-//     }
-//     
-//     for (auto &pair : edges_indices2) {
-//       ASSERT(!pair.second.empty());
-//       std::vector<border_gen_data> sorted_data;
-//       sorted_data.push_back(pair.second[0]);
-//       while (sorted_data.size() != pair.second.size()) {
-//         for (size_t i = 1; i < pair.second.size(); ++i) {
-//           const uint32_t current_index = i;
-//           const auto &current_data = pair.second[current_index];
-//     //         sorted_data.push_back(current_data);
-//           for (size_t j = 0; j < sorted_data.size(); ++j) {
-//             const auto &data = sorted_data[j];
-//             if ((data.point1 == current_data.point1 || data.point1 == current_data.point2) && 
-//                 (data.point2 == current_data.point1 || data.point2 == current_data.point2) && 
-//                  data.tile_index == current_data.tile_index) continue;
-//             
-//             if (data.point2 == current_data.point1 || data.point2 == current_data.point2) {
-//               if (data.tile_index == current_data.tile_index) {
-//                 auto itr = sorted_data.insert(sorted_data.begin()+j+1, current_data);
-//                 if (data.point2 == current_data.point2) std::swap(itr->point1, itr->point2);
-//               } else {
-//                 const auto &tile_data = render::unpack_data(map->get_tile(current_data.tile_index));
-//                 const uint32_t n_count = render::is_pentagon(tile_data) ? 5 : 6;
-//                 for (uint32_t k = 0; k < n_count; ++k) {
-//                   const uint32_t n_index = tile_data.neighbours[k];
-//                   if (n_index == data.tile_index) {
-//                     const uint32_t k2 = k == 0 ? n_count-1 : k-1;
-//                     const uint32_t point1 = tile_data.points[k2];
-//                     const uint32_t point2 = tile_data.points[k];
-//                     // нашли ребро, нужно по особому его добавить
-//                     // 
-//                     
-// #ifndef _NDEBUG
-//                     {
-//                       const uint32_t test1 = uint32_t(point1 == current_data.point1) + uint32_t(point1 == current_data.point2) + uint32_t(point1 == data.point1) + uint32_t(point1 == data.point2);
-//                       const uint32_t test2 = uint32_t(point2 == current_data.point1) + uint32_t(point2 == current_data.point2) + uint32_t(point2 == data.point1) + uint32_t(point2 == data.point2);
-//                       ASSERT((test1 == 2 && test2 == 0) || (test1 == 0 && test2 == 2));
-//                     }
-// #endif
-// 
-//                     auto itr = sorted_data.insert(sorted_data.begin()+j+1, {current_data.point1, current_data.point2, current_data.tile_index, k});
-//                     if (data.point2 == current_data.point2) std::swap(itr->point1, itr->point2);
-//                     
-//                     break;
-//                   }
-//                 }
-//               }
-//             }
-//             
-//             if (data.point1 == current_data.point1 || data.point1 == current_data.point2) {
-//               if (data.tile_index == current_data.tile_index) {
-//                 auto itr = sorted_data.insert(sorted_data.begin()+j, current_data);
-//                 if (data.point1 == current_data.point1) std::swap(itr->point1, itr->point2);
-//               } else {
-//                 const auto &tile_data = render::unpack_data(map->get_tile(current_data.tile_index));
-//                 const uint32_t n_count = render::is_pentagon(tile_data) ? 5 : 6;
-//                 for (uint32_t k = 0; k < n_count; ++k) {
-//                   const uint32_t n_index = tile_data.neighbours[k];
-//                   if (n_index == data.tile_index) {
-//                     const uint32_t k2 = k == 0 ? n_count-1 : k-1;
-//                     const uint32_t point1 = tile_data.points[k2];
-//                     const uint32_t point2 = tile_data.points[k];
-//                     // нашли ребро, нужно по особому его добавить
-//                     // 
-//                     
-// #ifndef _NDEBUG
-//                     {
-//                       const uint32_t test1 = uint32_t(point1 == current_data.point1) + uint32_t(point1 == current_data.point2) + uint32_t(point1 == data.point1) + uint32_t(point1 == data.point2);
-//                       const uint32_t test2 = uint32_t(point2 == current_data.point1) + uint32_t(point2 == current_data.point2) + uint32_t(point2 == data.point1) + uint32_t(point2 == data.point2);
-//                       ASSERT((test1 == 2 && test2 == 0) || (test1 == 0 && test2 == 2));
-//                     }
-// #endif
-// 
-//                     auto itr = sorted_data.insert(sorted_data.begin()+j, {current_data.point1, current_data.point2, current_data.tile_index, k});
-//                     if (data.point2 == current_data.point2) std::swap(itr->point1, itr->point2);
-//                     
-//                     break;
-//                   }
-//                 }
-//               }
-//             }
-//           }
-//         }
-//       }
-//       
-//       std::swap(sorted_data, pair.second);
-//     }
-//     
-//     for (auto &pair : edges_indices2) {
-//       const size_t key = pair.first;
-//       const uint32_t province_index = uint32_t(key); // & size_t(UINT32_MAX)
-//       const uint32_t n_province_index = uint32_t(key >> 32);
-//       std::vector<border_data> border;
-//       for (size_t i = 0; i < pair.second.size(); ++i) {
-//         const auto &border_gen_data = pair.second[i];
-//         const auto &data = render::unpack_data(map->get_tile(border_gen_data.tile_index));
-//         const glm::vec4 point1 = map->get_point(border_gen_data.point1);
-//         const glm::vec4 point2 = map->get_point(border_gen_data.point2);
-//         const glm::vec4 center = map->get_point(data.center);
-//         const glm::vec4 dir1 = glm::normalize(center - point1);
-//         const glm::vec4 dir2 = glm::normalize(center - point2);
-//         
-//         if (border_gen_data.edge_index != UINT32_MAX) {
-//           const uint32_t n_count = render::is_pentagon(data) ? 5 : 6;
-//           const uint32_t k = border_gen_data.edge_index;
-//           const uint32_t k2 = k == 0 ? n_count-1 : k-1;
-//           
-//           const uint32_t edge_point1_index = (data.points[k] == border_gen_data.point1) || (data.points[k] == border_gen_data.point2) ? data.points[k] : data.points[k2];
-//           const uint32_t edge_point2_index = (data.points[k] == border_gen_data.point1) || (data.points[k] == border_gen_data.point2) ? data.points[k2] : data.points[k];
-//           const glm::vec4 point1 = map->get_point(edge_point1_index);
-//           const glm::vec4 point2 = map->get_point(edge_point2_index);
-//           const glm::vec4 dir = glm::normalize(point2 - point1);
-//           const border_data d{
-//             glm::vec4(point1.x, point1.y, point1.z, glm::uintBitsToFloat(edge_point1_index)),
-//             glm::vec4(dir.x, dir.y, dir.z, glm::uintBitsToFloat(border_gen_data.tile_index))
-//           };
-//           border.push_back(d);
-//         } else {
-//           const border_data d1{
-//             glm::vec4(point1.x, point1.y, point1.z, glm::uintBitsToFloat(border_gen_data.point1)),
-//             glm::vec4(dir1.x, dir1.y, dir1.z, glm::uintBitsToFloat(border_gen_data.tile_index))
-//           };
-//           border.push_back(d1);
-//         }
-//         
-//         if (i+1 == pair.second.size()) {
-//           const border_data d2{
-//             glm::vec4(point2.x, point2.y, point2.z, glm::uintBitsToFloat(border_gen_data.point2)),
-//             glm::vec4(dir2.x, dir2.y, dir2.z, glm::uintBitsToFloat(border_gen_data.tile_index))
-//           };
-//           border.push_back(d2);
-//         }
-//       }
-//       provinces_borders[province_index].push_back(std::make_pair(n_province_index, border));
-//     }
     
     // теперь где то эту информацию нужно сохранить
     
@@ -1518,14 +1405,25 @@ namespace devils_engine {
       glm::vec4 dirs[2];
     };
     
+    struct border_type2 {
+      render::color_t color1; // цвет достаточно хранить в uint32
+      uint32_t image;
+      render::color_t color2;
+      float thickness; // эту штуку не нужно делать здесь - это должны быть константы от титула
+    };
+    
     // кому еще соседи могут пригодиться?
     
+    auto ctx = global::get<core::context>();
+    
     std::vector<border_data2> borders;
-    const uint32_t provinces_count = container->entities_count(map::debug::entities::province);
+    const uint32_t provinces_count = ctx->get_entity_count<core::province>();
     for (size_t i = 0; i < provinces_count; ++i) {
       const uint32_t province_index = i;
+      auto province = ctx->get_entity<core::province>(province_index);
       // нужен более строгий способ получать тайлы у провинций
-      const auto &childs = container->get_childs(map::debug::entities::province, province_index);
+      //const auto &childs = container->get_childs(map::debug::entities::province, province_index);
+      const auto &childs = province->tiles;
       if (childs.empty()) throw std::runtime_error("Could not find province tiles");
       
       const uint32_t tiles_count = childs.size();
@@ -1537,7 +1435,8 @@ namespace devils_engine {
         for (uint32_t k = 0; k < n_count; ++k) {
           const uint32_t n_index = data.neighbours[k];
           
-          const uint32_t n_province_index = container->get_data<uint32_t>(map::debug::entities::tile, n_index, map::debug::properties::tile::province_index);
+          //const uint32_t n_province_index = container->get_data<uint32_t>(map::debug::entities::tile, n_index, map::debug::properties::tile::province_index);
+          const uint32_t n_province_index = ctx->get_tile(n_index).province;
           if (province_index == n_province_index) continue;
           
 //           const auto &n_data = render::unpack_data(map->get_tile(n_index));
@@ -1552,14 +1451,24 @@ namespace devils_engine {
       }
     }
     
-    struct border_type2 {
-      glm::vec3 color1;
-      uint32_t image;
-      glm::vec3 color2;
-      float thickness;
-    };
+    const float borders_size[] = {0.5f, 0.3f, 0.15f}; // было бы неплохо это убрать в defines.lua (то есть считывать с диска)
     
-    std::vector<border_type2> types(container->entities_count(map::debug::entities::country)+1);
+    std::unordered_map<core::titulus*, uint32_t> type_index;
+    std::vector<border_type2> types;
+    types.push_back({render::make_color(0.0f, 0.0f, 0.0f, 1.0f), UINT32_MAX, render::make_color(0.0f, 0.0f, 0.0f, 1.0f), 0.0f});
+    for (size_t i = 0; i < ctx->get_entity_count<core::titulus>(); ++i) {
+      // нужно задать типы границ
+      // по владельцам?
+      auto title = ctx->get_entity<core::titulus>(i);
+      if (title->type == core::titulus::type::baron) continue;
+      if (title->type == core::titulus::type::city) continue;
+      if (title->owner == nullptr) continue;
+      if (title->owner->main_title != title) continue;
+      ASSERT(type_index.find(title) == type_index.end());
+      type_index.insert(std::make_pair(title, types.size()));
+      types.push_back({title->border_color1, GPU_UINT_MAX, title->border_color2, 0.0f}); // толщину границы мы должны в поинт записать
+    }
+    
     std::unordered_set<uint32_t> unique_index;
     yavf::Buffer* buffer = global::get<render::buffers>()->border_buffer;
     buffer->resize(borders.size() * sizeof(border_buffer));
@@ -1679,55 +1588,132 @@ namespace devils_engine {
       // нужно проверить принадлежат ли смежные тайлы к тем же государствам 
       // тут же мы определяем тип границы (государственная, вассальная, граница провинции)
       
-      const std::vector<uint32_t> prop_arr = {
-        map::debug::properties::tile::country_index,
-        map::debug::properties::tile::province_index
-      };
+      const uint32_t province_index = ctx->get_tile(current_data.tile_index).province;
+      const uint32_t opposite_province_index = ctx->get_tile(current_data.opposite_tile_index).province;
       
-      for (const auto &prop : prop_arr) {
-        // или лучше брать эти данные из провинции
-        const uint32_t country_index = container->get_data<uint32_t>(map::debug::entities::tile, current_data.tile_index, prop);
-        const uint32_t opposing_country_index = container->get_data<uint32_t>(map::debug::entities::tile, current_data.opposite_tile_index, prop);
-        
-        if (country_index == opposing_country_index) continue;
-        
-        const uint32_t adjacent1_index = container->get_data<uint32_t>(map::debug::entities::tile, adjacent1, prop);
-        const uint32_t adjacent2_index = container->get_data<uint32_t>(map::debug::entities::tile, adjacent2, prop);
-        
-        if (country_index != adjacent1_index) {
-          const glm::vec4 center = map->get_point(tile_data.center);
-          arr[i].dirs[1] = glm::normalize(center - arr[i].points[1]);
-        } else {
-          const uint32_t k3 = (tmp_index+2)%n_count;
-          const uint32_t point3_index = tile_data.points[k3];
-          const glm::vec4 point3 = map->get_point(point3_index);
-          arr[i].dirs[1] = glm::normalize(point3 - arr[i].points[1]);
-        }
-        
-        if (country_index != adjacent2_index) {
-          const glm::vec4 center = map->get_point(tile_data.center);
-          arr[i].dirs[0] = glm::normalize(center - arr[i].points[0]);
-        } else {
-          const uint32_t k4 = k == 0 ? n_count-2 : (k == 1 ? n_count-1 : k-2);
-          const uint32_t point4_index = tile_data.points[k4];
-          const glm::vec4 point4 = map->get_point(point4_index);
-          arr[i].dirs[0] = glm::normalize(point4 - arr[i].points[0]);
-        }
-        
-        if (prop == map::debug::properties::tile::country_index) {
-          types[country_index+1] = {{0.0f, 0.0f, 0.0f}, UINT32_MAX, {0.0f, 0.0f, 0.0f}, 0.3f}; // это мы заполняем для каждого титула
-          arr[i].dirs[1].w = glm::uintBitsToFloat(country_index+1);
-        }
-        
-        if (prop == map::debug::properties::tile::province_index) {
-          types[0] = {{0.0f, 0.0f, 0.0f}, UINT32_MAX, {0.0f, 0.0f, 0.0f}, 0.15f};
-          arr[i].dirs[1].w = glm::uintBitsToFloat(0);
-        }
-        
-        break;
+      const uint32_t adjacent1_province_index = ctx->get_tile(adjacent1).province;
+      const uint32_t adjacent2_province_index = ctx->get_tile(adjacent2).province;
+      
+      if (province_index != adjacent1_province_index) {
+        const glm::vec4 center = map->get_point(tile_data.center);
+        arr[i].dirs[1] = glm::normalize(center - arr[i].points[1]);
+      } else {
+        const uint32_t k3 = (tmp_index+2)%n_count;
+        const uint32_t point3_index = tile_data.points[k3];
+        const glm::vec4 point3 = map->get_point(point3_index);
+        arr[i].dirs[1] = glm::normalize(point3 - arr[i].points[1]);
       }
       
+      if (province_index != adjacent2_province_index) {
+        const glm::vec4 center = map->get_point(tile_data.center);
+        arr[i].dirs[0] = glm::normalize(center - arr[i].points[0]);
+      } else {
+        const uint32_t k4 = k == 0 ? n_count-2 : (k == 1 ? n_count-1 : k-2);
+        const uint32_t point4_index = tile_data.points[k4];
+        const glm::vec4 point4 = map->get_point(point4_index);
+        arr[i].dirs[0] = glm::normalize(point4 - arr[i].points[0]);
+      }
+      
+      const auto province = ctx->get_entity<core::province>(province_index);
+      const auto opposite_province = opposite_province_index == UINT32_MAX ? nullptr : ctx->get_entity<core::province>(opposite_province_index);
+      ASSERT(province->title->owner != nullptr);
+      
       arr[i].dirs[0].w = glm::uintBitsToFloat(current_data.tile_index);
+      if (opposite_province == nullptr) {
+        auto title = province->title->owner->main_title;
+        const uint32_t type_idx = type_index[title];
+        arr[i].points[0].w = borders_size[0];
+        arr[i].dirs[1].w = glm::uintBitsToFloat(type_idx); // или здесь другую границу?
+        continue;
+      }
+      
+      ASSERT(opposite_province->title->owner != nullptr);
+      if (province->title->owner == opposite_province->title->owner) {
+        // один владелец, мы должны нарисовать базовую границу
+        arr[i].points[0].w = borders_size[2];
+        arr[i].dirs[1].w = glm::uintBitsToFloat(0);
+        continue;
+      }
+      
+      std::unordered_set<core::faction*> factions;
+      auto liege1 = province->title->owner;
+      while (liege1 != nullptr) {
+        factions.insert(liege1);
+        liege1 = liege1->liege;
+      }
+      
+      bool found = false;
+      auto liege2 = opposite_province->title->owner;
+      while (liege2 != nullptr) {
+        found = found || factions.find(liege2) != factions.end();
+        liege2 = liege2->liege;
+      }
+      
+      if (found) {
+        // эти провинции находятся в одном государстве
+        auto title = province->title->owner->main_title;
+        const uint32_t type_idx = type_index[title];
+        arr[i].points[0].w = borders_size[1];
+        arr[i].dirs[1].w = glm::uintBitsToFloat(type_idx);
+        
+        continue;
+      }
+      
+      // это граница разных государств
+      auto title = province->title->owner->main_title;
+      const uint32_t type_idx = type_index[title];
+      arr[i].points[0].w = borders_size[0];
+      arr[i].dirs[1].w = glm::uintBitsToFloat(type_idx);
+      
+//       const std::vector<uint32_t> prop_arr = {
+//         map::debug::properties::tile::country_index,
+//         map::debug::properties::tile::province_index
+//       };
+//       
+//       for (const auto &prop : prop_arr) {
+//         // или лучше брать эти данные из провинции
+//         const uint32_t country_index = container->get_data<uint32_t>(map::debug::entities::tile, current_data.tile_index, prop);
+//         const uint32_t opposing_country_index = container->get_data<uint32_t>(map::debug::entities::tile, current_data.opposite_tile_index, prop);
+//         
+//         if (country_index == opposing_country_index) continue;
+//         
+//         const uint32_t adjacent1_index = container->get_data<uint32_t>(map::debug::entities::tile, adjacent1, prop);
+//         const uint32_t adjacent2_index = container->get_data<uint32_t>(map::debug::entities::tile, adjacent2, prop);
+//         
+//         if (country_index != adjacent1_index) {
+//           const glm::vec4 center = map->get_point(tile_data.center);
+//           arr[i].dirs[1] = glm::normalize(center - arr[i].points[1]);
+//         } else {
+//           const uint32_t k3 = (tmp_index+2)%n_count;
+//           const uint32_t point3_index = tile_data.points[k3];
+//           const glm::vec4 point3 = map->get_point(point3_index);
+//           arr[i].dirs[1] = glm::normalize(point3 - arr[i].points[1]);
+//         }
+//         
+//         if (country_index != adjacent2_index) {
+//           const glm::vec4 center = map->get_point(tile_data.center);
+//           arr[i].dirs[0] = glm::normalize(center - arr[i].points[0]);
+//         } else {
+//           const uint32_t k4 = k == 0 ? n_count-2 : (k == 1 ? n_count-1 : k-2);
+//           const uint32_t point4_index = tile_data.points[k4];
+//           const glm::vec4 point4 = map->get_point(point4_index);
+//           arr[i].dirs[0] = glm::normalize(point4 - arr[i].points[0]);
+//         }
+//         
+//         if (prop == map::debug::properties::tile::country_index) {
+//           types[country_index+1] = {render::make_color(0.0f, 0.0f, 0.0f, 1.0f), UINT32_MAX, render::make_color(0.0f, 0.0f, 0.0f, 1.0f), 0.3f}; // это мы заполняем для каждого титула
+//           arr[i].dirs[1].w = glm::uintBitsToFloat(country_index+1);
+//         }
+//         
+//         if (prop == map::debug::properties::tile::province_index) {
+//           types[0] = {render::make_color(0.0f, 0.0f, 0.0f, 1.0f), UINT32_MAX, render::make_color(0.0f, 0.0f, 0.0f, 1.0f), 0.15f};
+//           arr[i].dirs[1].w = glm::uintBitsToFloat(0);
+//         }
+//         
+//         break;
+//       }
+//       
+//       arr[i].dirs[0].w = glm::uintBitsToFloat(current_data.tile_index);
       //arr[i].dirs[1].w = glm::uintBitsToFloat(border_type);
       
       // по идее все что мне нужно теперь делать каждый ход это:
@@ -1815,6 +1801,213 @@ namespace devils_engine {
     global::get<render::tile_walls_optimizer>()->set_connections_count(walls.size());
   }
   
+  void connect_game_data(core::map* map, core::context* ctx) {
+    {
+      const size_t count = ctx->get_entity_count<core::city>();
+      for (size_t i = 0; i < count; ++i) {
+        auto city = ctx->get_entity<core::city>(i);
+        ASSERT(city->title != nullptr);
+        ASSERT(city->title->count == 0);
+        city->title->create_children(1);
+        city->title->set_city(city);
+        ASSERT(city->province != nullptr);
+        ASSERT(city->province->cities_count < core::province::cities_max_game_count);
+        city->province->cities[city->province->cities_count] = city;
+        ++city->province->cities_count;
+      }
+    }
+    
+    {
+      const size_t count = ctx->get_entity_count<core::province>();
+      for (size_t i = 0; i < count; ++i) {
+        auto province = ctx->get_entity<core::province>(i);
+        ASSERT(province->cities_count <= province->cities_max_count);
+        ASSERT(province->title != nullptr);
+        ASSERT(province->title->count == 0);
+        province->title->create_children(1);
+        province->title->set_province(province);
+        ASSERT(!province->tiles.empty());
+        for (const auto &tile_index : province->tiles) {
+          core::tile t;
+          t.height = map->get_tile_height(tile_index);
+          t.province = i;
+          ctx->set_tile(tile_index, t);
+        }
+      }
+    }
+    
+    {
+      const size_t count = ctx->get_entity_count<core::titulus>();
+      std::unordered_map<core::titulus*, std::vector<core::titulus*>> childs;
+      for (size_t i = 0; i < count; ++i) {
+        auto title = ctx->get_entity<core::titulus>(i);
+        if (title->parent != nullptr) childs[title->parent].push_back(title);
+      }
+      
+      for (size_t i = 0; i < count; ++i) {
+        auto title = ctx->get_entity<core::titulus>(i);
+        auto itr = childs.find(title);
+        if (itr == childs.end()) continue;
+        const auto &childs_arr = itr->second;
+        ASSERT(title->childs == nullptr);
+        title->create_children(childs_arr.size());
+        if (childs_arr.size() == 1) {
+          title->set_child(0, childs_arr[0]);
+          continue;
+        }
+        
+        for (size_t j = 0; j < childs_arr.size(); ++j) {
+          title->set_child(j, childs_arr[j]);
+        }
+      }
+    }
+    
+    {
+      const size_t count = ctx->characters_count();
+      std::unordered_map<core::faction*, std::vector<core::faction*>> vassals;
+      std::unordered_map<core::faction*, std::vector<core::character*>> prisoners;
+      std::unordered_map<core::character*, std::vector<core::character*>> court;
+      std::unordered_map<core::character*, std::vector<core::character*>> concubines;
+      std::unordered_map<core::character*, std::vector<core::character*>> children;
+      for (size_t i = 0; i < count; ++i) {
+        auto character = ctx->get_character(i);
+        if (character->suzerain != nullptr) court[character->suzerain].push_back(character);
+        if (character->imprisoner != nullptr) prisoners[character->imprisoner].push_back(character);
+        if (character->factions[core::character::self] != nullptr && character->factions[core::character::self]->liege != nullptr) {
+          vassals[character->factions[core::character::self]->liege].push_back(character->factions[core::character::self]);
+        }
+        if (character->family.owner != nullptr) concubines[character->family.owner].push_back(character);
+        // братья сестры, нужно выбрать кого то из родителей и положить туда? как быть с полуродственниками?
+        // скорее всего несколько супругов может быть только у правителей
+        // предыдущих супругов я кажется пока не задаю, тогда нужно найти правителя
+        ASSERT(character->family.previous_consorts == nullptr);
+        const bool has_parent1 = character->family.parents[0] != nullptr;
+        const bool has_parent2 = character->family.parents[1] != nullptr;
+        core::character* parent = nullptr;
+        if (has_parent1 || has_parent2) {
+          if (parent == nullptr) parent = has_parent1 && has_parent2 && character->family.parents[0]->factions[core::character::self] != nullptr ? character->family.parents[0] : nullptr;
+          if (parent == nullptr) parent = has_parent1 && has_parent2 && character->family.parents[1]->factions[core::character::self] != nullptr ? character->family.parents[1] : nullptr;
+          if (parent == nullptr) parent = has_parent1 ? character->family.parents[0] : nullptr;
+          if (parent == nullptr) parent = has_parent2 ? character->family.parents[1] : nullptr;
+        }
+        
+        if (parent != nullptr) children[parent].push_back(character);
+        
+        for (size_t j = 0; j < core::character::relations::max_game_friends; ++j) {
+          auto char_friend = character->relations.friends[j];
+          if (char_friend == nullptr) continue;
+          size_t counter = 0;
+          for (size_t k = 0; k < core::character::relations::max_game_friends; ++k) {
+            auto char_char_friend = char_friend->relations.friends[j];
+            counter += size_t(char_char_friend != nullptr) + 500 * size_t(char_char_friend == character);
+            if (char_char_friend == character) break;
+          }
+          
+          if (counter > 499) continue;
+          ASSERT(counter < core::character::relations::max_game_friends);
+          char_friend->relations.friends[counter] = character;
+        }
+        
+        for (size_t j = 0; j < core::character::relations::max_game_friends; ++j) {
+          auto char_rival = character->relations.rivals[j];
+          if (char_rival == nullptr) continue;
+          size_t counter = 0;
+          for (size_t k = 0; k < core::character::relations::max_game_rivals; ++k) {
+            auto char_char_rival = char_rival->relations.rivals[j];
+            counter += size_t(char_char_rival != nullptr) + 500 * size_t(char_char_rival == character);
+            if (char_char_rival == character) break;
+          }
+          
+          if (counter > 499) continue;
+          ASSERT(counter < core::character::relations::max_game_rivals);
+          char_rival->relations.rivals[counter] = character;
+        }
+        
+        for (size_t j = 0; j < core::character::relations::max_game_lovers; ++j) {
+          auto char_lover = character->relations.lovers[j];
+          if (char_lover == nullptr) continue;
+          size_t counter = 0;
+          for (size_t k = 0; k < core::character::relations::max_game_lovers; ++k) {
+            auto char_char_lovar = char_lover->relations.lovers[j];
+            counter += size_t(char_char_lovar != nullptr) + 500 * size_t(char_char_lovar == character);
+            if (char_char_lovar == character) break;
+          }
+          
+          if (counter > 499) continue;
+          ASSERT(counter < core::character::relations::max_game_lovers);
+          char_lover->relations.friends[counter] = character;
+        }
+        
+        if (character->family.consort != nullptr) {
+          auto consort = character->family.consort;
+          ASSERT(consort->family.consort == nullptr || consort->family.consort == character);
+          consort->family.consort = character;
+        }
+      }
+      
+      for (size_t i = 0; i < count; ++i) {
+        auto character = ctx->get_character(i);
+        // у персонажа может быть другая форма правления (но наверное в этом случае персонажи не будут считаться за вассалов)
+        auto faction = character->factions[core::character::self];
+        if (faction == nullptr) continue;
+        auto itr = vassals.find(faction);
+        if (itr == vassals.end()) continue;
+        const auto &vs = itr->second;
+        for (size_t j = 0; j < vs.size(); ++j) {
+          faction->add_vassal_raw(vs[j]);
+        }
+      }
+      
+      for (size_t i = 0; i < count; ++i) {
+        auto character = ctx->get_character(i);
+        auto faction = character->factions[core::character::self];
+        if (faction == nullptr) continue;
+        auto itr = prisoners.find(faction);
+        if (itr == prisoners.end()) continue;
+        const auto &ps = itr->second;
+        for (size_t j = 0; j < ps.size(); ++j) {
+          faction->add_prisoner_raw(character);
+        }
+      }
+      
+      for (size_t i = 0; i < count; ++i) {
+        auto character = ctx->get_character(i);
+        auto itr = court.find(character);
+        if (itr == court.end()) continue;
+        const auto &cs = itr->second;
+        for (size_t j = 0; j < cs.size(); ++j) {
+          character->add_courtier_raw(cs[j]);
+        }
+      }
+      
+      for (size_t i = 0; i < count; ++i) {
+        auto character = ctx->get_character(i);
+        auto itr = concubines.find(character);
+        if (itr == concubines.end()) continue;
+        const auto &cs = itr->second;
+        for (size_t j = 0; j < cs.size(); ++j) {
+          ASSERT(character->is_male() != cs[j]->is_male());
+          character->add_concubine_raw(cs[j]);
+        }
+      }
+      
+      for (size_t i = 0; i < count; ++i) {
+        auto character = ctx->get_character(i);
+        auto itr = children.find(character);
+        if (itr == children.end()) continue;
+        const auto &cs = itr->second;
+        for (size_t j = 0; j < cs.size(); ++j) {
+          character->add_child_raw(cs[j]);
+        }
+        
+        if (character->family.consort != nullptr) { 
+          ASSERT(character->family.consort->family.children == nullptr);
+          character->family.consort->family.children = character->family.children; 
+        }
+      }
+    }
+  }
+  
   template <typename T>
   void create_entities_without_id() {
     auto tables = global::get<utils::table_container>();
@@ -1822,6 +2015,8 @@ namespace devils_engine {
     
     const auto &data = tables->get_tables(T::s_type);
     ctx->create_container<T>(data.size());
+    
+    PRINT_VAR("cities count", data.size())
   }
   
   template <typename T>
@@ -1848,6 +2043,7 @@ namespace devils_engine {
     auto ctx = global::get<core::context>();
     
     const auto &data = tables->get_tables(core::structure::character);
+    ASSERT(!data.empty());
     for (const auto &table : data) {
       bool male = true;
       bool dead = false;
@@ -1860,7 +2056,20 @@ namespace devils_engine {
         dead = proxy.get<bool>();
       }
       
-      ctx->create_character(male, dead);
+      auto c = ctx->create_character(male, dead);
+      
+      // нам нужно заполнить стейт рандомайзера
+      // как это лучше всего сделать?
+      // советуют использовать splitmix64
+      // но с чем его использовать не говорят
+      // мне нужно придумать как получить сид 
+      // по идее нужно задать некий игровой сид и от него отталкиваться
+      // с другой стороны у меня локальные сиды на всех персах
+      // да но они не будут меняться если я начинаю на тойже карте по нескольку раз
+      // поэтому нужно придумать стейт глобальный
+      const size_t state1 = global::advance_state();
+      const size_t state2 = global::advance_state();
+      c->rng_state = {state1, state2};
     }
   }
   
@@ -1886,18 +2095,27 @@ namespace devils_engine {
     }
   }
   
-  void validate_and_create_data(system_container_t &systems) {
+  void validate_and_create_data(map::creator* creator, system_container_t &systems) {
     systems.core_context = systems.container.create<core::context>();
     global::get(systems.core_context);
     systems.string_container = systems.container.create<utils::data_string_container>();
     global::get(systems.string_container);
     
-    const std::function<bool(const sol::table&)> validation_funcs[] = {
+    utils::world_serializator cont;
+    const std::string_view test_name = "Test world 1\0";
+    const std::string_view test_tname = "test_world_1\0";
+    const std::string_view test_settings = "{}\0";
+    cont.set_name(test_name);
+    cont.set_technical_name(test_tname);
+    cont.set_settings(test_settings);
+    cont.set_seed(1);
+    
+    const std::function<bool(const size_t &, sol::this_state, const sol::table&, utils::world_serializator*)> validation_funcs[] = {
       nullptr,                   // tile    : нужна ли тайлу валидация? я не уверен что хорошей идеей будет использовать луа таблицы для заполнения тайла
-      utils::validate_province,  // province
-      utils::validate_building,  // building_type,
-      utils::validate_city_type, // city_type,
-      utils::validate_city,      // city,
+      utils::validate_province_and_save,  // province
+      utils::validate_building_and_save,  // building_type,
+      utils::validate_city_type_and_save, // city_type,
+      utils::validate_city_and_save,      // city,
       nullptr,                   // trait,
       nullptr,                   // modificator,
       nullptr,                   // troop_type,
@@ -1907,8 +2125,8 @@ namespace devils_engine {
       nullptr,                   // culture,
       nullptr,                   // law,
       nullptr,                   // event,
-      utils::validate_title,     // titulus,
-      utils::validate_character, // character,
+      utils::validate_title_and_save,     // titulus,
+      utils::validate_character_and_save, // character,
       nullptr,                   // dynasty,
       nullptr,                   // faction,    // это и далее делать не нужно по идее
       nullptr,                   // hero_troop, 
@@ -1916,14 +2134,21 @@ namespace devils_engine {
       
     };
     
-    auto tables = global::get<utils::table_container>();
+    global::get<utils::calendar>()->validate();
+    
+    auto &lua = creator->state();
+    //ASSERT(lua != nullptr);
+    
+    auto &tables = creator->table_container();
     const size_t count = static_cast<size_t>(core::structure::count);
     bool ret = true;
     for (size_t i = 0; i < count; ++i) {
       if (!validation_funcs[i]) continue;
-      const auto &data = tables->get_tables(static_cast<core::structure>(i));
+      const auto &data = tables.get_tables(static_cast<core::structure>(i));
+      size_t counter = 0;
       for (const auto &table : data) {
-        ret = ret && validation_funcs[i](table);
+        ret = ret && validation_funcs[i](counter, lua.lua_state(), table, &cont);
+        ++counter;
       }
     }
     
@@ -1944,6 +2169,8 @@ namespace devils_engine {
     parse_entities<core::city>(utils::parse_city);
     parse_characters(utils::parse_character);
     parse_characters(utils::parse_character_goverment);
+    // тут нужно еще соединить все полученные данные друг с другом
+    connect_game_data(systems.map, systems.core_context);
     
     // по идее в этой точке все игровые объекты созданы
     // и можно непосредственно переходить к геймплею
@@ -1951,210 +2178,90 @@ namespace devils_engine {
     // это означает: сериализация данных карты + записать на диск все таблицы + сериализация персонажей и династий (первых)
     // могу ли я сериализовать конкретные типы? скорее да чем нет, 
     // но при этом мне придется делать отдельный сериализатор для каждого типа
-    // понятное дело делать отдельный сериализатор не с руки
+    // понятное дело делать отдельный сериализатор не сруки
+    
+    for (size_t i = 0; i < core::map::hex_count_d(core::map::detail_level); ++i) {
+      const auto &d = systems.core_context->get_tile(i);
+      cont.set_tile_data(i, {d.height, d.province});
+    }
+    
+    cont.serialize(); // 
+    
+    utils::world_serializator test;
+    test.deserialize(global::root_directory() + "saves/test_world_1/world_data");
+    
+    ASSERT(test.get_name() == test_name);
+    ASSERT(test.get_technical_name() == test_tname);
+    ASSERT(test.get_settings() == test_settings);
+    ASSERT(test.get_seed() == 1);
+    
+    ASSERT(tables.get_tables(core::structure::province).size() == cont.get_data_count(core::structure::province));
+    ASSERT(tables.get_tables(core::structure::city_type).size() == cont.get_data_count(core::structure::city_type));
+    ASSERT(tables.get_tables(core::structure::city).size() == cont.get_data_count(core::structure::city));
+    ASSERT(tables.get_tables(core::structure::building_type).size() == cont.get_data_count(core::structure::building_type));
+    ASSERT(tables.get_tables(core::structure::titulus).size() == cont.get_data_count(core::structure::titulus));
+    ASSERT(tables.get_tables(core::structure::character).size() == cont.get_data_count(core::structure::character));
+    
+    ASSERT(cont.get_data_count(core::structure::province) == test.get_data_count(core::structure::province));
+    ASSERT(cont.get_data_count(core::structure::city_type) == test.get_data_count(core::structure::city_type));
+    ASSERT(cont.get_data_count(core::structure::city) == test.get_data_count(core::structure::city));
+    ASSERT(cont.get_data_count(core::structure::building_type) == test.get_data_count(core::structure::building_type));
+    ASSERT(cont.get_data_count(core::structure::titulus) == test.get_data_count(core::structure::titulus));
+    ASSERT(cont.get_data_count(core::structure::character) == test.get_data_count(core::structure::character));
+    
+#define CHECK_CONTENT(var) for (uint32_t i = 0; i < cont.get_data_count(var); ++i) { ASSERT(cont.get_data(var, i) == test.get_data(var, i)); }
+    CHECK_CONTENT(core::structure::province)
+    CHECK_CONTENT(core::structure::city_type)
+    CHECK_CONTENT(core::structure::city)
+    CHECK_CONTENT(core::structure::building_type)
+    CHECK_CONTENT(core::structure::titulus)
+    CHECK_CONTENT(core::structure::character)
+    
+    // кажется все правильно сериализуется и десериализуется
+    // сохранения должны храниться в папках с файлом world_data
+    // название папки - техническое название мира, 
+    // техническое название мира - нужно зафорсить пользователя задать валидное техническое название 
+    // (какнибудь бы упростить для пользователя это дело)
+    // что самое главное я могу оставить пока так как есть и это покроет почти всю сериализацию
+    // остается решить вопрос с климатом, хотя че тут решать: нужно выделить
+    // 64*500к или 128*500к памяти чтобы сохранить сезоны, сезонов по идее не имеет смысла делать больше чем размер массива на каждый тайл
+    // соответственно 64 сезона на каждый тайл, означает ли это что мы можем сохранить 4 тайла в одном чаре?
+    // в сохранениях видимо придется делать протомессадж для каждой сущности которую необходимо сохранить
+    // мне нужно еще придумать стендалоне сохранения: то есть сохранения в которых записаны данные мира дополнительно
+    // 
   }
   
   void create_interface(system_container_t &systems) {
     systems.interface = systems.container.create<utils::interface>();
     global::get(systems.interface);
-    
-    auto &lua = systems.interface->get_state();
-    load_interface_functions(systems.interface, lua);
+    systems.interface->init_constants();
+    systems.interface->init_input();
   }
   
-  void post_generation_work(system_container_t &systems) {
-    find_border_points(global::get<map::generator::container>(), global::get<core::map>(), sol::table()); // после генерации нужно сделать много вещей
+  void post_generation_work(map::creator* creator, system_container_t &systems) {
+    create_game_state();
     generate_tile_connections(global::get<core::map>(), global::get<dt::thread_pool>());
-    validate_and_create_data(systems); // создаем объекты
+    validate_and_create_data(creator, systems); // создаем объекты
+    find_border_points(global::get<core::map>()); // после генерации нужно сделать много вещей
     // по идее создать границы нужно сейчас, так как в титулах появились данные о цвете
     
-    // создать нужно здесь луа интерфейс
-    create_interface(systems);
-  }
-  
-  enum class gameplay_state {
-    turn_advancing,
-    ai_turn,
-    player_turn,
-    next_player,
-  };
-  
-  static std::atomic<gameplay_state> new_state = gameplay_state::turn_advancing;
-  static gameplay_state current_state = gameplay_state::turn_advancing;
-  void player_has_ended_turn() { // перед этим мы должны проверить сделал ли игрок все вещи (ответил на все эвенты, всеми походил)
-    if (current_state != gameplay_state::player_turn) throw std::runtime_error("Current game state isnt player turn");
-    new_state = gameplay_state::next_player;
-  }
-  
-  bool player_end_turn(core::character* c) {
-    // тут мы должны проверить все ли сделал игрок (резолв битвы (вобзможно какого события) и эвенты)
-    // наверное нужно запилить функцию дополнительной проверки
-    ASSERT(c != nullptr);
-    
-    player_has_ended_turn();
-    return true;
-  }
-  
-  void advance_state() {
-    if (current_state == new_state) return;
-    
-    // к сожалению видимо никак кроме последовательности игрок -> комп -> следующий ход
-    // сделать не получится, нам нужно правильно и быстро обработать подсистемы
-    // а это означает что дробить вычисления компа - это плохая идея
-    
-    switch (new_state) {
-      case gameplay_state::turn_advancing: {
-        auto pool = global::get<dt::thread_pool>();
-        pool->submitbase([pool] () {
-          auto ctx = global::get<core::context>();
-          ctx->sort_characters();
-          const size_t first_not_dead = ctx->first_not_dead_character();
-          const size_t first_playable = ctx->first_playable_character();
-          const size_t count_not_dead = ctx->characters_count() - first_not_dead;
-          const size_t count_playable = ctx->characters_count() - first_playable;
-          
-          // статы у городов, провинций, фракций, армий и героев (возможно сначало нужно посчитать эвенты)
-          
-          utils::submit_works_async(pool, count_not_dead, [ctx, first_not_dead] (const size_t &start, const size_t &count) {
-            for (size_t i = start; i < start+count; ++i) {
-              const size_t index = i + first_not_dead;
-              auto c = ctx->get_character(index);
-              ASSERT(!c->is_dead());
-              // нужно наверное добавить флажок необходимости обновляться
-              
-              std::this_thread::sleep_for(std::chrono::microseconds(10)); // пока что моделируем какую то бурную деятельность
-            }
-          });
-          
-          pool->compute();
-          
-          // должно сработать (текущий тред занят этой конкретной функцией)
-          while (pool->working_count() != 1) { std::this_thread::sleep_for(std::chrono::microseconds(1)); }
-          
-          // вычислить эвенты (?)
-          // вычислить рождения/смерти (тут же нужно посчитать наследство)
-          // распространение техов/религии
-          
-          // делаем работу дальше 
-          global::get<utils::calendar>()->advance_turn();
-          
-          new_state = gameplay_state::player_turn; // ?
-        });
-        
-        break;
-      }
-      
-      case gameplay_state::ai_turn: {
-        auto pool = global::get<dt::thread_pool>();
-        pool->submitbase([pool] () {
-          // тут мы должны вычислить ии и сложный луа ии
-          // интеллект должен понять ситуацию вокруг, посмотреть дипломатию,
-          // можно ли что-то построить и куда то сходить героями и армиями
-          // оценить ситуацию можно и параллельно
-          // а вот более конкретные действия требуют какой то последовательности
-          // на такого рода последовательности у меня аллергия
-          // можно как то все сделать параллельно? тут надо понять что все
-          // поиск пути нужно сделать, мы вполне можем найти пути для всех армий заранее
-          // (другое дело что нам возможно потребуется очень много памяти) 
-          // нашел статейку которая кратко описывает как работает ии
-          // основная вещь в том что ии большое количество времени находится в паузе
-          // то есть не выполняет никаких действий или выполняет какую то одну легкую подсистему
-          // существует множество подсистем с которыми взаимодействуют персонажи
-          // некоторые из них выполняются чаще чем другие (например в европке дипломатия обновляется каждый месяц)
-          // я так понимаю происходит распределение на основе весов + неких общих ограничителей?
-          // мы вполне можем распределить веса параллельно, к весам нужно еще распределить нагрузку
-          // подсистемы должны обладать неким коэффициентом вычислительной сложности, которая повлияет на развесовку 
-          // (точнее на распределение нагрузки: более тяжелые персонажи с большей вероятностью получат вычислительное время)
-          // (но при этом всего вычисляемых персонажей будет ограниченное количество)
-          // какие то подсистемы можем посчитать параллельно, какие то нужно считать последовательно
-          // (например передвижение войск должно быть более менее последовательно)
-          // (но при этом передвижение войск можно считать менее часто, и не во всех странах идет сейчас война)
-          // (параллельно можно определить какие то долгосрочные цели, найти супруга, сделать вклад в дипломатию (тут посчитаем отношения соседей))
-          // каждому персонажу должно быть выдано вычислительное время, не каждый ход, скорее всего зависит и от максимального титула
-          // то есть хотелки императора должны вычисляться чаще, у зависимых персонажей видимо меньше всего должно быть вычислительного времени (?)
-          // (относительно меньше всего, так или иначе вычислять мы должны всех хотя бы по разу в год (?))
-          // одно хорошо - у нас не реалтайм, где то рядом нужно посчитать луа ии
-          // луа ии отличается тем что у нас будет гораздо больше опций по оптимизации и рационализации поведения персонажей
-          // но при этом мы должны предоставить возможность какие то части моделировать с помощью с++ кода
-          // (например оставить возможность с++ вычислять женитьбу, так как она чаще всего сопряжена с поиском среди всех персонажей)
-          // как то так
-          
-          // вот хорошая статья про это https://www.rockpapershotgun.com/2016/11/11/crusader-kings-2-characters/
-          
-          // сейчас нужно сделать пока что одну подсистему которая должна отвечать за строительство
-          
-          auto ctx = global::get<core::context>();
-          const size_t first_not_dead = ctx->first_not_dead_character();
-          const size_t first_playable = ctx->first_playable_character();
-          const size_t count_not_dead = ctx->characters_count() - first_not_dead;
-          const size_t count_playable = ctx->characters_count() - first_playable;
-          
-          uint32_t systems_data[count_not_dead];
-          uint32_t* systems_data_ptr = systems_data;
-          
-          const auto &systems = global::get<systems::ai>()->get_subsystems();
-          for (auto s : systems) {
-            // по идее всегда должно быть true
-            // скорее всего иное какое то серьезное исключение
-            //if (!s->get_attrib(ai::sub_system::attrib_threadsave_check)) continue;
-            ASSERT(s->get_attrib(ai::sub_system::attrib_threadsave_check));
-            
-            memset(systems_data_ptr, 0, sizeof(uint32_t) * count_not_dead);
-            const size_t count = s->get_attrib(ai::sub_system::attrib_playable_characters) ? count_playable : count_not_dead;
-            const size_t first = s->get_attrib(ai::sub_system::attrib_playable_characters) ? first_playable : first_not_dead;
-            
-            utils::submit_works_async(pool, count, [ctx, first, s, systems_data_ptr] (const size_t &start, const size_t &count) {
-              for (size_t i = start; i < start+count; ++i) {
-                const size_t index = i + first;
-                auto c = ctx->get_character(index);
-                ASSERT(!c->is_dead());
-                
-                systems_data_ptr[i] = s->check(c);
-                if (systems_data_ptr[i] == SUB_SYSTEM_SKIP) continue;
-                // а зачем мне тогда массив? мне он нужен когда ai::sub_system::attrib_threadsave_process == false 
-                if (s->get_attrib(ai::sub_system::attrib_threadsave_process)) {
-                  s->process(c, systems_data_ptr[i]);
-                }
-              }
-            });
-            
-            pool->compute();
-            
-            // должно сработать (текущий тред занят этой конкретной функцией)
-            while (pool->working_count() != 1) { std::this_thread::sleep_for(std::chrono::microseconds(1)); }
-            
-            if (!s->get_attrib(ai::sub_system::attrib_threadsave_process)) { // такая ситуация должна быть очень редкой
-              const size_t start = 0;
-              for (size_t i = start; i < start+count; ++i) {
-                const size_t index = i + first;
-                if (systems_data_ptr[i] == SUB_SYSTEM_SKIP) continue;
-                         
-                auto c = ctx->get_character(index);
-                ASSERT(!c->is_dead());
-                
-                s->process(c, systems_data_ptr[i]);
-              }
-            }
-          }
-          
-          new_state = gameplay_state::turn_advancing;
-        });
-        break;
-      }
-      
-      case gameplay_state::player_turn: {
-        // мы как то должны переключить стейт отсюда
-        break;
-      }
-      
-      case gameplay_state::next_player: {
-        // выбираем следующего игрока (сейчас понятное дело никакого другого игрока нет)
-        new_state = gameplay_state::ai_turn;
-        break;
-      }
-    }
-    
-    current_state = new_state;
+    //create_interface(systems);
+    systems.interface->init_types();
+    systems.interface->init_game_logic();
+    auto &lua = systems.interface->get_state();
+    load_interface_functions(systems.interface, lua);
+    create_ai_systems(systems);
+    // нужно выбрать себе какого нибудь персонажа
+    // кажется у меня сейчас все персонажи живы, так что можно любого
+    auto ctx = global::get<core::context>();
+    const size_t chars_count = ctx->characters_count();
+    utils::rng::state s = {67586, 987699695};
+    s = utils::rng::next(s);
+    const double val = utils::rng::normalize(utils::rng::value(s));
+    const size_t index = chars_count * val;
+    auto c = ctx->get_character(index);
+    c->make_player();
+    game::update_player(c);
   }
   
   void update(const size_t &time) {
@@ -2167,7 +2274,7 @@ namespace devils_engine {
     // ну и на мой взгляд так будет интереснее (правда от этого пострадает мультитрединг)
     // 
     
-    advance_state();
+    game::advance_state();
     
     // здесь рид онли стейт
     global::get<utils::interface>()->draw(time); // весь интерфейс рисуем здесь
@@ -2229,6 +2336,8 @@ namespace devils_engine {
 //       utils::time_log log("task waiting");
       global::get<render::task_start>()->wait();
       global::get<systems::render>()->clear();
+      auto s = global::get<core::map>()->status();
+      if (s == core::map::status::rendering) global::get<core::map>()->set_status(core::map::status::valid);
     }
 
     size_t mcs = 0;
@@ -2291,10 +2400,10 @@ namespace devils_engine {
   //   if (action == GLFW_RELEASE) mousePressed[button] = false;
 
     //global::data()->keys[button] = !(action == GLFW_RELEASE);
-    const auto old = global::get<input::data>()->key_events.container[button].event;
-    global::get<input::data>()->key_events.container[button].event = static_cast<input::type>(action);
-    auto data = global::get<input::data>()->key_events.container[button].data;
-    if (data != nullptr && old != static_cast<input::type>(action)) data->time = 0;
+    auto data = global::get<input::data>();
+    const auto old = data->key_events.container[button].event;
+    data->key_events.container[button].event = static_cast<input::type>(action);
+    if (old != static_cast<input::type>(action)) data->key_events.container[button].event_time = 0;
   }
 
   void keyCallback(GLFWwindow*, int key, int scancode, int action, int mods) {
@@ -2308,11 +2417,10 @@ namespace devils_engine {
 //     else if (action == GLFW_REPEAT) std::cout << "Repeat" << "\n";
 
     //global::data()->keys[key] = !(action == GLFW_RELEASE);
-    const auto old = global::get<input::data>()->key_events.container[key].event;
-//     global::get<input::data>()->key_events.container[key].prev_event = old;
-    global::get<input::data>()->key_events.container[key].event = static_cast<input::type>(action);
-    auto data = global::get<input::data>()->key_events.container[key].data;
-    if (data != nullptr && old != static_cast<input::type>(action)) data->time = 0;
+    auto data = global::get<input::data>();
+    const auto old = data->key_events.container[key].event;
+    data->key_events.container[key].event = static_cast<input::type>(action);
+    if (old != static_cast<input::type>(action)) data->key_events.container[key].event_time = 0;
     
     //ASSERT(false);
   }

@@ -24,6 +24,16 @@ namespace devils_engine {
       }
     }
     
+    void context::set_tile(const uint32_t &index, const tile &tile_data) {
+      ASSERT(index < core::map::hex_count_d(core::map::detail_level));
+      tile_array[index] = tile_data;
+    }
+    
+    tile context::get_tile(const uint32_t &index) const {
+      ASSERT(index < core::map::hex_count_d(core::map::detail_level));
+      return tile_array[index];
+    }
+    
     dynasty* context::create_dynasty() {
       auto ptr = dynasties_pool.create();
       dynasties.push_back(ptr);

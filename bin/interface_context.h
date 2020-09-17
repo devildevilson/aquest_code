@@ -5,6 +5,7 @@
 #include "render/shared_structures.h"
 #include <vector>
 #include <cstdint>
+// #include "utils/sol.h"
 
 namespace yavf {
   class Device;
@@ -84,6 +85,8 @@ namespace devils_engine {
       size_t descriptor_index;
       nk_draw_null_texture null;
       nk_buffer cmds;
+//       sol::object moonnuklear_ctx;
+//       sol::object moonnuklear_font;
       
       context(yavf::Device* device, render::window* window);
       ~context();

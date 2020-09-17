@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <vector>
+#include <atomic>
 #include "utils/utility.h"
 #include "render/shared_structures.h"
 #include "utils/ray.h"
@@ -37,6 +38,7 @@ namespace devils_engine {
     struct map {
       enum class status {
         initial,
+        rendering,
         valid
       };
       
@@ -79,20 +81,25 @@ namespace devils_engine {
         uint32_t next_level[4];
       };
       
+      // почти все мы тут можем сгенерировать
+      // кроме высот и матрицы поворота
       yavf::Device* device;
       yavf::Buffer* points;
       yavf::Buffer* tiles;
       yavf::Buffer* accel_triangles;
       yavf::Buffer* tile_indices;
+      // биомы: это текстура + цвет, мы это дело можем записать в данные тайла
+      // + какие то объекты на карте, что с ними? нужно придумать какой то способ нарисовать спрайт так чтобы он выглядел максимально 3дшно
+      // у нас есть жесткие ограничения по тому как мы видим объекты на карте, мы их видим в основном сверху и чуть с юга
       yavf::Buffer* biomes;
-      yavf::Buffer* provinces;
+      yavf::Buffer* provinces; // скорее всего не пригодится (и далее)
       yavf::Buffer* faiths;
       yavf::Buffer* cultures;
       yavf::DescriptorSet* tiles_set;
       std::vector<triangle> triangles;
       float max_triangle_size; // 23.8457f
       
-      status s;
+      std::atomic<status> s;
       
       struct create_info {
         yavf::Device* device;
@@ -117,9 +124,13 @@ namespace devils_engine {
       void set_point_data(const glm::vec3 &point, const uint32_t &index);
       void set_tile_indices(const uint32_t &triangle_index, const glm::uvec3 &points, const std::vector<uint32_t> &indices, const uint32_t &offset, const uint32_t &count, const bool has_pentagon);
       void flush_data();
-      void set_tile_biom(const uint32_t &tile_index, const uint32_t &biom_index);
-      void set_tile_tectonic_plate(const uint32_t &tile_index, const uint32_t &tectonic_plate_index);
+      //void set_tile_biom(const uint32_t &tile_index, const uint32_t &biom_index);
+      void set_tile_color(const uint32_t &tile_index, const render::color_t &color);
+      void set_tile_texture(const uint32_t &tile_index, const render::image_t &texture);
+      //void set_tile_tectonic_plate(const uint32_t &tile_index, const uint32_t &tectonic_plate_index);
       void set_tile_height(const uint32_t &tile_index, const float &tile_hight);
+      
+      float get_tile_height(const uint32_t &tile_index) const;
       
       enum status status() const;
       void set_status(const enum status s);

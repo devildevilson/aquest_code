@@ -1,17 +1,8 @@
 #include "helper.h"
 #include "utils/utility.h"
-
-#define SOL_ALL_SAFETIES_ON 1
-#include <sol/sol.hpp>
+#include <filesystem>
 
 using namespace devils_engine;
-
-enum class game_state {
-  loading,
-  menu,
-  create_map,
-  map
-};
 
 int main(int argc, char const *argv[]) {
   set_application_path();
@@ -40,6 +31,7 @@ int main(int argc, char const *argv[]) {
   create_render_system(systems);
   create_map_container(systems);
   create_render_stages(systems);
+  create_interface(systems);
   
   // по всей видимости луа занимает реально много памяти
   // что то с этим сделать вряд ли можно (интересно есть ли какие нибудь жесткие ограничения на андроиде?)
@@ -64,6 +56,8 @@ int main(int argc, char const *argv[]) {
   // проблема в том что тут довольно серьезную оптимизацию нужно предпринять по уменьшению занимаемой памяти
   // да и ко всему прочему очень мало данных у каждой энтити
   
+//   std::cout << "Current path is " << std::filesystem::current_path() << '\n';
+  
   keys_setup();
   
 //   map::generator::context ctx;
@@ -78,25 +72,90 @@ int main(int argc, char const *argv[]) {
 //   systems::generator* gen = nullptr;
   map::creator* creator = nullptr;
   
-  // нужно наверное сделать пока что меню? посмотреть что по сериализации 
+  // по идее хорошим дизайном будет запускать интерфейс без условно всегда 
+  // просто следить чтобы там во время появлялись нужные функции интерфейса
+  // нужно также подчистить интерфейс 
+  // проблема в том что мне часто нужно определенное возвращемое значение
+  // для каждого "экрана" (главное меню, загрузка, генерация, игра, битва, геройская битва)
+  // мне скорее всего потребуется некий уникальный набор правил для интерфейсов
+  // + ко всему мне нужно чистить интерфейсы, то есть нужно таблицу интерфейсов держать отдельно
+  // и скорее тот интерфейс который у меня сейчас - это надстройка над контейнером
   
+  // судя по всему довольно уверенно наступает момент когда мне требуется загружать изображения
+  // как их грузить? достаточно очевидно что мне нужны изображения для всех аспектов игры 
+  // грузим мы их наверное тоже через луа (да вообще нахрена что то еще если есть луа?)
+  // нам требуется собрать описания, заранее посчитать сколько всего нужно создать
+  // посчитать размер + ко всему нужно уметь грузить все в несколько итераций
+  // перед сменой состояния нам нужно будет все не нужное удалить
+  
+  game_state new_state = game_state::create_map; // нужно для загрузчика
   game_state current_state = game_state::create_map;
+  game_state old_state = game_state::create_map;
+  //game_state current_state = game_state::map;
   global::get<render::window>()->show();
   utils::frame_time frame_time;
   while (!global::get<render::window>()->close()) {
     frame_time.start();
-    poll_events();
     const size_t time = frame_time.get();
+    input::update_time(time);
+    poll_events();
     mouse_input(ent, time); 
     key_input(time);
     zoom_input(ent);
     next_nk_frame(time);
     camera::strategic(ent);
-    input::update_time(time);
     
     switch (current_state) {
       case game_state::loading: {
         ASSERT(false);
+        // лоадинг может быть от карты к битве, от карты к столкновению, от битвы к карте, от столкновения к карте
+        // переход от карты означает что мы должны сохранить все данные карты в каком нибудь адекватном виде
+        // и загрузить только то что нужно непосредственно в битве (это анимации, биомы, генерация карты, расстановка войск)
+        // нужно выделить все данные используемые на карте и их удалить после сериализации (в том числе core::map)
+        // тут мы должны получить от чего к чему переходим и какие то данные этих переходов
+        // переход от создания карты не должен переключать нас на экран загрузки, идеально сделать отдельный рендер для интерфейса
+        // нужно попытаться сделать этот переход с функцией post_generation_work
+        
+        if (old_state == game_state::create_map && new_state == game_state::map) {
+          // нужно положить post_generation_work в треад пул вместе с контейнером (можно в контейнере указывать когда конец когда начало)
+          // нужно запустить функцию отрисовки интерфейса, 
+          // причем перед этим нужно либо загрузить новую картинку, 
+          // либо подсказать интерфейсу что использовать заглушку не нужно
+        }
+        
+        if (old_state == game_state::map && new_state == game_state::battle) { // начало битвы
+          
+        }
+        
+        if (old_state == game_state::map && new_state == game_state::encounter) {
+          
+        }
+        
+        if (old_state == game_state::battle && new_state == game_state::map) { // конец битвы
+          
+        }
+        
+        if (old_state == game_state::encounter && new_state == game_state::map) {
+          
+        }
+        
+        if (old_state == game_state::map && new_state == game_state::menu) { // выходим в главное меню
+          
+        }
+        
+        if (old_state == game_state::battle && new_state == game_state::menu) {
+          
+        }
+        
+        if (old_state == game_state::encounter && new_state == game_state::menu) {
+          
+        }
+        
+        // загрузка игры (можем ли мы сохранить игру посреди битвы? вообще наверное можем, но там нужно дожидаться окончания анимаций)
+        if (old_state == game_state::menu && new_state == game_state::map) {
+          
+        }
+        
         break;
       }
       
@@ -112,8 +171,12 @@ int main(int argc, char const *argv[]) {
         
         creator->generate();
         
+        if (creator->back_to_menu()) {
+          destroy_map_generator(&creator);
+        }
+        
         if (creator->finished()) {
-          post_generation_work(systems);
+          post_generation_work(creator, systems); // эти вещи тоже вполне можно сделать асинхронно
           destroy_map_generator(&creator);
           current_state = game_state::map;
         }
@@ -122,20 +185,32 @@ int main(int argc, char const *argv[]) {
       }
       
       case game_state::map: {
+//         const uint32_t picked_tile_index = cast_mouse_ray();
+//         global::get<render::tile_render>()->picked_tile(picked_tile_index); // тайл теперь нужно пикать с учетом высоты тайлов
+//         overlay::debug(picked_tile_index, global::get<map::generator::container>());
+        
         update(time);
         break;
       }
+      
+      case game_state::battle: {
+        ASSERT(false);
+        break;
+      }
+      
+      case game_state::encounter: {
+        ASSERT(false);
+        break;
+      }
     }
-    
-    const uint32_t picked_tile_index = cast_mouse_ray();
-    global::get<render::tile_render>()->picked_tile(picked_tile_index);
-    overlay::debug(picked_tile_index, global::get<map::generator::container>());
     
     // ошибки с отрисовкой непосредственно тайлов могут быть связаны с недостаточным буфером для индексов (исправил)
     // еще меня беспокоит то что игра занимает уже 270 мб оперативы 
     // (примерно 100 мб занимает вся информация о игровой карте (размер контейнера и размер данных в кор::мап))
     // (еще мегобайт 100 занимает луа (похоже что с этим бороться будет крайне сложно))
     // нужно каким то образом это сократить
+    auto s = global::get<core::map>()->status();
+    if (s == core::map::status::valid) global::get<core::map>()->set_status(core::map::status::rendering);
     global::get<systems::render>()->update(global::get<render::container>());
     const size_t sync_time = global::get<render::window>()->flags.vsync() ? global::get<render::window>()->refresh_rate_mcs() : 0;
     sync(frame_time, sync_time);

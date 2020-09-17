@@ -26,5 +26,9 @@ namespace devils_engine {
     size_t generator::current() const {
       return current_part;
     }
+    
+    bool generator::finished() const {
+      return current_part == parts.size();
+    }
   }
 }

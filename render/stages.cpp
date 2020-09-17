@@ -1100,8 +1100,8 @@ namespace devils_engine {
         // нужен ли мне изменяющийся антиаляисинг?
         const nk_convert_config config{
           1.0f,
-          NK_ANTI_ALIASING_ON,
-          NK_ANTI_ALIASING_ON,
+          NK_ANTI_ALIASING_OFF,
+          NK_ANTI_ALIASING_OFF,
           22,
           22,
           22,

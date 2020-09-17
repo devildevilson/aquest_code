@@ -171,8 +171,10 @@ struct light_map_tile_t {
 
 struct map_tile_t {
   uint center;
-  uint biom_index;          // тут мы можем задать цвет (и даже 10 бит на компоненту)
-  uint unique_object_index; // нам потребуется цвет и текстурка
+//   uint biom_index;          // тут мы можем задать цвет (и даже 10 бит на компоненту)
+//   uint unique_object_index; // нам потребуется цвет и текстурка
+  image_t texture; 
+  color_t color;
   float height; // мне бы еще подъем какой
   uint points[6];
   uint neighbours[6];
@@ -180,6 +182,7 @@ struct map_tile_t {
   // подъем означает что мне нужно генерить закраску какую для этих областей
   // что хорошо - закраску можно сгенерировать в screen space
   // там же мы должны сгенерить данные для отрисовки деревьев
+  // закраску сгенерировал, но в буфере (вообще нужно посмотреть сколько гпу памяти занимают все это данные)
 };
 
 // формула безье (2 порядок): vec = (1-t)*(1-t)*vec0+2*(1-t)*t*vec1+t*t*vec2, где
@@ -189,16 +192,28 @@ struct map_tile_t {
 
 struct packed_biom_data_t {
   uvec4 uint_data;
+  vec4 scale_data;
   vec4 float_data;
 };
 
-struct biom_data_t {
-  image_t img;
-  image_t obj;
-  
+struct biome_data_t {
+  image_t texture;
+  color_t color;
+  // кажется что объекты биома (например лес) будут состоять из двух текстурок
+  // первая - это та часть которая будет ровно стоять на тайле, но при этом повернута на игрока
+  // вторая - это та часть которая будет ображена к игроку полностью (билборд)
+  image_t object_texture1;
+  image_t object_texture2;
+  float min_scale1; // mix по этим двум числам 
+  float max_scale1;
+  float min_scale2;
+  float max_scale2;
+  // "плотность" объектов на тайле, ниже нуля - каждые несколько тайлов объект, выше нуля - среднее количество объектов на тайле
+  // нужно ли делать минимум максимум плотности? не уверен что это полезно
   float density;
-  float width; // лучше бы чтобы для таких объектов размеры были одинаковыми
-  float height; // хотя может и нет
+  float dummy1; // что тут?
+  float dummy2;
+  float dummy3;
 };
 
 INLINE bool is_image_valid(const image_t img) {
@@ -256,6 +271,16 @@ INLINE float get_color_a(const color_t col) {
   const uint mask = 0xff;
   const uint comp = (col.container >> 0) & mask;
   return float(comp) / div;
+}
+
+INLINE color_t make_color1(const float r, const float g, const float b, const float a) {
+  const uint ur = uint(255.0f * r);
+  const uint ug = uint(255.0f * g);
+  const uint ub = uint(255.0f * b);
+  const uint ua = uint(255.0f * a);
+  color_t c;
+  c.container = (ur << 24) | (ug << 16) | (ub << 8) | (ua << 0);
+  return c;
 }
 
 INLINE image_t get_particle_image(const gpu_particle particle) {
@@ -391,8 +416,10 @@ INLINE bool particle_limit_min_speed(const gpu_particle particle) {
 INLINE map_tile_t unpack_data(const light_map_tile_t data) {
   map_tile_t tile;
   tile.center = data.tile_indices.x;
-  tile.biom_index = data.tile_indices.y;
-  tile.unique_object_index = data.tile_indices.z;
+//   tile.biom_index = data.tile_indices.y;
+//   tile.unique_object_index = data.tile_indices.z;
+  tile.texture.container = data.tile_indices.y;
+  tile.color.container = data.tile_indices.z;
   tile.height = uintBitsToFloat(data.tile_indices.w);
   tile.points[0] = data.packed_data1[0];
   tile.points[1] = data.packed_data1[1];
@@ -409,21 +436,32 @@ INLINE map_tile_t unpack_data(const light_map_tile_t data) {
   return tile;
 }
 
-INLINE biom_data_t unpack_data(const packed_biom_data_t data) {
-  biom_data_t biom;
-  biom.img.container = data.uint_data.x;
-  biom.obj.container = data.uint_data.y;
-  biom.density = data.float_data.x;
-  biom.width = data.float_data.y;
-  biom.height = data.float_data.z;
-  return biom;
+INLINE biome_data_t unpack_data(const packed_biom_data_t data) {
+  biome_data_t biome;
+  biome.texture.container = data.uint_data.x;
+  biome.color.container = data.uint_data.y;
+  biome.object_texture1.container = data.uint_data.z;
+  biome.object_texture2.container = data.uint_data.w;
+  
+  biome.min_scale1 = data.scale_data.x;
+  biome.max_scale1 = data.scale_data.y;
+  biome.min_scale2 = data.scale_data.z;
+  biome.max_scale2 = data.scale_data.w;
+  
+  biome.density = data.float_data.x;
+  biome.dummy1 = data.float_data.y;
+  biome.dummy2 = data.float_data.z;
+  biome.dummy3 = data.float_data.w;
+  return biome;
 }
 
 INLINE light_map_tile_t pack_data(const map_tile_t tile) {
   light_map_tile_t packed_data;
   packed_data.tile_indices.x = tile.center;
-  packed_data.tile_indices.y = tile.biom_index;
-  packed_data.tile_indices.z = tile.unique_object_index;
+//   packed_data.tile_indices.y = tile.biom_index;
+//   packed_data.tile_indices.z = tile.unique_object_index;
+  packed_data.tile_indices.y = tile.texture.container;
+  packed_data.tile_indices.z = tile.color.container;
   packed_data.tile_indices.w = floatBitsToUint(tile.height);
   packed_data.packed_data1[0] = tile.points[0];
   packed_data.packed_data1[1] = tile.points[1];
@@ -440,13 +478,20 @@ INLINE light_map_tile_t pack_data(const map_tile_t tile) {
   return packed_data;
 }
 
-INLINE packed_biom_data_t pack_data(const biom_data_t biom) {
+INLINE packed_biom_data_t pack_data(const biome_data_t biome) {
   packed_biom_data_t packed_data;
-  packed_data.uint_data.x = biom.img.container;
-  packed_data.uint_data.y = biom.obj.container;
-  packed_data.float_data.x = biom.density;
-  packed_data.float_data.y = biom.width;
-  packed_data.float_data.z = biom.height;
+  packed_data.uint_data.x = biome.texture.container;
+  packed_data.uint_data.y = biome.color.container;
+  packed_data.uint_data.z = biome.object_texture1.container;
+  packed_data.uint_data.w = biome.object_texture2.container;
+  packed_data.scale_data.x = biome.min_scale1;
+  packed_data.scale_data.y = biome.max_scale1;
+  packed_data.scale_data.z = biome.min_scale2;
+  packed_data.scale_data.w = biome.max_scale2;
+  packed_data.float_data.x = biome.density;
+  packed_data.float_data.y = biome.dummy1;
+  packed_data.float_data.z = biome.dummy2;
+  packed_data.float_data.w = biome.dummy3;
   return packed_data;
 }
 
@@ -493,6 +538,29 @@ INLINE float lcg_normalize(const uint val) {
 
     INLINE image_t create_image(const uint16_t &index, const uint8_t &layer) {
       return {(uint(index) << 16) | (uint(layer) << 8)};
+    }
+    
+    INLINE color_t make_color(const uint16_t &r, const uint16_t &g, const uint16_t &b, const uint16_t &a) {
+      ASSERT(r <= UINT8_MAX);
+      ASSERT(g <= UINT8_MAX);
+      ASSERT(b <= UINT8_MAX);
+      ASSERT(a <= UINT8_MAX);
+      color_t c;
+      c.container = (r << 24) | (g << 16) | (b << 8) | (a << 0);
+      return c;
+    }
+    
+    INLINE color_t make_color(const float &r, const float &g, const float &b, const float &a) {
+      ASSERT(r >= 0.0f && r <= 1.0f);
+      ASSERT(g >= 0.0f && g <= 1.0f);
+      ASSERT(b >= 0.0f && b <= 1.0f);
+      ASSERT(a >= 0.0f && a <= 1.0f);
+      const uint8_t final_r = UINT8_MAX * r;
+      const uint8_t final_g = UINT8_MAX * g;
+      const uint8_t final_b = UINT8_MAX * b;
+      const uint8_t final_a = UINT8_MAX * a;
+      
+      return make_color(uint16_t(final_r), uint16_t(final_g), uint16_t(final_b), uint16_t(final_a));
     }
     
     static_assert(sizeof(light_map_tile_t) % 16 == 0);

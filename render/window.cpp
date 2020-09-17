@@ -619,5 +619,23 @@ namespace devils_engine {
       // Global::get<render::buffers>()->set_camera_dim(surface.extent.width, surface.extent.height);
       // Global::get<render::buffers>()->update_data();
     }
+    
+    std::pair<float, float> window::content_scale() const {
+      std::pair<float, float> scale;
+      glfwGetWindowContentScale(handle, &scale.first, &scale.second);
+      return scale;
+    }
+    
+    std::pair<int32_t, int32_t> window::monitor_physical_size() const {
+      std::pair<int32_t, int32_t> mm = std::make_pair(0, 0);
+      if (monitor != nullptr) glfwGetMonitorPhysicalSize(monitor, &mm.first, &mm.second);
+      return mm;
+    }
+    
+    std::pair<float, float> window::monitor_content_scale() const {
+      std::pair<float, float> scale = std::make_pair(0.0f, 0.0f);
+      if (monitor != nullptr) glfwGetMonitorContentScale(monitor, &scale.first, &scale.second);
+      return scale;
+    }
   }
 }

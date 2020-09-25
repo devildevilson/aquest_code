@@ -1,8 +1,9 @@
 cmake_minimum_required(VERSION 3.1)
 project(apates_quest) # 'эпати'
 
-set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME})
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME})
+set(PROJECT_DIR ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME})
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${PROJECT_DIR}/bin)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_DIR}/bin)
 
 set(TARGET_NAME ${PROJECT_NAME})
 
@@ -46,7 +47,7 @@ if(NOT EXISTS "${PROJECT_SOURCE_DIR}/include/fmt/CMakeLists.txt")
 endif()
 
 set(STB_INCLUDE_PATH include/stb)
-set(LUA_LIB_PATH ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/scripts)
+set(LUA_LIB_PATH ${PROJECT_DIR}/scripts)
 
 include_directories(
   .
@@ -71,6 +72,11 @@ link_directories(
   #${LUA_LIB_PATH} # требуется для moonnuklear
   libs/
 )
+
+set(CMAKE_SKIP_BUILD_RPATH TRUE)
+#set(CMAKE_BUILD_WITH_INSTALL_RPATH FALSE)
+#set(CMAKE_INSTALL_RPATH "")
+#set(CMAKE_INSTALL_RPATH_USE_LINK_PATH FALSE)
 
 if (WIN32)
   set(CPPFS_LIB_PATH C:/libs/cppfs)
@@ -123,7 +129,7 @@ else()
   )
 endif()
 
-set(COMPILED_SHADERS_PATH ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/shaders)
+set(COMPILED_SHADERS_PATH ${PROJECT_DIR}/shaders)
 
 file(MAKE_DIRECTORY ${COMPILED_SHADERS_PATH})
 
@@ -139,10 +145,10 @@ add_definitions(
 
 if (CMAKE_BUILD_TYPE MATCHES "Debug")
   # -fsanitize=address -fsanitize=pointer-compare -fsanitize=pointer-subtract -fsanitize=undefined
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -msse4.2 -std=c++17 -Wall -Wextra -g -fno-rtti -pthread")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -msse4.2 -std=c++17 -Wall -Wextra -g -fno-rtti -pthread -Wl,-rpath=./")
 else()
   add_definitions(-D_NDEBUG)
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -msse4.2 -std=c++17 -Wall -Wextra -O3 -s -fno-rtti -pthread")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -msse4.2 -std=c++17 -Wall -Wextra -O3 -s -fno-rtti -pthread -Wl,-rpath=./")
 endif (CMAKE_BUILD_TYPE MATCHES "Debug")
 
 file(GLOB_RECURSE GLSL_SOURCE_FILES
@@ -196,7 +202,7 @@ set(HDR_LIST
 )
 
 add_library(serialization ${SRC_LIST} ${HDR_LIST})
-target_link_libraries(serialization lz4 cryptopp z) #protobuf-lite protobuf
+target_link_libraries(serialization lz4 cryptopp) #protobuf-lite protobuf
 
 set(SRC_LIST
   utils/thread_pool.cpp

@@ -4,6 +4,7 @@
 #include <GLFW/glfw3.h>
 
 #include <thread>
+#include <filesystem>
 
 #include "whereami.h"
 
@@ -50,9 +51,12 @@ namespace devils_engine {
     
 //     std::cout << array << "\n";
     
-    const std::string dir_path = std::string(array);
+    std::filesystem::path p = std::string(array);
+    p /= "../";
+    const std::string dir_path = p;
+    std::cout << dir_path << "\n";
     
-    ASSERT(dir_path.size() == size_t(dirname+1));
+    //ASSERT(dir_path.size() == size_t(dirname+1));
     
     global g;
     g.set_root_directory(dir_path);

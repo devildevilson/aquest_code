@@ -125,17 +125,19 @@ namespace devils_engine {
       VkPhysicalDeviceProperties deviceProperties;
       choosen.getProperties(&deviceProperties);
       if (choosen.handle() == VK_NULL_HANDLE) throw std::runtime_error("choosen.handle() == VK_NULL_HANDLE");
-      //Global::console()->printf("Using device: %s", deviceProperties.deviceName);
       std::cout << "Using device: " << deviceProperties.deviceName << '\n';
+      VkPhysicalDeviceFeatures f_test;
+      choosen.getFeatures(&f_test);
+      if (f_test.samplerAnisotropy == VK_TRUE) device_properties.set(physical_device_sampler_anisotropy, true);
 
       yavf::DeviceMaker dm(instance);
       VkPhysicalDeviceFeatures f = {};
-      f.samplerAnisotropy = VK_TRUE;
+      f.samplerAnisotropy = is_properties_presented(physical_device_sampler_anisotropy);
       //f.geometryShader = VK_TRUE;
     //   f.multiDrawIndirect = VK_TRUE;
     //   f.drawIndirectFirstInstance = VK_TRUE;
     //   f.fragmentStoresAndAtomics = VK_TRUE;
-      f.wideLines = VK_TRUE;
+//       f.wideLines = VK_TRUE;
       device = dm.beginDevice(choosen).setExtensions(deviceExtensions).createQueues().features(f).create(instanceLayers, "Graphics device");
 
       yavf::DescriptorPool defaultPool = VK_NULL_HANDLE;
@@ -179,6 +181,10 @@ namespace devils_engine {
         tasks[i]->pushWaitSemaphore(window->frames[i].image_available, window->frames[i].flags);
         tasks[i]->pushSignalSemaphore(window->frames[i].finish_rendering);
       }
+    }
+    
+    bool container::is_properties_presented(const uint32_t &index) const {
+      return device_properties.get(index);
     }
 
     yavf::TaskInterface* container::interface() const {

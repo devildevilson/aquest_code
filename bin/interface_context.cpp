@@ -3,6 +3,7 @@
 #include "render/window.h"
 // #include "Helper.h"
 #include "utils/globals.h"
+#include "render/container.h"
 
 #include <fstream>
 #include "nlohmann/json.hpp"
@@ -214,10 +215,18 @@ namespace devils_engine {
           // тут нужен еще сэмплер и дескриптор
           yavf::Sampler sampler;
           {
+            auto container = global::get<render::container>();
+            int enable = VK_FALSE;
+            float level = 1.0f;
+            if (container->is_properties_presented(render::container::physical_device_sampler_anisotropy)) {
+              enable = VK_TRUE;
+              level = 16.0f;
+            }
+            
             yavf::SamplerMaker sm(device);
 
             sampler = sm.addressMode(VK_SAMPLER_ADDRESS_MODE_REPEAT, VK_SAMPLER_ADDRESS_MODE_REPEAT)
-                        .anisotropy(0.0f)
+                        .anisotropy(enable, level)
                         .borderColor(VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK)
                         .compareOp(VK_FALSE, VK_COMPARE_OP_GREATER)
                         .filter(VK_FILTER_NEAREST, VK_FILTER_NEAREST)

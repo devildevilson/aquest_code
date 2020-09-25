@@ -1,5 +1,7 @@
 #include "interface_container.h"
 
+#include <iostream>
+
 #include "bin/interface_context.h"
 #include "lua_initialization.h"
 #include "globals.h"

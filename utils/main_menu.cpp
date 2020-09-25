@@ -1,6 +1,7 @@
 #include "main_menu.h"
 #include "interface_container.h"
 #include "demiurge.h"
+#include <iostream>
 
 namespace devils_engine {
   namespace utils {

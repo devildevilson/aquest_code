@@ -151,8 +151,8 @@ local function core_main_menu(ctx, menu, data, entries_table)
     print("choose " .. main_menu_next)
   end
 
-  if main_menu_next == "quit_game_window" then menu:quit_game() end
-  if main_menu_next ~= "main_menu" then
+  if main_menu_next == "quit_game_window" then menu:quit_game()
+  elseif main_menu_next ~= "main_menu" then
     menu:push(main_menu_next)
     main_menu_next = "main_menu"
   end
@@ -174,14 +174,7 @@ function main_menu_window(ctx, menu, data)
 end
 
 local map_window_table <const> = {
-  -- "continue_game",       "Continue", -- так то мы это берем из локализации
-  -- "new_game_window",     "New game",
   "back_to_main_menu",       "Back to main menu",
-  -- "load_game_window",    "Load game",
-  -- "multiplayer_window",  "Multiplayer",
-  -- "options_window",      "Options",
-  -- "achievements_window", "Achievements",
-  -- "credits_window",      "Credits",
   "quit_game_window",    "Quit game"
 }
 

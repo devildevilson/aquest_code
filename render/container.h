@@ -2,6 +2,7 @@
 #define CONTAINER_H
 
 #include "utils/typeless_container.h"
+#include "utils/bit_field.h"
 #include "context.h"
 #include <vector>
 #include <string>
@@ -23,6 +24,11 @@ namespace devils_engine {
   
   namespace render {
     struct container : public context {
+      enum physical_device_properties {
+        physical_device_sampler_anisotropy,
+        physical_device_properties_count
+      };
+      
       struct application_info {
         std::string app_name;
         uint32_t app_version;
@@ -31,12 +37,15 @@ namespace devils_engine {
         uint32_t api_version;
       };
       
+      static const size_t bit_field_size = physical_device_properties_count / SIZE_WIDTH + 1;
+      
       utils::typeless_container mem;
       yavf::Instance* instance;
       yavf::Device* device;
       struct window* window;
       render::stage_container* render;
       std::vector<yavf::CombinedTask*> tasks;
+      utils::bit_field<bit_field_size> device_properties;
 
       container();
       ~container();
@@ -46,6 +55,7 @@ namespace devils_engine {
       yavf::Device* create_device();
       render::stage_container* create_system(const size_t &system_container_size);
       void create_tasks();
+      bool is_properties_presented(const uint32_t &index) const;
 
       yavf::TaskInterface* interface() const override;
       yavf::CombinedTask* combined() const override;

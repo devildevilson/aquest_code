@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.0)
+cmake_minimum_required(VERSION 3.1)
 project(apates_quest) # 'эпати'
 
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME})
@@ -63,6 +63,7 @@ include_directories(
   include/magic_enum/include/
   include/lz4/lib/
   include/protobuf/src/
+  include/cista/include/
 )
 link_directories(
   ${CMAKE_CURRENT_BINARY_DIR}
@@ -138,10 +139,10 @@ add_definitions(
 
 if (CMAKE_BUILD_TYPE MATCHES "Debug")
   # -fsanitize=address -fsanitize=pointer-compare -fsanitize=pointer-subtract -fsanitize=undefined
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -msse4.2 -pthread -std=c++17 -Wall -Wextra -g -fno-rtti")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -msse4.2 -std=c++17 -Wall -Wextra -g -fno-rtti -pthread")
 else()
   add_definitions(-D_NDEBUG)
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -msse4.2 -pthread -std=c++17 -Wall -Wextra -O3 -s -fno-rtti")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -msse4.2 -std=c++17 -Wall -Wextra -O3 -s -fno-rtti -pthread")
 endif (CMAKE_BUILD_TYPE MATCHES "Debug")
 
 file(GLOB_RECURSE GLSL_SOURCE_FILES
@@ -180,19 +181,22 @@ add_custom_target(
 )
 
 set(SRC_LIST
-  utils/sha256.cpp
+  utils/lib_crypto_fake_rtti.cpp
+#   include/cryptopp/hc256.cpp
+#   include/cryptopp/sha.cpp
   utils/serializator_helper.cpp
-  protobuf/test1.pb.cc
+#   protobuf/test1.pb.cc
 )
 
 set(HDR_LIST
-  utils/sha256.h
+  include/cryptopp/hc256.h
+  include/cryptopp/sha.h
   utils/serializator_helper.h
-  protobuf/test1.pb.h
+#   protobuf/test1.pb.h
 )
 
 add_library(serialization ${SRC_LIST} ${HDR_LIST})
-target_link_libraries(serialization lz4 protobuf) #protobuf-lite
+target_link_libraries(serialization lz4 cryptopp z) #protobuf-lite protobuf
 
 set(SRC_LIST
   utils/thread_pool.cpp
@@ -209,7 +213,10 @@ set(SRC_LIST
   utils/string_container.cpp
   utils/string_bank.cpp
   utils/progress_container.cpp
-  #utils/perlin.cpp
+  utils/interface_container.cpp
+  utils/main_menu.cpp
+  utils/demiurge.cpp
+  bin/interface2.cpp
   include/FastNoise/FastNoise.cpp
   include/whereami/src/whereami.c
   include/fmt/src/format.cc
@@ -244,12 +251,16 @@ set(HDR_LIST
   utils/string_container.h
   utils/string_bank.h
   utils/progress_container.h
+  utils/interface_container.h
+  utils/main_menu.h
+  utils/demiurge.h
+  bin/interface2.h
   include/FastNoise/FastNoise.h
   include/whereami/src/whereami.h
 )
 
 add_library(utils ${SRC_LIST} ${HDR_LIST})
-target_link_libraries(utils) # PUBLIC foonathan_memory moonnuklear
+target_link_libraries(utils lua pthread) # PUBLIC foonathan_memory moonnuklear
 
 set(SRC_LIST
   render/container.cpp
@@ -266,6 +277,8 @@ set(SRC_LIST
   render/render_mode_container.cpp
   render/pipeline_mode_updater.cpp
   render/image_container.cpp
+  render/persistent_resources.cpp
+  render/slots.cpp
 )
 
 set(HDR_LIST
@@ -289,6 +302,8 @@ set(HDR_LIST
   render/render_mode_container.h
   render/pipeline_mode_updater.h
   render/image_container.h
+  render/persistent_resources.h
+  render/slots.h
 )
 
 add_library(render ${SRC_LIST} ${HDR_LIST})
@@ -307,6 +322,21 @@ add_library(ai ${SRC_LIST} ${HDR_LIST})
 target_link_libraries(ai utils)
 
 set(SRC_LIST
+  utils/systems.cpp
+  bin/loading_functions.cpp
+  bin/game_time.cpp
+)
+
+set(HDR_LIST
+  utils/systems.h
+  bin/loading_functions.h
+  bin/game_time.h
+)
+
+add_library(systems ${SRC_LIST} ${HDR_LIST})
+target_link_libraries(systems render utils)
+
+set(SRC_LIST
   bin/interface_context.cpp
   #bin/interfaces.cpp
   bin/overlay.cpp
@@ -323,8 +353,6 @@ set(SRC_LIST
   #include/lanes/src/compat.c
   bin/character.cpp
   bin/map_creator.cpp
-  bin/interface2.cpp
-  bin/game_time.cpp
   bin/core_context.cpp
   bin/titulus_data_parser.cpp
   bin/province_data_parser.cpp
@@ -333,6 +361,7 @@ set(SRC_LIST
   bin/character_data_parser.cpp
   bin/building_data_parser.cpp
   bin/logic.cpp
+  utils/quest_states.cpp
 )
 
 set(HDR_LIST
@@ -352,15 +381,15 @@ set(HDR_LIST
   bin/core_structures.h
   bin/declare_structures.h
   bin/map_creator.h
-  bin/interface2.h
-  bin/game_time.h
   bin/core_context.h
   bin/stats.h
   bin/data_parser.h
   bin/logic.h
+  utils/quest_states.h
+  utils/quest_state.h
 )
 add_executable(${TARGET_NAME} ${SRC_LIST} ${HDR_LIST})
-target_link_libraries(${TARGET_NAME} ai render utils serialization lua)
+target_link_libraries(${TARGET_NAME} systems ai render utils serialization)
 add_dependencies(${TARGET_NAME} shaders)
 
 # Strip binary for release builds

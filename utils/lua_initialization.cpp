@@ -7,6 +7,8 @@
 #include "bin/logic.h"
 #include "input.h"
 #include "progress_container.h"
+#include "main_menu.h"
+#include "demiurge.h"
 
 namespace devils_engine {
   namespace utils {
@@ -35,6 +37,16 @@ namespace devils_engine {
     
     void setup_lua_constants(sol::state &lua) {
       //auto constants = lua["constants"].get_or_create<sol::table>();
+      auto t1 = lua.create_table_with(
+        "creating_map", utils::progress_container::creating_map,
+        "loading_map", utils::progress_container::loading_map,
+        "loading_created_map", utils::progress_container::loading_created_map,
+        "loading_map_save", utils::progress_container::loading_map_save,
+        "loading_battle", utils::progress_container::loading_battle,
+        "loading_encounter", utils::progress_container::loading_encounter,
+        "back_to_menu", utils::progress_container::back_to_menu
+      );
+      
       auto target = lua.create_table_with(
         "time_precision", TIME_PRECISION,
         "one_second", ONE_SECOND,
@@ -57,7 +69,8 @@ namespace devils_engine {
         "pi_e", PI_E,
         "epsilon", EPSILON,
         "size_max", -1,
-        "uint32_max", UINT32_MAX
+        "uint32_max", UINT32_MAX,
+        "loading_type", t1
       );
       
       target.set_function("deg_to_rad", [] (const double &deg) { return DEG_TO_RAD(deg); });
@@ -72,6 +85,27 @@ namespace devils_engine {
 //         "hint", &utils::progress_container::hint,
 //         "is_finished", &utils::progress_container::is_finished
 //       );
+    }
+    
+    void setup_lua_main_menu(sol::state &lua) {
+      auto utils = lua["utils"].get_or_create<sol::table>();
+      auto main_menu = utils.new_usertype<utils::main_menu>("main_menu",
+        sol::no_constructor,
+        "push", &utils::main_menu::push,
+        "exist", &utils::main_menu::exist,
+        "escape", &utils::main_menu::escape,
+        "quit_game", &utils::main_menu::quit_game,
+        "current_entry", &utils::main_menu::current_entry
+      );
+      
+      auto demiurge = utils.new_usertype<utils::demiurge>("demiurge",
+        sol::no_constructor,
+        "create_new_world", &utils::demiurge::create_new_world,
+        "refresh",          &utils::demiurge::refresh,
+        "worlds_count",     &utils::demiurge::worlds_count,
+        "world",            &utils::demiurge::world,
+        "choose_world",     &utils::demiurge::choose_world
+      );
     }
     
     template <typename T>

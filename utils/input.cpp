@@ -374,7 +374,7 @@ namespace devils_engine {
 
     event_data::event_data() {}
     event_data::event_data(const utils::id &id) : id(id) {}
-    key_data::key_data() : event(release), state(state_initial), state_time(0) {}
+    key_data::key_data() : event(release), state(state_initial), event_layer(UINT32_MAX), state_time(0) {}
     data::data() : interface_focus(false), mouse_wheel(0.0f), current_text(0), last_frame_time(0) {
       memset(text, 0, sizeof(uint32_t)*text_memory_size);
     }
@@ -473,11 +473,13 @@ namespace devils_engine {
     }
 
     void update_time(const size_t &time) {
+      global::get<data>()->key_events.current_event_layer = 0;
       auto container = global::get<data>()->key_events.container;
       global::get<data>()->last_frame_time = time;
       for (size_t i = 0; i < key_count; ++i) {
         container[i].state_time += time;
         container[i].event_time += time;
+        container[i].event_layer = UINT32_MAX;
         switch (container[i].state) {
           case state_initial: {
             const bool press = container[i].event != release;
@@ -585,6 +587,10 @@ namespace devils_engine {
 //       PRINT(str)
       return utils::id::get(str);
     }
+    
+    void block() { global::get<data>()->key_events.blocked = 1; }
+    void unblock() { global::get<data>()->key_events.blocked = 0; }
+    void increase_layer() { ++global::get<data>()->key_events.current_event_layer; }
 
     void set_key(const int &key, const utils::id &id, const uint8_t &slot) {
       assert(slot < event_key_slots);
@@ -610,6 +616,7 @@ namespace devils_engine {
     
     bool check_key(const int &key, const uint32_t &states) {
       if (uint32_t(key) >= container_size) return false;
+      if (global::get<data>()->key_events.blocked == 1) return false;
       const auto &container = global::get<data>()->key_events.container;
       const uint32_t final_state = container[key].state == state_click && container[key].state_time != 0 ? state_initial : container[key].state;
       return (final_state & states) != 0;
@@ -617,6 +624,7 @@ namespace devils_engine {
     
     bool timed_check_key(const int &key, const uint32_t &states, const size_t &wait, const size_t &period) {
       if (uint32_t(key) >= container_size) return false;
+      if (global::get<data>()->key_events.blocked == 1) return false;
       const auto &container = global::get<data>()->key_events.container;
       const size_t last_frame_time = global::get<data>()->last_frame_time;
 //       if (container[key].state_time < wait) return false;
@@ -628,7 +636,8 @@ namespace devils_engine {
     }
     
     bool check_event(const utils::id &event, const uint32_t &states) {
-      const auto &container = global::get<data>()->key_events;
+      auto &container = global::get<data>()->key_events;
+      if (container.blocked == 1) return false;
       auto itr = container.event_keys.find(event);
       if (itr == container.event_keys.end()) return false;
       
@@ -637,16 +646,17 @@ namespace devils_engine {
       else if (container.container[itr->second.keys[0]].state_time < container.container[itr->second.keys[1]].state_time) index = itr->second.keys[0]; // стейт тайм?
       else index = itr->second.keys[1];
       
+      if (container.container[index].event_layer == UINT32_MAX) container.container[index].event_layer = container.current_event_layer;
+      if (container.container[index].event_layer != container.current_event_layer) return false;
+      
       const uint32_t final_state = container.container[index].state == state_click && container.container[index].state_time != 0 ? state_initial : container.container[index].state;
       return (final_state & states) != 0;
     }
     
     bool timed_check_event(const utils::id &event, const uint32_t &states, const size_t &wait, const size_t &period) {
-      const auto &container = global::get<data>()->key_events;
+      auto &container = global::get<data>()->key_events;
+      if (container.blocked == 1) return false;
       auto itr = container.event_keys.find(event);
-      //PRINT(period)
-      //ASSERT(period == SIZE_MAX); // 18446744073709551615 18446744073709551615
-      //ASSERT(itr != container.event_keys.end());
       if (itr == container.event_keys.end()) return false;
       
       const size_t last_frame_time = global::get<data>()->last_frame_time;
@@ -655,6 +665,9 @@ namespace devils_engine {
       if (itr->second.keys[1] == INT32_MAX) index = itr->second.keys[0];
       else if (container.container[itr->second.keys[0]].state_time < container.container[itr->second.keys[1]].state_time) index = itr->second.keys[0]; // стейт тайм?
       else index = itr->second.keys[1];
+      
+      if (container.container[index].event_layer == UINT32_MAX) container.container[index].event_layer = container.current_event_layer;
+      if (container.container[index].event_layer != container.current_event_layer) return false;
       
 //       if (index == 264 && container.container[index].event_time < 10000) PRINT(container.container[index].event_time)
       if (container.container[index].event_time < wait) return false;

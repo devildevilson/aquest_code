@@ -49,7 +49,8 @@ namespace devils_engine {
     create_map,
     map,
     battle,  
-    encounter // геройская битва
+    encounter,  // геройская битва
+    count
   };
 }
 

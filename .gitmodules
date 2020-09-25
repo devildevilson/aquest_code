@@ -43,3 +43,9 @@
 [submodule "include/protobuf"]
 	path = include/protobuf
 	url = https://github.com/protocolbuffers/protobuf.git
+[submodule "include/cista"]
+	path = include/cista
+	url = https://github.com/felixguendling/cista.git
+[submodule "include/cryptopp"]
+	path = include/cryptopp
+	url = https://github.com/weidai11/cryptopp.git

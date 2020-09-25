@@ -48,6 +48,13 @@ namespace devils_engine {
         start += jobCount;
       }
     }
+    
+    // использовать только для тредов в тредпуле (то есть для вторичных тредов (не главный))
+    inline void async_wait(dt::thread_pool* pool) {
+      pool->compute();
+      while (pool->working_count() != 1 || pool->tasks_count() != 0) { std::this_thread::sleep_for(std::chrono::microseconds(1)); }
+      ASSERT(pool->working_count() == 1 && pool->tasks_count() == 0);
+    }
   }
 }
 

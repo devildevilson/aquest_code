@@ -25,6 +25,11 @@ namespace devils_engine {
       return max_value;
     }
     
+    size_t progress_container::get_type() const {
+      std::unique_lock<std::mutex> lock(mutex);
+      return type;
+    }
+    
     std::string progress_container::get_hint1() const {
       std::unique_lock<std::mutex> lock(mutex);
       return hint1;
@@ -40,6 +45,21 @@ namespace devils_engine {
       return hint3;
     }
     
+    void progress_container::advance() {
+      std::unique_lock<std::mutex> lock(mutex);
+      ++current_value;
+    }
+    
+    bool progress_container::finished() const {
+      std::unique_lock<std::mutex> lock(mutex);
+      return max_value != 0 && current_value >= max_value;
+    }
+    
+    bool progress_container::reseted() const {
+      std::unique_lock<std::mutex> lock(mutex);
+      return max_value == 0;
+    }
+    
     void progress_container::set_value(const int64_t &val) {
       std::unique_lock<std::mutex> lock(mutex);
       current_value = val;
@@ -48,6 +68,11 @@ namespace devils_engine {
     void progress_container::set_max_value(const int64_t &val) {
       std::unique_lock<std::mutex> lock(mutex);
       max_value = val;
+    }
+    
+    void progress_container::set_type(const size_t &type) {
+      std::unique_lock<std::mutex> lock(mutex);
+      this->type = type;
     }
     
     void progress_container::set_hint1(const std::string_view &str) {
@@ -78,6 +103,16 @@ namespace devils_engine {
     void progress_container::set_hint3(std::string &&str) {
       std::unique_lock<std::mutex> lock(mutex);
       hint3 = std::move(str);
+    }
+    
+    void progress_container::reset() {
+      std::unique_lock<std::mutex> lock(mutex);
+      current_value = 0;
+      max_value = 0;
+      // строки?
+      hint1.clear();
+      hint2.clear();
+      hint3.clear();
     }
   }
 }

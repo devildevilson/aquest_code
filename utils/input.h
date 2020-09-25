@@ -51,6 +51,9 @@ namespace devils_engine {
       event_data data[utils::player_states_count];
       type event;
       enum state state;
+      // нам нужно убедится что эвент с кнопок мы получаем один раз на окно, нужно ввести понятие event layer 
+      // теущая проверка заполняет леер у кнопки, следующие проверки чекают леер, если он совпадает то проверяем остаток
+      uint32_t event_layer;
       size_t state_time; // время непосредственно стейта (то есть переключение стейтов идет по нему)
       size_t event_time; // время нажатия (тут проверяем изменился ли стейт, можем ли мы это делать через время стейта?)
       key_data();
@@ -60,6 +63,8 @@ namespace devils_engine {
       struct event_keys_container { int keys[event_key_slots]; };
 //       utils::memory_pool<event_data, sizeof(event_data)*50> events_pool;
       key_data container[container_size]; // тут должен быть контейнер с указателями
+      uint32_t current_event_layer;
+      uint32_t blocked;
       // если одна из этих кнопок нажата то эвент срабатывает
       // а что если у одной кнопки двойное нажатие, а другой длинное? нужно 
       std::unordered_map<utils::id, event_keys_container> event_keys;
@@ -101,6 +106,10 @@ namespace devils_engine {
     bool is_event_released(const utils::id &id);
     std::pair<utils::id, size_t> pressed_event(size_t &mem);
     utils::id get_event(const std::string_view &str);
+    
+    void block();
+    void unblock();
+    void increase_layer();
 
     void update_time(const size_t &time);
     const char* get_key_name(const uint32_t &key);

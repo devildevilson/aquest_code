@@ -1,9 +1,13 @@
 #include "render.h"
 
+#include "stage.h"
+#include "target.h"
+#include "context.h"
+
 namespace devils_engine {
-  namespace systems {
-    render::render(const size_t &container_size) : container(container_size) {}
-    render::~render() {
+  namespace render {
+    stage_container::stage_container(const size_t &container_size) : container(container_size) {}
+    stage_container::~stage_container() {
       for (auto stage : stages) {
         container.destroy(stage);
       }
@@ -13,11 +17,13 @@ namespace devils_engine {
       }
     }
     
-    void render::update(devils_engine::render::context* ctx) {
+    void stage_container::begin() {
       for (auto stage : stages) {
         stage->begin();
       }
-      
+    }
+    
+    void stage_container::proccess(devils_engine::render::context* ctx) {
       for (auto stage : stages) {
         stage->proccess(ctx);
       }
@@ -26,13 +32,13 @@ namespace devils_engine {
       // возможно этим займется один из стейджев
     }
     
-    void render::clear() {
+    void stage_container::clear() {
       for (auto stage : stages) {
         stage->clear();
       }
     }
     
-    void render::recreate(const uint32_t &width, const uint32_t &height) {
+    void stage_container::recreate(const uint32_t &width, const uint32_t &height) {
       for (auto target : targets) {
         target->recreate(width, height);
       }

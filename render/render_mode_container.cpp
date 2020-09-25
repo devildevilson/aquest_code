@@ -3,6 +3,7 @@
 #include "utils/assert.h"
 #include <stdexcept>
 #include "bin/stats.h"
+#include "utils/systems.h"
 #include <atomic>
 #include <iostream>
 
@@ -16,7 +17,7 @@ namespace devils_engine {
     void mode(const modes::values &mode) {
       ASSERT(mode < modes::count);
       //std::cout << "Current mode " << magic_enum::enum_name<modes::values>(mode) << "\n";
-      auto ptr = global::get<const mode_container>();
+      auto ptr = global::get<systems::map_t>()->render_modes;
       if (ptr->at(mode) == nullptr) throw std::runtime_error("Render mode " + std::string(magic_enum::enum_name<modes::values>(mode)) + " is not set");
       ptr->at(mode)();
       current_mode = mode;

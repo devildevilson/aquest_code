@@ -4,17 +4,20 @@
 #include <cstddef>
 #include <cstdint>
 #include <vector>
+#include "utils/typeless_container.h"
 #include "stage.h"
 #include "target.h"
-#include "context.h"
-#include "utils/typeless_container.h"
 
 namespace devils_engine {
-  namespace systems {
-    class render {
+  namespace render {
+    class context;
+    class stage;
+    class target;
+    
+    class stage_container : public stage, public target {
     public:
-      render(const size_t &container_size);
-      ~render();
+      stage_container(const size_t &container_size);
+      virtual ~stage_container();
 
       template <typename T, typename... Args>
       T* add_stage(Args&&... args) {
@@ -29,14 +32,15 @@ namespace devils_engine {
         targets.push_back(ptr);
         return ptr;
       }
-
-      void update(devils_engine::render::context* ctx);
+      
+      void begin();
+      void proccess(context* ctx);
       void clear();
       void recreate(const uint32_t &width, const uint32_t &height);
-    private:
+    protected:
       utils::typeless_container container;
-      std::vector<devils_engine::render::stage*> stages;
-      std::vector<devils_engine::render::target*> targets;
+      std::vector<stage*> stages;
+      std::vector<target*> targets;
     };
   }
 }

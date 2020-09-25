@@ -8,6 +8,7 @@
 #include "targets.h"
 #include "bin/interface_context.h"
 #include "utils/input.h"
+#include "utils/systems.h"
 
 #define TILE_RENDER_PIPELINE_LAYOUT_NAME "tile_render_pipeline_layout"
 #define TILE_RENDER_PIPELINE_NAME "tile_render_pipeline"
@@ -61,6 +62,8 @@ namespace devils_engine {
 
     void render_pass_end::clear() {}
     
+#define WORLD_MAP_RENDER_DESCRIPTOR_POOL "world_map_render_descriptor_pool"
+    
     const size_t max_tiles_count = core::map::hex_count_d(core::map::detail_level) / 2 + 1; // это подойдет для 7 уровня разбиения, для 8-го слишком много скорее всего
     static_assert(max_tiles_count < 500000);
     tile_optimizer::tile_optimizer(const create_info &info) : 
@@ -69,12 +72,18 @@ namespace devils_engine {
       indirect = device->create(yavf::BufferCreateInfo::buffer(sizeof(struct indirect_buffer), VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT), VMA_MEMORY_USAGE_CPU_ONLY);
       tiles_indices = device->create(yavf::BufferCreateInfo::buffer((sizeof(instance_data_t)*max_tiles_count)/4+1, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT), VMA_MEMORY_USAGE_GPU_ONLY);
       
-      auto pool = device->descriptorPool(DEFAULT_DESCRIPTOR_POOL_NAME);
+      //auto pool = device->descriptorPool(DEFAULT_DESCRIPTOR_POOL_NAME);
 //       auto storage_layout = device->setLayout(STORAGE_BUFFER_LAYOUT_NAME);
       auto tiles_data_layout = device->setLayout(TILES_DATA_LAYOUT_NAME);
       auto uniform_layout = device->setLayout(UNIFORM_BUFFER_LAYOUT_NAME);
       
       ASSERT(tiles_data_layout != VK_NULL_HANDLE);
+      
+      yavf::DescriptorPool pool = device->descriptorPool(WORLD_MAP_RENDER_DESCRIPTOR_POOL);
+      if (pool == VK_NULL_HANDLE) {
+        yavf::DescriptorPoolMaker dpm(device);
+        pool = dpm.poolSize(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 30).create(WORLD_MAP_RENDER_DESCRIPTOR_POOL);
+      }
       
       yavf::DescriptorSetLayout tiles_indices_layout = VK_NULL_HANDLE;
       {
@@ -117,7 +126,14 @@ namespace devils_engine {
       }
     }
     
-    tile_optimizer::~tile_optimizer() {}
+    tile_optimizer::~tile_optimizer() {
+      device->destroy(indirect);
+      device->destroy(tiles_indices);
+      device->destroySetLayout("tiles_indices_layout");
+      device->destroyLayout("tiles_optimizer_pipeline_layout");
+      device->destroy(pipe);
+    }
+    
     void tile_optimizer::begin() {
       auto buffer = reinterpret_cast<struct indirect_buffer*>(indirect->ptr());
       
@@ -150,8 +166,10 @@ namespace devils_engine {
     }
     
     void tile_optimizer::proccess(context* ctx) {
-      auto map = global::get<core::map>();
-      if (map->status() == core::map::status::initial) return;
+      auto map_systems = global::get<systems::map_t>();
+      if (!map_systems->is_init()) return;
+      auto map = map_systems->map;
+//       if (map->status() == core::map::status::initial) return;
       
       auto uniform = global::get<render::buffers>()->uniform;
       auto tiles = map->tiles;
@@ -187,16 +205,27 @@ namespace devils_engine {
       return tiles_indices;
     }
     
-    tile_borders_optimizer::tile_borders_optimizer(const create_info &info) : device(info.device), indirect(nullptr), borders_indices(nullptr) {
+    tile_borders_optimizer::tile_borders_optimizer(const create_info &info) : 
+      device(info.device), 
+      indirect(nullptr), 
+      borders_indices(nullptr),
+      map_buffers(info.map_buffers) 
+    {
       indirect = device->create(yavf::BufferCreateInfo::buffer(sizeof(struct indirect_buffer), VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT), VMA_MEMORY_USAGE_CPU_ONLY);
 //       borders_indices = device->create(yavf::BufferCreateInfo::buffer(sizeof(instance_data_t)*(max_tiles_count/4), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT), VMA_MEMORY_USAGE_GPU_ONLY);
       
-      auto pool = device->descriptorPool(DEFAULT_DESCRIPTOR_POOL_NAME);
+//       auto pool = device->descriptorPool(DEFAULT_DESCRIPTOR_POOL_NAME);
 //       auto storage_layout = device->setLayout(STORAGE_BUFFER_LAYOUT_NAME);
       auto tiles_data_layout = device->setLayout(TILES_DATA_LAYOUT_NAME);
       auto uniform_layout = device->setLayout(UNIFORM_BUFFER_LAYOUT_NAME);
       
       ASSERT(tiles_data_layout != VK_NULL_HANDLE);
+      
+      yavf::DescriptorPool pool = device->descriptorPool(WORLD_MAP_RENDER_DESCRIPTOR_POOL);
+      if (pool == VK_NULL_HANDLE) {
+        yavf::DescriptorPoolMaker dpm(device);
+        pool = dpm.poolSize(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 30).create(WORLD_MAP_RENDER_DESCRIPTOR_POOL);
+      }
       
       yavf::DescriptorSetLayout storage_buffer_layout = device->setLayout(STORAGE_BUFFER_LAYOUT_NAME);
       yavf::DescriptorSetLayout tiles_indices_layout = VK_NULL_HANDLE;
@@ -210,6 +239,7 @@ namespace devils_engine {
       {
         yavf::DescriptorMaker dm(device);
         set = dm.layout(tiles_indices_layout).create(pool)[0];
+        set->resize(2);
 //         size_t index = desc->add({indirect, 0, indirect->info().size, 0, 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER});
 //                        desc->add({borders_indices, 0, borders_indices->info().size, 0, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER});
 //         desc->update();
@@ -274,13 +304,15 @@ namespace devils_engine {
     
     void tile_borders_optimizer::proccess(context* ctx) {
       if (borders_indices == nullptr) return;
-      auto map = global::get<core::map>();
-      if (map->status() == core::map::status::initial) return;
+      auto map_systems = global::get<systems::map_t>();
+      if (!map_systems->is_init()) return;
+      auto map = map_systems->map;
+//       if (map->status() == core::map::status::initial) return;
       
       auto uniform = global::get<render::buffers>()->uniform;
       auto tiles = map->tiles;
       auto buffer = reinterpret_cast<struct indirect_buffer*>(indirect->ptr());
-      auto border_buffer = global::get<render::buffers>()->border_buffer;
+      auto border_buffer = map_buffers->border_buffer;
 //       auto points = global::get<render::buffers>()->points;
       
       auto task = ctx->compute();
@@ -319,20 +351,33 @@ namespace devils_engine {
       buffer->data.w = 0;
       
       {
-        size_t index = set->add({indirect, 0, indirect->info().size, 0, 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER});
-                       set->add({borders_indices, 0, borders_indices->info().size, 0, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER});
+        //size_t index = 0;
+        set->at(0) = {indirect, 0, indirect->info().size, 0, 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER};
+        set->at(1) = {borders_indices, 0, borders_indices->info().size, 0, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER};
         set->update();
-        indirect->setDescriptor(set, index);
+        if (indirect->descriptorSet() == nullptr) indirect->setDescriptor(set, 0);
       }
     }
     
-    tile_walls_optimizer::tile_walls_optimizer(const create_info &info) : device(info.device), indirect(nullptr), walls_indices(nullptr), set(nullptr) {
+    tile_walls_optimizer::tile_walls_optimizer(const create_info &info) : 
+      device(info.device), 
+      indirect(nullptr), 
+      walls_indices(nullptr), 
+      set(nullptr),
+      map_buffers(info.map_buffers) 
+    {
       indirect = device->create(yavf::BufferCreateInfo::buffer(sizeof(struct indirect_buffer), VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT), VMA_MEMORY_USAGE_CPU_ONLY);
       
-      auto pool = device->descriptorPool(DEFAULT_DESCRIPTOR_POOL_NAME);
+//       auto pool = device->descriptorPool(DEFAULT_DESCRIPTOR_POOL_NAME);
 //       auto storage_layout = device->setLayout(STORAGE_BUFFER_LAYOUT_NAME);
       auto tiles_data_layout = device->setLayout(TILES_DATA_LAYOUT_NAME);
       auto uniform_layout = device->setLayout(UNIFORM_BUFFER_LAYOUT_NAME);
+      
+      yavf::DescriptorPool pool = device->descriptorPool(WORLD_MAP_RENDER_DESCRIPTOR_POOL);
+      if (pool == VK_NULL_HANDLE) {
+        yavf::DescriptorPoolMaker dpm(device);
+        pool = dpm.poolSize(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 30).create(WORLD_MAP_RENDER_DESCRIPTOR_POOL);
+      }
       
       ASSERT(tiles_data_layout != VK_NULL_HANDLE);
       
@@ -348,6 +393,7 @@ namespace devils_engine {
       {
         yavf::DescriptorMaker dm(device);
         set = dm.layout(tiles_indices_layout).create(pool)[0];
+        set->resize(2);
 //         size_t index = desc->add({indirect, 0, indirect->info().size, 0, 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER});
 //                        desc->add({borders_indices, 0, borders_indices->info().size, 0, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER});
 //         desc->update();
@@ -398,13 +444,15 @@ namespace devils_engine {
     
     void tile_walls_optimizer::proccess(context* ctx) {
       if (walls_indices == nullptr) return;
-      auto map = global::get<core::map>();
-      if (map->status() == core::map::status::initial) return;
+      auto map_systems = global::get<systems::map_t>();
+      if (!map_systems->is_init()) return;
+      auto map = map_systems->map;
+//       if (map->status() == core::map::status::initial) return;
       
       auto uniform = global::get<render::buffers>()->uniform;
       auto tiles = map->tiles;
       auto buffer = reinterpret_cast<struct indirect_buffer*>(indirect->ptr());
-      auto walls_buffer = global::get<render::buffers>()->tiles_connections;
+      auto walls_buffer = map_buffers->tiles_connections;
 //       auto points = global::get<render::buffers>()->points;
       
       auto task = ctx->compute();
@@ -436,10 +484,11 @@ namespace devils_engine {
       buffer->data.w = 0;
       
       {
-        size_t index = set->add({indirect, 0, indirect->info().size, 0, 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER});
-                       set->add({walls_indices, 0, walls_indices->info().size, 0, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER});
+        size_t index = 0;
+        set->at(0) = {indirect, 0, indirect->info().size, 0, 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER};
+        set->at(1) = {walls_indices, 0, walls_indices->info().size, 0, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER};
         set->update();
-        indirect->setDescriptor(set, index);
+        if (indirect->descriptorSet() == nullptr) indirect->setDescriptor(set, index);
       }
     }
     
@@ -564,9 +613,19 @@ namespace devils_engine {
       // }
     }
 
-    tile_render::~tile_render() {}
+    tile_render::~tile_render() {
+      device->destroy(points_indices);
+      device->destroy(pipe.layout());
+      device->destroy(pipe);
+      device->destroy(one_tile_pipe.layout());
+      device->destroy(one_tile_pipe);
+    }
+    
     void tile_render::begin() {}
     void tile_render::proccess(context* ctx) {
+      auto map_systems = global::get<systems::map_t>();
+      if (!map_systems->is_init()) return;
+      auto map = map_systems->map;
 //       if (hexagons_count + pentagons_count == 0) return;
       
       // все таки мне лучше рисовать треугольниками из центра
@@ -576,7 +635,7 @@ namespace devils_engine {
       // не только, нужно крайне аккуратно работать с 2кк тайлами
       
       auto uniform = global::get<render::buffers>()->uniform;
-      auto tiles = global::get<core::map>()->tiles;
+      auto tiles = map->tiles;
 //       auto points = global::get<render::buffers>()->points;
 //       auto biomes = global::get<render::buffers>()->biomes;
       
@@ -763,8 +822,8 @@ namespace devils_engine {
     
     tile_border_render::tile_border_render(const create_info &info) :
       device(info.device),
-      opt(info.opt)
-//       render(info.render)
+      opt(info.opt),
+      map_buffers(info.map_buffers)
     {
       auto uniform_layout = device->setLayout(UNIFORM_BUFFER_LAYOUT_NAME);
       auto tiles_data_layout = device->setLayout(TILES_DATA_LAYOUT_NAME);
@@ -819,15 +878,22 @@ namespace devils_engine {
       }
     }
     
-    tile_border_render::~tile_border_render() {}
+    tile_border_render::~tile_border_render() {
+      device->destroySetLayout("tile_borders_render_layout");
+      device->destroy(pipe.layout());
+      device->destroy(pipe);
+    }
 
     void tile_border_render::begin() {}
     void tile_border_render::proccess(context* ctx) {
+      auto map_systems = global::get<systems::map_t>();
+      if (!map_systems->is_init()) return;
+      auto map = map_systems->map;
       auto uniform = global::get<render::buffers>()->uniform;
-      auto borders = global::get<render::buffers>()->border_buffer;
-      auto types = global::get<render::buffers>()->border_types;
+      auto borders = map_buffers->border_buffer;
+      auto types = map_buffers->border_types;
 //       auto indices = global::get<render::buffers>()->border_indices;
-      auto tiles = global::get<core::map>()->tiles;
+      auto tiles = map->tiles;
       
       // должен быть еще буфер с индексами
       // каждый кадр нужно обойти границы и почекать с фрустумом
@@ -863,7 +929,8 @@ namespace devils_engine {
     
     tile_connections_render::tile_connections_render(const create_info &info) :
       device(info.device), 
-      opt(info.opt)
+      opt(info.opt),
+      map_buffers(info.map_buffers)
     {
       yavf::DescriptorSetLayout uniform_layout = device->setLayout(UNIFORM_BUFFER_LAYOUT_NAME);
       if (uniform_layout == VK_NULL_HANDLE) {
@@ -918,15 +985,19 @@ namespace devils_engine {
     }
     
     tile_connections_render::~tile_connections_render() {
+      device->destroySetLayout("walls_rendering_pipeline_layout");
       device->destroy(pipe.layout());
       device->destroy(pipe);
     }
 
     void tile_connections_render::begin() {}
     void tile_connections_render::proccess(context* ctx) {
+      auto map_systems = global::get<systems::map_t>();
+      if (!map_systems->is_init()) return;
+      auto map = map_systems->map;
       auto uniform = global::get<render::buffers>()->uniform;
-      auto walls_buffer = global::get<render::buffers>()->tiles_connections;
-      auto tiles = global::get<core::map>()->tiles;
+      auto walls_buffer = map_buffers->tiles_connections;
+      auto tiles = map->tiles;
       
       auto indirect_buffer = opt->indirect_buffer();
       auto vertices_buffer = opt->vertices_buffer();
@@ -987,6 +1058,26 @@ namespace devils_engine {
                   .colorWriteMask(VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT)
                 .create("walls_rendering_pipeline", pipe.layout(), global::get<render::window>()->render_pass);
     }
+    
+    world_map_render::world_map_render(const create_info &info) : stage_container(info.container_size) {}
+    void world_map_render::begin() {
+      stage_container::begin();
+    }
+    
+    void world_map_render::proccess(context* ctx) {
+      auto map_systems = global::get<systems::map_t>();
+//       auto map = map_systems->map;
+      if (!map_systems->is_init()) return;
+//       if (map->status() != core::map::status::rendering) return;
+      
+      stage_container::proccess(ctx);
+    }
+    
+    void world_map_render::clear() {
+      stage_container::clear();
+    }
+    
+    void world_map_render::recreate_pipelines(const game::image_resources_t* resource) { (void)resource; }
     
     struct gui_vertex {
       glm::vec2 pos;

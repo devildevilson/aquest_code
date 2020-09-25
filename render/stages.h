@@ -6,6 +6,8 @@
 #include "utils/utility.h"
 #include "bin/figures.h"
 #include "bin/map.h"
+#include "render.h"
+// #include "targets.h"
 #include <atomic>
 #include <mutex>
 #include <unordered_set>
@@ -16,6 +18,7 @@ namespace devils_engine {
     struct images;
     struct window;
     struct particles;
+    struct world_map_buffers;
 
     class window_next_frame : public stage {
     public:
@@ -103,6 +106,7 @@ namespace devils_engine {
       
       struct create_info {
         yavf::Device* device;
+        world_map_buffers* map_buffers;
       };
       tile_borders_optimizer(const create_info &info);
       ~tile_borders_optimizer();
@@ -120,6 +124,7 @@ namespace devils_engine {
       yavf::Buffer* borders_indices;
       yavf::DescriptorSet* set;
       yavf::Pipeline pipe;
+      world_map_buffers* map_buffers;
     };
     
     class tile_walls_optimizer : public stage {
@@ -136,6 +141,7 @@ namespace devils_engine {
       
       struct create_info {
         yavf::Device* device;
+        world_map_buffers* map_buffers;
       };
       tile_walls_optimizer(const create_info &info);
       ~tile_walls_optimizer();
@@ -154,6 +160,7 @@ namespace devils_engine {
       yavf::Buffer* walls_indices;
       yavf::DescriptorSet* set;
       yavf::Pipeline pipe;
+      world_map_buffers* map_buffers;
     };
     
     class barriers : public stage {
@@ -199,7 +206,7 @@ namespace devils_engine {
       struct create_info {
         yavf::Device* device;
         tile_borders_optimizer* opt;
-//         tile_render* render;
+        world_map_buffers* map_buffers;
       };
       tile_border_render(const create_info &info);
       ~tile_border_render();
@@ -215,6 +222,7 @@ namespace devils_engine {
       tile_borders_optimizer* opt;
 //       tile_render* render;
       yavf::Pipeline pipe;
+      world_map_buffers* map_buffers;
     };
     
     class tile_connections_render : public stage, public pipeline_stage {
@@ -222,6 +230,7 @@ namespace devils_engine {
       struct create_info {
         yavf::Device* device;
         tile_walls_optimizer* opt;
+        world_map_buffers* map_buffers;
       };
       tile_connections_render(const create_info &info);
       ~tile_connections_render();
@@ -236,6 +245,22 @@ namespace devils_engine {
       yavf::Device* device;
       tile_walls_optimizer* opt;
       yavf::Pipeline pipe;
+      world_map_buffers* map_buffers;
+    };
+    
+    class world_map_render : public pipeline_stage, public stage_container {
+    public:
+      struct create_info {
+//         yavf::Device* device;
+        size_t container_size;
+      };
+      world_map_render(const create_info &info);
+      
+      void begin() override;
+      void proccess(context* ctx) override;
+      void clear() override;
+      
+      void recreate_pipelines(const game::image_resources_t* resource) override;
     };
     
     class interface_stage : public stage, public pipeline_stage {

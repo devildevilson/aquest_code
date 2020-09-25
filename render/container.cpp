@@ -2,6 +2,9 @@
 
 #include "utils/globals.h"
 #include "shared_structures.h"
+#include "render.h"
+#include "yavf.h"
+#include "window.h"
 
 static const std::vector<const char*> instanceLayers = {
   //"VK_LAYER_LUNARG_standard_validation",
@@ -15,7 +18,7 @@ static const std::vector<const char*> instanceLayers = {
 
 namespace devils_engine {
   namespace render {
-    container::container() : mem(sizeof(yavf::Instance) + sizeof(struct window) + sizeof(systems::render)), instance(nullptr), device(nullptr), window(nullptr), render(nullptr) {}
+    container::container() : mem(sizeof(yavf::Instance) + sizeof(struct window) + sizeof(render::stage_container)), instance(nullptr), device(nullptr), window(nullptr), render(nullptr) {}
     container::~container() {
       device->wait();
       for (size_t i = 0 ; i < tasks.size(); ++i) {
@@ -27,10 +30,18 @@ namespace devils_engine {
       mem.destroy(instance);
     }
 
-    yavf::Instance* container::create_instance(const std::vector<const char*> &extensions, const yavf::Instance::ApplicationInfo* app_info) {
+    yavf::Instance* container::create_instance(const std::vector<const char*> &extensions, const application_info* app_info) {
+      const yavf::Instance::ApplicationInfo info{
+        app_info->app_name,
+        app_info->app_version,
+        app_info->engine_name,
+        app_info->engine_version,
+        app_info->api_version
+      };
+      
       instance = mem.create<yavf::Instance>(yavf::Instance::CreateInfo{
         nullptr,
-        app_info,
+        &info,
     #ifndef _NDEBUG
         instanceLayers,
         //{},
@@ -154,8 +165,8 @@ namespace devils_engine {
       return device;
     }
 
-    systems::render* container::create_system(const size_t &system_container_size) {
-      render = mem.create<systems::render>(system_container_size);
+    render::stage_container* container::create_system(const size_t &system_container_size) {
+      render = mem.create<render::stage_container>(system_container_size);
       return render;
     }
 

@@ -2,10 +2,14 @@
 #define TARGETS_H
 
 #include "target.h"
-#include "yavf.h"
 #include "utils/utility.h"
-#include "bin/figures.h"
-#include <atomic>
+// #include "bin/figures.h"
+// #include <atomic>
+
+namespace yavf {
+  class Buffer;
+  class Device;
+}
 
 namespace devils_engine {
   namespace map {
@@ -14,11 +18,9 @@ namespace devils_engine {
 
   namespace render {
     struct buffers : public target {
+      yavf::Device* device;
       yavf::Buffer* uniform;
       yavf::Buffer* matrices;
-      yavf::Buffer* border_buffer;
-      yavf::Buffer* border_types;
-      yavf::Buffer* tiles_connections;
 
       buffers(yavf::Device* device);
       ~buffers();
@@ -38,6 +40,18 @@ namespace devils_engine {
       glm::mat4 get_inv_view() const;
       glm::mat4 get_inv_view_proj() const;
       glm::vec4 get_pos() const;
+    };
+    
+    struct world_map_buffers : public target {
+      yavf::Device* device;
+      yavf::Buffer* border_buffer; // вообще эти вещи после создания могут пойти в гпу спокойно (границы мы будем все же переделывать довольно часто)
+      yavf::Buffer* border_types;
+      yavf::Buffer* tiles_connections; // а вот соединения не будем
+      
+      world_map_buffers(yavf::Device* device);
+      ~world_map_buffers();
+      
+      void recreate(const uint32_t &width, const uint32_t &height) override;
     };
   }
 }

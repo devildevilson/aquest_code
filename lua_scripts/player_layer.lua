@@ -76,7 +76,7 @@ function main_interface_layer(ctx, interface, data)
     if hovering then
       nk.tooltip(ctx, "next turn")
     end
-    if ctx:is_mouse_click_in_rect(nk.BUTTON_LEFT, bounds) then
+    if current_player_turn and ctx:is_mouse_click_in_rect(nk.BUTTON_LEFT, bounds) then
       game.player_end_turn()
       print("advance turn")
     end

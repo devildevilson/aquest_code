@@ -1,22 +1,23 @@
 local nk = require("moonnuklear")
 
-local window_flags <const> = nk.WINDOW_BORDER | nk.WINDOW_NO_SCROLLBAR | nk.WINDOW_BACKGROUND
-local generator_names <const> = {"Tectonic plates generator", "Biomes generator", "Countries generator"}
+local window_flags <const> = nk.WINDOW_BORDER | nk.WINDOW_NO_SCROLLBAR
+--local generator_names <const> = {"Tectonic plates generator", "Biomes generator", "Countries generator"}
 
-function gen_progress(ctx, info)
+function progress_bar(ctx, info)
   local fbw, fbh <const> = input.get_framebuffer_size()
-  local progress_bar_size <const> = 40
+  local progress_bar_size <const> = 35
   local sizex, sizey <const> = 400, ctx:font():height() * 2 + progress_bar_size + 20
-  local wx, wy <const> = fbw/2.0-sizex/2.0, fbh/2.0-sizey/2.0
+  --local wx, wy <const> = fbw/2.0-sizex/2.0, fbh/2.0-sizey/2.0
+  local wx, wy <const> = fbw-sizex-10, fbh-sizey-10
   local current_step <const> = info.current_step
-  local hint <const> = info.hint
+  local current_progress_name <const> = info.hint1
+  local hint <const> = info.hint2
   local step_count <const> = info.step_count
-  local current_generator_part <const> = info.current_generator_part
   local progress_hint <const> = tostring(current_step) .. "/" .. tostring(step_count)
 
   if nk.window_begin(ctx, "progress_bar", {wx, wy, sizex, sizey}, window_flags) then
     nk.layout_row_dynamic(ctx, ctx:font():height(), 1)
-    nk.label(ctx, generator_names[current_generator_part+1], nk.TEXT_ALIGN_LEFT);
+    nk.label(ctx, current_progress_name, nk.TEXT_ALIGN_LEFT);
 
     local text_width <const> = ctx:font():width(ctx:font():height(), hint)
     local hint2_width <const> = ctx:font():width(ctx:font():height(), "00/00")
@@ -33,6 +34,4 @@ function gen_progress(ctx, info)
     nk.progress(ctx, current_step, step_count, nk.FIXED)
   end
   nk.window_end(ctx)
-
-  return false
 end

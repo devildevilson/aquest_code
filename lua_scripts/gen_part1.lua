@@ -34,6 +34,19 @@ local function decimal_filter(edit, codepoint)
   return true
 end
 
+local function isempty(s)
+  return s == nil or s == ''
+end
+
+local world_name_str = ''
+local world_name_str_prev = ''
+local world_folder_str = ''
+
+local code_empty_string = 0
+local code_bad_string = 1
+local code_world_exists = 2
+local code_world_does_not_exist = 3
+
 function gen_part1_fun(ctx, table)
   if table["plates_count"] == nil then
     table["plates_count"] = plates_count_prop.default_val
@@ -43,8 +56,11 @@ function gen_part1_fun(ctx, table)
   local ret_value = 0
   local states_flag
 
+  local valid_name = false
+  local valid_folder = false
+
   if nk.window_begin(ctx, "plates_gen", {5, 5, 400, 400}, window_flags) then
-    nk.layout_row_static(ctx, 30.0, 400, 1)
+    nk.layout_row_dynamic(ctx, 30.0, 1)
     nk.label(ctx, generator_name, nk.TEXT_ALIGN_LEFT)
 
     nk.layout_row(ctx, nk.DYNAMIC, 30.0, {0.6, 0.4})
@@ -56,12 +72,57 @@ function gen_part1_fun(ctx, table)
       current_seed_buf = tostring(current_seed)
     end
 
+    nk.layout_row(ctx, nk.DYNAMIC, 30.0, {0.9, 0.1})
+    world_name_str_prev, states_flag = nk.edit_string(ctx, nk.EDIT_FIELD, world_name_str_prev, 50)
+    local bounds1 = nk.widget_bounds(ctx)
+    valid_name = not isempty(world_name_str)
+    if not valid_name then
+      nk.label(ctx, "[!]", nk.TEXT_ALIGN_RIGHT, {1,0,0,1})
+      if ctx:is_mouse_hovering_rect(bounds1) then
+        nk.tooltip(ctx, "Please provide a world name")
+      end
+    else
+      nk.spacing(ctx, 1)
+    end
+
+    world_folder_str, states_flag = nk.edit_string(ctx, nk.EDIT_FIELD, world_folder_str, 50)
+    local bounds2 = nk.widget_bounds(ctx)
+
+    if world_name_str_prev ~= world_name_str then
+      world_name_str = world_name_str_prev
+      -- здесь пытаемся собрать строку из входной так чтобы она имела только английские символы
+      -- + '_' + '.' (наверное допустимы еще какие то символы но лучше так)
+      -- делаем это если первый символ совпадает у строк
+      if isempty(world_folder_str) or world_folder_str:sub(0, 0) == world_name_str:sub(0, 0) then
+        world_folder_str = ''
+        for c in world_name_str:gmatch(".") do
+          --print(string.match(c, "[a-zA-Z0-9_.]")) -- если ни один символ не попадает в выражение, то возвращает nil
+          if c == ' ' then world_folder_str = world_folder_str .. '_'
+          elseif string.match(c, "[a-zA-Z0-9_.]") then world_folder_str = world_folder_str .. c:lower() end
+        end
+      end
+    end
+
+    valid_folder = not isempty(world_folder_str) and string.match(world_folder_str, "[a-zA-Z0-9_.]+") == world_folder_str -- нужно проверить с иходной сторокой
+    local existance = not isempty(world_folder_str) and generator.check_world_existance(world_folder_str) == code_world_exists
+
+    if not valid_folder or existance then
+      nk.label(ctx, "[!]", nk.TEXT_ALIGN_RIGHT, {1,0,0,1})
+      if ctx:is_mouse_hovering_rect(bounds2) then
+        if existance then
+          nk.tooltip(ctx, "Another world exists in folder " .. world_folder_str)
+        else nk.tooltip(ctx, "Please provide a folder name. Folder name must match [a-zA-Z0-9_.]") end
+      end
+    else
+      --nk.spacing(ctx, 1)
+    end
+
     -- переменные
     nk.layout_row_dynamic(ctx, 30.0, 1)
     gen_property(ctx, table, "plates_count", plates_count_prop, 400)
     gen_property(ctx, table, "ocean_percentage", ocean_percentage_prop, 400)
 
-    nk.layout_row_static(ctx, 30.0, 199, 2)
+    nk.layout_row_dynamic(ctx, 30.0, 2)
     if nk.button(ctx, nil, "Back") then ret_value = -1 end
     if nk.button(ctx, nil, "Generate") then ret_value = 1 end
   end
@@ -73,9 +134,12 @@ function gen_part1_fun(ctx, table)
     current_seed_buf = tostring(current_seed)
   end
 
-  if ret_value == 0 then return 0 end
+  if ret_value < 0 then return -1 end
+  if ret_value == 0 or not valid_name or not valid_folder then return 0 end
   generator.setup_random_seed(current_seed == nil and 1 or current_seed)
   generator.setup_noise_seed(current_seed == nil and 1 or current_seed)
+  generator.set_world_name(world_name_str)    -- пустая строка == вылет
+  generator.set_folder_name(world_folder_str)
   current_seed_buf = "1"
   current_seed = 1
   return ret_value

@@ -46,8 +46,8 @@ namespace devils_engine {
       
       triangles.resize(accum);
       
-      yavf::DescriptorSetLayout tiles_data_layout = VK_NULL_HANDLE;
-      {
+      yavf::DescriptorSetLayout tiles_data_layout = device->setLayout(TILES_DATA_LAYOUT_NAME);
+      if (tiles_data_layout == VK_NULL_HANDLE) {
         yavf::DescriptorLayoutMaker dlm(device);
         tiles_data_layout = dlm.binding(0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_ALL)
                                .binding(1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_ALL)
@@ -297,42 +297,49 @@ namespace devils_engine {
       return false;
     }
     
-    const render::light_map_tile_t & map::get_tile(const uint32_t &index) const {
-      auto tiles_arr = reinterpret_cast<render::light_map_tile_t*>(tiles->ptr());
+    const render::light_map_tile_t map::get_tile(const uint32_t &index) const {
       ASSERT(index < tiles_count());
+//       std::unique_lock<std::mutex> lock(mutex);
+      auto tiles_arr = reinterpret_cast<render::light_map_tile_t*>(tiles->ptr());
       return tiles_arr[index];
     }
     
-    const glm::vec4 & map::get_point(const uint32_t &index) const {
+    const glm::vec4 map::get_point(const uint32_t &index) const {
       ASSERT(index < points_count());
+//       std::unique_lock<std::mutex> lock(mutex);
       auto points_arr = reinterpret_cast<glm::vec4*>(points->ptr());
       return points_arr[index];
     }
     
     uint32_t map::points_count() const {
+//       std::unique_lock<std::mutex> lock(mutex);
       return points->info().size / sizeof(glm::vec4);
     }
     
     uint32_t map::tiles_count() const {
+//       std::unique_lock<std::mutex> lock(mutex);
       return tiles->info().size / sizeof(render::light_map_tile_t);
     }
     
     uint32_t map::accel_triangles_count() const {
+//       std::unique_lock<std::mutex> lock(mutex);
       return accel_triangles->info().size / sizeof(render::packed_fast_triangle_t);
     }
     
     uint32_t map::triangles_count() const {
+//       std::unique_lock<std::mutex> lock(mutex);
       return triangles.size();
     }
     
     void map::set_tile_data(const devils_engine::map::tile* tile, const uint32_t &index) {
-      while (s == status::rendering) { std::this_thread::sleep_for(std::chrono::microseconds(1)); }
+      ASSERT(index < tiles_count());
+      std::unique_lock<std::mutex> lock(mutex);
       
       auto tiles_arr = reinterpret_cast<render::light_map_tile_t*>(tiles->ptr());
       const render::map_tile_t map_tile{
         tile->index,
-        0,
-        0,
+        {GPU_UINT_MAX},
+        {GPU_UINT_MAX},
         0.0f,
         {tile->neighbours[0].points[0], tile->neighbours[1].points[0], tile->neighbours[2].points[0], tile->neighbours[3].points[0], tile->neighbours[4].points[0], tile->neighbours[5].points[0]},
         {tile->neighbours[0].index, tile->neighbours[1].index, tile->neighbours[2].index, tile->neighbours[3].index, tile->neighbours[4].index, tile->neighbours[5].index}
@@ -341,13 +348,14 @@ namespace devils_engine {
     }
     
     void map::set_point_data(const glm::vec3 &point, const uint32_t &index) {
-      while (s == status::rendering) { std::this_thread::sleep_for(std::chrono::microseconds(1)); }
+      ASSERT(index < points_count());
+      std::unique_lock<std::mutex> lock(mutex);
       auto points_arr = reinterpret_cast<glm::vec4*>(points->ptr());
       points_arr[index] = glm::vec4(point, 1.0f);
     }
     
     void map::set_tile_indices(const uint32_t &triangle_index, const glm::uvec3 &points, const std::vector<uint32_t> &indices, const uint32_t &offset, const uint32_t &count, const bool has_pentagon) {
-      while (s == status::rendering) { std::this_thread::sleep_for(std::chrono::microseconds(1)); }
+      std::unique_lock<std::mutex> lock(mutex);
       auto triangles_arr = reinterpret_cast<render::packed_fast_triangle_t*>(accel_triangles->ptr());
       auto tile_indices_arr = reinterpret_cast<uint32_t*>(tile_indices->ptr()); // важно не забыть как мы храним индексы
       
@@ -364,7 +372,7 @@ namespace devils_engine {
     }
     
     void map::flush_data() {
-      while (s == status::rendering) { std::this_thread::sleep_for(std::chrono::microseconds(1)); }
+      std::unique_lock<std::mutex> lock(mutex);
       auto accel_triangles_gpu = device->create(yavf::BufferCreateInfo::buffer(accel_triangles->info().size, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT), VMA_MEMORY_USAGE_GPU_ONLY);
       auto tile_indices_gpu = device->create(yavf::BufferCreateInfo::buffer(tile_indices->info().size, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT), VMA_MEMORY_USAGE_GPU_ONLY);
       
@@ -384,9 +392,9 @@ namespace devils_engine {
       accel_triangles = accel_triangles_gpu;
       tile_indices = tile_indices_gpu;
       
-      auto pool = device->descriptorPool(DEFAULT_DESCRIPTOR_POOL_NAME);
+//       auto pool = device->descriptorPool(DEFAULT_DESCRIPTOR_POOL_NAME);
       
-      yavf::DescriptorSetLayout tiles_data_layout = device->setLayout(TILES_DATA_LAYOUT_NAME);
+//       yavf::DescriptorSetLayout tiles_data_layout = device->setLayout(TILES_DATA_LAYOUT_NAME);
 //       {
 //         yavf::DescriptorLayoutMaker dlm(device);
 //         tiles_data_layout = dlm.binding(0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_ALL)
@@ -428,24 +436,29 @@ namespace devils_engine {
 //     }
 
     void map::set_tile_color(const uint32_t &tile_index, const render::color_t &color) {
-      while (s == status::rendering) { std::this_thread::sleep_for(std::chrono::microseconds(1)); }
+      ASSERT(tile_index < tiles_count());
+      std::unique_lock<std::mutex> lock(mutex);
       auto tiles_arr = reinterpret_cast<render::light_map_tile_t*>(tiles->ptr());
       tiles_arr[tile_index].tile_indices.z = color.container;
     }
     
     void map::set_tile_texture(const uint32_t &tile_index, const render::image_t &texture) {
-      while (s == status::rendering) { std::this_thread::sleep_for(std::chrono::microseconds(1)); }
+      ASSERT(tile_index < tiles_count());
+      std::unique_lock<std::mutex> lock(mutex);
       auto tiles_arr = reinterpret_cast<render::light_map_tile_t*>(tiles->ptr());
       tiles_arr[tile_index].tile_indices.y = texture.container;
     }
     
     void map::set_tile_height(const uint32_t &tile_index, const float &tile_hight) {
-      while (s == status::rendering) { std::this_thread::sleep_for(std::chrono::microseconds(1)); }
+      ASSERT(tile_index < tiles_count());
+      std::unique_lock<std::mutex> lock(mutex);
       auto tiles_arr = reinterpret_cast<render::light_map_tile_t*>(tiles->ptr());
       tiles_arr[tile_index].tile_indices.w = glm::floatBitsToUint(tile_hight);
     }
     
     float map::get_tile_height(const uint32_t &tile_index) const {
+      ASSERT(tile_index < tiles_count());
+      std::unique_lock<std::mutex> lock(mutex);
       auto tiles_arr = reinterpret_cast<render::light_map_tile_t*>(tiles->ptr());
       return glm::uintBitsToFloat(tiles_arr[tile_index].tile_indices.w);
     }
@@ -469,6 +482,10 @@ namespace devils_engine {
       mem += sizeof(*this);
       return mem;
     }
+    
+    const uint32_t map::detail_level;
+    const uint32_t map::accel_struct_detail_level;
+    const float map::world_radius;
   }
 }
 

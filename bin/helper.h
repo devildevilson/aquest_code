@@ -17,6 +17,10 @@
 #include "utils/sol.h"
 #include "utils/serializator_helper.h"
 #include "utils/progress_container.h"
+#include "utils/systems.h"
+#include "utils/interface_container.h"
+#include "utils/main_menu.h"
+#include "utils/quest_states.h"
 //#include "utils/perlin.h"
 #include "FastNoise.h"
 
@@ -28,6 +32,7 @@
 #include "render/shared_structures.h"
 #include "render/render_mode_container.h"
 #include "render/pipeline_mode_updater.h"
+#include "render/slots.h"
 
 #include "ai/sub_system.h"
 #include "ai/build_subsystem.h"
@@ -68,69 +73,6 @@ namespace devils_engine {
   const float radius = 500.0f;
   const uint32_t detail_level = 7;
   const uint32_t detail_level_acc_struct = 4;
-  
-  struct system_container_t {
-    utils::typeless_container container;
-    render::container* graphics_container;
-    core::map* map;
-//     systems::generator<map::generator_context>* map_generator;
-    interface::context* context;
-//     map::generator::container* map_container;
-    utils::interface* interface;
-    core::context* core_context;
-    utils::data_string_container* string_container;
-    utils::sequential_string_container* sequential_string_container;
-    utils::calendar* game_calendar;
-    systems::ai* ai_systems;
-    core::seasons* seasons; // нужен при генерации и самой игре, в главном меню не особенно нужен, может все таки отдельно?
-
-    system_container_t();
-    ~system_container_t();
-  };
-  
-  // только данные глобальной карты, их мы максимально плотно сериализуем при загрузках
-  // нам скорее всего потребуется еще сделать уникальный рендер, буферы
-  struct game_map_data {
-    utils::slot_container container;
-    core::map* map;
-    // запуская рендеры друг за другом, мы можем составить более сложный рендер
-    // хотя лучше наверное отключать часть единственного рендера 
-    // (так очевидней, но теперь нужно придумать хороший способ переключаться)
-    systems::render* render;
-    core::context* core_context;
-    core::seasons* seasons;
-    systems::ai* ai_systems;
-    // тут наверное поместим std string в котором будем хранить данные которые сериализуем при загрузке
-    
-    game_map_data();
-    ~game_map_data();
-    bool is_init() const;
-  };
-  
-  // так же нужны данные битвы и столкновения
-  struct game_battle_data {
-    utils::slot_container container;
-    systems::render* render;
-    // карта, контекст (отряды, их состояния, небольшая инфа о персонажах и титулах), биомы 
-    // ии (будет использовать совсем другие системы нежели чем на общей карте)
-    systems::ai* ai_systems;
-    
-    game_battle_data();
-    ~game_battle_data();
-    bool is_init() const;
-  };
-  
-  struct game_encounter_data {
-    utils::slot_container container;
-    systems::render* render;
-    // карта, контекст (герои и их состояния), биомы
-    // ии (другие системы, не такие как в битвах или на глобальной карте)
-    systems::ai* ai_systems;
-    
-    game_encounter_data();
-    ~game_encounter_data();
-    bool is_init() const;
-  };
 
   struct glfw_t {
     glfw_t();
@@ -144,41 +86,20 @@ namespace devils_engine {
   
   void keys_setup();
   void mouse_input(yacs::entity* ent, const size_t &time);
-  void key_input(const size_t &time);
+  void key_input(const size_t &time, const uint32_t &current_state, const bool loading);
   void zoom_input(yacs::entity* ent);
   uint32_t cast_mouse_ray();
   void next_nk_frame(const size_t &time);
 
-  void create_render_system(system_container_t &systems);
-  void create_render_stages(system_container_t &systems);
-  void create_map_container(system_container_t &systems);
-  void create_ai_systems(system_container_t &systems);
-  void create_game_state();
-  map::creator* setup_map_generator();
-  void destroy_map_generator(map::creator** ptr);
-  void setup_rendering_modes(render::mode_container &container);
-//   void create_map_generator(system_container_t &systems, dt::thread_pool* pool, map::generator_context* context);
-//   std::vector<systems::generator<map::generator_context>*> create_map_generators(system_container_t &systems, dt::thread_pool* pool, map::generator_context* context);
+  void create_render_system(systems::core_t &base_systems);
+  void setup_callbacks();
+  void basic_interface_functions(systems::core_t &base_systems);
 
   uint32_t sphere_frustum_test(const glm::vec3 &pos, const float &radius, const utils::frustum &fru);
-//   void map_frustum_test(const map::container* map, const glm::mat4 &frustum, std::vector<uint32_t> &indices);
-  void map_triangle_test(dt::thread_pool* pool, const map::container* map, const utils::frustum &fru, const uint32_t &triangle_index, std::atomic<uint32_t> &counter);
-  void map_triangle_test(const map::container* map, const utils::frustum &fru, const uint32_t &triangle_index, std::atomic<uint32_t> &counter);
-  void map_triangle_add(const map::container* map, const uint32_t &triangle_index, std::atomic<uint32_t> &counter);
-  void map_triangle_add2(const map::container* map, const uint32_t &triangle_index, std::mutex &mutex, std::unordered_set<uint32_t> &unique_tiles, std::vector<uint32_t> &tiles_array);
-//   void map_triangle_test2(dt::thread_pool* pool, const map::container* map, const utils::frustum &fru, const uint32_t &triangle_index, std::atomic<uint32_t> &counter);
   
   void set_default_values(sol::state &lua, sol::table &table);
-  void load_interface_functions(utils::interface* interface, sol::state &lua);
-//   void rendering_mode(const map::generator::container* cont, core::map* map, const uint32_t &property, const uint32_t &render_mode, const uint32_t &water_mode);
   void border_points_test(const std::vector<glm::vec4> &array);
-  void find_border_points(const core::map* map);
-  
-  void generate_tile_connections(const core::map* map, dt::thread_pool* pool);
-  void validate_and_create_data(map::creator* creator, system_container_t &systems);
-  void create_interface(system_container_t &systems);
-  void post_generation_work(map::creator* creator, system_container_t &systems);
-  
+
   void update(const size_t &time);
 
   void sync(utils::frame_time &frame_time, const size_t &time);

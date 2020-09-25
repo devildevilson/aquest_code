@@ -85,6 +85,12 @@ namespace devils_engine {
     // }
 
     void tile::add_neighbour(const uint32_t &index, const uint32_t &point_a, const uint32_t &point_b) {
+//       if (this->index == 0) {
+//         PRINT_VAR("n index  ", index)
+//         PRINT_VAR("points[0]", point_a)
+//         PRINT_VAR("points[1]", point_b)
+//       }
+      
       for (uint32_t i = 0; i < 6; ++i) {
         if (neighbours[i].index == index) {
           assert(neighbours[i].points[0] == point_a || neighbours[i].points[1] == point_a);
@@ -202,13 +208,13 @@ namespace devils_engine {
           const uint32_t b = add_middle_point(radius, triangles[i].points.y, triangles[i].points.z, edges_point);
           const uint32_t c = add_middle_point(radius, triangles[i].points.z, triangles[i].points.x, edges_point);
 
-          triangles[i].next_level[0] = triangles.size()+0;
-          triangles[i].next_level[1] = triangles.size()+1;
-          triangles[i].next_level[2] = triangles.size()+2;
-          triangles[i].next_level[3] = triangles.size()+3;
+          triangles[i].next_level[0] = triangles.size();
           triangles.push_back(triangle(triangles[i].points.x, a, c, k+1, i));
+          triangles[i].next_level[1] = triangles.size();
           triangles.push_back(triangle(triangles[i].points.y, b, a, k+1, i));
+          triangles[i].next_level[2] = triangles.size();
           triangles.push_back(triangle(triangles[i].points.z, c, b, k+1, i));
+          triangles[i].next_level[3] = triangles.size();
           triangles.push_back(triangle(a, b, c, k+1, i));
         }
 
@@ -228,8 +234,28 @@ namespace devils_engine {
       }
 
       const size_t point_hexes = points.size();
+      
+//       std::unordered_map<uint32_t, std::unordered_set<uint32_t>> hex_tri;
+//       for (size_t i = start; i < count; ++i) {
+//         const triangle &tri = triangles[i];
+//         ASSERT(hex_tri[tri.points.x].find(i) == hex_tri[tri.points.x].end());
+//         ASSERT(hex_tri[tri.points.y].find(i) == hex_tri[tri.points.y].end());
+//         ASSERT(hex_tri[tri.points.z].find(i) == hex_tri[tri.points.z].end());
+//         hex_tri[tri.points.x].insert(i);
+//         hex_tri[tri.points.y].insert(i);
+//         hex_tri[tri.points.z].insert(i);
+//       }
+//       
+//       size_t counter = 0;
+//       for (const auto &p : hex_tri) {
+//         //ASSERT(p.second.size() == 3);
+//         if (p.second.size() == 5) ++counter;
+//       }
+//       ASSERT(counter == 12);
 
+//       std::unordered_map<uint32_t, std::vector<uint32_t>> point_hex;
       // по идее в start хранится начало последнего уровня
+      // некоторые тайлы получают неверные пары точек
       for (size_t i = start; i < count; ++i) {
         triangle &tri = triangles[i];
         const glm::vec3 tri_center = (points[tri.points.x] + points[tri.points.y] + points[tri.points.z]) / 3.0f;
@@ -237,6 +263,7 @@ namespace devils_engine {
         const uint32_t index = add_vertex(tri_center);
         tiles.emplace_back(index);
         const uint32_t current_tile_index = tiles.size()-1;
+//         ASSERT(current_tile_index == index);
 
         tile::neighbour n[6];
         n[0].index = tri.points.x;
@@ -252,8 +279,28 @@ namespace devils_engine {
           const glm::vec3 edge_point2 = point - hex_side_length/2.0f * dir;
 
           const auto points_indices = add_hex_point(point_a, point_b, edge_point1, edge_point2, edges_hex);
-          const float dist1 = glm::distance2(points[point_a], points[points_indices.first]);
-          const float dist2 = glm::distance2(points[point_a], points[points_indices.second]);
+          const float dist1 = glm::distance(points[point_a], points[points_indices.first]);
+          const float dist2 = glm::distance(points[point_a], points[points_indices.second]);
+          
+          ASSERT(points_indices.first != points_indices.second);
+          
+//           // неверно нахожу точки???
+//           point_hex[points_indices.first].push_back(current_tile_index);
+//           point_hex[points_indices.second].push_back(current_tile_index);
+//           
+//           const auto &tri_a = hex_tri[point_a];
+//           const auto &tri_b = hex_tri[point_b];
+//           std::pair<uint32_t, uint32_t> two_tri = std::make_pair(UINT32_MAX, UINT32_MAX);
+//           for (const uint32_t id : tri_a) {
+//             if (tri_b.find(id) != tri_b.end()) {
+//               ASSERT(two_tri.first == UINT32_MAX || two_tri.second == UINT32_MAX);
+//               if (two_tri.first != UINT32_MAX) two_tri.second = id;
+//               else two_tri.first = id;
+//             }
+//           }
+//           
+//           const uint32_t opposite_tri = two_tri.first == i ? two_tri.second : two_tri.first;
+//           const uint32_t n_hex_index = point_hexes + (opposite_tri - start); // по идее вот это настоящий индекс соседа
 
           // tiles.back().add_neighbour(point_a, points_indices.first);
           // tiles.back().add_neighbour(point_b, points_indices.second);
@@ -264,8 +311,10 @@ namespace devils_engine {
           n[1].points[0] = dist1 < dist2 ? points_indices.second : points_indices.first;
 
           const uint32_t side_neighbor = find_neighbor_tile(current_tile_index, points_indices.first, points_indices.second, neighbor_hex);
-          if (side_neighbor != UINT32_MAX) {
-            n[3].index = side_neighbor;
+          if (side_neighbor != UINT32_MAX) { // сосед по ребру найден
+//             ASSERT(n_hex_index == side_neighbor); // я видимо верно нахожу соседей
+            n[3].index = side_neighbor; // сосед у меня находится по индексу серединной точки
+            //n[3].index = n_hex_index;
             n[3].points[0] = points_indices.first;
             n[3].points[1] = points_indices.second;
             // tiles.back().add_neighbour(side_neighbor, points_indices.first);
@@ -282,20 +331,36 @@ namespace devils_engine {
           const glm::vec3 edge_point2 = point - hex_side_length/2.0f * dir;
 
           const auto points_indices = add_hex_point(point_a, point_b, edge_point1, edge_point2, edges_hex);
-          const float dist1 = glm::distance2(points[point_a], points[points_indices.first]);
-          const float dist2 = glm::distance2(points[point_a], points[points_indices.second]);
-
-          // tiles.back().add_neighbour(point_a, points_indices.first);
-          // tiles.back().add_neighbour(point_b, points_indices.second);
-          // tiles[point_a].add_neighbour(tiles.size()-1, dist1 < dist2 ? points_indices.first : points_indices.second);
-          // tiles[point_b].add_neighbour(tiles.size()-1, dist1 < dist2 ? points_indices.second : points_indices.first);
+          const float dist1 = glm::distance(points[point_a], points[points_indices.first]);
+          const float dist2 = glm::distance(points[point_a], points[points_indices.second]);
+          
+          ASSERT(points_indices.first != points_indices.second);
+          
+//           point_hex[points_indices.first].push_back(current_tile_index);
+//           point_hex[points_indices.second].push_back(current_tile_index);
+// 
+//           const auto &tri_a = hex_tri[point_a];
+//           const auto &tri_b = hex_tri[point_b];
+//           std::pair<uint32_t, uint32_t> two_tri = std::make_pair(UINT32_MAX, UINT32_MAX);
+//           for (const uint32_t id : tri_a) {
+//             if (tri_b.find(id) != tri_b.end()) {
+//               ASSERT(two_tri.first == UINT32_MAX || two_tri.second == UINT32_MAX);
+//               if (two_tri.first != UINT32_MAX) two_tri.second = id;
+//               else two_tri.first = id;
+//             }
+//           }
+//           
+//           const uint32_t opposite_tri = two_tri.first == i ? two_tri.second : two_tri.first;
+//           const uint32_t n_hex_index = point_hexes + (opposite_tri - start); // по идее вот это настоящий индекс соседа
 
           n[1].points[1] = dist1 < dist2 ? points_indices.first : points_indices.second;
           n[2].points[0] = dist1 < dist2 ? points_indices.second : points_indices.first;
 
           const uint32_t side_neighbor = find_neighbor_tile(current_tile_index, points_indices.first, points_indices.second, neighbor_hex);
           if (side_neighbor != UINT32_MAX) {
+//             ASSERT(n_hex_index == side_neighbor);
             n[4].index = side_neighbor;
+            //n[4].index = n_hex_index;
             n[4].points[0] = points_indices.first;
             n[4].points[1] = points_indices.second;
             // tiles.back().add_neighbour(side_neighbor, points_indices.first);
@@ -312,20 +377,36 @@ namespace devils_engine {
           const glm::vec3 edge_point2 = point - hex_side_length/2.0f * dir;
 
           const auto points_indices = add_hex_point(point_a, point_b, edge_point1, edge_point2, edges_hex);
-          const float dist1 = glm::distance2(points[point_a], points[points_indices.first]);
-          const float dist2 = glm::distance2(points[point_a], points[points_indices.second]);
-
-          // tiles.back().add_neighbour(point_a, points_indices.first);
-          // tiles.back().add_neighbour(point_b, points_indices.second);
-          // tiles[point_a].add_neighbour(tiles.size()-1, dist1 < dist2 ? points_indices.first : points_indices.second);
-          // tiles[point_b].add_neighbour(tiles.size()-1, dist1 < dist2 ? points_indices.second : points_indices.first);
+          const float dist1 = glm::distance(points[point_a], points[points_indices.first]);
+          const float dist2 = glm::distance(points[point_a], points[points_indices.second]);
+          
+          ASSERT(points_indices.first != points_indices.second);
+          
+//           point_hex[points_indices.first].push_back(current_tile_index);
+//           point_hex[points_indices.second].push_back(current_tile_index);
+// 
+//           const auto &tri_a = hex_tri[point_a];
+//           const auto &tri_b = hex_tri[point_b];
+//           std::pair<uint32_t, uint32_t> two_tri = std::make_pair(UINT32_MAX, UINT32_MAX);
+//           for (const uint32_t id : tri_a) {
+//             if (tri_b.find(id) != tri_b.end()) {
+//               ASSERT(two_tri.first == UINT32_MAX || two_tri.second == UINT32_MAX);
+//               if (two_tri.first != UINT32_MAX) two_tri.second = id;
+//               else two_tri.first = id;
+//             }
+//           }
+//           
+//           const uint32_t opposite_tri = two_tri.first == i ? two_tri.second : two_tri.first;
+//           const uint32_t n_hex_index = point_hexes + (opposite_tri - start); // по идее вот это настоящий индекс соседа
 
           n[2].points[1] = dist1 < dist2 ? points_indices.first : points_indices.second;
           n[0].points[1] = dist1 < dist2 ? points_indices.second : points_indices.first;
 
           const uint32_t side_neighbor = find_neighbor_tile(current_tile_index, points_indices.first, points_indices.second, neighbor_hex);
           if (side_neighbor != UINT32_MAX) {
+//             ASSERT(n_hex_index == side_neighbor);
             n[5].index = side_neighbor;
+            //n[5].index = n_hex_index;
             n[5].points[0] = points_indices.first;
             n[5].points[1] = points_indices.second;
             // tiles.back().add_neighbour(side_neighbor, points_indices.first);
@@ -342,11 +423,17 @@ namespace devils_engine {
           tiles[n[j].index].add_neighbour(current_tile_index, n[j].points[0], n[j].points[1]);
         }
 
-        tri.next_level[0] = tiles.size()-1;
+        tri.next_level[0] = current_tile_index;
         tri.next_level[1] = tri.points.x;
         tri.next_level[2] = tri.points.y;
         tri.next_level[3] = tri.points.z;
       }
+      
+//       for (const auto &p : point_hex) {
+//         ASSERT(p.second.size() == 2); // одного соседа мы не затрагиваем
+//         
+//         
+//       }
 
       std::cout << "triangle_hex_count " << (tiles.size()-point_hexes) << '\n';
       std::cout << "hex_count " << tiles.size() << '\n';
@@ -404,9 +491,9 @@ namespace devils_engine {
     }
 
     uint32_t container::add_middle_point(const float &radius, const uint32_t &p1, const uint32_t &p2, std::unordered_map<size_t, uint32_t> &cache) {
-      const bool first_smaller = p1 < p2;
-      const size_t smaller = first_smaller ? p1 : p2;
-      const size_t greater = first_smaller ? p2 : p1;
+      //(void)radius;
+      const size_t smaller = std::min(p1, p2);
+      const size_t greater = std::max(p1, p2);
       const size_t key = (smaller << 32) | greater;
 
       auto itr = cache.find(key);
@@ -417,14 +504,14 @@ namespace devils_engine {
       const glm::vec3 middle = (point1 + point2) / 2.0f;
 
       const uint32_t index = add_vertex(radius, middle);
+      //const uint32_t index = add_vertex(middle);
       cache.insert(std::make_pair(key, index));
       return index;
     }
 
     std::pair<uint32_t, uint32_t> container::add_hex_point(const uint32_t &p1, const uint32_t &p2, const glm::vec3 &edge_point1, const glm::vec3 &edge_point2, std::unordered_map<size_t, std::pair<uint32_t, uint32_t>> &cache) {
-      const bool first_smaller = p1 < p2;
-      const size_t smaller = first_smaller ? p1 : p2;
-      const size_t greater = first_smaller ? p2 : p1;
+      const size_t smaller = std::min(p1, p2);
+      const size_t greater = std::max(p1, p2);
       const size_t key = (smaller << 32) | greater;
 
       auto itr = cache.find(key);
@@ -438,9 +525,8 @@ namespace devils_engine {
     }
 
     uint32_t container::find_neighbor_tile(const uint32_t &tile, const uint32_t &p1, const uint32_t &p2, std::unordered_map<size_t, uint32_t> &cache) {
-      const bool first_smaller = p1 < p2;
-      const size_t smaller = first_smaller ? p1 : p2;
-      const size_t greater = first_smaller ? p2 : p1;
+      const size_t smaller = std::min(p1, p2);
+      const size_t greater = std::max(p1, p2);
       const size_t key = (smaller << 32) | greater;
 
       auto itr = cache.find(key);
@@ -602,6 +688,7 @@ namespace devils_engine {
     }
     
     void container::fix_tile(const uint32_t &tile_index) {
+      ASSERT(tile_index < tiles.size());
       tile &t = tiles[tile_index];
       const glm::vec3 dir = points[t.index];
       
@@ -611,17 +698,51 @@ namespace devils_engine {
         if (glm::dot(dir, tri_dir) < 0.0f) {
           std::swap(t.neighbours[i].points[0], t.neighbours[i].points[1]);
         }
-        
-        const uint32_t current_index = t.neighbours[i].points[1];
+      }
+      
+      // нужно чтобы пары чисел в соседях шли друг за другом по условию как ниже
+      // выше алгортим работает через раз
+      
+      std::vector<tile::neighbour> new_n;
+      std::unordered_set<uint32_t> set;
+      new_n.push_back(t.neighbours[0]);
+      set.insert(t.neighbours[0].index);
+      
+      for (uint32_t i = 0; i < new_n.size(); ++i) {
+        //const uint32_t current_index = t.neighbours[i].points[1];
+        const uint32_t current_index = new_n[i].points[1];
         for (uint32_t j = 0; j < n_count; ++j) {
-          if (i == j) continue;
+          //if (i == j) continue;
+          if (set.find(t.neighbours[j].index) != set.end()) continue;
           
           if (t.neighbours[j].points[0] == current_index || t.neighbours[j].points[1] == current_index) {
-            if (j == (i+1) % n_count) break;
-            std::swap(t.neighbours[j], t.neighbours[(i+1) % n_count]);
+            new_n.push_back(t.neighbours[j]);
+            set.insert(t.neighbours[j].index);
+            if (t.neighbours[j].points[1] == current_index) std::swap(new_n.back().points[0], new_n.back().points[1]);
           }
         }
       }
+      
+      ASSERT(new_n.size() == n_count);
+      for (uint32_t i = 0; i < n_count; ++i) {
+        t.neighbours[i] = new_n[i];
+      }
+      
+//       for (uint32_t i = 0; i < n_count; ++i) {
+//         const uint32_t current_index = t.neighbours[i].points[1];
+//         for (uint32_t j = i+1; j < n_count-1; ++j) {
+//           //if (i == j) continue;
+//           
+//           if (t.neighbours[j].points[0] == current_index || t.neighbours[j].points[1] == current_index) {
+//             //if (j == (i+1) % n_count) break;
+//             std::swap(t.neighbours[j], t.neighbours[(i+1) % n_count]);
+//           }
+//         }
+//         
+//         if (i+1 == n_count) {
+//           ASSERT(current_index == t.neighbours[0].points[0]);
+//         }
+//       }
       
       for (uint32_t i = 0; i < n_count; ++i) {
         const uint32_t current_index = t.neighbours[i].points[1];

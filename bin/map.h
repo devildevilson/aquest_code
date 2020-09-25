@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <vector>
 #include <atomic>
+#include <mutex>
 #include "utils/utility.h"
 #include "render/shared_structures.h"
 #include "utils/ray.h"
@@ -45,32 +46,33 @@ namespace devils_engine {
       // уровень детализации карты лучше задавать через константы
       static const uint32_t detail_level = 7;
       static const uint32_t accel_struct_detail_level = 4;
+      constexpr static const float world_radius = 500.0f;
       
-      static constexpr size_t tri_count_d(const size_t &detail_level) {
+      constexpr static size_t tri_count_d(const size_t &detail_level) {
         return 20 * power4(detail_level);
       }
       
-      static constexpr size_t icosahedron_points_count_t(const size_t &tri_count) {
+      constexpr static size_t icosahedron_points_count_t(const size_t &tri_count) {
         return (tri_count*3-12*5)/6+12;
       }
       
-      static constexpr size_t icosahedron_points_count_d(const size_t &detail_level) {
+      constexpr static size_t icosahedron_points_count_d(const size_t &detail_level) {
         return icosahedron_points_count_t(tri_count_d(detail_level));
       }
       
-      static constexpr size_t hex_count_t(const size_t &tri_count) {
+      constexpr static size_t hex_count_t(const size_t &tri_count) {
         return icosahedron_points_count_t(tri_count) + tri_count;
       }
       
-      static constexpr size_t hex_count_d(const size_t &detail_level) {
+      constexpr static size_t hex_count_d(const size_t &detail_level) {
         return hex_count_t(tri_count_d(detail_level));
       }
       
-      static constexpr size_t points_count_t(const size_t &tri_count) {
+      constexpr static size_t points_count_t(const size_t &tri_count) {
         return icosahedron_points_count_t(tri_count) + tri_count + tri_count*6/2;
       }
       
-      static constexpr size_t points_count_d(const size_t &detail_level) {
+      constexpr static size_t points_count_d(const size_t &detail_level) {
         return points_count_t(tri_count_d(detail_level));
       }
       
@@ -99,7 +101,10 @@ namespace devils_engine {
       std::vector<triangle> triangles;
       float max_triangle_size; // 23.8457f
       
+      glm::mat4 world_matrix;
+      
       std::atomic<status> s;
+      mutable std::mutex mutex;
       
       struct create_info {
         yavf::Device* device;
@@ -112,8 +117,8 @@ namespace devils_engine {
       bool intersect_tri(const glm::vec4 &v0, const glm::vec4 &v1, const glm::vec4 &v2, const utils::ray &ray) const;
       bool intersect_tile(const uint32_t &tile_index, const utils::ray &ray) const;
       
-      const render::light_map_tile_t & get_tile(const uint32_t &index) const;
-      const glm::vec4 & get_point(const uint32_t &index) const;
+      const render::light_map_tile_t get_tile(const uint32_t &index) const;
+      const glm::vec4 get_point(const uint32_t &index) const;
       
       uint32_t points_count() const;
       uint32_t tiles_count() const;

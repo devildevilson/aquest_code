@@ -5,6 +5,7 @@
 #include "utils/works_utils.h"
 #include "game_time.h"
 #include "ai/ai_system.h"
+#include "utils/systems.h"
 
 #include <stdexcept>
 
@@ -57,7 +58,7 @@ namespace devils_engine {
           auto pool = global::get<dt::thread_pool>();
           pool->submitbase([pool] () {
             PRINT("Thread compute turn advancing")
-            auto ctx = global::get<core::context>();
+            auto ctx = global::get<systems::map_t>()->core_context;
             ctx->sort_characters();
             const size_t first_not_dead = ctx->first_not_dead_character();
             const size_t first_playable = ctx->first_playable_character();
@@ -135,7 +136,7 @@ namespace devils_engine {
             
             // сейчас нужно сделать пока что одну подсистему которая должна отвечать за строительство
             
-            auto ctx = global::get<core::context>();
+            auto ctx = global::get<systems::map_t>()->core_context;
             const size_t first_not_dead = ctx->first_not_dead_character();
             const size_t first_playable = ctx->first_playable_character();
             const size_t count_not_dead = ctx->characters_count() - first_not_dead;
@@ -144,7 +145,7 @@ namespace devils_engine {
             uint32_t systems_data[count_not_dead];
             uint32_t* systems_data_ptr = systems_data;
             
-            const auto &systems = global::get<systems::ai>()->get_subsystems();
+            const auto &systems = global::get<systems::map_t>()->ai_systems->get_subsystems();
             for (auto s : systems) {
               // по идее всегда должно быть true
               // скорее всего иное какое то серьезное исключение

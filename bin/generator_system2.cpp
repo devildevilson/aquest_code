@@ -34,6 +34,7 @@ namespace devils_engine {
     
     void generator::clear() {
       generators.clear();
+      current_step = 0;
     }
     
     bool generator::finished() const {

@@ -5,6 +5,7 @@
 
 #include "generator_context2.h"
 #include <string>
+#include <mutex>
 
 // с этим все понятно, но как сохраняться во время игры теперь?
 // в принципе все эти вещи сохраняемы вполне легко
@@ -25,6 +26,8 @@ struct biome_data { // чет пока ничего не приходит в г�
 
 namespace devils_engine {
   namespace map {
+    struct container;
+    
     namespace debug {
       namespace entities {
         enum values {
@@ -123,6 +126,8 @@ namespace devils_engine {
     
     using generator_pair = std::pair<std::string, std::function<void(generator::context*, sol::table&)>>;
     extern const generator_pair default_generator_pairs[];
+    
+    void map_triangle_add2(const map::container* map, const uint32_t &triangle_index, std::mutex &mutex, std::unordered_set<uint32_t> &unique_tiles, std::vector<uint32_t> &tiles_array);
     
     void update_noise_seed(generator::context* ctx);
     

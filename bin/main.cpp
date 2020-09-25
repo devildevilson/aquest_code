@@ -17,37 +17,48 @@ int main(int argc, char const *argv[]) {
   //const uint32_t threads_count = thread_pool_size+1;
   dt::thread_pool pool(thread_pool_size);
   global::get(&pool);
+  
+  systems::core_t base_systems;
+  systems::map_t map_systems;
+  systems::battle_t battle_systems;
+  systems::encouter_t encounter_systems;
+  
+  base_systems.create_utility_systems();
+  create_render_system(base_systems);
+  setup_callbacks();
+  base_systems.create_render_stages();
+  base_systems.create_interface();
+  // базовые функции интерфейса?
+  // ну мы должны получить какую то таблицу с указанием откуда че загружать
+  basic_interface_functions(base_systems);
+  
+  global::get(&base_systems);
+  global::get(&map_systems);
+  global::get(&battle_systems);
+  global::get(&encounter_systems);
+  
+  utils::main_menu_state main_menu_state;
+  utils::map_creation_state map_creation_state;
+  utils::world_map_state world_map_state;
+  utils::battle_state battle_state;
+  utils::encounter_state encounter_state;
 
-  input::data input_data;
-  global::get(&input_data);
-  render::mode_container mode_container;
-  setup_rendering_modes(mode_container);
-  global::get<const render::mode_container>(&mode_container);
   render::updater upd;
   global::get(&upd);
   yacs::world world;
-
-  system_container_t systems;
-  create_render_system(systems);
-  create_map_container(systems);
-  create_render_stages(systems);
-  create_interface(systems);
   
   // по всей видимости луа занимает реально много памяти
   // что то с этим сделать вряд ли можно (интересно есть ли какие нибудь жесткие ограничения на андроиде?)
   // вроде как жестких ограничений нет, смогу ли я сделать приложение меньше чем 500 мб? 
   // это хороший ориентир для приложений без луа, но с ним получается как то слишком многопамяти =(
-//   sol::state lua;
-//   lua.open_libraries(sol::lib::base);
-//   sol::table table = lua.create_table();
-//   set_default_values(lua, table);
   
   const float dist = 550.0f;
   const glm::vec3 default_camera_pos = glm::normalize(glm::vec3(1.0f, 0.0f, 0.0f)) * dist;
   
   auto ent = world.create_entity();
   ent->add<components::transform>(default_camera_pos, glm::vec3(-1.0f, 0.0f, 0.0f));
-  ent->add<components::camera>(ent);
+  ent->add<components::camera>(ent); // тут нужно использовать алгоритм тини (?) : camera_pos += (end_pos - camera_pos) * CONST
+  // так камера будет плавно подъезжать к end_pos в зависимости от константы
   
   // какие энтити у нас будут? провинции?
   // провинции, города и другие статичные вещи наверное лучше сделать отдельными структурами
@@ -56,21 +67,7 @@ int main(int argc, char const *argv[]) {
   // проблема в том что тут довольно серьезную оптимизацию нужно предпринять по уменьшению занимаемой памяти
   // да и ко всему прочему очень мало данных у каждой энтити
   
-//   std::cout << "Current path is " << std::filesystem::current_path() << '\n';
-  
   keys_setup();
-  
-//   map::generator::context ctx;
-//   ctx.pool = &pool;
-//   ctx.map = global::get<core::map>();
-// //   ctx.noise = new FastNoise(1);             // это удалится после создания
-// //   ctx.random = new utils::random_engine_st; // это удалится
-//   ctx.container = global::get<map::generator::container>();
-//   ctx.noise = nullptr;
-//   ctx.random = nullptr;
-  
-//   systems::generator* gen = nullptr;
-  map::creator* creator = nullptr;
   
   // по идее хорошим дизайном будет запускать интерфейс без условно всегда 
   // просто следить чтобы там во время появлялись нужные функции интерфейса
@@ -87,120 +84,65 @@ int main(int argc, char const *argv[]) {
   // нам требуется собрать описания, заранее посчитать сколько всего нужно создать
   // посчитать размер + ко всему нужно уметь грузить все в несколько итераций
   // перед сменой состояния нам нужно будет все не нужное удалить
+//   map_systems.setup_map_generator();
+//   setup_map_generator(map_systems);
   
-  game_state new_state = game_state::create_map; // нужно для загрузчика
-  game_state current_state = game_state::create_map;
-  game_state old_state = game_state::create_map;
-  //game_state current_state = game_state::map;
+  const std::vector<std::string> base_interfaces = { // как передать данные?
+    "main_menu",          
+    "",
+    // должен быть указатель на персонажа, вообще наверное нет, 
+    // должен быть указатель на какого то помошника (там должен быть более простой доступ ко всем функциям)
+    // например контейнер для поиска жен, и прочее, как его передать?
+    "player_interface",   
+    "battle_interface",
+    "encounter_interface"
+  };
+  
+  const std::array<utils::quest_state*, utils::quest_state::count> game_states = {
+    &main_menu_state,
+    &map_creation_state,
+    &world_map_state,
+    &battle_state,
+    &encounter_state
+  };
+  
+  uint32_t current_game_state_index = utils::quest_state::main_menu;
+  utils::quest_state* current_game_state = game_states[current_game_state_index];
+  bool loading = true;
+  current_game_state->enter();
+  
   global::get<render::window>()->show();
   utils::frame_time frame_time;
-  while (!global::get<render::window>()->close()) {
+  while (!global::get<render::window>()->close() && !base_systems.menu->m_quit_game) {
     frame_time.start();
     const size_t time = frame_time.get();
     input::update_time(time);
     poll_events();
     mouse_input(ent, time); 
-    key_input(time);
+    key_input(time, current_game_state_index, loading);
     zoom_input(ent);
     next_nk_frame(time);
     camera::strategic(ent);
     
-    switch (current_state) {
-      case game_state::loading: {
-        ASSERT(false);
-        // лоадинг может быть от карты к битве, от карты к столкновению, от битвы к карте, от столкновения к карте
-        // переход от карты означает что мы должны сохранить все данные карты в каком нибудь адекватном виде
-        // и загрузить только то что нужно непосредственно в битве (это анимации, биомы, генерация карты, расстановка войск)
-        // нужно выделить все данные используемые на карте и их удалить после сериализации (в том числе core::map)
-        // тут мы должны получить от чего к чему переходим и какие то данные этих переходов
-        // переход от создания карты не должен переключать нас на экран загрузки, идеально сделать отдельный рендер для интерфейса
-        // нужно попытаться сделать этот переход с функцией post_generation_work
-        
-        if (old_state == game_state::create_map && new_state == game_state::map) {
-          // нужно положить post_generation_work в треад пул вместе с контейнером (можно в контейнере указывать когда конец когда начало)
-          // нужно запустить функцию отрисовки интерфейса, 
-          // причем перед этим нужно либо загрузить новую картинку, 
-          // либо подсказать интерфейсу что использовать заглушку не нужно
-        }
-        
-        if (old_state == game_state::map && new_state == game_state::battle) { // начало битвы
-          
-        }
-        
-        if (old_state == game_state::map && new_state == game_state::encounter) {
-          
-        }
-        
-        if (old_state == game_state::battle && new_state == game_state::map) { // конец битвы
-          
-        }
-        
-        if (old_state == game_state::encounter && new_state == game_state::map) {
-          
-        }
-        
-        if (old_state == game_state::map && new_state == game_state::menu) { // выходим в главное меню
-          
-        }
-        
-        if (old_state == game_state::battle && new_state == game_state::menu) {
-          
-        }
-        
-        if (old_state == game_state::encounter && new_state == game_state::menu) {
-          
-        }
-        
-        // загрузка игры (можем ли мы сохранить игру посреди битвы? вообще наверное можем, но там нужно дожидаться окончания анимаций)
-        if (old_state == game_state::menu && new_state == game_state::map) {
-          
-        }
-        
-        break;
+    // здесь наверное будет обновлять интерфейс (где главное меню?)
+//     if (base_systems.menu->exist()) input::block();
+    base_systems.interface_container->draw(time);
+//     if (base_systems.menu->exist()) input::unblock();
+    
+    if (loading) {
+      if (current_game_state->load()) {
+        loading = false;
+        base_systems.interface_container->close_all();
       }
-      
-      case game_state::menu: {
-        ASSERT(false);
-        break;
-      }
-      
-      case game_state::create_map: {
-        if (creator == nullptr) {
-          creator = setup_map_generator();
-        }
-        
-        creator->generate();
-        
-        if (creator->back_to_menu()) {
-          destroy_map_generator(&creator);
-        }
-        
-        if (creator->finished()) {
-          post_generation_work(creator, systems); // эти вещи тоже вполне можно сделать асинхронно
-          destroy_map_generator(&creator);
-          current_state = game_state::map;
-        }
-        
-        break;
-      }
-      
-      case game_state::map: {
-//         const uint32_t picked_tile_index = cast_mouse_ray();
-//         global::get<render::tile_render>()->picked_tile(picked_tile_index); // тайл теперь нужно пикать с учетом высоты тайлов
-//         overlay::debug(picked_tile_index, global::get<map::generator::container>());
-        
-        update(time);
-        break;
-      }
-      
-      case game_state::battle: {
-        ASSERT(false);
-        break;
-      }
-      
-      case game_state::encounter: {
-        ASSERT(false);
-        break;
+    } else {
+      current_game_state->update(time);
+      if (current_game_state->next_state() != UINT32_MAX) {
+        const uint32_t index = current_game_state->next_state();
+        current_game_state->clean(); // ождается что здесь мы почистим все ресурсы доконца и обратно вернем next_state к UINT32_MAX
+        current_game_state = game_states[index];
+        current_game_state->enter();
+        loading = true;
+        current_game_state_index = index;
       }
     }
     
@@ -209,9 +151,8 @@ int main(int argc, char const *argv[]) {
     // (примерно 100 мб занимает вся информация о игровой карте (размер контейнера и размер данных в кор::мап))
     // (еще мегобайт 100 занимает луа (похоже что с этим бороться будет крайне сложно))
     // нужно каким то образом это сократить
-    auto s = global::get<core::map>()->status();
-    if (s == core::map::status::valid) global::get<core::map>()->set_status(core::map::status::rendering);
-    global::get<systems::render>()->update(global::get<render::container>());
+    map_systems.lock_map();
+    base_systems.render_slots->update(global::get<render::container>());
     const size_t sync_time = global::get<render::window>()->flags.vsync() ? global::get<render::window>()->refresh_rate_mcs() : 0;
     sync(frame_time, sync_time);
   }

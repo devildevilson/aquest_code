@@ -19,6 +19,7 @@ class FastNoise;
 namespace devils_engine {
   namespace core {
     struct map;
+    struct seasons;
   }
   
   namespace utils {
@@ -85,6 +86,7 @@ namespace devils_engine {
         utils::random_engine_st* random;
         FastNoise* noise;
         core::map* map;
+        core::seasons* seasons;
         dt::thread_pool* pool;
       };
     }

@@ -16,8 +16,6 @@
 #include "seasons.h"
 #include "render/shared_structures.h"
 
-const float radius_const = 500.0f;
-
 namespace devils_engine {
   namespace map {
     const generator_pair default_generator_pairs[] = {
@@ -209,12 +207,14 @@ namespace devils_engine {
       glm::mat4 mat1 = glm::rotate(glm::mat4(), angle2, glm::vec3(0.0f, 1.0f, 0.0f));
                 mat1 = glm::rotate(mat1,        angle1, glm::vec3(1.0f, 0.0f, 0.0f));
       glm::mat3 mat(mat1);
-      map::container generated_core(radius_const, core::map::detail_level, mat); // возможно нужно как то это ускорить
+      map::container generated_core(core::map::world_radius, core::map::detail_level, mat); // возможно нужно как то это ускорить
       
       auto map = ctx->map;
       ASSERT(generated_core.points.size() == map->points_count());
       ASSERT(generated_core.tiles.size() == map->tiles_count());
       ASSERT(generated_core.triangles.size() == map->triangles_count());
+      
+      map->world_matrix = mat1;
       
       // придется переделать функции и добавить ожидание треду
       utils::submit_works_async(ctx->pool, generated_core.tiles.size(), [&generated_core] (const size_t &start, const size_t &count) {
@@ -222,24 +222,21 @@ namespace devils_engine {
           generated_core.fix_tile(i);
         }
       });
-      ctx->pool->compute();
-      while (ctx->pool->working_count() != 1 || ctx->pool->tasks_count() != 0) { std::this_thread::sleep_for(std::chrono::microseconds(1)); }
+      utils::async_wait(ctx->pool);
       
       utils::submit_works_async(ctx->pool, generated_core.tiles.size(), [&generated_core, map] (const size_t &start, const size_t &count) {
         for (size_t i = start; i < start+count; ++i) {
           map->set_tile_data(&generated_core.tiles[i], i);
         }
       });
-      ctx->pool->compute();
-      while (ctx->pool->working_count() != 1 || ctx->pool->tasks_count() != 0) { std::this_thread::sleep_for(std::chrono::microseconds(1)); }
+      utils::async_wait(ctx->pool);
       
       utils::submit_works_async(ctx->pool, generated_core.points.size(), [&generated_core, map] (const size_t &start, const size_t &count) {
         for (size_t i = start; i < start+count; ++i) {
           map->set_point_data(generated_core.points[i], i);
         }
       });
-      ctx->pool->compute();
-      while (ctx->pool->working_count() != 1 || ctx->pool->tasks_count() != 0) { std::this_thread::sleep_for(std::chrono::microseconds(1)); }
+      utils::async_wait(ctx->pool);
       
       const size_t tri_count = core::map::tri_count_d(core::map::accel_struct_detail_level);
       ASSERT(tri_count == map->accel_triangles_count());
@@ -279,14 +276,16 @@ namespace devils_engine {
           tiles_array.clear();
         }
       });
-      ctx->pool->compute();
-      while (ctx->pool->working_count() != 1 || ctx->pool->tasks_count() != 0) { std::this_thread::sleep_for(std::chrono::microseconds(1)); }
+      utils::async_wait(ctx->pool); // похоже что работает
       
       ASSERT(ctx->pool->working_count() == 1 && ctx->pool->tasks_count() == 0);
       
       ASSERT(generated_core.triangles.size() == map->triangles.size());
       ASSERT(sizeof(core::map::triangle) == sizeof(map::triangle));
-      memcpy(map->triangles.data(), generated_core.triangles.data(), map->triangles.size()*sizeof(core::map::triangle));
+      {
+        std::unique_lock<std::mutex> lock(map->mutex);
+        memcpy(map->triangles.data(), generated_core.triangles.data(), map->triangles.size()*sizeof(core::map::triangle));
+      }
       
       map->flush_data();
       
@@ -295,6 +294,7 @@ namespace devils_engine {
     }
     
     void setup_generator(generator::context* ctx, sol::table &table) {
+      (void)table;
       ctx->container->set_tile_template({
         map::generator::data_type::uint_t,    //       plate_index,
         map::generator::data_type::uint_t,    //       edge_index,
@@ -2118,75 +2118,75 @@ namespace devils_engine {
       (void)table;
       utils::time_log log("creating biomes");
       
-      global::get<core::seasons>()->biomes[render::biome_ocean] = {
+      ctx->seasons->create_biome(render::biome_ocean, {
         { GPU_UINT_MAX }, render::make_color(0.2f, 0.2f, 0.8f, 1.0f), { GPU_UINT_MAX }, { GPU_UINT_MAX },
         0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f
-      };
+      });
       
-      global::get<core::seasons>()->biomes[render::biome_ocean_glacier] = {
+      ctx->seasons->create_biome(render::biome_ocean_glacier, {
         { GPU_UINT_MAX }, render::make_color(0.8f, 0.8f, 1.0f, 1.0f), { GPU_UINT_MAX }, { GPU_UINT_MAX },
         0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f
-      };
+      });
       
-      global::get<core::seasons>()->biomes[render::biome_desert] = {
+      ctx->seasons->create_biome(render::biome_desert, {
         { GPU_UINT_MAX }, render::make_color(1.0f, 1.0f, 0.0f, 1.0f), { GPU_UINT_MAX }, { GPU_UINT_MAX },
         0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f
-      };
+      });
       
-      global::get<core::seasons>()->biomes[render::biome_rain_forest] = {
+      ctx->seasons->create_biome(render::biome_rain_forest, {
         { GPU_UINT_MAX }, render::make_color(0.0f, 0.7f, 0.2f, 1.0f), { GPU_UINT_MAX }, { GPU_UINT_MAX },
         0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f
-      };
+      });
       
-      global::get<core::seasons>()->biomes[render::biome_rocky] = {
+      ctx->seasons->create_biome(render::biome_rocky, {
         { GPU_UINT_MAX }, render::make_color(1.0f, 0.2f, 0.2f, 1.0f), { GPU_UINT_MAX }, { GPU_UINT_MAX },
         0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f
-      };
+      });
       
-      global::get<core::seasons>()->biomes[render::biome_plains] = {
+      ctx->seasons->create_biome(render::biome_plains, {
         { GPU_UINT_MAX }, render::make_color(0.0f, 1.0f, 0.2f, 1.0f), { GPU_UINT_MAX }, { GPU_UINT_MAX },
         0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f
-      };
+      });
       
-      global::get<core::seasons>()->biomes[render::biome_swamp] = {
+      ctx->seasons->create_biome(render::biome_swamp, {
         { GPU_UINT_MAX }, render::make_color(0.0f, 1.0f, 0.0f, 1.0f), { GPU_UINT_MAX }, { GPU_UINT_MAX },
         0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f
-      };
+      });
       
-      global::get<core::seasons>()->biomes[render::biome_grassland] = {
+      ctx->seasons->create_biome(render::biome_grassland, {
         { GPU_UINT_MAX }, render::make_color(0.2f, 1.0f, 0.2f, 1.0f), { GPU_UINT_MAX }, { GPU_UINT_MAX },
         0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f
-      };
+      });
       
-      global::get<core::seasons>()->biomes[render::biome_deciduous_forest] = {
+      ctx->seasons->create_biome(render::biome_deciduous_forest, {
         { GPU_UINT_MAX }, render::make_color(0.0f, 0.8f, 0.0f, 1.0f), { GPU_UINT_MAX }, { GPU_UINT_MAX },
         0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f
-      };
+      });
       
-      global::get<core::seasons>()->biomes[render::biome_tundra] = {
+      ctx->seasons->create_biome(render::biome_tundra, {
         { GPU_UINT_MAX }, render::make_color(0.6f, 0.6f, 0.6f, 1.0f), { GPU_UINT_MAX }, { GPU_UINT_MAX },
         0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f
-      };
+      });
       
-      global::get<core::seasons>()->biomes[render::biome_land_glacier] = {
+      ctx->seasons->create_biome(render::biome_land_glacier, {
         { GPU_UINT_MAX }, render::make_color(0.9f, 0.9f, 0.9f, 1.0f), { GPU_UINT_MAX }, { GPU_UINT_MAX },
         0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f
-      };
+      });
       
-      global::get<core::seasons>()->biomes[render::biome_conifer_forest] = {
+      ctx->seasons->create_biome(render::biome_conifer_forest, {
         { GPU_UINT_MAX }, render::make_color(0.0f, 0.6f, 0.0f, 1.0f), { GPU_UINT_MAX }, { GPU_UINT_MAX },
         0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f
-      };
+      });
       
-      global::get<core::seasons>()->biomes[render::biome_mountain] = {
+      ctx->seasons->create_biome(render::biome_mountain, {
         { GPU_UINT_MAX }, render::make_color(0.2f, 0.2f, 0.2f, 1.0f), { GPU_UINT_MAX }, { GPU_UINT_MAX },
         0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f
-      };
+      });
       
-      global::get<core::seasons>()->biomes[render::biome_snowy_mountain] = {
+      ctx->seasons->create_biome(render::biome_snowy_mountain, {
         { GPU_UINT_MAX }, render::make_color(1.0f, 1.0f, 1.0f, 1.0f), { GPU_UINT_MAX }, { GPU_UINT_MAX },
         0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f
-      };
+      });
       
       std::vector<uint32_t> tile_biome(ctx->map->tiles_count(), UINT32_MAX);
       utils::submit_works_async(ctx->pool, ctx->map->tiles_count(), [&tile_biome] (const size_t &start, const size_t &count, const generator::context* ctx) {
@@ -2198,7 +2198,7 @@ namespace devils_engine {
           const uint32_t biome_id = calcutate_biome2(elevation, temperature, wetness);
           ASSERT(biome_id != UINT32_MAX);
           tile_biome[tile_index] = biome_id;
-          global::get<core::seasons>()->set_tile_biome(tile_index, biome_id);
+          ctx->seasons->set_tile_biome(tile_index, biome_id);
         }
       }, ctx);
       ctx->pool->compute();
@@ -2206,7 +2206,7 @@ namespace devils_engine {
       
       for (size_t i = 0; i < tile_biome.size(); ++i) {
         ctx->container->set_data<uint32_t>(debug::entities::tile, i, debug::properties::tile::biome, tile_biome[i]);
-        const auto &biome = global::get<core::seasons>()->biomes[tile_biome[i]];
+        const auto &biome = ctx->seasons->biomes[tile_biome[i]];
         ctx->map->set_tile_color(i, biome.color);
       }
     }
@@ -6284,7 +6284,8 @@ namespace devils_engine {
       const uint32_t provinces_creation_count = ctx->container->entities_count(debug::entities::province);
       for (uint32_t i = 0; i < provinces_creation_count; ++i) {
         const auto &province_tiles = ctx->container->get_childs(debug::entities::province, i);
-        const uint32_t rand_tile = ctx->random->index(province_tiles.size());
+        const uint32_t rand_index = ctx->random->index(province_tiles.size());
+        const uint32_t rand_tile = province_tiles[rand_index];
         // id получаются совсем не информативными, они будут более информативными если генерировать имена
         // в общем это проблема неединичной генерации, хочется использовать индексы, но они не информативные
         const std::string city_id = "city" + std::to_string(i) + "_title";

@@ -226,6 +226,7 @@ VkBool32 utilsMessengerCallback(VkDebugUtilsMessageSeverityFlagBitsEXT      mess
   std::cout << "\n";
 
   if (messageSeverity == VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT) {
+#ifndef _WIN32
     void *array[200];
     size_t size;
 
@@ -234,6 +235,7 @@ VkBool32 utilsMessengerCallback(VkDebugUtilsMessageSeverityFlagBitsEXT      mess
     // print out all the frames to stderr
 //     fprintf(stderr, "Error: signal %d:\n", sig);
     backtrace_symbols_fd(array, size, STDERR_FILENO);
+#endif
 
     throw std::runtime_error("Vulkan error");
   }

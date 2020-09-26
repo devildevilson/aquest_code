@@ -15,26 +15,31 @@ namespace devils_engine {
     void setup_lua_package_path(sol::state &lua) {
       {
         const std::string default_path = lua["package"]["path"];
-        const std::string new_path = 
-          global::root_directory() + "scripts/?.lua;" + 
-          global::root_directory() + "scripts/?/init.lua;" + 
+        const std::string new_path =
+#ifdef __linux__
+          global::root_directory() + "scripts/?.lua;" +
+          global::root_directory() + "scripts/?/init.lua;" +
+#elif _WIN32
+          global::root_directory() + "scripts\\?.lua;" +
+          global::root_directory() + "scripts\\?\\init.lua;" +
+#endif
           default_path;
         lua["package"]["path"] = new_path;
       }
-      
+
       {
         const std::string default_path = lua["package"]["cpath"];
-        const std::string new_path = 
+        const std::string new_path =
   #ifdef __linux__
           global::root_directory() + "scripts/?.so;" + // этого достаточно?
   #elif _WIN32
-          global::root_directory() + "scripts/?.dll;" + 
+          global::root_directory() + "scripts\\?.dll;" +
   #endif
           default_path;
         lua["package"]["cpath"] = new_path;
       }
     }
-    
+
     void setup_lua_constants(sol::state &lua) {
       //auto constants = lua["constants"].get_or_create<sol::table>();
       auto t1 = lua.create_table_with(
@@ -46,7 +51,7 @@ namespace devils_engine {
         "loading_encounter", utils::progress_container::loading_encounter,
         "back_to_menu", utils::progress_container::back_to_menu
       );
-      
+
       auto target = lua.create_table_with(
         "time_precision", TIME_PRECISION,
         "one_second", ONE_SECOND,
@@ -72,13 +77,13 @@ namespace devils_engine {
         "uint32_max", UINT32_MAX,
         "loading_type", t1
       );
-      
+
       target.set_function("deg_to_rad", [] (const double &deg) { return DEG_TO_RAD(deg); });
       target.set_function("rad_to_deg", [] (const double &rad) { return RAD_TO_DEG(rad); });
-      
+
       sol::table x = lua.create_table_with(sol::meta_function::new_index, sol::detail::fail_on_newindex, sol::meta_function::index, target);
       lua["constants"] = lua.create_table(0, 0, sol::metatable_key, x);
-      
+
 //       auto progress = lua.new_usertype<utils::progress_container>("progress_container",
 //         "current_progress", &utils::progress_container::current_progress,
 //         "steps_count", &utils::progress_container::steps_count,
@@ -86,7 +91,7 @@ namespace devils_engine {
 //         "is_finished", &utils::progress_container::is_finished
 //       );
     }
-    
+
     void setup_lua_main_menu(sol::state &lua) {
       auto utils = lua["utils"].get_or_create<sol::table>();
       auto main_menu = utils.new_usertype<utils::main_menu>("main_menu",
@@ -97,7 +102,7 @@ namespace devils_engine {
         "quit_game", &utils::main_menu::quit_game,
         "current_entry", &utils::main_menu::current_entry
       );
-      
+
       auto demiurge = utils.new_usertype<utils::demiurge>("demiurge",
         sol::no_constructor,
         "create_new_world", &utils::demiurge::create_new_world,
@@ -107,22 +112,22 @@ namespace devils_engine {
         "choose_world",     &utils::demiurge::choose_world
       );
     }
-    
+
     template <typename T>
     sol::table create_enum(sol::table &core, const std::string &name) {
       sol::table target = core.create(static_cast<int>(T::count), static_cast<int>(0));
       for (size_t i = 0; i < T::count; ++i) {
         target.set(magic_enum::enum_name<T>(static_cast<T>(i)), i);
       }
-      
+
       sol::table x = core.create_with(sol::meta_function::new_index, sol::detail::fail_on_newindex, sol::meta_function::index, target);
       sol::table shim = core.create_named(name, sol::metatable_key, x);
       return shim;
     }
-    
+
     void setup_lua_types(sol::state &lua) {
       //lua["ctx"] = &global::get<interface::context>()->ctx;
-      
+
       // тут видимо тоже нужно задать энумы
       auto core = lua["core"].get_or_create<sol::table>();
       core["character_stats"] = create_enum<core::character_stats::values>(core, "character_stats");
@@ -134,70 +139,70 @@ namespace devils_engine {
       core["city_stats"] = create_enum<core::city_stats::values>(core, "city_stats");
       core["army_stats"] = create_enum<core::army_stats::values>(core, "army_stats");
       core["hero_troop_stats"] = create_enum<core::hero_troop_stats::values>(core, "hero_troop_stats");
-      
+
 //       {
 //         auto enum_table = core.new_enum("character_stats");
 //         for (size_t i = 0; i < core::character_stats::count; ++i) {
 //           enum_table.set(magic_enum::enum_name<core::character_stats::values>(static_cast<core::character_stats::values>(i)), i);
 //         }
 //       }
-//       
+//
 //       {
 //         auto enum_table = core.new_enum("troop_stats");
 //         for (size_t i = 0; i < core::troop_stats::count; ++i) {
 //           enum_table.set(magic_enum::enum_name<core::troop_stats::values>(static_cast<core::troop_stats::values>(i)), i);
 //         }
 //       }
-//       
+//
 //       {
 //         auto enum_table = core.new_enum("hero_stats");
 //         for (size_t i = 0; i < core::hero_stats::count; ++i) {
 //           enum_table.set(magic_enum::enum_name<core::hero_stats::values>(static_cast<core::hero_stats::values>(i)), i);
 //         }
 //       }
-//       
+//
 //       {
 //         auto enum_table = core.new_enum("opinion_stats"); // тут сложнее, из луа добавятся еще некоторые переменные
 //         for (size_t i = 0; i < core::opinion_stats::count; ++i) {
 //           enum_table.set(magic_enum::enum_name<core::opinion_stats::values>(static_cast<core::opinion_stats::values>(i)), i);
 //         }
 //       }
-//       
+//
 //       {
 //         auto enum_table = core.new_enum("faction_stats");
 //         for (size_t i = 0; i < core::faction_stats::count; ++i) {
 //           enum_table.set(magic_enum::enum_name<core::faction_stats::values>(static_cast<core::faction_stats::values>(i)), i);
 //         }
 //       }
-//       
+//
 //       {
 //         auto enum_table = core.new_enum("province_stats");
 //         for (size_t i = 0; i < core::province_stats::count; ++i) {
 //           enum_table.set(magic_enum::enum_name<core::province_stats::values>(static_cast<core::province_stats::values>(i)), i);
 //         }
 //       }
-//       
+//
 //       {
 //         auto enum_table = core.new_enum("city_stats");
 //         for (size_t i = 0; i < core::city_stats::count; ++i) {
 //           enum_table.set(magic_enum::enum_name<core::city_stats::values>(static_cast<core::city_stats::values>(i)), i);
 //         }
 //       }
-//       
+//
 //       {
 //         auto enum_table = core.new_enum("army_stats");
 //         for (size_t i = 0; i < core::army_stats::count; ++i) {
 //           enum_table.set(magic_enum::enum_name<core::army_stats::values>(static_cast<core::army_stats::values>(i)), i);
 //         }
 //       }
-//       
+//
 //       {
 //         auto enum_table = core.new_enum("hero_troop_stats");
 //         for (size_t i = 0; i < core::hero_troop_stats::count; ++i) {
 //           enum_table.set(magic_enum::enum_name<core::hero_troop_stats::values>(static_cast<core::hero_troop_stats::values>(i)), i);
 //         }
 //       }
-      
+
       // теперь по идее нужно задать основные типы объектов
       {
         sol::usertype<core::province> province_type = core.new_usertype<core::province>("province",
@@ -217,7 +222,7 @@ namespace devils_engine {
           "cities_max_game_count", sol::var(core::province::cities_max_game_count)
         );
       }
-      
+
       {
         sol::usertype<core::building_type> building_type = core.new_usertype<core::building_type>("building_type",
           sol::no_constructor,
@@ -243,7 +248,7 @@ namespace devils_engine {
           "maximum_unit_stat_modifiers", sol::var(core::building_type::maximum_unit_stat_modifiers)
         );
       }
-      
+
       {
         sol::usertype<core::city_type> city_type = core.new_usertype<core::city_type>("city_type",
           sol::no_constructor,
@@ -258,7 +263,7 @@ namespace devils_engine {
           "stats_count", sol::var(core::city_stats::count)
         );
       }
-      
+
       {
         sol::usertype<core::city> city = core.new_usertype<core::city>("city",
           sol::no_constructor,
@@ -277,7 +282,7 @@ namespace devils_engine {
           "buildings_size", sol::var(core::city_type::maximum_buildings)
         );
       }
-      
+
       {
         sol::usertype<core::titulus> title_type = core.new_usertype<core::titulus>("titulus",
           sol::no_constructor,
@@ -302,7 +307,7 @@ namespace devils_engine {
           "flags_container_size", sol::var(core::titulus::flags_container_size)
           // наименования
         );
-        
+
         sol::table title_type_table = core["titulus"];
         auto title_type_type = title_type_table.new_enum("type_enum",
           "city", core::titulus::type::city,
@@ -312,7 +317,7 @@ namespace devils_engine {
           "imperial", core::titulus::type::imperial
         );
       }
-      
+
       {
         auto character_type = core.new_usertype<core::character>("character",
           sol::no_constructor,
@@ -363,9 +368,9 @@ namespace devils_engine {
           "stats_count", sol::var(core::character_stats::count),
           "hero_stats_count", sol::var(core::hero_stats::count)
         );
-        
+
         sol::table character_type_table = core["character"];
-        
+
         auto family = character_type_table.new_usertype<struct core::character::family>("character_family",
           "real_parents", sol::readonly_property([] (const struct core::character::family* self) { return std::ref(self->real_parents); }),
           "parents", sol::readonly_property([] (const struct core::character::family* self) { return std::ref(self->parents); }),
@@ -379,14 +384,14 @@ namespace devils_engine {
           "blood_dynasty", sol::readonly(&core::character::family::blood_dynasty),
           "dynasty", sol::readonly(&core::character::family::dynasty)
         );
-        
+
         auto relations = character_type_table.new_usertype<struct core::character::relations>("character_relations",
           "friends", sol::readonly_property([] (const struct core::character::relations* self) { return std::ref(self->friends); }),
           "rivals", sol::readonly_property([] (const struct core::character::relations* self) { return std::ref(self->rivals); }),
           "lovers", sol::readonly_property([] (const struct core::character::relations* self) { return std::ref(self->lovers); })
         );
       }
-      
+
       {
         auto faction_type = core.new_usertype<core::faction>("faction",
           sol::no_constructor,
@@ -414,11 +419,11 @@ namespace devils_engine {
           "realm_mechanics_size", sol::var(utils::realm_mechanics::count)
         );
       }
-      
+
       // нужно еще сделать несколько функций: например поиск персонажей, доступные решения и проч
 //       core.set_function("player_end_turn", player_end_turn);
     }
-    
+
     void setup_lua_input(sol::state &lua) {
       {
         auto utils = lua["utils"].get_or_create<sol::table>();
@@ -429,13 +434,13 @@ namespace devils_engine {
           "get", &utils::id::get
         );
       }
-      
+
       {
         auto target = lua.create_table_with(
           "release", input::release,
           "press", input::press,
           "repeated", input::repeated,
-          
+
           "state_initial", input::state_initial,
           "state_press", input::state_press,
           "state_click", input::state_click,
@@ -443,13 +448,13 @@ namespace devils_engine {
           "state_double_click", input::state_double_click,
           "state_long_press", input::state_long_press,
           "state_long_click", input::state_long_click,
-          
+
           "long_press_time", input::long_press_time,
           "double_press_time", input::double_press_time,
-          
+
           "event_key_slots", input::event_key_slots
         );
-        
+
         target.set_function("check_event", input::check_event);
         target.set_function("timed_check_event", input::timed_check_event);
         target.set_function("input_event_state", input::input_event_state);
@@ -461,19 +466,19 @@ namespace devils_engine {
         target.set_function("get_window_content_scale", input::get_window_content_scale);
         target.set_function("get_monitor_content_scale", input::get_monitor_content_scale);
         target.set_function("get_monitor_physical_size", input::get_monitor_physical_size);
-        
+
         // тут добавятся несколько функций для того чтобы задать клавишу в настройках
         sol::table x = lua.create_table_with(sol::meta_function::new_index, sol::detail::fail_on_newindex, sol::meta_function::index, target);
         lua["input"] = lua.create_table(0, 0, sol::metatable_key, x);
       }
     }
-    
+
     void setup_lua_game_logic(sol::state &lua) {
       {
         auto target = lua.create_table();
         target.set_function("player_end_turn", game::player_end_turn);
         target.set_function("current_player_turn", game::current_player_turn);
-        
+
         // тут добавятся несколько функций для того чтобы задать клавишу в настройках
         sol::table x = lua.create_table_with(sol::meta_function::new_index, sol::detail::fail_on_newindex, sol::meta_function::index, target);
         lua["game"] = lua.create_table(0, 0, sol::metatable_key, x);

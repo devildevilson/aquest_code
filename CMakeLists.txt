@@ -78,7 +78,7 @@ set(CMAKE_SKIP_BUILD_RPATH TRUE)
 #set(CMAKE_INSTALL_RPATH "")
 #set(CMAKE_INSTALL_RPATH_USE_LINK_PATH FALSE)
 
-if (WIN32)
+if (WIN32 OR MINGW)
   set(CPPFS_LIB_PATH C:/libs/cppfs)
 
   set(GLFW3_LIB_DIRS C:/libs/glfw-3.2.1.bin.WIN64/lib-mingw-w64)
@@ -148,7 +148,7 @@ if (CMAKE_BUILD_TYPE MATCHES "Debug")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -msse4.2 -std=c++17 -Wall -Wextra -g -fno-rtti -pthread -Wl,-rpath=./")
 else()
   add_definitions(-D_NDEBUG)
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -msse4.2 -std=c++17 -Wall -Wextra -O3 -s -fno-rtti -pthread -Wl,-rpath=./")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -msse4.2 -std=c++17 -Wall -Wextra -O3 -g -fno-rtti -pthread -Wl,-rpath=./")
 endif (CMAKE_BUILD_TYPE MATCHES "Debug")
 
 file(GLOB_RECURSE GLSL_SOURCE_FILES
@@ -202,7 +202,7 @@ set(HDR_LIST
 )
 
 add_library(serialization ${SRC_LIST} ${HDR_LIST})
-target_link_libraries(serialization lz4 cryptopp) #protobuf-lite protobuf
+target_link_libraries(serialization lz4 cryptopp mman) #protobuf-lite protobuf
 
 set(SRC_LIST
   utils/thread_pool.cpp
@@ -399,7 +399,7 @@ target_link_libraries(${TARGET_NAME} systems ai render utils serialization)
 add_dependencies(${TARGET_NAME} shaders)
 
 # Strip binary for release builds
-if (CMAKE_BUILD_TYPE STREQUAL Release)
-    add_custom_command(TARGET ${TARGET_NAME} POST_BUILD
-            COMMAND ${CMAKE_STRIP} -s "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${TARGET_NAME}")
-endif()
+# if (CMAKE_BUILD_TYPE STREQUAL Release)
+#     add_custom_command(TARGET ${TARGET_NAME} POST_BUILD
+#             COMMAND ${CMAKE_STRIP} -s "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${TARGET_NAME}")
+# endif()

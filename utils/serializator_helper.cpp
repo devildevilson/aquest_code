@@ -14,16 +14,18 @@
 #include "linear_rng.h"
 #include "bin/seasons.h"
 
-#include <gzip/compress.hpp>
-#include <gzip/config.hpp>
-#include <gzip/decompress.hpp>
-#include <gzip/utils.hpp>
-#include <gzip/version.hpp>
+#include <iostream>
+
+// #include <gzip/compress.hpp>
+// #include <gzip/config.hpp>
+// #include <gzip/decompress.hpp>
+// #include <gzip/utils.hpp>
+// #include <gzip/version.hpp>
 
 // typedef void(apate_quest::map_data::*fptr)(const std::string &);
 // typedef const std::string & (apate_quest::map_data::*get_ptr)(int index) const;
 // typedef int (apate_quest::map_data::*get_size_ptr)() const;
-// 
+//
 // const fptr write_funcs[] = {
 //   nullptr,
 //   &apate_quest::map_data::add_provinces,
@@ -46,7 +48,7 @@
 //   &apate_quest::map_data::add_hero_troop,
 //   &apate_quest::map_data::add_army,
 // };
-// 
+//
 // const get_ptr read_funcs[] = {
 //   nullptr,
 //   &apate_quest::map_data::provinces,
@@ -69,7 +71,7 @@
 //   &apate_quest::map_data::hero_troop,
 //   &apate_quest::map_data::army,
 // };
-// 
+//
 // const get_size_ptr get_size_funcs[] = {
 //   nullptr,
 //   &apate_quest::map_data::provinces_size,
@@ -92,7 +94,7 @@
 //   &apate_quest::map_data::hero_troop_size,
 //   &apate_quest::map_data::army_size,
 // };
-// 
+//
 // static_assert(static_cast<int32_t>(devils_engine::core::structure::count) == sizeof(write_funcs) / sizeof(write_funcs[0]));
 // static_assert(static_cast<int32_t>(devils_engine::core::structure::count) == sizeof(read_funcs) / sizeof(read_funcs[0]));
 // static_assert(static_cast<int32_t>(devils_engine::core::structure::count) == sizeof(get_size_funcs) / sizeof(get_size_funcs[0]));
@@ -105,20 +107,20 @@ namespace devils_engine {
 //       size_t counter = 0;
 //       for (size_t i = 0; i < s.size(); ++i) {
 //         const char c = s[i];
-//         
+//
 //       }
 //     }
-    
+
     constexpr const auto MODE = cista::mode::WITH_VERSION | cista::mode::WITH_INTEGRITY; // opt. versioning + check sum
-    
+
     namespace data = cista::offset;
-    
+
     struct cista_serializator {
       struct tile_data {
         float height;
         uint32_t biome;
       };
-      
+
 //       data::string world_name;
 //       data::string technical_name;
 //       data::string world_settings;
@@ -126,13 +128,13 @@ namespace devils_engine {
       uint32_t noise_seed;
       uint32_t current_season;
       data::array<data::array<float, 4>, 4> matrix;
-      
+
       data::array<data::vector<data::string>, static_cast<size_t>(core::structure::count)> data_array;
       data::array<tile_data, world_serializator::tiles_count> tiles_array;
       data::array<render::biome_data_t, core::seasons::maximum_biomes> biomes;
       data::vector<uint8_t> tiles_seasons;
     };
-    
+
     world_serializator::world_serializator() : ptr(new cista_serializator) {}
     world_serializator::~world_serializator() { delete ptr; ptr = nullptr; }
     void world_serializator::set_name(const std::string_view &name) { world_name = name; }
@@ -147,12 +149,12 @@ namespace devils_engine {
       const uint32_t index = static_cast<uint32_t>(type);
       ptr->data_array[index].push_back(data);
     }
-    
+
     void world_serializator::add_data(const core::structure &type, std::string &&data) {
       const uint32_t index = static_cast<uint32_t>(type);
       ptr->data_array[index].emplace_back(std::move(data));
     }
-    
+
     void world_serializator::set_world_matrix(const glm::mat4 &mat) {
       ASSERT(mat.length() == 4);
       ASSERT(mat[0].length() == 4);
@@ -162,21 +164,21 @@ namespace devils_engine {
         }
       }
     }
-    
+
     void world_serializator::set_tile_data(const uint32_t &index, const tile_data &data) {
       ASSERT(index < core::map::hex_count_d(core::map::detail_level));
       ptr->tiles_array[index] = {data.height, data.biome};
     }
-    
+
     void world_serializator::copy_seasons(core::seasons* s) {
       ptr->current_season = s->current_season;
       ptr->tiles_seasons.resize(core::seasons::data_count);
       memcpy(ptr->tiles_seasons.data(), s->data, core::seasons::data_count);
       memcpy(ptr->biomes.data(), s->biomes, sizeof(s->biomes[0]) * core::seasons::maximum_biomes);
     }
-    
+
     using array = std::array<world_serializator::container, static_cast<size_t>(core::structure::count)>;
-    
+
 //     void setup_core_structures(array &arr, const uint32_t &arr_index, apate_quest::map_data* data, fptr func) {
 //       const size_t index = arr_index;
 //       for (size_t i = 0; i < arr[index].data.size(); ++i) {
@@ -185,7 +187,7 @@ namespace devils_engine {
 //       }
 // //       arr[index].data.clear();
 //     }
-    
+
     void fill_encryptor_data(size_t* key, size_t* iv) {
       const splitmix64::state s = 0x32a665c;
       splitmix64::state states[8];
@@ -193,24 +195,24 @@ namespace devils_engine {
       for (uint32_t i = 1; i < 8; ++i) {
         states[i] = splitmix64::rng(states[i-1]);
       }
-      
+
       key[0] = splitmix64::get_value(states[0]);
       key[1] = splitmix64::get_value(states[1]);
       key[2] = splitmix64::get_value(states[2]);
       key[3] = splitmix64::get_value(states[3]);
-      
+
       iv[0]  = splitmix64::get_value(states[4]);
       iv[1]  = splitmix64::get_value(states[5]);
       iv[2]  = splitmix64::get_value(states[6]);
       iv[3]  = splitmix64::get_value(states[7]);
     }
-    
+
     void world_serializator::serialize() {
 //       GOOGLE_PROTOBUF_VERIFY_VERSION;
-//       
+//
 //       apate_quest::map_data serialization_container;
 //       serialization_container.set_seed(seed);
-//       
+//
 //       auto map_rotation = new apate_quest::map_data::mat4();
 //       for (uint32_t i = 0; i < 4; ++i) {
 //         auto row = map_rotation->add_row();
@@ -218,27 +220,27 @@ namespace devils_engine {
 //           row->add_val(mat[i][j]);
 //         }
 //       }
-//       
+//
 //       serialization_container.set_allocated_map_rotation(map_rotation);
-//       
+//
 //       for (uint32_t i = 0; i < static_cast<uint32_t>(core::structure::count); ++i) {
 //         if (write_funcs[i] == nullptr) continue;
 //         setup_core_structures(data_container, i, &serialization_container, write_funcs[i]);
 //       }
-//       
+//
 //       for (size_t i = 0; i < core::map::hex_count_d(core::map::detail_level); ++i) {
 //         auto ptr = serialization_container.add_tile_datas();
 //         ptr->set_height(tiles[i].height);
 //         ptr->set_biome(tiles[i].biome);
 //       }
-//       
+//
 //       std::string raw_data;
 //       const bool ret = serialization_container.SerializeToString(&raw_data);
 //       if (!ret) throw std::runtime_error("Could not serialize map data");
-//       
+//
 //       const int32_t max_bound = LZ4_compressBound(raw_data.size());
 //       if (max_bound <= 0) throw std::runtime_error("Compressor returns bad size");
-//       
+//
 //       std::string mem(max_bound, '\0');
 //       ASSERT(mem.size() == size_t(max_bound));
 //       const int32_t compressed_data_size = LZ4_compress_HC(raw_data.c_str(), mem.data(), raw_data.size(), mem.size(), LZ4HC_CLEVEL_MAX);
@@ -247,7 +249,7 @@ namespace devils_engine {
 //       PRINT_VAR("max bound  data size", max_bound)
 //       PRINT_VAR("compressed data size", compressed_data_size)
 //       PRINT_VAR("compress ratio", float(compressed_data_size) / float(raw_data.size()))
-//       
+//
 //       SHA256 sha256;
 //       sha256.add(mem.data(), compressed_data_size);
 //       uint8_t buffer1[SHA256::HashBytes];
@@ -256,9 +258,9 @@ namespace devils_engine {
 // //       uint8_t buffer2[SHA256::HashBytes];
 // //       memset(buffer2, 0, sizeof(buffer2[0]) * SHA256::HashBytes);
 // //       sha256.getHash(buffer2);
-//       
+//
 // //       ASSERT(memcmp(buffer1, buffer2, sizeof(buffer1[0]) * SHA256::HashBytes) == 0);
-//       
+//
 //       std::filesystem::path current_path(global::root_directory());
 // #ifndef _NDEBUG
 //       std::filesystem::directory_entry current_dir(current_path);
@@ -267,10 +269,10 @@ namespace devils_engine {
 // #endif
 //       current_path /= "saves";
 //       std::error_code code;
-//       std::filesystem::create_directory(current_path, code); // создает директорию 
+//       std::filesystem::create_directory(current_path, code); // создает директорию
 //       if (code) throw std::runtime_error("Could not create dir. " + code.message());
-//       
-//       // теперь нужно придумать какое то название 
+//
+//       // теперь нужно придумать какое то название
 //       // желательно организовать сохранения в отдельные папки по адекватному названию
 //       // самое адекватное это конечно дать человеку назвать мир, а потом создать папку по этому названию
 //       // название по всей видимости нужно дать в самом конце, как быть с анонимным генератором?
@@ -280,11 +282,11 @@ namespace devils_engine {
 //       current_path /= technical_name;
 //       std::filesystem::create_directory(current_path, code);
 //       if (code) throw std::runtime_error("Could not create dir. " + code.message());
-//       
+//
 //       current_path /= "world_data";
-//       
+//
 //       const char end_of_string = '\0';
-//       
+//
 //       std::ofstream map_data_file(current_path, std::ios::out | std::ios::binary);
 //       if (!map_data_file.is_open()) throw std::runtime_error("Could not open world_data file");
 //       map_data_file.write(world_name.data(), world_name.size());
@@ -297,15 +299,15 @@ namespace devils_engine {
 //       map_data_file.write(reinterpret_cast<const char*>(&write_size), sizeof(write_size));
 //       map_data_file.write(mem.data(), compressed_data_size);
 //       map_data_file.write(reinterpret_cast<const char*>(buffer1), SHA256::HashBytes);
-//       
+//
 //       // для сериализации нужно еще записать размер данных в сыром массиве
 //       // возможно еще какие то данные, для того чтобы игроку показать когда тот будет выбирать сгенерированный мир
 //       // явно нужно записать название какое нибудь, изображение? какое изображение? у нас карта сферическая
-//       
+//
 //       // как то так выглядит сериализация
-//       
+//
 //       google::protobuf::ShutdownProtobufLibrary();
-      
+
       std::filesystem::path current_path(global::root_directory());
 #ifndef _NDEBUG
       std::filesystem::directory_entry current_dir(current_path);
@@ -314,10 +316,10 @@ namespace devils_engine {
 #endif
       current_path /= "saves";
       std::error_code code;
-      std::filesystem::create_directory(current_path, code); // создает директорию 
+      std::filesystem::create_directory(current_path, code); // создает директорию
       if (code) throw std::runtime_error("Could not create dir. " + code.message());
-      
-      // теперь нужно придумать какое то название 
+
+      // теперь нужно придумать какое то название
       // желательно организовать сохранения в отдельные папки по адекватному названию
       // самое адекватное это конечно дать человеку назвать мир, а потом создать папку по этому названию
       // название по всей видимости нужно дать в самом конце, как быть с анонимным генератором?
@@ -326,8 +328,8 @@ namespace devils_engine {
       // название мира нужно сделать техническим, для того чтобы все папки поддерживались
       current_path /= technical_name;
       std::filesystem::create_directory(current_path, code);
-      if (code) throw std::runtime_error("Could not create dir. " + code.message());      
-      
+      if (code) throw std::runtime_error("Could not create dir. " + code.message());
+
       //cista::buf mmap{cista::mmap{"data"}};
       const auto buf = cista::serialize<MODE>(*ptr);
 // #ifndef _NDEBUG
@@ -338,7 +340,7 @@ namespace devils_engine {
 // #endif
       const int32_t max_bound = LZ4_compressBound(buf.size());
       if (max_bound <= 0) throw std::runtime_error("Compressor returns bad size");
-      
+
       std::vector<uint8_t> mem(max_bound, 0);
       ASSERT(mem.size() == size_t(max_bound));
       //std::string compressed_data = gzip::compress(reinterpret_cast<const char*>(buf.data()), buf.size(), Z_BEST_COMPRESSION);
@@ -365,19 +367,19 @@ namespace devils_engine {
       fill_encryptor_data(key, iv);
       //std::vector<uint8_t> out_message(compressed_data_size, 0);
       std::vector<uint8_t> out_message(compressed_data_size, 0);
-      
+
       enc.SetKeyWithIV(reinterpret_cast<const uint8_t*>(key), 32, reinterpret_cast<const uint8_t*>(iv), 32);
       enc.ProcessString(out_message.data(), reinterpret_cast<const uint8_t*>(mem.data()), compressed_data_size);
-      
+
       SHA512 hasher;
       hasher.Update(out_message.data(), compressed_data_size);
       ASSERT(hasher.DigestSize() == hash_size);
       hasher.Final(hash);
-      
+
       current_path /= "world_data";
-      
+
       const char end_of_string = '\0';
-      
+
       std::ofstream map_data_file(current_path, std::ios::out | std::ios::binary);
       if (!map_data_file.is_open()) throw std::runtime_error("Could not open world_data file");
       map_data_file.write(world_name.data(), world_name.size());
@@ -391,7 +393,7 @@ namespace devils_engine {
       map_data_file.write(reinterpret_cast<const char*>(out_message.data()), compressed_data_size);
       map_data_file.write(reinterpret_cast<const char*>(hash), hasher.DigestSize());
     }
-    
+
 //     void fill_structure_data(array &arr, const uint32_t &arr_index, apate_quest::map_data* data, const size_t &count, get_ptr ptr) {
 //       const uint32_t index = arr_index;
 //       for (size_t i = 0; i < count; ++i) {
@@ -399,14 +401,14 @@ namespace devils_engine {
 //         arr[index].data.push_back(d);
 //       }
 //     }
-    
+
     void world_serializator::deserialize(const std::string &path) {
       std::filesystem::path p(path);
       std::filesystem::directory_entry file(p);
       if (!file.exists()) throw std::runtime_error("Could not find file " + path);
       if (!file.is_regular_file()) throw std::runtime_error("Bad file " + path);
       if (p.filename() != "world_data") throw std::runtime_error("File " + path + " is not world data file");
-      
+
       std::ifstream map_data_file(p, std::ios::in | std::ios::binary);
       {
         const int64_t prev_pos = map_data_file.tellg();
@@ -422,7 +424,7 @@ namespace devils_engine {
         ASSERT(pos-1 == map_data_file.tellg());
         map_data_file.seekg(pos); // это скорее всего не нужно
       }
-      
+
       {
         const int64_t prev_pos = map_data_file.tellg();
         ASSERT(prev_pos != -1);
@@ -437,7 +439,7 @@ namespace devils_engine {
         ASSERT(pos-1 == map_data_file.tellg());
         map_data_file.seekg(pos); // это скорее всего не нужно
       }
-      
+
       {
         const int64_t prev_pos = map_data_file.tellg();
         ASSERT(prev_pos != -1);
@@ -452,7 +454,7 @@ namespace devils_engine {
         ASSERT(pos-1 == map_data_file.tellg());
         map_data_file.seekg(pos);
       }
-      
+
       size_t output_size = 0;
       {
         char buf[sizeof(output_size)];
@@ -461,7 +463,7 @@ namespace devils_engine {
         //ASSERT(output_size == 3849016); // почему то иногда меняются размеры выходного буфера, но при этом вроде бы все данные одинаковые
         PRINT_VAR("raw        data size", output_size)
       }
-      
+
       using namespace CryptoPP;
       std::vector<uint8_t> raw_data(output_size, 0);
       {
@@ -475,26 +477,26 @@ namespace devils_engine {
         ASSERT(compressed_data_size < INT32_MAX);
         PRINT_VAR("compressed data size", compressed_data_size)
         map_data_file.seekg(pos);
-        
+
         std::vector<uint8_t> mem(compressed_data_size, 0);
         ASSERT(mem.size() == compressed_data_size);
         map_data_file.read(reinterpret_cast<char*>(mem.data()), mem.size());
-        
+
         HC256::Decryption dec;
         ASSERT(dec.DefaultKeyLength() == 32);
         ASSERT(dec.IVSize() == 32);
         size_t key[32 / sizeof(size_t)];
         size_t iv[32 / sizeof(size_t)];
         fill_encryptor_data(key, iv);
-        
+
         std::vector<uint8_t> dec_message(compressed_data_size, 0);
         dec.SetKeyWithIV(reinterpret_cast<const uint8_t*>(key), 32, reinterpret_cast<const uint8_t*>(iv), 32);
         dec.ProcessString(dec_message.data(), mem.data(), compressed_data_size);
-        
+
         const int32_t ret = LZ4_decompress_safe_partial(reinterpret_cast<const char*>(dec_message.data()), reinterpret_cast<char*>(raw_data.data()), dec_message.size(), raw_data.size(), INT32_MAX);
         if (ret < 0) throw std::runtime_error("Bad decompression");
       }
-      
+
 //       std::string saved_data;
 //       {
 //         const int64_t pos = map_data_file.tellg();
@@ -506,25 +508,25 @@ namespace devils_engine {
 //         ASSERT(compressed_data_size < INT32_MAX);
 //         PRINT_VAR("compressed data size", compressed_data_size)
 //         map_data_file.seekg(pos);
-//         
+//
 //         std::string mem(compressed_data_size, '\0');
 //         ASSERT(mem.size() == compressed_data_size);
 //         map_data_file.read(mem.data(), mem.size());
-//         
+//
 //         saved_data.resize(output_size);
 //         const int32_t ret = LZ4_decompress_safe_partial(mem.data(), saved_data.data(), mem.size(), saved_data.size(), INT32_MAX);
 //         if (ret < 0) throw std::runtime_error("Bad decompression");
 //       }
-      
+
       {
         auto p = cista::deserialize<cista_serializator, MODE>(raw_data);
         *ptr = *p;
       }
-      
+
 //       {
 //         apate_quest::map_data serialization_container;
 //         serialization_container.ParseFromString(saved_data);
-//         
+//
 //         seed = serialization_container.seed();
 //         const auto map_rot = serialization_container.map_rotation();
 //         for (int32_t i = 0; i < map_rot.row_size(); ++i) {
@@ -534,14 +536,14 @@ namespace devils_engine {
 //             mat[i][j] = val;
 //           }
 //         }
-//         
+//
 //         for (uint32_t i = 0; i < static_cast<uint32_t>(core::structure::count); ++i) {
 //           if (get_size_funcs[i] == nullptr) continue;
 //           ASSERT((get_size_funcs[i] == nullptr) == (read_funcs[i] == nullptr));
 //           fill_structure_data(data_container, i, &serialization_container, std::invoke(get_size_funcs[i], serialization_container), read_funcs[i]);
 //         }
 //       }
-      
+
       // нужно еще прочитать хеш для будущих сохранений в этом мире (или мы используем техническое имя? хеш всегда 32 последних байта)
       {
         const int64_t pos = map_data_file.tellg();
@@ -557,28 +559,28 @@ namespace devils_engine {
         map_data_file.read(reinterpret_cast<char*>(hash), hash_size);
       }
     }
-    
+
     std::string_view world_serializator::get_name() const {
       return world_name;
     }
-    
+
     std::string_view world_serializator::get_technical_name() const {
       return technical_name;
     }
-    
+
     std::string_view world_serializator::get_settings() const {
       return world_settings;
     }
-    
+
     uint32_t world_serializator::get_rand_seed() const { return ptr->noise_seed; }
     uint32_t world_serializator::get_noise_seed() const { return ptr->rand_seed; }
-    
+
     uint32_t world_serializator::get_data_count(const core::structure &type) const {
       const uint32_t index = static_cast<uint32_t>(type);
       ASSERT(type < core::structure::count);
       return ptr->data_array[index].size();
     }
-    
+
     std::string_view world_serializator::get_data(const core::structure &type, const uint32_t &index) const {
       const uint32_t data_index = static_cast<uint32_t>(type);
       ASSERT(type < core::structure::count);
@@ -586,7 +588,7 @@ namespace devils_engine {
       if (index >= arr.size()) throw std::runtime_error("Bad data index");
       return arr[index];
     }
-    
+
     glm::mat4 world_serializator::get_world_matrix() const {
       glm::mat4 mat;
       ASSERT(mat.length() == 4);
@@ -598,12 +600,12 @@ namespace devils_engine {
       }
       return mat;
     }
-    
+
     world_serializator::tile_data world_serializator::get_tile_data(const uint32_t &index) const {
       if (index >= tiles_count) throw std::runtime_error("Bad tile data index");
       return {ptr->tiles_array[index].height, ptr->tiles_array[index].biome};
     }
-    
+
     void world_serializator::fill_seasons(core::seasons* s) const {
       s->current_season = ptr->current_season;
       //ptr->tiles_seasons.resize(core::seasons::data_count);
@@ -611,7 +613,7 @@ namespace devils_engine {
       memcpy(s->data, ptr->tiles_seasons.data(), core::seasons::data_count);
       memcpy(s->biomes, ptr->biomes.data(), sizeof(s->biomes[0]) * core::seasons::maximum_biomes);
     }
-    
+
     const uint8_t* world_serializator::get_hash() const {
       return hash;
     }

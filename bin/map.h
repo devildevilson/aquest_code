@@ -134,6 +134,8 @@ namespace devils_engine {
       void set_tile_texture(const uint32_t &tile_index, const render::image_t &texture);
       //void set_tile_tectonic_plate(const uint32_t &tile_index, const uint32_t &tectonic_plate_index);
       void set_tile_height(const uint32_t &tile_index, const float &tile_hight);
+      void set_tile_border_data(const uint32_t &tile_index, const uint32_t &offset, const uint32_t &size);
+      void set_tile_connections_data(const uint32_t &tile_index, const uint32_t &offset, const uint32_t &size);
       
       float get_tile_height(const uint32_t &tile_index) const;
       

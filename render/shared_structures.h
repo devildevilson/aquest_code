@@ -56,6 +56,8 @@ namespace devils_engine {
 #endif
 
 #define GPU_UINT_MAX 0xffffffff
+#define PACKED_INDEX_COEF 4
+#define PACKED_TILE_INDEX_COEF 6
     
 const uint biome_ocean            = 0;
 const uint biome_ocean_glacier    = 1;
@@ -76,6 +78,11 @@ const uint layers_count = 20;
 const float render_tile_height = 7.0f;
 const float mountain_height = 0.5f;
 const float layer_height = 1.0f / float(layers_count);
+
+const uint border_offset_mask = 0xfffffff; // 2^28
+const uint border_size_mask   = 0xf;       // 2^4
+const uint connections_offset_mask = 0xfffffff; // 2^28
+const uint connections_size_mask   = 0xf;       // 2^4
 
 struct image_t {
   uint container;
@@ -163,26 +170,28 @@ struct packed_fast_triangle_t {
 // добавится индекс биома
 struct light_map_tile_t {
   uvec4 tile_indices;
-  //vec4 color;
   uvec4 packed_data1;
   uvec4 packed_data2;
   uvec4 packed_data3;
+  // чем заполнить два последних инта?
+  uvec4 packed_data4;
 };
 
 struct map_tile_t {
   uint center;
-//   uint biom_index;          // тут мы можем задать цвет (и даже 10 бит на компоненту)
-//   uint unique_object_index; // нам потребуется цвет и текстурка
   image_t texture; 
   color_t color;
   float height; // мне бы еще подъем какой
   uint points[6];
   uint neighbours[6];
+  uint borders_data;
+  uint connections_data;
   
   // подъем означает что мне нужно генерить закраску какую для этих областей
   // что хорошо - закраску можно сгенерировать в screen space
   // там же мы должны сгенерить данные для отрисовки деревьев
   // закраску сгенерировал, но в буфере (вообще нужно посмотреть сколько гпу памяти занимают все это данные)
+  // нужно добавить еще 2 переменные: оффсет для границ и оффсет для соединений
 };
 
 // формула безье (2 порядок): vec = (1-t)*(1-t)*vec0+2*(1-t)*t*vec1+t*t*vec2, где
@@ -433,6 +442,8 @@ INLINE map_tile_t unpack_data(const light_map_tile_t data) {
   tile.neighbours[3] = data.packed_data3[1];
   tile.neighbours[4] = data.packed_data3[2];
   tile.neighbours[5] = data.packed_data3[3];
+  tile.borders_data = data.packed_data4[0];
+  tile.connections_data = data.packed_data4[1];
   return tile;
 }
 
@@ -475,6 +486,8 @@ INLINE light_map_tile_t pack_data(const map_tile_t tile) {
   packed_data.packed_data3[1] = tile.neighbours[3];
   packed_data.packed_data3[2] = tile.neighbours[4];
   packed_data.packed_data3[3] = tile.neighbours[5];
+  packed_data.packed_data4[0] = tile.borders_data;
+  packed_data.packed_data4[1] = tile.connections_data;
   return packed_data;
 }
 

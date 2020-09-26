@@ -86,7 +86,7 @@ namespace devils_engine {
     }
   }
     
-    void find_border_points(const core::map* map, const core::context* ctx) {
+    void find_border_points(core::map* map, const core::context* ctx) {
       // возможно нужно найти первый граничный тайл, а потом обходить его соседей
       // тут можно поступить несколькими способами
       // 1) попытаться обойти тайлы правильно
@@ -184,6 +184,8 @@ namespace devils_engine {
         for (size_t j = 0; j < tiles_count; ++j) {
           const uint32_t tile_index = childs[j]; 
           
+          const uint32_t offset = borders.size();
+          uint32_t border_count = 0;
           const auto &data = render::unpack_data(map->get_tile(tile_index));
           const uint32_t n_count = render::is_pentagon(data) ? 5 : 6;
           for (uint32_t k = 0; k < n_count; ++k) {
@@ -201,7 +203,13 @@ namespace devils_engine {
               k
             };
             borders.push_back(d);
+            ++border_count;
           }
+          
+          // теперь у нас есть offset и border_count
+          if (border_count == 0) continue;
+          
+          map->set_tile_border_data(tile_index, offset, border_count);
         }
       }
       
@@ -245,7 +253,7 @@ namespace devils_engine {
         auto ptr = types_buffer->ptr();
         ASSERT(ptr != nullptr);
         memcpy(ptr, types.data(), types.size() * sizeof(border_type2));
-        global::get<render::tile_borders_optimizer>()->set_borders_count(0);
+        //global::get<render::tile_borders_optimizer>()->set_borders_count(0);
       }
       //global::get<render::tile_borders_optimizer>()->set_borders_count(borders.size());
       auto pool = global::get<dt::thread_pool>();
@@ -517,14 +525,15 @@ namespace devils_engine {
   //     ASSERT(ptr != nullptr);
   //     memcpy(ptr, types.data(), types.size() * sizeof(border_type2));
       std::unique_lock<std::mutex> lock(map->mutex);
-      global::get<render::tile_borders_optimizer>()->set_borders_count(borders.size());
+      //global::get<render::tile_borders_optimizer>()->set_borders_count(borders.size());
+      global::get<render::tile_optimizer>()->set_borders_count(borders.size());
     }
     
-    const uint32_t layers_count = 10;
-    const float mountain_height = 0.5f;
-    const float render_tile_height = 10.0f;
-    const float layer_height = mountain_height / float(layers_count);
-    void generate_tile_connections(const core::map* map, dt::thread_pool* pool) {
+//     const uint32_t layers_count = 10;
+//     const float mountain_height = 0.5f;
+//     const float render_tile_height = 10.0f;
+//     const float layer_height = mountain_height / float(layers_count);
+    void generate_tile_connections(core::map* map, dt::thread_pool* pool) {
       struct wall {
         uint32_t tile1;
         uint32_t tile2;
@@ -543,7 +552,21 @@ namespace devils_engine {
           const float tile_height = tile_data.height;
           const uint32_t height_layer = render::compute_height_layer(tile_height);
           if (height_layer == 0) continue;
-                          
+          
+          uint32_t size = 0;
+          for (uint32_t j = 0; j < n_count; ++j) {
+            const uint32_t n_index = tile_data.neighbours[j];
+            const auto &n_tile_data = render::unpack_data(map->get_tile(n_index));
+            const float n_tile_height = n_tile_data.height;
+            const uint32_t n_height_layer = render::compute_height_layer(n_tile_height);
+            if (height_layer <= n_height_layer) continue;
+            ++size;
+          }
+          
+          if (size == 0) continue;
+          
+          wall tmp_arr[size];
+          uint32_t counter = 0;
           for (uint32_t j = 0; j < n_count; ++j) {
             const uint32_t n_index = tile_data.neighbours[j];
             const auto &n_tile_data = render::unpack_data(map->get_tile(n_index));
@@ -579,9 +602,22 @@ namespace devils_engine {
             }
   #endif
 
-            std::unique_lock<std::mutex> lock(mutex);
-            walls.push_back({tile_index, n_index, point1, point2});
+//             std::unique_lock<std::mutex> lock(mutex);
+//             walls.push_back({tile_index, n_index, point1, point2});
+            tmp_arr[counter] = {tile_index, n_index, point1, point2};
+            ++counter;
           }
+          
+          uint32_t offset = UINT32_MAX;
+          {
+            std::unique_lock<std::mutex> lock(mutex);
+            offset = walls.size();
+            for (uint32_t i = 0; i < size; ++i) { 
+              walls.push_back(tmp_arr[i]);
+            } 
+          }
+          
+          map->set_tile_connections_data(tile_index, offset, size);
         }
       });
       utils::async_wait(pool); // текущий тред не должен быть главным!!!
@@ -591,8 +627,10 @@ namespace devils_engine {
       connections->resize(walls.size() * sizeof(walls[0]));
       auto ptr = connections->ptr();
       memcpy(ptr, walls.data(), walls.size() * sizeof(walls[0]));
-      ASSERT(global::get<render::tile_walls_optimizer>() != nullptr);
-      global::get<render::tile_walls_optimizer>()->set_connections_count(walls.size());
+      //ASSERT(global::get<render::tile_walls_optimizer>() != nullptr);
+      //global::get<render::tile_walls_optimizer>()->set_connections_count(walls.size());
+      ASSERT(global::get<render::tile_optimizer>() != nullptr);
+      global::get<render::tile_optimizer>()->set_connections_count(walls.size());
     }
     
     void connect_game_data(core::map* map, core::context* ctx) {

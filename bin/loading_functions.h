@@ -26,9 +26,8 @@ namespace devils_engine {
     
     void setup_map_generator(const systems::map_t* map_data);
     
-    void find_border_points(const core::map* map, const core::context* ctx);
-  
-    void generate_tile_connections(const core::map* map, dt::thread_pool* pool);
+    void find_border_points(core::map* map, const core::context* ctx);
+    void generate_tile_connections(core::map* map, dt::thread_pool* pool);
     void validate_and_create_data(systems::map_t* map_systems, utils::progress_container* prog);
     void post_generation_work(systems::map_t* map_systems, systems::core_t* systems, utils::progress_container* prog);
     

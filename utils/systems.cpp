@@ -162,7 +162,7 @@ namespace devils_engine {
       auto window = graphics_container->create_window();
       graphics_container->create_device();
       window->create_swapchain(graphics_container->device);
-      auto render = graphics_container->create_system(stage_container_size);
+      graphics_container->create_system(stage_container_size); // auto render = 
       graphics_container->create_tasks();
       //container.decals_system = container.container.create<systems::decals>();
       
@@ -180,15 +180,15 @@ namespace devils_engine {
     }
     
     void core_t::create_render_stages() {
-      const size_t world_map_render_size = 
-        sizeof(render::tile_optimizer) + 
-        sizeof(render::tile_borders_optimizer) + 
-        sizeof(render::tile_walls_optimizer) + 
-        sizeof(render::barriers) +
-        sizeof(render::render_pass_begin) +
-        sizeof(render::tile_render) +
-        sizeof(render::tile_border_render) +
-        sizeof(render::tile_connections_render);
+//       const size_t world_map_render_size = 
+//         sizeof(render::tile_optimizer) + 
+//         sizeof(render::tile_borders_optimizer) + 
+//         sizeof(render::tile_walls_optimizer) + 
+//         sizeof(render::barriers) +
+//         sizeof(render::render_pass_begin) +
+//         sizeof(render::tile_render) +
+//         sizeof(render::tile_border_render) +
+//         sizeof(render::tile_connections_render);
       
       auto system = graphics_container->render;
       auto device = graphics_container->device;
@@ -608,19 +608,20 @@ namespace devils_engine {
       world_buffers = buffers;
       
       auto opt1 = optimizators_container->add_stage<render::tile_optimizer>(render::tile_optimizer::create_info{device});
-      auto opt2 = optimizators_container->add_stage<render::tile_borders_optimizer>(render::tile_borders_optimizer::create_info{device, buffers});
-      auto opt3 = optimizators_container->add_stage<render::tile_walls_optimizer>(render::tile_walls_optimizer::create_info{device, buffers});
+//       auto opt2 = optimizators_container->add_stage<render::tile_borders_optimizer>(render::tile_borders_optimizer::create_info{device, buffers});
+//       auto opt3 = optimizators_container->add_stage<render::tile_walls_optimizer>(render::tile_walls_optimizer::create_info{device, buffers});
       systems->render_slots->set_stage(2, optimizators_container);
       
       auto tiles   = render_container->add_stage<render::tile_render>(render::tile_render::create_info{device, opt1});
-      auto borders = render_container->add_stage<render::tile_border_render>(render::tile_border_render::create_info{device, opt2, buffers});
-      auto walls   = render_container->add_stage<render::tile_connections_render>(render::tile_connections_render::create_info{device, opt3, buffers});
+      auto borders = render_container->add_stage<render::tile_border_render>(render::tile_border_render::create_info{device, opt1, buffers});
+      auto walls   = render_container->add_stage<render::tile_connections_render>(render::tile_connections_render::create_info{device, opt1, buffers});
       systems->render_slots->set_stage(7, render_container);
       
       global::get(tiles);
       global::get(walls);
-      global::get(opt2);
-      global::get(opt3);
+      global::get(opt1);
+//       global::get(opt2);
+//       global::get(opt3);
       UNUSED_VARIABLE(borders);
     }
     

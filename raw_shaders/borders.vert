@@ -43,7 +43,7 @@ layout(std140, set = 3, binding = 0) readonly buffer tiles_buffer {
 };
 
 // наверное из вершинного буфера приходят индексы
-layout(location = 0) in uint current_index;
+//layout(location = 0) in uint current_index;
 // тип границы?
 //layout(location = 0) out vec4 out_vert;
 
@@ -54,9 +54,11 @@ out gl_PerVertex {
 //const float thickness = 0.2f;
 
 void main() {
-  const uint border_index = current_index / 6;
+  // const uint border_index = current_index / 6;
+  // const uint index_border = current_index % 6; // [0,5]
+  const uint border_index = gl_VertexIndex / PACKED_INDEX_COEF;
+  const uint index_border = gl_VertexIndex % PACKED_INDEX_COEF; // [0,5]
   border_data current_data = datas[border_index];
-  const uint index_border = current_index % 6; // [0,5]
   const uint type_index = floatBitsToUint(current_data.dirs[1].w); // так прячем тип границы
   const border_type type = types[type_index];
   const float thickness = current_data.points[0].w;
@@ -84,22 +86,22 @@ void main() {
       break;
     }
 
-    case 2:
-    case 3: {
+    //case 2:
+    case 2: {
       const vec4 up = normalize(vec4(current_data.points[0].xyz, 0.0f));
       const vec4 dir = vec4(current_data.dirs[0].x, current_data.dirs[0].y, current_data.dirs[0].z, 0.0f);
       gl_Position = camera.viewproj * (current_data.points[0] + up * final_height * render_tile_height + dir * thickness + up * depth_mod);
       break;
     }
 
-    case 1:
-    case 4: {
+    //case 1:
+    case 1: {
       const vec4 up = normalize(vec4(current_data.points[1].xyz, 0.0f));
       gl_Position = camera.viewproj * (current_data.points[1] + up * final_height * render_tile_height + up * depth_mod);
       break;
     }
 
-    case 5: {
+    case 3: {
       const vec4 up = normalize(vec4(current_data.points[1].xyz, 0.0f));
       const vec4 dir = vec4(current_data.dirs[1].x, current_data.dirs[1].y, current_data.dirs[1].z, 0.0f);
       gl_Position = camera.viewproj * (current_data.points[1] + up * final_height * render_tile_height + dir * thickness + up * depth_mod);

@@ -66,9 +66,15 @@ namespace devils_engine {
       static const uint32_t work_group_size = 256;
       
       struct indirect_buffer {
-        VkDrawIndirectCommand pentagon_command;
-        VkDrawIndirectCommand hexagon_command;
-        glm::uvec4 data;
+//         VkDrawIndirectCommand pentagon_command;
+//         VkDrawIndirectCommand hexagon_command;
+        VkDrawIndexedIndirectCommand tiles_command;
+        uint32_t padding1[3];
+        VkDrawIndexedIndirectCommand borders_command;
+        uint32_t padding2[3];
+        VkDrawIndexedIndirectCommand walls_command;
+        uint32_t padding3[3];
+//         glm::uvec4 data;
         utils::frustum frustum;
       };
       
@@ -84,11 +90,19 @@ namespace devils_engine {
       void clear() override;
       
       yavf::Buffer* indirect_buffer() const;
-      yavf::Buffer* instances_buffer() const;
+      yavf::Buffer* tiles_index_buffer() const;
+      yavf::Buffer* borders_index_buffer() const;
+      yavf::Buffer* walls_index_buffer() const;
+      
+      void set_borders_count(const uint32_t &count);
+      void set_connections_count(const uint32_t &count);
     private:
       yavf::Device* device;
       yavf::Buffer* indirect;
       yavf::Buffer* tiles_indices;
+      yavf::Buffer* borders_indices;
+      yavf::Buffer* walls_indices;
+      yavf::DescriptorSet* set;
       yavf::Pipeline pipe;
     };
     
@@ -205,7 +219,8 @@ namespace devils_engine {
     public:
       struct create_info {
         yavf::Device* device;
-        tile_borders_optimizer* opt;
+//         tile_borders_optimizer* opt;
+        tile_optimizer* opt;
         world_map_buffers* map_buffers;
       };
       tile_border_render(const create_info &info);
@@ -219,7 +234,8 @@ namespace devils_engine {
 //       void add(const uint32_t &tile_index); // кажется только индекс тайла нам нужен
     private:
       yavf::Device* device;
-      tile_borders_optimizer* opt;
+//       tile_borders_optimizer* opt;
+      tile_optimizer* opt;
 //       tile_render* render;
       yavf::Pipeline pipe;
       world_map_buffers* map_buffers;
@@ -229,7 +245,8 @@ namespace devils_engine {
     public:
       struct create_info {
         yavf::Device* device;
-        tile_walls_optimizer* opt;
+//         tile_walls_optimizer* opt;
+        tile_optimizer* opt;
         world_map_buffers* map_buffers;
       };
       tile_connections_render(const create_info &info);
@@ -243,7 +260,8 @@ namespace devils_engine {
       void change_rendering_mode(const uint32_t &render_mode, const uint32_t &water_mode, const uint32_t &render_slot, const uint32_t &water_slot, const glm::vec3 &color);
     private:
       yavf::Device* device;
-      tile_walls_optimizer* opt;
+//       tile_walls_optimizer* opt;
+      tile_optimizer* opt;
       yavf::Pipeline pipe;
       world_map_buffers* map_buffers;
     };

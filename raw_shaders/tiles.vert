@@ -40,8 +40,9 @@ out gl_PerVertex {
   vec4 gl_Position;
 };
 
-layout(location = 0) in uint tile_index;  // инстансный буфер
-layout(location = 1) in uint point_index; // буфер вида [0,...,4,0,...,5], указываем оффсет
+// теперь у нас нет никаких выходных вершинных буферов
+//layout(location = 0) in uint tile_index;  // инстансный буфер
+//layout(location = 1) in uint point_index; // буфер вида [0,...,4,0,...,5], указываем оффсет
 //layout(location = 0) out flat uint out_biom_index;
 layout(location = 0) out flat image_t out_biom_texture;
 layout(location = 1) out flat color_t out_biom_color;
@@ -51,6 +52,8 @@ layout(location = 3) out flat float out_tile_height;
 // либо мы uv координаты можем посчитать в скрин спейсе
 // нет лучше здесь
 void main() {
+  const uint tile_index  = gl_VertexIndex / PACKED_TILE_INDEX_COEF; 
+  const uint point_index = gl_VertexIndex % PACKED_TILE_INDEX_COEF;
   const map_tile_t tile = unpack_data(tiles[tile_index]);
   //const uint tile_center = tile.center;
   const uint point_id = tile.points[point_index];

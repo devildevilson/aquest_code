@@ -342,7 +342,9 @@ namespace devils_engine {
         {GPU_UINT_MAX},
         0.0f,
         {tile->neighbours[0].points[0], tile->neighbours[1].points[0], tile->neighbours[2].points[0], tile->neighbours[3].points[0], tile->neighbours[4].points[0], tile->neighbours[5].points[0]},
-        {tile->neighbours[0].index, tile->neighbours[1].index, tile->neighbours[2].index, tile->neighbours[3].index, tile->neighbours[4].index, tile->neighbours[5].index}
+        {tile->neighbours[0].index, tile->neighbours[1].index, tile->neighbours[2].index, tile->neighbours[3].index, tile->neighbours[4].index, tile->neighbours[5].index},
+        GPU_UINT_MAX,
+        GPU_UINT_MAX
       };
       tiles_arr[index] = pack_data(map_tile);
     }
@@ -454,6 +456,26 @@ namespace devils_engine {
       std::unique_lock<std::mutex> lock(mutex);
       auto tiles_arr = reinterpret_cast<render::light_map_tile_t*>(tiles->ptr());
       tiles_arr[tile_index].tile_indices.w = glm::floatBitsToUint(tile_hight);
+    }
+    
+    void map::set_tile_border_data(const uint32_t &tile_index, const uint32_t &offset, const uint32_t &size) {
+      ASSERT(tile_index < tiles_count());
+      ASSERT(size <= render::border_size_mask);
+      ASSERT(offset < render::border_offset_mask);
+      const uint32_t packed_border_data = (size << 28) | (offset & render::border_offset_mask);
+      std::unique_lock<std::mutex> lock(mutex);
+      auto tiles_arr = reinterpret_cast<render::light_map_tile_t*>(tiles->ptr());
+      tiles_arr[tile_index].packed_data4[0] = packed_border_data;
+    }
+    
+    void map::set_tile_connections_data(const uint32_t &tile_index, const uint32_t &offset, const uint32_t &size) {
+      ASSERT(tile_index < tiles_count());
+      ASSERT(size <= render::connections_size_mask);
+      ASSERT(offset < render::connections_offset_mask);
+      const uint32_t packed_connections_data = (size << 28) | (offset & render::connections_offset_mask);
+      std::unique_lock<std::mutex> lock(mutex);
+      auto tiles_arr = reinterpret_cast<render::light_map_tile_t*>(tiles->ptr());
+      tiles_arr[tile_index].packed_data4[1] = packed_connections_data;
     }
     
     float map::get_tile_height(const uint32_t &tile_index) const {

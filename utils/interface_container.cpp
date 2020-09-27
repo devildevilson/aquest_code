@@ -49,9 +49,10 @@ namespace devils_engine {
         throw std::runtime_error("Error in interface_init.lua file");
       }
 
-      std::tuple<sol::function, sol::function> ret = script_from_file_result;
+      std::tuple<sol::function, sol::function, sol::function> ret = script_from_file_result;
       get_ctx = std::get<0>(ret);
       get_font = std::get<1>(ret);
+      free_font = std::get<2>(ret);
 
       {
         auto ctx = &global::get<devils_engine::interface::context>()->ctx;
@@ -64,24 +65,40 @@ namespace devils_engine {
 
         sol::object obj = res.get<sol::object>();
         moonnuklear_ctx = obj;
+
+        // std::cout << "context      " << ctx << '\n';
+        // std::cout << "default font " << ctx->style.font << '\n';
       }
 
-      {
-        for (uint32_t i = 0; i < fonts::count; ++i) {
-          auto font = global::get<devils_engine::interface::context>()->fonts[i];
-          assert(font != nullptr);
-          if (font == nullptr) continue;
-          auto res = get_font(sol::make_light(font));
-          if (!res.valid()) {
-            sol::error err = res;
-            std::string what = err.what();
-            std::cout << what << std::endl;
-            throw std::runtime_error("Could not make interface font");
-          }
+      // {
+      //   for (uint32_t i = 0; i < fonts::count; ++i) {
+      //     auto font = global::get<devils_engine::interface::context>()->fonts[i];
+      //     //assert(font != nullptr);
+      //     if (font == nullptr) continue;
+      //     std::cout << "font to lua " << font << "\n";
+      //     auto res = get_font(sol::make_light(font));
+      //     if (!res.valid()) {
+      //       sol::error err = res;
+      //       std::string what = err.what();
+      //       std::cout << what << std::endl;
+      //       throw std::runtime_error("Could not make interface font");
+      //     }
+      //
+      //     fonts[i] = res.get<sol::object>();
+      //   }
+      // }
+      make_fonts();
 
-          fonts[i] = res.get<sol::object>();
-        }
-      }
+      // {
+      //   auto script_from_file_result = lua.safe_script_file(script_dir + "interface_test.lua");
+      //   if (!script_from_file_result.valid()) {
+      //     sol::error err = script_from_file_result;
+      //     std::cout << err.what();
+      //     throw std::runtime_error("Error in interface_test.lua file");
+      //   }
+      //
+      //   lua["test"](moonnuklear_ctx);
+      // }
 
       lua["get_font"] = [this] (const size_t &index) {
         if (index >= fonts::count) throw std::runtime_error("Bad font index");
@@ -265,6 +282,35 @@ namespace devils_engine {
 
     void interface_container::init_game_logic() {
       setup_lua_game_logic(lua);
+    }
+
+    void interface_container::free_fonts() {
+      for (uint32_t i = 0; i < fonts::count; ++i) {
+        auto res = free_font(fonts[i]);
+        if (!res.valid()) {
+          sol::error err = res;
+          std::cout << err.what();
+          throw std::runtime_error("Could not free interface font");
+        }
+      }
+    }
+
+    void interface_container::make_fonts() {
+      for (uint32_t i = 0; i < fonts::count; ++i) {
+        auto font = global::get<devils_engine::interface::context>()->fonts[i];
+        //assert(font != nullptr);
+        if (font == nullptr) continue;
+        //std::cout << "font to lua " << font << "\n";
+        auto res = get_font(sol::make_light(font));
+        if (!res.valid()) {
+          sol::error err = res;
+          std::string what = err.what();
+          std::cout << what << std::endl;
+          throw std::runtime_error("Could not make interface font");
+        }
+
+        fonts[i] = res.get<sol::object>();
+      }
     }
   }
 }

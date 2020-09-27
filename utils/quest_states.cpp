@@ -34,22 +34,22 @@ namespace devils_engine {
       table["hint3"] = prog->get_hint3();
       table["type"] = prog->get_type();
     }
-    
+
     main_menu_state::main_menu_state() {}
     void main_menu_state::enter() {
       // эта функция будет запускаться перед загрузкой
     }
-    
+
     bool main_menu_state::load() {
       auto base = global::get<systems::core_t>();
       // грузанем здесь новую картинку для заднего фона
       if (!base->interface_container->is_visible(utils::interface_container::last_layer())) {
         base->menu->push("main_menu");
       }
-      
+
       return true;
     }
-    
+
     void main_menu_state::update(const size_t &time) {
       (void)time;
       auto base = global::get<systems::core_t>();
@@ -67,25 +67,25 @@ namespace devils_engine {
         }
       }
     }
-    
+
     void main_menu_state::clean() {
       auto base = global::get<systems::core_t>();
       base->interface_container->close_all();
       base->menu->clear();
       m_next_state = UINT32_MAX;
     }
-    
+
 //     uint32_t main_menu_state::next_state() const {
 //       return m_next_state;
 //     }
-    
+
     void map_creation_state::enter() {
       auto map = global::get<systems::map_t>();
       map->create_map_container();
-//       map->setup_map_generator();
-      
+      map->setup_map_generator();
+      systems::setup_map_generator(map);
     }
-    
+
     map_creation_state::map_creation_state() {}
     bool map_creation_state::load() {
       auto base = global::get<systems::core_t>();
@@ -98,26 +98,26 @@ namespace devils_engine {
           systems::from_menu_to_create_map(prog);
         });
       }
-      
+
       update_interface();
-      
+
       if (base->loading_progress->finished()) {
         base->loading_progress->reset();
         return true;
       }
-      
+
       return false;
     }
-    
+
     void map_creation_state::update(const size_t &time) {
       (void)time;
       auto map_systems = global::get<systems::map_t>();
       map_systems->map_creator->generate();
-      
+
       if (map_systems->map_creator->back_to_menu()) m_next_state = quest_state::main_menu;
       if (map_systems->map_creator->finished()) m_next_state = quest_state::world_map;
     }
-    
+
     void map_creation_state::clean() {
       // чистим ресурсы у map_creator'a мы в загрузке карты (!)
       if (m_next_state == quest_state::main_menu) {
@@ -127,17 +127,17 @@ namespace devils_engine {
         map_systems->release_container();
         base->interface_container->close_all();
       }
-      
+
       m_next_state = UINT32_MAX;
     }
-    
+
     world_map_state::world_map_state() {}
     void world_map_state::enter() {
       auto map = global::get<systems::map_t>();
       map->create_map_container();
 //       PRINT("world_map_state::enter")
     }
-    
+
     // тут нужно как то определить загружаем ли мы сохранение или грузим карту
     bool world_map_state::load() {
 //       auto map = global::get<systems::map_t>();
@@ -158,21 +158,21 @@ namespace devils_engine {
           });
         }
       }
-      
+
       update_interface();
-      
+
       if (base->loading_progress->finished()) {
         base->loading_progress->reset();
         return true;
       }
-      
+
       return false;
     }
-    
+
     void world_map_state::update(const size_t &time) {
       (void)time;
       game::advance_state();
-      
+
       auto base = global::get<systems::core_t>();
       game_state current_state = game_state::map;
       game_state new_state = game_state::map;
@@ -188,7 +188,7 @@ namespace devils_engine {
         }
       }
     }
-    
+
     void world_map_state::clean() {
       auto map_systems = global::get<systems::map_t>();
       auto base = global::get<systems::core_t>();
@@ -196,21 +196,21 @@ namespace devils_engine {
       base->interface_container->close_all();
       m_next_state = UINT32_MAX;
     }
-    
+
     battle_state::battle_state() {}
     void battle_state::enter() {
       ASSERT(false);
     }
-    
+
     bool battle_state::load() {}
     void battle_state::update(const size_t &time) {}
     void battle_state::clean() {}
-    
+
     encounter_state::encounter_state() {}
     void encounter_state::enter() {
       ASSERT(false);
     }
-    
+
     bool encounter_state::load() {}
     void encounter_state::update(const size_t &time) {}
     void encounter_state::clean() {}

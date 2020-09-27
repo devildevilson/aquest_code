@@ -686,13 +686,15 @@ namespace devils_engine {
   }
 
   void window_resize_callback(GLFWwindow*, int w, int h) {
+    auto system = global::get<systems::core_t>();
     global::get<render::window>()->recreate(w, h);
     //global::get<GBufferStage>()->recreate(w, h);
     //global::get<render::stage_container>()->recreate(w, h);
+    system->interface_container->free_fonts();
     global::get<interface::context>()->remake_font_atlas(w, h);
+    system->interface_container->make_fonts();
   //   std::cout << "window_resize_callback width " << w << " height " << h << '\n';
 
-    auto system = global::get<systems::core_t>();
     system->graphics_container->render->recreate(w, h);
     auto map = global::get<systems::map_t>();
     if (map != nullptr) {

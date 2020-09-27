@@ -339,7 +339,7 @@ namespace devils_engine {
           auto province = core_context->get_entity<core::province>(i);
           auto culture = nullptr;
           for (const uint32_t tile_index : province->tiles) {
-            const uint32_t rand_num1 = render::lcg(size_t(culture));
+            const uint32_t rand_num1 = render::lcg(size_t(0));
             const uint32_t rand_num2 = render::lcg(rand_num1);
             const uint32_t rand_num3 = render::lcg(rand_num2);
             const float color_r = render::lcg_normalize(rand_num1);
@@ -356,7 +356,7 @@ namespace devils_engine {
           auto province = core_context->get_entity<core::province>(i);
           auto culture = nullptr;
           for (const uint32_t tile_index : province->tiles) {
-            const uint32_t rand_num1 = render::lcg(size_t(culture));
+            const uint32_t rand_num1 = render::lcg(size_t(0));
             const uint32_t rand_num2 = render::lcg(rand_num1);
             const uint32_t rand_num3 = render::lcg(rand_num2);
             const float color_r = render::lcg_normalize(rand_num1);
@@ -373,7 +373,7 @@ namespace devils_engine {
           auto province = core_context->get_entity<core::province>(i);
           auto religion = nullptr;
           for (const uint32_t tile_index : province->tiles) {
-            const uint32_t rand_num1 = render::lcg(size_t(religion));
+            const uint32_t rand_num1 = render::lcg(size_t(0));
             const uint32_t rand_num2 = render::lcg(rand_num1);
             const uint32_t rand_num3 = render::lcg(rand_num2);
             const float color_r = render::lcg_normalize(rand_num1);
@@ -390,7 +390,7 @@ namespace devils_engine {
           auto province = core_context->get_entity<core::province>(i);
           auto religion = nullptr;
           for (const uint32_t tile_index : province->tiles) {
-            const uint32_t rand_num1 = render::lcg(size_t(religion));
+            const uint32_t rand_num1 = render::lcg(size_t(0));
             const uint32_t rand_num2 = render::lcg(rand_num1);
             const uint32_t rand_num3 = render::lcg(rand_num2);
             const float color_r = render::lcg_normalize(rand_num1);

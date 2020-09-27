@@ -83,7 +83,7 @@ if (WIN32 OR MINGW)
 
   set(GLFW3_LIB_DIRS C:/libs/glfw-3.2.1.bin.WIN64/lib-mingw-w64)
   set(GLFW3_INCLUDE_DIRS C:/libs/glfw-3.2.1.bin.WIN64/include)
-  set(GLFW3_LIBRARIES glfw3)
+  set(GLFW3_LIBRARIES glfw3dll)
 
   set(VULKAN_SDK_PATH C:/VulkanSDK/1.1.97.0)
   set(VULKAN_LIB_PATH ${VULKAN_SDK_PATH}/Lib)
@@ -144,11 +144,19 @@ add_definitions(
 )
 
 if (CMAKE_BUILD_TYPE MATCHES "Debug")
-  # -fsanitize=address -fsanitize=pointer-compare -fsanitize=pointer-subtract -fsanitize=undefined
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -msse4.2 -std=c++17 -Wall -Wextra -g -fno-rtti -pthread -Wl,-rpath=./")
+  if (MSVC)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /std:c++17 /ZI /MTd /GR- /permissive- /bigobj") #/W3
+  else()
+    # -fsanitize=address -fsanitize=pointer-compare -fsanitize=pointer-subtract -fsanitize=undefined
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -msse4.2 -std=c++17 -Wall -Wextra -g -fno-rtti -pthread -Wl,-rpath=./")
+  endif()
 else()
   add_definitions(-D_NDEBUG)
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -msse4.2 -std=c++17 -Wall -Wextra -O3 -g -fno-rtti -pthread -Wl,-rpath=./")
+  if (MSVC)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /std:c++17 /Ox /MT /GR- /permissive-")
+  else()
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -msse4.2 -std=c++17 -Wall -Wextra -O3 -s -fno-rtti -pthread -Wl,-rpath=./")
+  endif()
 endif (CMAKE_BUILD_TYPE MATCHES "Debug")
 
 file(GLOB_RECURSE GLSL_SOURCE_FILES
@@ -187,22 +195,25 @@ add_custom_target(
 )
 
 set(SRC_LIST
-  utils/lib_crypto_fake_rtti.cpp
+  #utils/lib_crypto_fake_rtti.cpp
 #   include/cryptopp/hc256.cpp
 #   include/cryptopp/sha.cpp
+  utils/salsa20.cpp
   utils/serializator_helper.cpp
 #   protobuf/test1.pb.cc
 )
 
 set(HDR_LIST
-  include/cryptopp/hc256.h
-  include/cryptopp/sha.h
+  #include/cryptopp/hc256.h
+  #include/cryptopp/sha.h
+  utils/picosha2.h
+  utils/salsa20.h
   utils/serializator_helper.h
 #   protobuf/test1.pb.h
 )
 
 add_library(serialization ${SRC_LIST} ${HDR_LIST})
-target_link_libraries(serialization lz4 cryptopp mman) #protobuf-lite protobuf
+target_link_libraries(serialization lz4) #protobuf-lite protobuf
 
 set(SRC_LIST
   utils/thread_pool.cpp
@@ -215,7 +226,20 @@ set(SRC_LIST
   utils/ecs.cpp
   utils/random_engine.cpp
   utils/linear_rng.cpp
-  utils/lua_initialization.cpp
+  utils/lua_initialization_game_logic.cpp
+  utils/lua_initialization_input.cpp
+  utils/lua_initialization_types.cpp
+  utils/lua_initialization_main_menu.cpp
+  utils/lua_initialization_constants.cpp
+  utils/lua_initialization_package.cpp
+  utils/lua_initialization_internal_enums.cpp
+  utils/lua_initialization_internal_building_type.cpp
+  utils/lua_initialization_internal_character.cpp
+  utils/lua_initialization_internal_city.cpp
+  utils/lua_initialization_internal_city_type.cpp
+  utils/lua_initialization_internal_faction.cpp
+  utils/lua_initialization_internal_province.cpp
+  utils/lua_initialization_internal_titulus.cpp
   utils/string_container.cpp
   utils/string_bank.cpp
   utils/progress_container.cpp
@@ -254,6 +278,7 @@ set(HDR_LIST
   utils/on_action_types.h
   utils/traits_modifier_attribs.h
   utils/lua_initialization.h
+  utils/lua_initialization_internal.h
   utils/string_container.h
   utils/string_bank.h
   utils/progress_container.h
@@ -266,7 +291,7 @@ set(HDR_LIST
 )
 
 add_library(utils ${SRC_LIST} ${HDR_LIST})
-target_link_libraries(utils lua pthread) # PUBLIC foonathan_memory moonnuklear
+target_link_libraries(utils lua53) # PUBLIC foonathan_memory moonnuklear
 
 set(SRC_LIST
   render/container.cpp

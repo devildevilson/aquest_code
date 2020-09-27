@@ -40,8 +40,8 @@ namespace devils_engine {
     const int32_t length = wai_getExecutablePath(nullptr, 0, &dirname);
     ASSERT(length > 0);
 
-    char array[length+1];
-    wai_getExecutablePath(array, length, &dirname);
+    std::vector<char> array(length+1);
+    wai_getExecutablePath(array.data(), length, &dirname);
 
     array[length] = '\0'; // весь путь
 
@@ -51,7 +51,7 @@ namespace devils_engine {
 
 //     std::cout << array << "\n";
 
-    std::filesystem::path p = std::string(array);
+    std::filesystem::path p = std::string(array.data());
     p /= "../";
     p.make_preferred();
     const std::string dir_path = p.string();

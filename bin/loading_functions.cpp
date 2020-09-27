@@ -565,7 +565,11 @@ namespace devils_engine {
 
           if (size == 0) continue;
 
+#ifdef _WIN32
+          std::vector<wall> tmp_arr(size); 
+#else
           wall tmp_arr[size];
+#endif
           uint32_t counter = 0;
           for (uint32_t j = 0; j < n_count; ++j) {
             const uint32_t n_index = tile_data.neighbours[j];

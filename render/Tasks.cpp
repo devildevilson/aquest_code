@@ -528,17 +528,27 @@ namespace yavf {
   }
 
   void TaskInterface::execute(const std::vector<TaskInterface*> &tasks) {
+#ifdef _WIN32
+    std::vector<VkCommandBuffer> commands(tasks.size());
+    for (uint32_t i = 0; i < tasks.size(); ++i) commands[i] = tasks[i]->current;
+    vkCmdExecuteCommands(current, tasks.size(), commands.data());
+#else
     VkCommandBuffer commands[tasks.size()];
     for (uint32_t i = 0; i < tasks.size(); ++i) commands[i] = tasks[i]->current;
-
     vkCmdExecuteCommands(current, tasks.size(), commands);
+#endif
   }
   
   void TaskInterface::execute(const size_t &count, TaskInterface** tasks) {
+#ifdef _WIN32
+    std::vector<VkCommandBuffer> commands(count);
+    for (uint32_t i = 0; i < count; ++i) commands[i] = tasks[i]->current;
+    vkCmdExecuteCommands(current, count, commands.data());
+#else
     VkCommandBuffer commands[count];
     for (uint32_t i = 0; i < count; ++i) commands[i] = tasks[i]->current;
-
     vkCmdExecuteCommands(current, count, commands);
+#endif
   }
   
   Internal::Queue TaskInterface::start() {

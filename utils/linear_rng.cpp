@@ -15,7 +15,8 @@ namespace devils_engine {
       }
       
       double normalize(const uint64_t &value) {
-        const union { uint64_t i; double d; } u = { .i = UINT64_C(0x3FF) << 52 | value >> 12 };
+        union { uint64_t i; double d; } u; 
+        u.i = UINT64_C(0x3FF) << 52 | value >> 12;
         return u.d - 1.0;
       }
     }
@@ -34,7 +35,8 @@ namespace devils_engine {
       }
       
       double normalize(const uint64_t &value) {
-        const union { uint64_t i; double d; } u = { .i = UINT64_C(0x3FF) << 52 | value >> 12 };
+        union { uint64_t i; double d; } u;
+        u.i = UINT64_C(0x3FF) << 52 | value >> 12;
         return u.d - 1.0;
       }
     }
@@ -61,7 +63,8 @@ namespace devils_engine {
       }
       
       double normalize(const uint64_t &value) {
-        const union { uint64_t i; double d; } u = { .i = UINT64_C(0x3FF) << 52 | value >> 12 };
+        union { uint64_t i; double d; } u;
+        u.i = UINT64_C(0x3FF) << 52 | value >> 12;
         return u.d - 1.0;
       }
     }
@@ -92,7 +95,8 @@ namespace devils_engine {
       }
       
       double normalize(const uint64_t &value) {
-        const union { uint64_t i; double d; } u = { .i = UINT64_C(0x3FF) << 52 | value >> 12 };
+        union { uint64_t i; double d; } u;
+        u.i = UINT64_C(0x3FF) << 52 | value >> 12;
         return u.d - 1.0;
       }
     }

@@ -9,8 +9,10 @@
 #include <fstream>
 #include <filesystem>
 #include "cista/cista.h"
-#include "cryptopp/sha.h"
-#include "cryptopp/hc256.h"
+//#include "cryptopp/sha.h"
+//#include "cryptopp/hc256.h"
+#include "picosha2.h"
+#include "salsa20.h"
 #include "linear_rng.h"
 #include "bin/seasons.h"
 
@@ -130,12 +132,12 @@ namespace devils_engine {
       data::array<data::array<float, 4>, 4> matrix;
 
       data::array<data::vector<data::string>, static_cast<size_t>(core::structure::count)> data_array;
-      data::array<tile_data, world_serializator::tiles_count> tiles_array;
       data::array<render::biome_data_t, core::seasons::maximum_biomes> biomes;
+      data::vector<tile_data> tiles_array; //  world_serializator::tiles_count
       data::vector<uint8_t> tiles_seasons;
     };
 
-    world_serializator::world_serializator() : ptr(new cista_serializator) {}
+    world_serializator::world_serializator() : ptr(new cista_serializator) { ptr->tiles_array.resize(world_serializator::tiles_count);  }
     world_serializator::~world_serializator() { delete ptr; ptr = nullptr; }
     void world_serializator::set_name(const std::string_view &name) { world_name = name; }
     void world_serializator::set_name(std::string &&name) { world_name = std::move(name); }
@@ -190,9 +192,9 @@ namespace devils_engine {
 
     void fill_encryptor_data(size_t* key, size_t* iv) {
       const splitmix64::state s = 0x32a665c;
-      splitmix64::state states[8];
+      splitmix64::state states[5];
       states[0] = splitmix64::rng(s);
-      for (uint32_t i = 1; i < 8; ++i) {
+      for (uint32_t i = 1; i < 5; ++i) {
         states[i] = splitmix64::rng(states[i-1]);
       }
 
@@ -202,9 +204,9 @@ namespace devils_engine {
       key[3] = splitmix64::get_value(states[3]);
 
       iv[0]  = splitmix64::get_value(states[4]);
-      iv[1]  = splitmix64::get_value(states[5]);
-      iv[2]  = splitmix64::get_value(states[6]);
-      iv[3]  = splitmix64::get_value(states[7]);
+      //iv[1]  = splitmix64::get_value(states[5]);
+      //iv[2]  = splitmix64::get_value(states[6]);
+      //iv[3]  = splitmix64::get_value(states[7]);
     }
 
     void world_serializator::serialize() {
@@ -347,34 +349,96 @@ namespace devils_engine {
       const int32_t compressed_data_size = LZ4_compress_HC(reinterpret_cast<const char*>(buf.data()), reinterpret_cast<char*>(mem.data()), buf.size(), mem.size(), LZ4HC_CLEVEL_MAX);
       //if (compressed_data_size <= 0) throw std::runtime_error("Could not compress map data");
       PRINT_VAR("raw        data size", buf.size())
-      PRINT_VAR("max bound  data size", max_bound)
-      PRINT_VAR("compressed data size", compressed_data_size)
-      PRINT_VAR("compress ratio", float(compressed_data_size) / float(buf.size()))
-      //PRINT_VAR("compressed data size", compressed_data.size())
-      //PRINT_VAR("compress ratio", float(compressed_data.size()) / float(buf.size()))
-// #ifndef _NDEBUG
-//       {
-//         std::ofstream map_data_file(std::string(current_path) + "/world_data_compressed", std::ios::out | std::ios::binary);
-//         map_data_file.write(reinterpret_cast<const char*>(mem.data()), compressed_data_size);
-//       }
-// #endif
-      using namespace CryptoPP;
-      HC256::Encryption enc;
-      ASSERT(enc.DefaultKeyLength() == 32);
-      ASSERT(enc.IVSize() == 32);
-      size_t key[32 / sizeof(size_t)];
-      size_t iv[32 / sizeof(size_t)];
+        PRINT_VAR("max bound  data size", max_bound)
+        PRINT_VAR("compressed data size", compressed_data_size)
+        PRINT_VAR("compress ratio", float(compressed_data_size) / float(buf.size()))
+        //PRINT_VAR("compressed data size", compressed_data.size())
+        //PRINT_VAR("compress ratio", float(compressed_data.size()) / float(buf.size()))
+  // #ifndef _NDEBUG
+  //       {
+  //         std::ofstream map_data_file(std::string(current_path) + "/world_data_compressed", std::ios::out | std::ios::binary);
+  //         map_data_file.write(reinterpret_cast<const char*>(mem.data()), compressed_data_size);
+  //       }
+  // #endif
+
+      cipher::salsa20 enc;
+      size_t key[cipher::salsa20::key_size / sizeof(size_t)];
+      size_t iv[cipher::salsa20::iv_size / sizeof(size_t)];
+
+      //using namespace CryptoPP;
+      //HC256::Encryption enc;
+      //ASSERT(enc.DefaultKeyLength() == 32);
+      //ASSERT(enc.IVSize() == 32);
+      //size_t key[32 / sizeof(size_t)];
+      //size_t iv[32 / sizeof(size_t)];
       fill_encryptor_data(key, iv);
+      enc.set_key(reinterpret_cast<uint8_t*>(key));
+      enc.set_iv(reinterpret_cast<uint8_t*>(iv));
       //std::vector<uint8_t> out_message(compressed_data_size, 0);
       std::vector<uint8_t> out_message(compressed_data_size, 0);
+      constexpr const size_t num_block_per_chunk = 1;
+      constexpr const size_t chunk_size = num_block_per_chunk * cipher::salsa20::block_size;
+      //uint8_t chunk[chunk_size];
+      size_t num_chunks = compressed_data_size / chunk_size;
+      size_t remainder_size = compressed_data_size % chunk_size;
 
-      enc.SetKeyWithIV(reinterpret_cast<const uint8_t*>(key), 32, reinterpret_cast<const uint8_t*>(iv), 32);
-      enc.ProcessString(out_message.data(), reinterpret_cast<const uint8_t*>(mem.data()), compressed_data_size);
+      {
+        cipher::salsa20 enc;
+        size_t key[cipher::salsa20::key_size / sizeof(size_t)];
+        size_t iv[cipher::salsa20::iv_size / sizeof(size_t)];
+        fill_encryptor_data(key, iv);
+        enc.set_key(reinterpret_cast<uint8_t*>(key));
+        enc.set_iv(reinterpret_cast<uint8_t*>(iv));
+        const std::string plain_text = "salkgjajs;;algjg[[opewttwtewgekvlwkdnvsjkvdkvsdnvsnvskdvjvsnkljckmlanjlkvnl;rvnajbnl;nnba;fnkjdpbmkndsbms;lkbnd;knasklbnzsq[wlgggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggg";
+        std::string cipher_text(plain_text.size(), '\0');
+        std::string test_text(plain_text.size(), '\0');
+        size_t num_chunks = plain_text.size() / chunk_size;
+        size_t remainder_size = plain_text.size() % chunk_size;
+        //for (size_t i = 0; i < num_chunks; ++i) {
+        //  enc.process_blocks(reinterpret_cast<const uint8_t*>(plain_text.data()), reinterpret_cast<uint8_t*>(cipher_text.data()), num_block_per_chunk);
+        //}
 
-      SHA512 hasher;
-      hasher.Update(out_message.data(), compressed_data_size);
-      ASSERT(hasher.DigestSize() == hash_size);
-      hasher.Final(hash);
+        //if (remainder_size != 0) {
+          enc.process_bytes(reinterpret_cast<const uint8_t*>(plain_text.data()), reinterpret_cast<uint8_t*>(cipher_text.data()), plain_text.size());
+        //}
+
+        {
+          cipher::salsa20 enc;
+          size_t key[cipher::salsa20::key_size / sizeof(size_t)];
+          size_t iv[cipher::salsa20::iv_size / sizeof(size_t)];
+          fill_encryptor_data(key, iv);
+          enc.set_key(reinterpret_cast<uint8_t*>(key));
+          enc.set_iv(reinterpret_cast<uint8_t*>(iv));
+          //for (size_t i = 0; i < num_chunks; ++i) {
+          //  enc.process_blocks(reinterpret_cast<const uint8_t*>(cipher_text.data()), reinterpret_cast<uint8_t*>(test_text.data()), num_block_per_chunk);
+          //}
+
+          //if (remainder_size != 0) {
+            enc.process_bytes(reinterpret_cast<const uint8_t*>(cipher_text.data()), reinterpret_cast<uint8_t*>(test_text.data()), plain_text.size());
+          //}
+
+          assert(test_text == plain_text);
+          //PRINT_VAR("test_text", test_text)
+          //PRINT_VAR("plain_text", plain_text)
+        }
+      }
+
+      //for (size_t i = 0; i < num_chunks; ++i) {
+      //  enc.process_blocks(reinterpret_cast<const uint8_t*>(mem.data()), out_message.data(), num_block_per_chunk);
+      //}
+
+      //if (remainder_size != 0) {
+        enc.process_bytes(reinterpret_cast<const uint8_t*>(mem.data()), out_message.data(), compressed_data_size);
+      //}
+
+      //enc.SetKeyWithIV(reinterpret_cast<const uint8_t*>(key), 32, reinterpret_cast<const uint8_t*>(iv), 32);
+      //enc.ProcessString(out_message.data(), reinterpret_cast<const uint8_t*>(mem.data()), compressed_data_size);
+
+      //SHA512 hasher;
+      //hasher.Update(out_message.data(), compressed_data_size);
+      ASSERT(picosha2::k_digest_size == hash_size);
+      picosha2::hash256(out_message, hash, hash+hash_size);
+      //hasher.Final(hash);
 
       current_path /= "world_data";
 
@@ -391,7 +455,7 @@ namespace devils_engine {
       const size_t write_size = buf.size();
       map_data_file.write(reinterpret_cast<const char*>(&write_size), sizeof(write_size));
       map_data_file.write(reinterpret_cast<const char*>(out_message.data()), compressed_data_size);
-      map_data_file.write(reinterpret_cast<const char*>(hash), hasher.DigestSize());
+      map_data_file.write(reinterpret_cast<const char*>(hash), hash_size);
     }
 
 //     void fill_structure_data(array &arr, const uint32_t &arr_index, apate_quest::map_data* data, const size_t &count, get_ptr ptr) {
@@ -464,7 +528,7 @@ namespace devils_engine {
         PRINT_VAR("raw        data size", output_size)
       }
 
-      using namespace CryptoPP;
+      //using namespace CryptoPP;
       std::vector<uint8_t> raw_data(output_size, 0);
       {
         const int64_t pos = map_data_file.tellg();
@@ -482,18 +546,32 @@ namespace devils_engine {
         ASSERT(mem.size() == compressed_data_size);
         map_data_file.read(reinterpret_cast<char*>(mem.data()), mem.size());
 
-        HC256::Decryption dec;
-        ASSERT(dec.DefaultKeyLength() == 32);
-        ASSERT(dec.IVSize() == 32);
-        size_t key[32 / sizeof(size_t)];
-        size_t iv[32 / sizeof(size_t)];
+        //HC256::Decryption dec;
+        //ASSERT(dec.DefaultKeyLength() == 32);
+        //ASSERT(dec.IVSize() == 32);
+        cipher::salsa20 dec;
+        size_t key[cipher::salsa20::key_size / sizeof(size_t)];
+        size_t iv[cipher::salsa20::iv_size / sizeof(size_t)];
         fill_encryptor_data(key, iv);
+        dec.set_key(reinterpret_cast<uint8_t*>(key));
+        dec.set_iv(reinterpret_cast<uint8_t*>(iv));
 
+        constexpr const size_t num_block_per_chunk = 1;
+        constexpr const size_t chunk_size = num_block_per_chunk * cipher::salsa20::block_size;
+        size_t num_chunks = compressed_data_size / chunk_size;
+        size_t remainder_size = compressed_data_size % chunk_size;
         std::vector<uint8_t> dec_message(compressed_data_size, 0);
-        dec.SetKeyWithIV(reinterpret_cast<const uint8_t*>(key), 32, reinterpret_cast<const uint8_t*>(iv), 32);
-        dec.ProcessString(dec_message.data(), mem.data(), compressed_data_size);
+        //dec.SetKeyWithIV(reinterpret_cast<const uint8_t*>(key), 32, reinterpret_cast<const uint8_t*>(iv), 32);
+        //dec.ProcessString(dec_message.data(), mem.data(), compressed_data_size);
+        //for (size_t i = 0; i < num_chunks; ++i) {
+        //  dec.process_blocks(reinterpret_cast<const uint8_t*>(mem.data()), dec_message.data(), num_block_per_chunk);
+        //}
 
-        const int32_t ret = LZ4_decompress_safe_partial(reinterpret_cast<const char*>(dec_message.data()), reinterpret_cast<char*>(raw_data.data()), dec_message.size(), raw_data.size(), INT32_MAX);
+        //if (remainder_size != 0) {
+          dec.process_bytes(reinterpret_cast<const uint8_t*>(mem.data()), dec_message.data(), compressed_data_size);
+        //}
+
+        const int32_t ret = LZ4_decompress_safe(reinterpret_cast<const char*>(dec_message.data()), reinterpret_cast<char*>(raw_data.data()), dec_message.size(), raw_data.size());
         if (ret < 0) throw std::runtime_error("Bad decompression");
       }
 

@@ -520,7 +520,7 @@ INLINE uint compute_height_layer(const float height) {
   return height < 0.0f ? 0 : uint(height / layer_height);
 }
 
-const uint modulus = 1 << 31;
+const uint modulus = uint(1) << 31;
 const uint multiplier = 1103515245;
 const uint increment = 12345;
 
@@ -568,10 +568,10 @@ INLINE float lcg_normalize(const uint val) {
       ASSERT(g >= 0.0f && g <= 1.0f);
       ASSERT(b >= 0.0f && b <= 1.0f);
       ASSERT(a >= 0.0f && a <= 1.0f);
-      const uint8_t final_r = UINT8_MAX * r;
-      const uint8_t final_g = UINT8_MAX * g;
-      const uint8_t final_b = UINT8_MAX * b;
-      const uint8_t final_a = UINT8_MAX * a;
+      const uint8_t final_r = uint8_t(UINT8_MAX * r);
+      const uint8_t final_g = uint8_t(UINT8_MAX * g);
+      const uint8_t final_b = uint8_t(UINT8_MAX * b);
+      const uint8_t final_a = uint8_t(UINT8_MAX * a);
       
       return make_color(uint16_t(final_r), uint16_t(final_g), uint16_t(final_b), uint16_t(final_a));
     }

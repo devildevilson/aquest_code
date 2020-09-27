@@ -16,7 +16,6 @@ class fake_type_info : public std::type_info {
 public:
   inline fake_type_info(const char* name) : std::type_info(name) {}
   inline virtual ~fake_type_info() {}
-  //operator std::type_info () { return *this; }
 };
 
 template<> const std::type_info& fake_rtti<int> () { static fake_type_info type("int"); return type; }

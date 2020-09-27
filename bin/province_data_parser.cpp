@@ -132,7 +132,7 @@ namespace devils_engine {
       }
       
       if (const auto &count = table["max_cities_count"]; count.valid()) { // мы можем это указать для того чтобы как то ограничить строительство новых городов
-        const uint32_t size = count.get<size_t>();
+        const uint32_t size = count.get<uint32_t>();
         province->cities_max_count = size;
       }
       

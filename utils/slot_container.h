@@ -105,7 +105,7 @@ namespace devils_engine {
 
       inline void init_bit_field() {
         if (slots_size < field_width) return;
-        const size_t bit_field_size = std::ceil(double(slots_size) / double(field_width));
+        const size_t bit_field_size = size_t(std::ceil(double(slots_size) / double(field_width)));
         initialized_ptr = new init_bit_field_type[bit_field_size];
         memset(initialized_ptr, 0, sizeof(initialized_ptr[0]) * bit_field_size);
       }

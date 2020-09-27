@@ -507,7 +507,9 @@ namespace devils_engine {
     
     const uint32_t map::detail_level;
     const uint32_t map::accel_struct_detail_level;
+#ifndef _WIN32
     const float map::world_radius;
+#endif
   }
 }
 

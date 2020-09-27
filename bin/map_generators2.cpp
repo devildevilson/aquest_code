@@ -203,10 +203,19 @@ namespace devils_engine {
       const float angle1 = PI   * ctx->random->norm();
       const float angle2 = PI_2 * ctx->random->norm();
 
+      ASSERT(angle1 != 0.0f);
+      ASSERT(angle2 != 0.0f);
+      PRINT_VAR("angle1", angle1)
+      PRINT_VAR("angle2", angle2)
+
       // нужно создать случайную матрицу поворота
-      glm::mat4 mat1 = glm::rotate(glm::mat4(), angle2, glm::vec3(0.0f, 1.0f, 0.0f));
-                mat1 = glm::rotate(mat1,        angle1, glm::vec3(1.0f, 0.0f, 0.0f));
+      glm::mat4 mat1 = glm::rotate(glm::mat4(1.0f), angle2, glm::vec3(0.0f, 1.0f, 0.0f));
+                mat1 = glm::rotate(mat1,            angle1, glm::vec3(1.0f, 0.0f, 0.0f));
       glm::mat3 mat(mat1);
+
+      PRINT_VEC3("mat", mat[0])
+      PRINT_VEC3("mat", mat[1])
+      PRINT_VEC3("mat", mat[2])
       map::container generated_core(core::map::world_radius, core::map::detail_level, mat); // возможно нужно как то это ускорить
 
       auto map = ctx->map;
@@ -391,17 +400,17 @@ namespace devils_engine {
 
       const uint32_t tiles_count = map->tiles_count();
       //std::atomic<uint32_t> tile_plate_atomic[tiles_count];
-      uint32_t tile_plate_atomic[tiles_count];
+      std::vector<uint32_t> tile_plate_atomic(tiles_count, UINT32_MAX);
       //utils::concurrent_vector<uint32_t> plate_tiles_concurrent[plates_count];
-      std::vector<uint32_t> plate_tiles_concurrent[plates_count];
+      std::vector<std::vector<uint32_t>> plate_tiles_concurrent(plates_count);
 
 //       utils::concurrent_vector<std::pair<uint32_t, uint32_t>> active_tile_indices;
 //       utils::concurrent_vector<std::pair<uint32_t, uint32_t>>::default_value = std::make_pair(0, UINT32_MAX);
       std::vector<std::pair<uint32_t, uint32_t>> active_tile_indices;
 
-      for (size_t i = 0; i < tiles_count; ++i) {
-        tile_plate_atomic[i] = UINT32_MAX;
-      }
+      // for (size_t i = 0; i < tiles_count; ++i) {
+      //   tile_plate_atomic[i] = UINT32_MAX;
+      // }
 
       std::unordered_set<uint32_t> unique_tiles;
       auto rand = ctx->random;
@@ -411,12 +420,14 @@ namespace devils_engine {
         do {
           ++attempts;
           const uint32_t rand_index = rand->index(map->tiles_count());
+          assert(rand_index < map->tiles_count());
           if (tile_plate_atomic[rand_index] != UINT32_MAX) continue;
           const auto &data = render::unpack_data(ctx->map->get_tile(rand_index));
           const uint32_t n_count = render::is_pentagon(data) ? 5 : 6;
           bool continue_b = false;
           for (uint32_t j = 0; j < n_count; ++j) {
             const uint32_t n_index = data.neighbours[j];
+            assert(n_index < map->tiles_count());
             if (tile_plate_atomic[n_index] != UINT32_MAX) continue_b = true;
           }
 
@@ -622,8 +633,8 @@ namespace devils_engine {
         std::swap(plate_tiles_local[i], plate_tiles_concurrent[i]);
       }
 
-      std::vector<uint32_t> tile_plates_local(tiles_count);
-      memcpy(tile_plates_local.data(), tile_plate_atomic, tiles_count * sizeof(uint32_t));
+      std::vector<uint32_t> tile_plates_local(tile_plate_atomic.size());
+      memcpy(tile_plates_local.data(), tile_plate_atomic.data(), tile_plate_atomic.size() * sizeof(tile_plate_atomic[0]));
 //       std::vector<uint32_t> plate_new_plate(context->plate_tile_indices.size(), UINT32_MAX);
 //       for (size_t i = 0; i < context->plate_tile_indices.size(); ++i) {
 //         plate_new_plate[i] = i;
@@ -657,8 +668,9 @@ namespace devils_engine {
             }
           }
         }, ctx);
-        ctx->pool->compute();
-        while (ctx->pool->working_count() != 1 || ctx->pool->tasks_count() != 0) { std::this_thread::sleep_for(std::chrono::microseconds(1)); }
+        utils::async_wait(ctx->pool);
+        //ctx->pool->compute();
+        //while (ctx->pool->working_count() != 1 || ctx->pool->tasks_count() != 0) { std::this_thread::sleep_for(std::chrono::microseconds(1)); }
 
         //ASSERT(false);
 
@@ -3243,7 +3255,7 @@ namespace devils_engine {
       // ее нужно както посчитать
       const uint32_t max_neighbour_dist = 5;
 
-      utils::submit_works_async(ctx->pool, provinces_count, [&province_n, &table] (const size_t &start, const size_t &count, const generator::context* context) {
+      utils::submit_works_async(ctx->pool, provinces_count, [&province_n, &table, max_neighbour_dist] (const size_t &start, const size_t &count, const generator::context* context) {
         for (size_t i = start; i < start+count; ++i) {
           const uint32_t current_province_index = i;
 
@@ -5182,7 +5194,7 @@ namespace devils_engine {
         }
       }
 
-      empire_func();
+      if (!emperor_queue.empty()) empire_func();
 
       for (auto itr = empires.begin(); itr != empires.end();) {
         if (itr->size() == 0) itr = empires.erase(itr);

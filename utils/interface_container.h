@@ -47,7 +47,7 @@ namespace devils_engine {
     struct interface_container {
       static const size_t timers_count = 256;
       static const size_t maximum_openned_layers = UINT32_WIDTH;
-      static const size_t bit_field_32_size = ceil(double(maximum_openned_layers) / double(UINT32_WIDTH));
+      static const size_t bit_field_32_size = size_t(ceil(double(maximum_openned_layers) / double(UINT32_WIDTH)));
       static const size_t fonts_count = 4;
 
       static size_t first_layer();

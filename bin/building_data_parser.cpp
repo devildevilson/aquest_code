@@ -399,7 +399,7 @@ namespace devils_engine {
           if (auto val = magic_enum::enum_cast<core::province_stats::values>(stat); val.has_value()) {
             building_type->mods[current_stat].type = core::unit_type::province;
             building_type->mods[current_stat].stat = val.value();
-            building_type->mods[current_stat].mod.fval = value;
+            building_type->mods[current_stat].mod.fval = float(value);
             ++current_stat;
           }
         }

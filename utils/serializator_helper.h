@@ -27,7 +27,7 @@ namespace devils_engine {
     class world_serializator {
     public:
       static const size_t tiles_count = core::map::hex_count_d(core::map::detail_level);
-      static const size_t hash_size = 64;
+      static const size_t hash_size = 32;
       
       struct tile_data {
         float height;

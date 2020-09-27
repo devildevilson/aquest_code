@@ -674,8 +674,13 @@ namespace yavf {
         return;
       }
       
-      std::_Destroy_aux<!std::is_trivially_destructible<T>::value>::
-      __destroy(ptr + size, ptr + m_size);
+      //std::_Destroy_aux<!std::is_trivially_destructible<T>::value>::
+      //__destroy(ptr + size, ptr + m_size);
+      if (!std::is_trivially_destructible_v<T>) {
+        for (auto p = ptr + size; p < ptr + m_size; ++p) {
+          p->~T();
+        }
+      }
 //       std::_Destroy_aux<__has_trivial_destructor(T)>::
 //       __destroy(ptr + size, ptr + m_size);
       
@@ -683,8 +688,13 @@ namespace yavf {
     }
     
     void clear() {
-      std::_Destroy_aux<!std::is_trivially_destructible<T>::value>::
-      __destroy(ptr, ptr + m_size);
+      if (!std::is_trivially_destructible_v<T>) {
+        for (auto p = ptr; p < ptr+m_size; ++p) {
+          p->~T();
+        }
+      }
+      //std::_Destroy_aux<!std::is_trivially_destructible<T>::value>::
+      //__destroy(ptr, ptr + m_size);
 //       std::_Destroy_aux<__has_trivial_destructor(T)>::
 //       __destroy(ptr, ptr + m_size);
       
@@ -749,8 +759,13 @@ namespace yavf {
     void pop_back() {
 //       std::_Destroy_aux<__has_trivial_destructor(T)>::
 //       __destroy(ptr + m_size-1, ptr + m_size);
-      std::_Destroy_aux<!std::is_trivially_destructible<T>::value>::
-        __destroy(ptr + m_size-1, ptr + m_size);
+      if (!std::is_trivially_destructible_v<T>) {
+        for (auto p = ptr + m_size - 1; p < ptr + m_size; ++p) {
+          p->~T();
+        }
+      }
+      //std::_Destroy_aux<!std::is_trivially_destructible<T>::value>::
+      //  __destroy(ptr + m_size-1, ptr + m_size);
       --m_size;
     }
     
@@ -797,8 +812,13 @@ namespace yavf {
 //       }
 //       
        const size_t s = pos - ptr;
-       std::_Destroy_aux<__has_trivial_destructor(T)>::
-       __destroy(ptr + s, ptr + s+1);
+       //std::_Destroy_aux<__has_trivial_destructor(T)>::
+       //__destroy(ptr + s, ptr + s+1);
+       if (!std::is_trivially_destructible_v<T>) {
+         for (auto p = ptr+s; p < ptr+s+1; ++p) {
+           p->~T();
+         }
+       }
 //       
 //       memmove(ptr + s, ptr + s+1, (m_size - s) * sizeof(T));
 
@@ -813,8 +833,13 @@ namespace yavf {
       
       // не понимаю правильно или нет?
       if (last != end()) _GLIBCXX_MOVE3(last, end(), first);
-      std::_Destroy_aux<!std::is_trivially_destructible<T>::value>::
-        __destroy(first + (end() - last), ptr + m_size);
+      if (!std::is_trivially_destructible_v<T>) {
+        for (auto p = first + (end() - last); p < ptr + m_size; ++p) {
+          p->~T();
+        }
+      }
+      //std::_Destroy_aux<!std::is_trivially_destructible<T>::value>::
+      //  __destroy(first + (end() - last), ptr + m_size);
 //       std::_Destroy_aux<__has_trivial_destructor(T)>::
 //       __destroy(first + (end() - last), ptr + m_size);
       m_size -= last - first;
@@ -945,7 +970,12 @@ namespace yavf {
         newBuffer->setDescriptor(buffer->descriptorSet(), buffer->descriptorSetIndex());
       }
 
-      std::_Destroy_aux<!std::is_trivially_destructible<T>::value>::__destroy(oldPtr, oldPtr + m_size);
+      //std::_Destroy_aux<!std::is_trivially_destructible<T>::value>::__destroy(oldPtr, oldPtr + m_size);
+      if (!std::is_trivially_destructible_v<T>) {
+        for (auto p = oldPtr; p < oldPtr + m_size; ++p) {
+          p->~T();
+        }
+      }
 
       device->destroy(buffer);
       buffer = newBuffer;

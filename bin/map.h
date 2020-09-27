@@ -23,7 +23,7 @@ namespace yavf {
 }
 
 constexpr size_t power4(const uint32_t &pow) {
-  return 1 << pow*2;
+  return size_t(1) << pow*2;
 }
 
 constexpr size_t div4(const size_t &num) {

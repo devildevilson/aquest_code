@@ -699,7 +699,9 @@ namespace devils_engine {
       device->destroy(one_tile_pipe.layout());
       device->destroy(one_tile_pipe);
     }
-    
+
+#define offsetof123(s,m) ((::size_t)&reinterpret_cast<char const volatile&>((((s*)0)->m)))
+
     void tile_render::begin() {}
     void tile_render::proccess(context* ctx) {
       auto map_systems = global::get<systems::map_t>();
@@ -762,7 +764,7 @@ namespace devils_engine {
 //       }
       
       task->setIndexBuffer(indices_buffer);
-      task->drawIndexedIndirect(indirect_buffer, 1, offsetof(struct tile_optimizer::indirect_buffer, tiles_command));
+      task->drawIndexedIndirect(indirect_buffer, 1, offsetof123(struct render::tile_optimizer::indirect_buffer, tiles_command));
     }
 
     void tile_render::clear() {
@@ -993,7 +995,7 @@ namespace devils_engine {
 //       task->setVertexBuffer(vertices_buffer, 0);
 //       task->drawIndirect(indirect_buffer, 1, offsetof(struct tile_borders_optimizer::indirect_buffer, border_command));
       task->setIndexBuffer(indices_buffer);
-      task->drawIndexedIndirect(indirect_buffer, 1, offsetof(struct tile_optimizer::indirect_buffer, borders_command));
+      task->drawIndexedIndirect(indirect_buffer, 1, offsetof123(struct tile_optimizer::indirect_buffer, borders_command));
       
 //       auto task = ctx->graphics();
 //       task->setPipeline(pipe);
@@ -1096,7 +1098,7 @@ namespace devils_engine {
       
       //task->setVertexBuffer(vertices_buffer, 0);
       task->setIndexBuffer(indices_buffer);
-      task->drawIndexedIndirect(indirect_buffer, 1, offsetof(struct tile_optimizer::indirect_buffer, walls_command));
+      task->drawIndexedIndirect(indirect_buffer, 1, offsetof123(struct tile_optimizer::indirect_buffer, walls_command));
     }
     
     void tile_connections_render::clear() {}

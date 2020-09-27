@@ -142,8 +142,8 @@ namespace devils_engine {
             const size_t count_not_dead = ctx->characters_count() - first_not_dead;
             const size_t count_playable = ctx->characters_count() - first_playable;
             
-            uint32_t systems_data[count_not_dead];
-            uint32_t* systems_data_ptr = systems_data;
+            std::vector<uint32_t> systems_data(count_not_dead); // msvc не хочет работать если используется статик массив
+            uint32_t* systems_data_ptr = systems_data.data();
             
             const auto &systems = global::get<systems::map_t>()->ai_systems->get_subsystems();
             for (auto s : systems) {

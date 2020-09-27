@@ -64,11 +64,11 @@ namespace devils_engine {
   void clipbardCopy(nk_handle usr, const char *text, const int len) {
     if (len == 0) return;
 
-    char str[len+1];
-    memcpy(str, text, len);
+    std::vector<char> str(len+1);
+    memcpy(str.data(), text, len);
     str[len] = '\0';
 
-    glfwSetClipboardString(reinterpret_cast<render::window*>(usr.ptr)->handle, str);
+    glfwSetClipboardString(reinterpret_cast<render::window*>(usr.ptr)->handle, str.data());
   }
   
   nk_handle nk_handle_image(const render::image_t &img) {

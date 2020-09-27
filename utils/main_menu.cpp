@@ -40,7 +40,7 @@ namespace devils_engine {
       }
     }
     
-    const size_t menu_layer = utils::interface_container::last_layer();
+    const uint32_t menu_layer = uint32_t(utils::interface_container::last_layer());
     
     sol::object make_object(sol::state_view lua, const uint32_t &type, void* pointer) {
       switch (type) {

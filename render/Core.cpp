@@ -1935,9 +1935,9 @@ namespace yavf {
         // это так не работает, наверное придется каждый раз память перевыделять
         //if (itr->second.images.size() == count) return itr->second.images;
 
-        VkImage imgs[count];
+        std::vector<VkImage> imgs(count);
         vkCheckError("vkGetSwapchainImagesKHR", nullptr,
-        vkGetSwapchainImagesKHR(h, swapchain, &count, imgs));
+        vkGetSwapchainImagesKHR(h, swapchain, &count, imgs.data()));
 
         itr->second.images.resize(count, nullptr);
 
@@ -1971,9 +1971,9 @@ namespace yavf {
     // это так не работает, наверное придется каждый раз память перевыделять
     //if (itr->second.images.size() == count) return itr->second.images;
 
-    VkImage imgs[count];
+    std::vector<VkImage> imgs(count);
     vkCheckError("vkGetSwapchainImagesKHR", nullptr,
-    vkGetSwapchainImagesKHR(h, itr->second.swap, &count, imgs));
+    vkGetSwapchainImagesKHR(h, itr->second.swap, &count, imgs.data()));
 
     for (size_t i = 0; i < count; ++i) {
       Image* img = imagePool.newElement(this, imgs[i], itr->second.swap.getImageExtent());

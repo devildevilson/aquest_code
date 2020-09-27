@@ -43,7 +43,7 @@ namespace devils_engine {
     bool main_menu_state::load() {
       auto base = global::get<systems::core_t>();
       // грузанем здесь новую картинку для заднего фона
-      if (!base->interface_container->is_visible(utils::interface_container::last_layer())) {
+      if (!base->interface_container->is_visible(uint32_t(utils::interface_container::last_layer()))) {
         base->menu->push("main_menu");
       }
 
@@ -126,6 +126,7 @@ namespace devils_engine {
         map_systems->destroy_map_generator();
         map_systems->release_container();
         base->interface_container->close_all();
+        base->menu->clear();
       }
 
       m_next_state = UINT32_MAX;
@@ -194,6 +195,7 @@ namespace devils_engine {
       auto base = global::get<systems::core_t>();
       map_systems->release_container();
       base->interface_container->close_all();
+      base->menu->clear();
       m_next_state = UINT32_MAX;
     }
 
@@ -202,8 +204,8 @@ namespace devils_engine {
       ASSERT(false);
     }
 
-    bool battle_state::load() {}
-    void battle_state::update(const size_t &time) {}
+    bool battle_state::load() { return false; }
+    void battle_state::update(const size_t& time) { UNUSED_VARIABLE(time); }
     void battle_state::clean() {}
 
     encounter_state::encounter_state() {}
@@ -211,8 +213,8 @@ namespace devils_engine {
       ASSERT(false);
     }
 
-    bool encounter_state::load() {}
-    void encounter_state::update(const size_t &time) {}
+    bool encounter_state::load() { return false; }
+    void encounter_state::update(const size_t &time) { UNUSED_VARIABLE(time); }
     void encounter_state::clean() {}
   }
 }

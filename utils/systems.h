@@ -72,7 +72,7 @@ namespace devils_engine {
     };
     
     struct map_t {
-      static const size_t hash_size = 64;
+      static const size_t hash_size = 32;
       
       utils::slot_container container; // мы не можем полностью почистить память здесь 
       core::map* map; // я могу все буферы в мап перенести в ГПУ память, нигде больше я их не использую (кроме смены рендер мода, там придется копировать буфер по несколько раз)

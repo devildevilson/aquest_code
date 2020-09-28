@@ -23,6 +23,7 @@ namespace devils_engine {
         ASSERT(val.is<sol::table>());
         table = val.as<sol::table>();
       } else {
+        if (interface->open_layers[0].first.size() == 0) return;
         auto &val = interface->open_layers[0].first[0];
         ASSERT(val.is<sol::table>());
         table = val.as<sol::table>();
@@ -72,6 +73,7 @@ namespace devils_engine {
       auto base = global::get<systems::core_t>();
       base->interface_container->close_all();
       base->menu->clear();
+      base->interface_container->collect_garbage();
       m_next_state = UINT32_MAX;
     }
 
@@ -91,11 +93,11 @@ namespace devils_engine {
       auto base = global::get<systems::core_t>();
       auto prog = base->loading_progress;
       if (prog->reseted()) {
-        base->interface_container->open_layer(0, "progress_bar", {base->interface_container->lua.create_table()});
+        base->interface_container->force_open_layer(0, "progress_bar", {base->interface_container->lua.create_table()});
         auto pool = global::get<dt::thread_pool>();
         prog->set_max_value(1);
         pool->submitbase([prog] () {
-          systems::from_menu_to_create_map(prog);
+          systems::from_menu_to_create_map(prog); // похоже что эта функция работает слишком быстро
         });
       }
 
@@ -103,6 +105,8 @@ namespace devils_engine {
 
       if (base->loading_progress->finished()) {
         base->loading_progress->reset();
+        base->interface_container->close_all();
+        base->interface_container->collect_garbage();
         return true;
       }
 
@@ -127,6 +131,7 @@ namespace devils_engine {
         map_systems->release_container();
         base->interface_container->close_all();
         base->menu->clear();
+        base->interface_container->collect_garbage();
       }
 
       m_next_state = UINT32_MAX;
@@ -164,6 +169,8 @@ namespace devils_engine {
 
       if (base->loading_progress->finished()) {
         base->loading_progress->reset();
+        base->interface_container->close_all();
+        base->interface_container->collect_garbage();
         return true;
       }
 
@@ -196,6 +203,7 @@ namespace devils_engine {
       map_systems->release_container();
       base->interface_container->close_all();
       base->menu->clear();
+      base->interface_container->collect_garbage();
       m_next_state = UINT32_MAX;
     }
 

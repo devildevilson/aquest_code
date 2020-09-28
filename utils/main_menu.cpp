@@ -69,7 +69,7 @@ namespace devils_engine {
       if (!exist() && (menu != "main_menu" && menu != "main_menu_map")) throw std::runtime_error("Trying to open main_menu from unknown source");
       auto itr = menu_types.find(menu);
       if (itr == menu_types.end()) throw std::runtime_error("Could not find menu " + menu);
-      std::cout << "main_menu::push " << menu << "\n";
+      //std::cout << "main_menu::push " << menu << "\n";
       menu_stack.emplace(itr->first, itr->second, container);
       // нужен тип
       const bool ret = container->close_layer(menu_layer);

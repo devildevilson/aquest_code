@@ -90,6 +90,7 @@ if (WIN32 OR MINGW)
   set(VULKAN_INCLUDE_PATH ${VULKAN_SDK_PATH}/Include)
   set(GLSL_VALIDATOR "${VULKAN_SDK_PATH}/Bin/glslangValidator")
   set(VULKAN_LIB_NAME vulkan-1)
+  set(LUA_LIB lua53)
 
   include_directories(
     ${GLFW3_INCLUDE_DIRS}
@@ -105,6 +106,8 @@ if (WIN32 OR MINGW)
 else()
   set(CPPFS_LIB_PATH libs)
   set(MEMORY_LIB_PATH include/memory/build/src/)
+  set(LUA_LIB lua5.3)
+  set(LUA_LIBRARIES /usr/include/lua5.3)
 
   # находим указанные зависимости (нужно чекнуть все ли это зависимости?)
   # вместо glm у меня установлен gli
@@ -121,6 +124,10 @@ else()
 
   include_directories(
     ${GLFW3_INCLUDE_DIRS}
+  )
+  
+  include_directories(SYSTEM
+    ${LUA_LIBRARIES}
   )
 
   link_directories(
@@ -153,7 +160,7 @@ if (CMAKE_BUILD_TYPE MATCHES "Debug")
 else()
   add_definitions(-D_NDEBUG)
   if (MSVC)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /std:c++17 /Ox /MT /GR- /permissive-")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /std:c++17 /Ox /MT /GR- /permissive-") # если разделить кучу файлов lua_initialization, то можно обойтись без /bigobj
   else()
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -msse4.2 -std=c++17 -Wall -Wextra -O3 -s -fno-rtti -pthread -Wl,-rpath=./")
   endif()
@@ -291,7 +298,9 @@ set(HDR_LIST
 )
 
 add_library(utils ${SRC_LIST} ${HDR_LIST})
-target_link_libraries(utils lua53) # PUBLIC foonathan_memory moonnuklear
+target_link_libraries(utils ${LUA_LIB}) # PUBLIC foonathan_memory moonnuklear
+# нужно сделать одинаковый файл что в линуксе что в винде
+# в любом случае нужно компилировать с одной версией луа
 
 set(SRC_LIST
   render/container.cpp
@@ -423,8 +432,9 @@ add_executable(${TARGET_NAME} ${SRC_LIST} ${HDR_LIST})
 target_link_libraries(${TARGET_NAME} systems ai render utils serialization)
 add_dependencies(${TARGET_NAME} shaders)
 
+# эта штука как то плохо работала в mingw, но можно ее использовать для линуксов
 # Strip binary for release builds
-# if (CMAKE_BUILD_TYPE STREQUAL Release)
-#     add_custom_command(TARGET ${TARGET_NAME} POST_BUILD
-#             COMMAND ${CMAKE_STRIP} -s "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${TARGET_NAME}")
-# endif()
+if (CMAKE_BUILD_TYPE STREQUAL Release AND UNIX)
+    add_custom_command(TARGET ${TARGET_NAME} POST_BUILD
+            COMMAND ${CMAKE_STRIP} -s "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${TARGET_NAME}")
+endif()

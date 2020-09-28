@@ -152,7 +152,7 @@ void main() {
   if (walls_indices_count == 0) return;
   for (uint i = 0; i < triangle.data[1]; ++i) {
     const uint tile_index = get_accel_triangle_tile_index(triangle.data[0] + i);
-    const uint walls_data = tiles[tile_index].packed_data4[1];
+    const uint walls_data = tiles[tile_index].packed_data4[1]; // блин у меня весь буффер используется только для двух переменных, наверное стоит вытащить их в другой буфер
     if (walls_data == GPU_UINT_MAX) continue;
 
     // было бы неплохо убрать те соединения, которые мы не видим

@@ -129,6 +129,7 @@ namespace devils_engine {
       void set_point_data(const glm::vec3 &point, const uint32_t &index);
       void set_tile_indices(const uint32_t &triangle_index, const glm::uvec3 &points, const std::vector<uint32_t> &indices, const uint32_t &offset, const uint32_t &count, const bool has_pentagon);
       void flush_data();
+      void flush_points();
       //void set_tile_biom(const uint32_t &tile_index, const uint32_t &biom_index);
       void set_tile_color(const uint32_t &tile_index, const render::color_t &color);
       void set_tile_texture(const uint32_t &tile_index, const render::image_t &texture);

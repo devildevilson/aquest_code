@@ -365,6 +365,10 @@ namespace devils_engine {
   //         std::unique_lock<std::mutex> lock(map->mutex);
   //         global::get<render::tile_borders_optimizer>()->set_borders_count(i);
   //       }
+  
+        // я хочу сделать все данные карты в гпу локал памяти (вообще лучше ВСЕ данные в локальной памяти сделать)
+        // поэтому здесь видимо придется копировать в стейджинг буфер это дело
+        // каждый раз когда мы хотим поправить границы на карте
 
         const uint32_t k = (tmp_index+1)%n_count;
         const uint32_t k2 = k == 0 ? n_count-1 : k-1;
@@ -1410,6 +1414,9 @@ namespace devils_engine {
       //advance_progress(prog, "creating tools for demiurge");
       //setup_map_generator(map_systems);
       advance_progress(prog, "end");
+      advance_progress(prog, "end");
+      advance_progress(prog, "end");
+      advance_progress(prog, "end");
     }
 
     void from_menu_to_map(utils::progress_container* prog) {
@@ -1441,6 +1448,9 @@ namespace devils_engine {
       prog->set_type(utils::progress_container::loading_created_map);
       post_generation_work(map_systems, base_systems, prog);
       map_systems->destroy_map_generator();
+      advance_progress(prog, "end");
+      advance_progress(prog, "end");
+      advance_progress(prog, "end");
     }
   }
 }

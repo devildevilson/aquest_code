@@ -1,8 +1,8 @@
 local nk = require("moonnuklear")
 
-local generator_name <const> = "Tectonic plates generator"
-local window_flags <const> = nk.WINDOW_BORDER | nk.WINDOW_NO_SCROLLBAR | nk.WINDOW_BACKGROUND
-local plates_count_prop <const> = {
+local generator_name = "Tectonic plates generator"
+local window_flags = nk.WINDOW_BORDER | nk.WINDOW_NO_SCROLLBAR | nk.WINDOW_BACKGROUND
+local plates_count_prop = {
   min = 40,
   default_val = 199,
   max = 300,
@@ -10,7 +10,7 @@ local plates_count_prop <const> = {
   var_name = "Plates count"
 }
 
-local ocean_percentage_prop <const> = {
+local ocean_percentage_prop = {
   min = 0.0,
   default_val = 0.7,
   max = 1.0,

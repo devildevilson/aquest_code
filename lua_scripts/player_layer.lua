@@ -1,14 +1,14 @@
 local nk = require("moonnuklear") -- нужно попробовать убрать из луа require используя sol state require_file
 
-local choose <const> = input.get_event("menu_choose")
+local choose = input.get_event("menu_choose")
 
 local function check_event_click(event)
   return input.check_event(event, input.state_click | input.state_double_click | input.state_long_click)
 end
 
---local window_flags <const> = nk.WINDOW_NO_SCROLLBAR | nk.WINDOW_BACKGROUND
+--local window_flags = nk.WINDOW_NO_SCROLLBAR | nk.WINDOW_BACKGROUND
 
-local layer_windows <const> = {
+local layer_windows = {
   "resources",
   "next_turn"
 }

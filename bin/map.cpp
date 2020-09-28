@@ -5,6 +5,8 @@
 #include <thread>
 #include <chrono>
 
+#define MAP_CONTAINER_DESCRIPTOR_POOL_NAME "map_container_descriptor_pool"
+
 namespace devils_engine {
   namespace core {
     map::map(const create_info &info) : 
@@ -57,7 +59,13 @@ namespace devils_engine {
                                .create(TILES_DATA_LAYOUT_NAME);
       }
       
-      auto pool = device->descriptorPool(DEFAULT_DESCRIPTOR_POOL_NAME);
+      //auto pool = device->descriptorPool(DEFAULT_DESCRIPTOR_POOL_NAME);
+      yavf::DescriptorPool pool = VK_NULL_HANDLE;
+      {
+        yavf::DescriptorPoolMaker dpm(device);
+        pool = dpm.poolSize(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 10).create(MAP_CONTAINER_DESCRIPTOR_POOL_NAME);
+      }
+      
       {
         yavf::DescriptorMaker dm(device);
         tiles_set = dm.layout(tiles_data_layout).create(pool)[0];
@@ -76,6 +84,8 @@ namespace devils_engine {
       device->destroy(tiles);
       device->destroy(accel_triangles);
       device->destroy(biomes);
+      device->destroy(tile_indices);
+      device->destroyDescriptorPool(MAP_CONTAINER_DESCRIPTOR_POOL_NAME);
 //       device->destroy(provinces);
 //       device->destroy(faiths);
 //       device->destroy(cultures);
@@ -425,6 +435,30 @@ namespace devils_engine {
 //         desc->update();
 //         tiles->setDescriptor(desc, index);
       }
+    }
+    
+    void map::flush_points() { // TODO: добавить все ресурсы в gpu память (!)
+      auto points_gpu = device->create(yavf::BufferCreateInfo::buffer(sizeof(glm::vec4)*points_count_d(detail_level), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT), VMA_MEMORY_USAGE_GPU_ONLY);
+      
+      auto task = device->allocateTransferTask();
+      task->begin();
+      task->copy(points, points_gpu);
+      task->end();
+      
+      task->start();
+      task->wait();
+      device->deallocate(task);
+      
+      device->destroy(points);
+      
+      points = points_gpu;
+      
+      tiles_set->at(0) = {tiles, 0, tiles->info().size, 0, 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER};
+      tiles_set->at(1) = {biomes, 0, biomes->info().size, 0, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER};
+      tiles_set->at(2) = {points, 0, points->info().size, 0, 2, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER};
+      tiles_set->at(3) = {accel_triangles, 0, accel_triangles->info().size, 0, 3, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER};
+      tiles_set->at(4) = {tile_indices, 0, tile_indices->info().size, 0, 4, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER};
+      tiles_set->update();
     }
     
 //     void map::set_tile_biom(const uint32_t &tile_index, const uint32_t &biom_index) {

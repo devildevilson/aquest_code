@@ -312,5 +312,9 @@ namespace devils_engine {
         fonts[i] = res.get<sol::object>();
       }
     }
+    
+    void interface_container::collect_garbage() {
+      lua.collect_garbage();
+    }
   }
 }

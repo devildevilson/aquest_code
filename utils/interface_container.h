@@ -97,6 +97,7 @@ namespace devils_engine {
 
       void free_fonts();
       void make_fonts();
+      void collect_garbage();
     };
   }
 }

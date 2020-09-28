@@ -1,8 +1,8 @@
 local nk = require("moonnuklear")
 
-local generator_name <const> = "Biomes generator"
-local window_flags <const> = nk.WINDOW_BORDER | nk.WINDOW_NO_SCROLLBAR | nk.WINDOW_BACKGROUND
-local noise_multiplier_prop <const> = {
+local generator_name = "Biomes generator"
+local window_flags = nk.WINDOW_BORDER | nk.WINDOW_NO_SCROLLBAR | nk.WINDOW_BACKGROUND
+local noise_multiplier_prop = {
   min = 0.0,
   default_val = 0.1,
   max = 1.0,
@@ -10,7 +10,7 @@ local noise_multiplier_prop <const> = {
   var_name = "Noise multiplier"
 }
 
-local blur_ratio_prop <const> = {
+local blur_ratio_prop = {
   min = 0.0,
   default_val = 0.7,
   max = 1.0,
@@ -18,7 +18,7 @@ local blur_ratio_prop <const> = {
   var_name = "Blur ratio"
 }
 
-local blur_water_ratio_prop <const> = {
+local blur_water_ratio_prop = {
   min = 0.0,
   default_val = 1.0,
   max = 2.0,
@@ -26,7 +26,7 @@ local blur_water_ratio_prop <const> = {
   var_name = "Water blur ratio"
 }
 
-local blur_iterations_count_prop <const> = {
+local blur_iterations_count_prop = {
   min = 0,
   default_val = 2,
   max = 5,

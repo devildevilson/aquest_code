@@ -1,11 +1,11 @@
 local nk = require("moonnuklear")
 
-local next <const> = input.get_event("menu_next")
-local prev <const> = input.get_event("menu_prev")
-local increase <const> = input.get_event("menu_increase")
-local decrease <const> = input.get_event("menu_decrease")
-local choose <const> = input.get_event("menu_choose")
-local escape <const> = input.get_event("escape")
+local next = input.get_event("menu_next")
+local prev = input.get_event("menu_prev")
+local increase = input.get_event("menu_increase")
+local decrease = input.get_event("menu_decrease")
+local choose = input.get_event("menu_choose")
+local escape = input.get_event("escape")
 
 local function check_event_click(event)
   return input.check_event(event, input.state_click | input.state_double_click | input.state_long_click)
@@ -16,9 +16,9 @@ local function check_event_press(event)
     input.timed_check_event(event, input.state_long_press | input.state_double_press, constants.one_second / 2.0, constants.one_second / 15.0)
 end
 
-local window_flags <const> = nk.WINDOW_NO_SCROLLBAR | nk.WINDOW_BACKGROUND
+local window_flags = nk.WINDOW_NO_SCROLLBAR | nk.WINDOW_BACKGROUND
 
-local next_window_table <const> = {
+local next_window_table = {
   -- "continue_game",       "Continue", -- так то мы это берем из локализации
   -- "new_game_window",     "New game",
   "worlds_window",       "Worlds",
@@ -30,7 +30,7 @@ local next_window_table <const> = {
   "quit_game_window",    "Quit game"
 }
 
---local entries_size <const> = #next_window_table / 2
+--local entries_size = #next_window_table / 2
 
 local function fix_struct(bounds)
   --print(type(bounds))
@@ -48,17 +48,23 @@ local create_menu_layout = function(ctx, b, entries_table)
   local bounds = fix_struct(b)
   --local menu_count = entries_size
   local menu_count = #entries_table / 2
-  local font_height <const> = ctx:font():height()
-  local offset_y <const> = 3
-  local offset_x <const> = 10
-  local menu_height <const> = menu_count * offset_y * 2.0 + menu_count * font_height
-  local half_menu_height <const> = menu_height / 2.0
-  local y <const> = bounds.h/2.0 - half_menu_height;
-  local label_height <const> = offset_y + font_height + offset_y
-  local menu_width <const> = bounds.w * 0.25
-  local x <const> = bounds.w/2.0 - menu_width/2.0
+  --local font_height = ctx:font():height()
+  --local f1 = get_font(0)
+  --print(ctx)
+  --print(f1)
+  --nk.style_set_font(ctx, f1)
+  --print(ctx:font())
+  local font_height = ctx:font():height()
+  local offset_y = 3
+  local offset_x = 10
+  local menu_height = menu_count * offset_y * 2.0 + menu_count * font_height
+  local half_menu_height = menu_height / 2.0
+  local y = bounds.h/2.0 - half_menu_height;
+  local label_height = offset_y + font_height + offset_y
+  local menu_width = bounds.w * 0.25
+  local x = bounds.w/2.0 - menu_width/2.0
 
-  local offset_to_menu <const> = y + label_height*0-offset_y
+  local offset_to_menu = y + label_height*0-offset_y
   local logo = {0, offset_to_menu/2.0-50, bounds.w, offset_to_menu}
 
   local entries = {}
@@ -88,7 +94,7 @@ local function core_main_menu(ctx, menu, data, entries_table)
   local dx, dy = ctx:mouse_delta()
   local mouse_movement = not (abs(dx) <= constants.epsilon and abs(dy) <= constants.epsilon)
   local fbw, fbh = input.get_framebuffer_size()
-  local entries_size <const> = #next_window_table / 2
+  local entries_size = #next_window_table / 2
 
   assert(data == nil)
 
@@ -173,7 +179,7 @@ function main_menu_window(ctx, menu, data)
   core_main_menu(ctx, menu, data, next_window_table)
 end
 
-local map_window_table <const> = {
+local map_window_table = {
   "back_to_main_menu",       "Back to main menu",
   "quit_game_window",    "Quit game"
 }
@@ -215,9 +221,9 @@ end
 function worlds_window_func(ctx, menu, demiurge)
   local abs = math.abs;
   local min = math.min;
-  local dx, dy <const> = ctx:mouse_delta()
-  local mouse_movement <const> = not (abs(dx) <= constants.epsilon and abs(dy) <= constants.epsilon)
-  local fbw, fbh <const> = input.get_framebuffer_size()
+  local dx, dy = ctx:mouse_delta()
+  local mouse_movement = not (abs(dx) <= constants.epsilon and abs(dy) <= constants.epsilon)
+  local fbw, fbh = input.get_framebuffer_size()
 
   assert(demiurge ~= nil)
 
@@ -227,10 +233,10 @@ function worlds_window_func(ctx, menu, demiurge)
   -- я еще не сделал выход из меню, то есть когда мы приняли какое то решение, нужно выйти из меню и почистить
   -- ресурсы, решение? видимо если мы в demiurge выбрали какой то мир и нажали кнопку загрузить
 
-  local sizex, sizey <const> = 500, 500
-  local y <const> = fbh/2.0-sizey/2.0
+  local sizex, sizey = 500, 500
+  local y = fbh/2.0-sizey/2.0
   local selectable_size = ctx:font():height() + 15 --  + ctx:font():height() + 5
-  local count <const> = demiurge:worlds_count()
+  local count = demiurge:worlds_count()
   local group_bounds = {fbw/2.0-sizex/2.0, y, sizex, sizey}
 
   if nk.window_begin(ctx, "worlds_window", {0, 0, fbw, fbh}, window_flags) then
@@ -241,7 +247,7 @@ function worlds_window_func(ctx, menu, demiurge)
     nk.label(ctx, "Apate's quest", nk.TEXT_ALIGN_CENTERED)
 
     nk.layout_space_push(ctx, group_bounds)
-    local bounds <const> = nk.layout_space_bounds(ctx)
+    local bounds = nk.layout_space_bounds(ctx)
     if nk.group_begin(ctx, "worlds_group", nk.WINDOW_BORDER) then
       -- не сработало
       --local window_background_color <close> = create_closable_color(ctx, 'window.background', {1,0,0,1})

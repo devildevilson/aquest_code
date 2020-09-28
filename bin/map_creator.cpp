@@ -266,6 +266,7 @@ namespace devils_engine {
 
       for (const auto &name : clearing_sol_state) {
         interface->lua[name] = sol::nil;
+        interface->layers_table[name] = sol::nil;
       }
     }
 

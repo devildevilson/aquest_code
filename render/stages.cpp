@@ -100,12 +100,12 @@ namespace devils_engine {
       );
       
       auto buffer = reinterpret_cast<struct indirect_buffer*>(indirect->ptr());
-      memset(buffer, 0, sizeof(struct indirect_buffer));
+      memset(indirect->ptr(), 0, sizeof(struct indirect_buffer));
       buffer->padding1[0] = core::map::tri_count_d(core::map::accel_struct_detail_level);
       buffer->padding1[1] = max_indices_count;
       
-      PRINT_VAR("triangle_count", buffer->padding1[0])
-      PRINT_VAR("max_indices_count", buffer->padding1[1])
+//       PRINT_VAR("triangle_count", buffer->padding1[0])
+//       PRINT_VAR("max_indices_count", buffer->padding1[1])
       
       //auto pool = device->descriptorPool(DEFAULT_DESCRIPTOR_POOL_NAME);
 //       auto storage_layout = device->setLayout(STORAGE_BUFFER_LAYOUT_NAME);
@@ -212,7 +212,7 @@ namespace devils_engine {
       auto map_systems = global::get<systems::map_t>();
       if (!map_systems->is_init()) return;
       auto map = map_systems->map;
-      if (map->status() != core::map::status::valid) return;
+      //if (map->status() != core::map::status::valid) return;
 //       if (map->status() == core::map::status::initial) return;
       
       auto uniform = global::get<render::buffers>()->uniform;

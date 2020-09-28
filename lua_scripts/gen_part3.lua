@@ -1,8 +1,8 @@
 local nk = require("moonnuklear")
 
-local generator_name <const> = "Countries generator"
-local window_flags <const> = nk.WINDOW_BORDER | nk.WINDOW_NO_SCROLLBAR | nk.WINDOW_BACKGROUND
-local provinces_count_prop <const> = {
+local generator_name = "Countries generator"
+local window_flags = nk.WINDOW_BORDER | nk.WINDOW_NO_SCROLLBAR | nk.WINDOW_BACKGROUND
+local provinces_count_prop = {
   min = 1000,
   default_val = 4000,
   max = 5000,
@@ -10,7 +10,7 @@ local provinces_count_prop <const> = {
   var_name = "Province count"
 }
 
-local history_iterations_count_prop <const> = {
+local history_iterations_count_prop = {
   min = 200,
   default_val = 300,
   max = 1000,

@@ -125,7 +125,7 @@ else()
   include_directories(
     ${GLFW3_INCLUDE_DIRS}
   )
-  
+
   include_directories(SYSTEM
     ${LUA_LIBRARIES}
   )
@@ -160,7 +160,7 @@ if (CMAKE_BUILD_TYPE MATCHES "Debug")
 else()
   add_definitions(-D_NDEBUG)
   if (MSVC)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /std:c++17 /Ox /MT /GR- /permissive-") # если разделить кучу файлов lua_initialization, то можно обойтись без /bigobj
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /std:c++17 /Ox /MT /GR- /permissive- /GL") # если разделить кучу файлов lua_initialization, то можно обойтись без /bigobj
   else()
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -msse4.2 -std=c++17 -Wall -Wextra -O3 -s -fno-rtti -pthread -Wl,-rpath=./")
   endif()
@@ -431,6 +431,13 @@ set(HDR_LIST
 add_executable(${TARGET_NAME} ${SRC_LIST} ${HDR_LIST})
 target_link_libraries(${TARGET_NAME} systems ai render utils serialization)
 add_dependencies(${TARGET_NAME} shaders)
+if (MSVC)
+  if (CMAKE_BUILD_TYPE MATCHES "Debug")
+    set_property(TARGET ${TARGET_NAME} APPEND PROPERTY LINK_FLAGS /DEBUG)
+  else()
+    set_property(TARGET ${TARGET_NAME} APPEND PROPERTY LINK_FLAGS /LTCG:INCREMENTAL)
+  endif()
+endif()
 
 # эта штука как то плохо работала в mingw, но можно ее использовать для линуксов
 # Strip binary for release builds

@@ -1414,9 +1414,9 @@ namespace devils_engine {
       //advance_progress(prog, "creating tools for demiurge");
       //setup_map_generator(map_systems);
       advance_progress(prog, "end");
-      advance_progress(prog, "end");
-      advance_progress(prog, "end");
-      advance_progress(prog, "end");
+      //advance_progress(prog, "end");
+      //advance_progress(prog, "end");
+      //advance_progress(prog, "end");
     }
 
     void from_menu_to_map(utils::progress_container* prog) {
@@ -1448,9 +1448,9 @@ namespace devils_engine {
       prog->set_type(utils::progress_container::loading_created_map);
       post_generation_work(map_systems, base_systems, prog);
       map_systems->destroy_map_generator();
-      advance_progress(prog, "end");
-      advance_progress(prog, "end");
-      advance_progress(prog, "end");
+      //advance_progress(prog, "end");
+      //advance_progress(prog, "end");
+      //advance_progress(prog, "end");
     }
   }
 }

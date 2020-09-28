@@ -103,10 +103,10 @@ namespace devils_engine {
 
       update_interface();
 
-      if (base->loading_progress->finished()) {
-        base->loading_progress->reset();
+      if (prog->finished()) {
         base->interface_container->close_all();
         base->interface_container->collect_garbage();
+        prog->reset();
         return true;
       }
 
@@ -167,10 +167,10 @@ namespace devils_engine {
 
       update_interface();
 
-      if (base->loading_progress->finished()) {
-        base->loading_progress->reset();
+      if (prog->finished()) {
         base->interface_container->close_all();
         base->interface_container->collect_garbage();
+        prog->reset();
         return true;
       }
 

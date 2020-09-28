@@ -116,6 +116,7 @@ namespace devils_engine {
             current = game_state::loading;
             new_state = game_state::create_map;
             ret = true;
+            break;
           }
           
           if (ptr->status() == demiurge::status::load_existing_world) {

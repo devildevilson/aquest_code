@@ -103,12 +103,12 @@ namespace devils_engine {
       m_current_turn = convert_date_to_turn(load_current_date);
       
       const int64_t current_day = convert_turn_to_days(m_current_turn);
-      if (m_start_day > current_day) {
+      if (m_start_day >= current_day) {
         ++counter;
         PRINT("Bad current date. Start date must not be later then current date")
       }
       
-      if (counter != 0) throw std::runtime_error("Calendar validation failed");
+      //if (counter != 0) throw std::runtime_error("Calendar validation failed");
     }
     
     bool operator==(const calendar::date &date1, const calendar::date &date2) {

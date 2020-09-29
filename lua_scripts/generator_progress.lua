@@ -15,7 +15,7 @@ function progress_bar(ctx, info)
   local step_count = info.step_count
   local progress_hint = tostring(current_step) .. "/" .. tostring(step_count)
 
-  assert(hint ~= nil)
+  --assert(hint ~= nil and hint ~= "")
   --print(hint)
 
   if nk.window_begin(ctx, "progress_bar", {wx, wy, sizex, sizey}, window_flags) then

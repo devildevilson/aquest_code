@@ -4,10 +4,26 @@ local generator_name = "Tectonic plates generator"
 local window_flags = nk.WINDOW_BORDER | nk.WINDOW_NO_SCROLLBAR | nk.WINDOW_BACKGROUND
 local plates_count_prop = {
   min = 40,
-  default_val = 199,
+  default_val = 200,
   max = 300,
   step = 1,
   var_name = "Plates count"
+}
+
+local plates_connection_limit_prop = {
+  min = plates_count_prop.min/2,
+  default_val = plates_count_prop.default_val/2,
+  max = plates_count_prop.max,
+  step = 1,
+  var_name = "Plates connection limit"
+}
+
+local plates_connection_iteration_prop = {
+  min = 2,
+  default_val = 5,
+  max = 15,
+  step = 1,
+  var_name = "Plates connection iteration"
 }
 
 local ocean_percentage_prop = {
@@ -50,6 +66,8 @@ local code_world_does_not_exist = 3
 function gen_part1_fun(ctx, table)
   if table["plates_count"] == nil then
     table["plates_count"] = plates_count_prop.default_val
+    table["plates_connection_limit"] = plates_connection_limit_prop.default_val
+    table["plates_connection_iteration"] = plates_connection_iteration_prop.default_val
     table["ocean_percentage"] = ocean_percentage_prop.default_val
   end
 
@@ -119,8 +137,11 @@ function gen_part1_fun(ctx, table)
 
     -- переменные
     nk.layout_row_dynamic(ctx, 30.0, 1)
-    gen_property(ctx, table, "plates_count", plates_count_prop, 400)
-    gen_property(ctx, table, "ocean_percentage", ocean_percentage_prop, 400)
+    local bounds4 = nk.widget_bounds(ctx)
+    gen_property(ctx, table, "plates_count", plates_count_prop, bounds4[3])
+    gen_property(ctx, table, "plates_connection_limit", plates_connection_limit_prop, bounds4[3])
+    gen_property(ctx, table, "plates_connection_iteration", plates_connection_iteration_prop, bounds4[3])
+    gen_property(ctx, table, "ocean_percentage", ocean_percentage_prop, bounds4[3])
 
     nk.layout_row_dynamic(ctx, 30.0, 2)
     if nk.button(ctx, nil, "Back") then ret_value = -1 end

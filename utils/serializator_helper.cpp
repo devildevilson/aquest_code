@@ -191,7 +191,7 @@ namespace devils_engine {
 //     }
 
     void fill_encryptor_data(size_t* key, size_t* iv) {
-      const splitmix64::state s = 0x32a665c;
+      const splitmix64::state s = {0x32a665c};
       splitmix64::state states[5];
       states[0] = splitmix64::rng(s);
       for (uint32_t i = 1; i < 5; ++i) {

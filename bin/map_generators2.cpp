@@ -341,6 +341,7 @@ namespace devils_engine {
         });
 
         ASSERT(index == debug::entities::plate);
+        UNUSED_VARIABLE(index);
       }
 
       {
@@ -354,6 +355,7 @@ namespace devils_engine {
         });
 
         ASSERT(index == debug::entities::edge);
+        UNUSED_VARIABLE(index);
       }
 
       {
@@ -363,16 +365,19 @@ namespace devils_engine {
         });
 
         ASSERT(index == debug::entities::province);
+        UNUSED_VARIABLE(index);
       }
 
       {
         const size_t index = ctx->container->set_entity_template({});
         ASSERT(index == debug::entities::culture);
+        UNUSED_VARIABLE(index);
       }
 
       {
         const size_t index = ctx->container->set_entity_template({});
         ASSERT(index == debug::entities::country);
+        UNUSED_VARIABLE(index);
       }
 
       {
@@ -382,6 +387,7 @@ namespace devils_engine {
         });
 
         ASSERT(index == debug::entities::title);
+        UNUSED_VARIABLE(index);
       }
     }
 
@@ -395,8 +401,8 @@ namespace devils_engine {
 
       const uint32_t plates_count = table["userdata"]["plates_count"];
 
-      ASSERT(plates_count > 3);
-      ASSERT(plates_count < 200);
+//       ASSERT(plates_count > 3);
+//       ASSERT(plates_count < 200);
 
       const uint32_t tiles_count = map->tiles_count();
       //std::atomic<uint32_t> tile_plate_atomic[tiles_count];
@@ -617,8 +623,8 @@ namespace devils_engine {
       // смотрим нужно ли ей выдать еще плиту если да то выбиваем случайного соседа,
       // должно остаться несколько плит
 
-      const uint32_t min_plates_count = 75;
-      const uint32_t max_iterations = 5;
+      const uint32_t min_plates_count = table["userdata"]["plates_connection_limit"];
+      const uint32_t max_iterations = table["userdata"]["plates_connection_iteration"];
       uint32_t current_plates_count = plates_count;
       uint32_t current_iter = 0;
 
@@ -721,24 +727,24 @@ namespace devils_engine {
 
           uint32_t plate_index = UINT32_MAX;
           {
-            std::vector<uint32_t> neighbours_vector(next_plates[i].neighbours.begin(), next_plates[i].neighbours.end());
-            while (plate_index == UINT32_MAX) {
-//               ASSERT(!neighbours_vector.empty());
-              const uint32_t rand_index = rand->index(neighbours_vector.size());
-              const uint32_t index = neighbours_vector[rand_index];
-              neighbours_vector[rand_index] = neighbours_vector.back();
-              neighbours_vector.pop_back();
-
-              if (plates_union[index]) plate_index = index;
-              if (neighbours_vector.empty()) break;
-            }
-
-//             for (auto idx : next_plates[i].neighbours) {
-//               if (!plates_union[idx]) continue;
-//               // первого соседа?
-//               plate_index = idx;
-//               break;
+//             std::vector<uint32_t> neighbours_vector(next_plates[i].neighbours.begin(), next_plates[i].neighbours.end());
+//             while (plate_index == UINT32_MAX) {
+// //               ASSERT(!neighbours_vector.empty());
+//               const uint32_t rand_index = rand->index(neighbours_vector.size());
+//               const uint32_t index = neighbours_vector[rand_index];
+//               neighbours_vector[rand_index] = neighbours_vector.back();
+//               neighbours_vector.pop_back();
+// 
+//               if (plates_union[index]) plate_index = index;
+//               if (neighbours_vector.empty()) break;
 //             }
+
+            for (auto idx : next_plates[i].neighbours) {
+              if (!plates_union[idx]) continue;
+              // первого соседа?
+              plate_index = idx;
+              break;
+            }
           }
 
           if (plate_index == UINT32_MAX) continue;
@@ -1483,7 +1489,7 @@ namespace devils_engine {
               oceans.insert(i);
             } else {
               std::unique_lock<std::mutex> lock(m3);
-              coastlines.insert(i);
+              oceans.insert(i); // coastlines
             }
           } else if (!data0_oceanic && !data1_oceanic) {
             if (collided) {
@@ -1683,7 +1689,7 @@ namespace devils_engine {
               const float dot1 = glm::dot(dir1, -boundary_normal);
 
               const float dot_k = (dot0 + dot1) / 2.0f;
-              const float final_k = boundary_elevation < 0.0f ? std::max(-boundary_elevation * (1.0f + dot_k) * 0.8f, -boundary_elevation) : glm::mix(-0.2f, 0.5f, dot_k);
+              const float final_k = boundary_elevation < 0.0f ? std::max(-boundary_elevation * (1.0f + dot_k) * 0.8f, -boundary_elevation) : glm::mix(-0.2f, 0.4f, dot_k);
 
               a_k = boundary_elevation + final_k;
 
@@ -1700,7 +1706,7 @@ namespace devils_engine {
               const uint32_t opposing_plate_index = plate_index == plate0 ? plate1 : plate0;
 
               const float opposing_plate_elevation = context->container->get_data<float>(debug::entities::plate, opposing_plate_index, debug::properties::plate::base_elevation);
-              const float boundary_elevation = std::max(opposing_plate_elevation, plate_elevation);
+              const float boundary_elevation = std::min(opposing_plate_elevation, plate_elevation);
 
               // к boundary_elevation нужно прибавить какую то силу
               // максимум который мы можем прибавить это 0.5f
@@ -1735,7 +1741,7 @@ namespace devils_engine {
               const float dot0 = glm::dot(dir0,  boundary_normal);
               const float dot1 = glm::dot(dir1, -boundary_normal);
 
-              const float dot_k = 1.0f - glm::abs(dot0 + dot1) / 2.0f;
+              const float dot_k = 1.0f - glm::abs(dot0 + dot1) / 2.0f; // нужно увеличить К воды
               const float final_k = boundary_elevation > 0.0f ?  std::min(-boundary_elevation * (1.0f + dot_k) * 0.8f, -boundary_elevation) : glm::mix(-0.2f, 0.05f, dot_k);
 
               b_k = boundary_elevation + final_k;
@@ -4942,7 +4948,7 @@ namespace devils_engine {
         king_queue.push(std::make_tuple(duchy_kingdom[i], 0, 0));
       }
 
-      func();
+      if (!king_queue.empty()) func();
 
       {
         uint32_t max_kingdoms = 0;

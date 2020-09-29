@@ -94,13 +94,13 @@ if (WIN32 OR MINGW)
 
   include_directories(
     ${GLFW3_INCLUDE_DIRS}
-	  ${VULKAN_INCLUDE_PATH}
-	  ${GLM_LIB_PATH}
+    ${VULKAN_INCLUDE_PATH}
+    ${GLM_LIB_PATH}
   )
 
   link_directories(
-	  ${GLFW3_LIB_DIRS}
-	  ${VULKAN_LIB_PATH}
+    ${GLFW3_LIB_DIRS}
+    ${VULKAN_LIB_PATH}
     ${CPPFS_LIB_PATH}
   )
 else()
@@ -297,6 +297,10 @@ set(HDR_LIST
   include/whereami/src/whereami.h
 )
 
+# if (UNIX)
+#   add_library(lua53 SHARED IMPORTED GLOBAL)
+#   set_property(TARGET lua53 PROPERTY IMPORTED_LOCATION "/usr/lib/liblua5.3.so")
+# endif()
 add_library(utils ${SRC_LIST} ${HDR_LIST})
 target_link_libraries(utils ${LUA_LIB}) # PUBLIC foonathan_memory moonnuklear
 # нужно сделать одинаковый файл что в линуксе что в винде

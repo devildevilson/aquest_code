@@ -96,6 +96,9 @@ namespace devils_engine {
       
       void set_borders_count(const uint32_t &count);
       void set_connections_count(const uint32_t &count);
+      
+      void set_border_rendering(const bool value);
+      bool is_rendering_border() const;
     private:
       yavf::Device* device;
       yavf::Buffer* indirect;

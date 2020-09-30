@@ -284,6 +284,16 @@ namespace devils_engine {
       PRINT_VAR("walls indices_count", indices_count)
     }
     
+    void tile_optimizer::set_border_rendering(const bool value) {
+      auto buffer = reinterpret_cast<struct indirect_buffer*>(indirect->ptr());
+      buffer->padding2[1] = value ? 0 : UINT32_MAX;
+    }
+    
+    bool tile_optimizer::is_rendering_border() const {
+      auto buffer = reinterpret_cast<struct indirect_buffer*>(indirect->ptr());
+      return !bool(buffer->padding2[1]);  
+    }
+    
     tile_borders_optimizer::tile_borders_optimizer(const create_info &info) : 
       device(info.device), 
       indirect(nullptr), 

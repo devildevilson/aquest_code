@@ -179,7 +179,8 @@ void main() {
     }
   }
 
-  if (borders_indices_count == 0) return;
+  // borders_data.z должно указывать нужно ли пропускать рендер границ
+  if (bool(borders_data[2]) || borders_indices_count == 0) return;
   for (uint i = 0; i < triangle.data[1]; ++i) {
     const uint tile_index = get_accel_triangle_tile_index(triangle.data[0] + i);
     const uint borders_data = tiles[tile_index].packed_data4[0];

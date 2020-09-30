@@ -1435,6 +1435,8 @@ namespace devils_engine {
   //     map_systems->setup_map_generator();
   //     advance_progress(prog, "creating tools for demiurge");
   //     setup_map_generator(*map_systems);
+      auto t = global::get<render::tile_optimizer>();
+      t->set_border_rendering(false);
 
       loading_world(map_systems, prog, base_systems->menu->loading_path); // мы должны выбрать: либо загрузка мира, либо загрузка сохранения (там загрузка мира тоже будет)
       base_systems->menu->loading_path.clear();
@@ -1446,6 +1448,8 @@ namespace devils_engine {
       auto map_systems = global::get<systems::map_t>();
       auto base_systems = global::get<systems::core_t>();
       prog->set_type(utils::progress_container::loading_created_map);
+      auto t = global::get<render::tile_optimizer>();
+      t->set_border_rendering(false);
       post_generation_work(map_systems, base_systems, prog);
       map_systems->destroy_map_generator();
       //advance_progress(prog, "end");

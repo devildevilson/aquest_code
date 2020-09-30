@@ -108,6 +108,9 @@ namespace devils_engine {
     input::set_key(GLFW_KEY_LEFT, menu_decrease);
     input::set_key(GLFW_KEY_ENTER, menu_choose);
     input::set_key(GLFW_KEY_ESCAPE, escape);
+    
+    const utils::id border_render = utils::id::get("border_render");
+    input::set_key(GLFW_KEY_B, border_render);
   }
 
   float hit_sphere(const glm::vec4 &center, const float &radius, const utils::ray &r) {
@@ -191,6 +194,7 @@ namespace devils_engine {
     static_assert(sizeof(modes) / sizeof(modes[0]) == render::modes::count);
 
     static const utils::id escape = utils::id::get("escape");
+    static const utils::id border_render = utils::id::get("border_render");
 
 //     auto map = global::get<core::map>();
 //     auto container = global::get<map::generator::container>();
@@ -215,9 +219,12 @@ namespace devils_engine {
       while (change.id.valid()) {
         //PRINT_VAR("change id", change.id.name())
         if (change.event != input::release) {
-//           if (change.id == escape) {
-//
-//           }
+          if (change.id == border_render) {
+            auto t = global::get<render::tile_optimizer>();
+            t->set_border_rendering(!t->is_rendering_border());
+            change = input::next_input_event(mem, 1);
+            continue;
+          }
 
           for (size_t i = 0; i < render::modes::count; ++i) {
             if (change.id != modes[i]) continue;

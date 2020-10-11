@@ -6,11 +6,15 @@
 #include <stdexcept>
 #include "map.h"
 #include "render/shared_structures.h"
+#include <vector>
+#include "utils/sol.h"
+#include "utils/table_container.h"
+#include "utils/globals.h"
 
 namespace devils_engine {
   namespace core {
     struct seasons {
-      static const size_t maximum_biomes = (UINT8_MAX);
+      static const size_t maximum_biomes = (MAX_BIOMES_COUNT);
       static const size_t maximum_seasons = 64;
       // с чего я взял что это вообще может сработать? сложение работает, но из сложения никак не получить обратно конкретные индексы
       // это не сработает, нужно в общем использовать целый чар для одного тайла
@@ -48,6 +52,11 @@ namespace devils_engine {
         if (biome_index >= maximum_biomes) throw std::runtime_error("Bad biome index");
         biomes[biome_index] = data;
       }
+      
+      inline uint32_t add_biome(const sol::table &table) {
+        if (global::get<utils::table_container>()->get_biome_tables().size() == maximum_biomes) throw std::runtime_error("Too many biomes");
+        return global::get<utils::table_container>()->add_biome_table(table);
+      }
     };
     
     struct season_container_initializer { // вряд ли нужен
@@ -56,6 +65,16 @@ namespace devils_engine {
       inline season_container_initializer() : ptr(new seasons) {}
       inline ~season_container_initializer() { delete ptr; ptr = nullptr; }
     };
+    
+    // мне нужно задать данные биомов
+    // они как и все остальное задаются через луа таблицы
+    // нужно их задать через тот же интерфейс как и картинки
+    // но лучше сделать примерно такой же интерфейс как у seasons
+//     struct loading_seasons {
+//       uint8_t current_season;
+//       uint8_t data[seasons::data_count];
+//       std::vector<sol::table> biome_tables;
+//     };
   }
 }
 

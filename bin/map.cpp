@@ -4,6 +4,7 @@
 #include "figures.h"
 #include <thread>
 #include <chrono>
+#include "seasons.h"
 
 #define MAP_CONTAINER_DESCRIPTOR_POOL_NAME "map_container_descriptor_pool"
 
@@ -30,7 +31,9 @@ namespace devils_engine {
         sizeof(render::packed_fast_triangle_t)*accel_triangles_count, 
         VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT
       ), VMA_MEMORY_USAGE_CPU_ONLY);
-      biomes = device->create(yavf::BufferCreateInfo::buffer(sizeof(render::packed_biom_data_t)*10, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT), VMA_MEMORY_USAGE_CPU_ONLY);
+      biomes = device->create(yavf::BufferCreateInfo::buffer(
+        sizeof(render::packed_biome_data_t)*MAX_BIOMES_COUNT, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT
+      ), VMA_MEMORY_USAGE_GPU_ONLY);
       
       const uint32_t tile_indices_count = std::ceil(float(tiles_count)/float(4));
       tile_indices = device->create(yavf::BufferCreateInfo::buffer(
@@ -517,6 +520,33 @@ namespace devils_engine {
       std::unique_lock<std::mutex> lock(mutex);
       auto tiles_arr = reinterpret_cast<render::light_map_tile_t*>(tiles->ptr());
       return glm::uintBitsToFloat(tiles_arr[tile_index].tile_indices.w);
+    }
+    
+    void map::copy_biomes(const seasons* s) {
+      yavf::Buffer staging(device, yavf::BufferCreateInfo::buffer(
+        sizeof(render::packed_biome_data_t)*MAX_BIOMES_COUNT, VK_BUFFER_USAGE_TRANSFER_SRC_BIT
+      ), VMA_MEMORY_USAGE_CPU_ONLY);
+      
+      static_assert(sizeof(render::packed_biome_data_t)*MAX_BIOMES_COUNT == sizeof(render::biome_data_t)*MAX_BIOMES_COUNT);
+      memcpy(staging.ptr(), s->biomes, sizeof(render::biome_data_t)*MAX_BIOMES_COUNT);
+      
+      auto task = device->allocateTransferTask();
+      task->begin();
+      task->copy(&staging, biomes);
+      task->end();
+      
+      task->start();
+      task->wait();
+      device->deallocate(task);
+    }
+    
+    void map::set_tile_biome(const seasons* s) {
+      std::unique_lock<std::mutex> lock(mutex);
+      auto tiles_arr = reinterpret_cast<render::light_map_tile_t*>(tiles->ptr());
+      for (size_t i = 0; i < tiles_count(); ++i) {
+        const uint32_t index = s->get_tile_biome(i);
+        tiles_arr[i].packed_data4[2] = index;
+      }
     }
     
     enum map::status map::status() const {

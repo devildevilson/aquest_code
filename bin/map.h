@@ -36,6 +36,8 @@ namespace devils_engine {
   }
   
   namespace core {
+    struct seasons;
+    
     struct map {
       enum class status {
         initial,
@@ -139,6 +141,9 @@ namespace devils_engine {
       void set_tile_connections_data(const uint32_t &tile_index, const uint32_t &offset, const uint32_t &size);
       
       float get_tile_height(const uint32_t &tile_index) const;
+      
+      void copy_biomes(const seasons* s);
+      void set_tile_biome(const seasons* s);
       
       enum status status() const;
       void set_status(const enum status s);

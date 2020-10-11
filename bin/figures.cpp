@@ -140,20 +140,20 @@ namespace devils_engine {
       std::cout << "final_points_count " << final_points_count << '\n';
 
       const float t = (1.0f + std::sqrt(5.0f)) / 2.0f;
-      add_vertex(radius, rotation*glm::vec3(-1,  t,  0));
-      add_vertex(radius, rotation*glm::vec3( 1,  t,  0));
-      add_vertex(radius, rotation*glm::vec3(-1, -t,  0));
-      add_vertex(radius, rotation*glm::vec3( 1, -t,  0));
+      add_vertex(radius, glm::vec3(-1,  t,  0)); // rotation*
+      add_vertex(radius, glm::vec3( 1,  t,  0));
+      add_vertex(radius, glm::vec3(-1, -t,  0));
+      add_vertex(radius, glm::vec3( 1, -t,  0));
 
-      add_vertex(radius, rotation*glm::vec3( 0, -1,  t));
-      add_vertex(radius, rotation*glm::vec3( 0,  1,  t));
-      add_vertex(radius, rotation*glm::vec3( 0, -1, -t));
-      add_vertex(radius, rotation*glm::vec3( 0,  1, -t));
+      add_vertex(radius, glm::vec3( 0, -1,  t));
+      add_vertex(radius, glm::vec3( 0,  1,  t));
+      add_vertex(radius, glm::vec3( 0, -1, -t));
+      add_vertex(radius, glm::vec3( 0,  1, -t));
 
-      add_vertex(radius, rotation*glm::vec3( t,  0, -1));
-      add_vertex(radius, rotation*glm::vec3( t,  0,  1));
-      add_vertex(radius, rotation*glm::vec3(-t,  0, -1));
-      add_vertex(radius, rotation*glm::vec3(-t,  0,  1));
+      add_vertex(radius, glm::vec3( t,  0, -1));
+      add_vertex(radius, glm::vec3( t,  0,  1));
+      add_vertex(radius, glm::vec3(-t,  0, -1));
+      add_vertex(radius, glm::vec3(-t,  0,  1));
 
       // add_vertex(radius, glm::rotate(glm::vec3(-1,  t,  0), -a, cross));
       // add_vertex(radius, glm::rotate(glm::vec3( 1,  t,  0), -a, cross));
@@ -481,7 +481,7 @@ namespace devils_engine {
 
     uint32_t container::add_vertex(const float &radius, const glm::vec3 &v) {
       const glm::vec3 norm = glm::normalize(v);
-      points.push_back(norm*radius);
+      points.push_back(norm); // *radius
       return points.size()-1;
     }
 
@@ -750,6 +750,70 @@ namespace devils_engine {
         ASSERT(current_index == t.neighbours[next_neighbour].points[0]);
         ASSERT(t.neighbours[i].points[1] != t.neighbours[i].points[0]);
       }
+    }
+    
+    void container::fix_tile2(const uint32_t &tile_index) {
+      ASSERT(tile_index < tiles.size());
+      tile &t = tiles[tile_index];
+      const glm::vec3 center = points[t.index];
+      const glm::vec3 dir = glm::normalize(center);
+      const glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0f);
+      const glm::vec3 right = glm::normalize(glm::cross(up, dir));
+      const uint32_t n_count = t.is_pentagon() ? 5 : 6;
+      float max_dot = 0.0f;
+      uint32_t index = 0;
+      for (uint32_t i = 0; i < n_count; ++i) {
+        const uint32_t point_index = t.neighbours[i].points[0];
+        const glm::vec3 point = points[point_index];
+        const glm::vec3 point_dir = point - center;
+        if (glm::dot(right, point_dir) < 0.0f) continue;
+        const float d = glm::dot(point, up);
+        if (d > max_dot) {
+          max_dot = d;
+          index = i;
+        }
+      }
+      
+      //ASSERT(index != UINT32_MAX);
+      
+      std::swap(t.neighbours[0], t.neighbours[index]);
+      std::vector<tile::neighbour> new_n;
+      std::unordered_set<uint32_t> set;
+      new_n.push_back(t.neighbours[0]);
+      set.insert(t.neighbours[0].index);
+      
+      for (uint32_t i = 0; i < new_n.size(); ++i) {
+        //const uint32_t current_index = t.neighbours[i].points[1];
+        const uint32_t current_index = new_n[i].points[1];
+        for (uint32_t j = 0; j < n_count; ++j) {
+          //if (i == j) continue;
+          if (set.find(t.neighbours[j].index) != set.end()) continue;
+          
+          if (t.neighbours[j].points[0] == current_index || t.neighbours[j].points[1] == current_index) {
+            new_n.push_back(t.neighbours[j]);
+            set.insert(t.neighbours[j].index);
+            if (t.neighbours[j].points[1] == current_index) std::swap(new_n.back().points[0], new_n.back().points[1]);
+          }
+        }
+      }
+      
+      ASSERT(new_n.size() == n_count);
+      for (uint32_t i = 0; i < n_count; ++i) {
+        t.neighbours[i] = new_n[i];
+      }
+      
+      for (uint32_t i = 0; i < n_count; ++i) {
+        const uint32_t current_index = t.neighbours[i].points[1];
+        const uint32_t next_neighbour = (i+1) % n_count;
+        ASSERT(current_index == t.neighbours[next_neighbour].points[0]);
+        ASSERT(t.neighbours[i].points[1] != t.neighbours[i].points[0]);
+      }
+    }
+    
+    void container::apply_matrix(const uint32_t &point_index, const glm::mat4 &matrix) {
+      ASSERT(point_index < points.size());
+      const glm::vec4 p = matrix * glm::vec4(points[point_index], 1.0f);
+      points[point_index] = p;
     }
 
     size_t container::memory() const {

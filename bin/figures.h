@@ -130,6 +130,8 @@ namespace devils_engine {
       // bool frustum_test_tile(const uint32_t &tile, const utils::frustum &frustum) const;
       
       void fix_tile(const uint32_t &tile_index);
+      void fix_tile2(const uint32_t &tile_index);
+      void apply_matrix(const uint32_t &point_index, const glm::mat4 &matrix);
 
       size_t memory() const;
       void validate() const;

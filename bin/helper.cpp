@@ -55,7 +55,7 @@ namespace devils_engine {
     p /= "../";
     p.make_preferred();
     const std::string dir_path = p.string();
-    std::cout << dir_path << "\n";
+//     std::cout << dir_path << "\n";
 
     //ASSERT(dir_path.size() == size_t(dirname+1));
 
@@ -133,8 +133,7 @@ namespace devils_engine {
     return -1.0f;
   }
 
-  void mouse_input(yacs::entity* ent, const size_t &time) {
-    auto camera = ent->get<components::camera>();
+  void mouse_input(components::camera* camera, const size_t &time) {
     auto window = global::get<render::window>();
     auto ctx = global::get<interface::context>();
 //     auto buffers = global::get<render::buffers>();
@@ -237,9 +236,8 @@ namespace devils_engine {
     }
   }
 
-  void zoom_input(yacs::entity* ent) {
+  void zoom_input(components::camera* camera) {
     auto input_data = global::get<input::data>();
-    auto camera = ent->get<components::camera>();
     auto ctx = global::get<interface::context>();
     const bool window_focus = nk_window_is_any_hovered(&ctx->ctx);
     if (window_focus) return;
@@ -452,11 +450,15 @@ namespace devils_engine {
     base_systems.interface_container->process_script_file(script_folder + "generator_progress.lua");
     base_systems.interface_container->process_script_file(script_folder + "user_interface.lua");
     base_systems.interface_container->process_script_file(script_folder + "player_layer.lua");
+    base_systems.interface_container->process_script_file(script_folder + "settings_menu.lua");
+    //options_window
     base_systems.interface_container->register_function("progress_bar", "progress_bar");
     base_systems.interface_container->register_function("main_menu_window", "main_menu");
     base_systems.interface_container->register_function("main_menu_map", "main_menu_map");
     base_systems.interface_container->register_function("worlds_window_func", "worlds_window");
     base_systems.interface_container->register_function("main_interface_layer", "player_interface");
+    base_systems.interface_container->register_function("options_menu_window", "options_window");
+    base_systems.interface_container->register_function("graphics_options_window", "graphics_window");
   }
 
   #define OUTSIDE 0
@@ -701,6 +703,10 @@ namespace devils_engine {
     global::get<interface::context>()->remake_font_atlas(w, h);
     system->interface_container->make_fonts();
   //   std::cout << "window_resize_callback width " << w << " height " << h << '\n';
+    
+    auto settings = global::get<utils::settings>();
+    settings->graphics.width = w;
+    settings->graphics.height = h;
 
     system->graphics_container->render->recreate(w, h);
     auto map = global::get<systems::map_t>();

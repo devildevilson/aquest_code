@@ -18,12 +18,38 @@
 #include "render/stages.h"
 #include "render/yavf.h"
 #include "game_time.h"
+#include "image_parser.h"
+
+#include "render/image_container.h"
+#include "render/image_controller.h"
 
 namespace devils_engine {
   namespace systems {
     void advance_progress(utils::progress_container* prog, std::string str) {
       prog->set_hint2(std::move(str));
       prog->advance();
+    }
+    
+    std::array<std::pair<uint32_t, uint32_t>, MAX_BIOMES_COUNT> get_season_biomes_data(const systems::map_t* map_system) {
+      //auto map_system = global::get<systems::map_t>();
+//       auto opt = global::get<render::tile_optimizer>();
+      
+      //map_system->seasons->set_current(s);
+      
+      std::array<std::pair<uint32_t, uint32_t>, MAX_BIOMES_COUNT> biomes_data;
+      for (size_t i = 0; i < core::map::hex_count_d(core::map::detail_level); ++i) {
+        const uint32_t index = map_system->seasons->get_tile_biome(i);
+        ++biomes_data[index].second;
+      }
+      
+      size_t current_offset = 0;
+      for (uint32_t i = 0; i < MAX_BIOMES_COUNT; ++i) {
+        biomes_data[i].first = current_offset;
+        current_offset += biomes_data[i].second * (PACKED_INDEX_COEF + 1);
+      }
+      
+      //opt->set_biome_tile_count(biomes_data);
+      return biomes_data;
     }
 
     // сюда видимо бедт приходить какая таблица, по которой мы будем создавать генератор
@@ -985,8 +1011,32 @@ namespace devils_engine {
           ++counter;
         }
       }
-
+      
+      const auto &image_data = tables->get_image_tables();
+      size_t counter = 0;
+      for (const auto &table : image_data) {
+        ret = ret && utils::validate_image_and_save(counter, lua.lua_state(), table, &cont);
+        ++counter;
+      }
+      
       if (!ret) throw std::runtime_error("There is validation errors");
+      
+      auto controller = global::get<systems::core_t>()->image_controller;
+      for (size_t i = 0; i < static_cast<size_t>(render::image_controller::image_type::count); ++i) {
+        //utils::load_images(controller, image_data, static_cast<uint32_t>(render::image_controller::image_type::system));
+        utils::load_images(controller, image_data, i);
+      }
+      utils::load_biomes(controller, map_systems->seasons, tables->get_biome_tables());
+      
+      const auto &data = get_season_biomes_data(map_systems);
+      
+      map_systems->lock_map();
+      controller->update_set();
+      map_systems->map->copy_biomes(map_systems->seasons);
+      global::get<render::tile_optimizer>()->set_biome_tile_count(data);
+      map_systems->unlock_map();
+      
+      map_systems->map->set_tile_biome(map_systems->seasons);
 
       advance_progress(prog, "allocating memory"); // 2
 
@@ -1171,6 +1221,22 @@ namespace devils_engine {
         }
       });
       utils::async_wait(pool);
+      
+      utils::submit_works_async(pool, generated_core.tiles.size(), [&generated_core] (const size_t &start, const size_t &count) {
+  //       size_t start = 0;
+  //       size_t count = generated_core.tiles.size();
+        for (size_t i = start; i < start+count; ++i) {
+          generated_core.fix_tile2(i);
+        }
+      });
+      utils::async_wait(pool);
+      
+      utils::submit_works_async(pool, generated_core.points.size(), [&generated_core, mat1] (const size_t &start, const size_t &count) {
+        for (size_t i = start; i < start+count; ++i) {
+          generated_core.apply_matrix(i, mat1);
+        }
+      });
+      utils::async_wait(pool);
 
       utils::submit_works_async(pool, generated_core.tiles.size(), [&generated_core, map] (const size_t &start, const size_t &count) {
         for (size_t i = start; i < start+count; ++i) {
@@ -1335,6 +1401,23 @@ namespace devils_engine {
         parsing_func(ptr, t);
       }
     }
+    
+    std::vector<sol::table> get_images_tables(const utils::world_serializator* w, sol::state_view state) {
+      std::vector<sol::table> tables;
+      for (size_t i = 0; i < w->get_images_count(); ++i) {
+        auto ret = state.script("return " + std::string(w->get_image_data(i)));
+        if (!ret.valid()) {
+          sol::error err = ret;
+          std::cout << err.what();
+          throw std::runtime_error("Could not load image table");
+        }
+        
+        sol::table t = ret;
+        tables.push_back(t);
+      }
+      
+      return tables;
+    }
 
     void loading_world(systems::map_t* map_systems, utils::progress_container* prog, const std::string &world_path) {
       ASSERT(!world_path.empty());
@@ -1373,6 +1456,16 @@ namespace devils_engine {
   //     map_systems->core_context->create_container<core::titulus>(world_data.get_data_count(core::structure::titulus));
       //map_systems->core_context->create_container<core::character>(world_data.get_data_count(core::structure::character));
       create_characters(map_systems->core_context, &world_data, lua);
+      
+      advance_progress(prog, "loading images");
+      
+      const auto image_data = get_images_tables(&world_data, lua);
+      auto controller = global::get<systems::core_t>()->image_controller;
+      for (size_t i = 0; i < static_cast<size_t>(render::image_controller::image_type::count); ++i) {
+        //utils::load_images(controller, image_data, static_cast<uint32_t>(render::image_controller::image_type::system));
+        utils::load_images(controller, image_data, i);
+      }
+      //utils::load_biomes(controller, map_systems->seasons, tables->get_biome_tables());
 
       advance_progress(prog, "parsing entities");
       parse_entities<core::titulus>(map_systems->core_context, &world_data, lua, utils::parse_title);
@@ -1385,7 +1478,20 @@ namespace devils_engine {
       // тут нужно еще соединить все полученные данные друг с другом
       advance_progress(prog, "connecting game data");
       connect_game_data(map_systems->map, map_systems->core_context);
+      // тут тупое копирование для того чтобы это работало нужно расположить данные так же как они были до сохранения
+      // это зависит от расположения картинок в массиве и по идее это расположение не изменяется
+      
+      advance_progress(prog, "preparing biomes");
       world_data.fill_seasons(map_systems->seasons);
+      
+      const auto &data = get_season_biomes_data(map_systems);
+      map_systems->lock_map();
+      controller->update_set();
+      map_systems->map->copy_biomes(map_systems->seasons);
+      global::get<render::tile_optimizer>()->set_biome_tile_count(data);
+      map_systems->unlock_map();
+      
+      map_systems->map->set_tile_biome(map_systems->seasons);
 
       map_systems->render_modes->at(render::modes::biome)();
       global::get(reinterpret_cast<utils::data_string_container*>(SIZE_MAX));
@@ -1422,7 +1528,7 @@ namespace devils_engine {
     void from_menu_to_map(utils::progress_container* prog) {
       auto base_systems = global::get<systems::core_t>();
       auto map_systems = global::get<systems::map_t>();
-      prog->set_max_value(9);
+      prog->set_max_value(11);
       prog->set_hint1(std::string_view("Load world"));
       prog->set_hint2(std::string_view("create container"));
       prog->set_type(utils::progress_container::loading_map);

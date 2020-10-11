@@ -24,6 +24,9 @@ int main(int argc, char const *argv[]) {
   systems::encouter_t encounter_systems;
 
   base_systems.create_utility_systems();
+  utils::settings settings;
+  settings.load_settings();
+  global::get(&settings);
   create_render_system(base_systems);
   setup_callbacks();
   base_systems.create_render_stages();
@@ -31,6 +34,8 @@ int main(int argc, char const *argv[]) {
   // базовые функции интерфейса?
   // ну мы должны получить какую то таблицу с указанием откуда че загружать
   basic_interface_functions(base_systems);
+  
+  settings.graphics.find_video_mode();
 
   global::get(&base_systems);
   global::get(&map_systems);
@@ -55,9 +60,11 @@ int main(int argc, char const *argv[]) {
   const float dist = 550.0f;
   const glm::vec3 default_camera_pos = glm::normalize(glm::vec3(1.0f, 0.0f, 0.0f)) * dist;
 
-  auto ent = world.create_entity();
-  ent->add<components::transform>(default_camera_pos, glm::vec3(-1.0f, 0.0f, 0.0f));
-  ent->add<components::camera>(ent); // тут нужно использовать алгоритм тини (?) : camera_pos += (end_pos - camera_pos) * CONST
+//   auto ent = world.create_entity();
+//   ent->add<components::transform>(default_camera_pos, glm::vec3(-1.0f, 0.0f, 0.0f));
+//   ent->add<components::camera>(ent); // тут нужно использовать алгоритм тини (?) : camera_pos += (end_pos - camera_pos) * CONST
+  components::camera camera(default_camera_pos);
+//   global::get(&camera);
   // так камера будет плавно подъезжать к end_pos в зависимости от константы
 
   // какие энтити у нас будут? провинции?
@@ -66,8 +73,8 @@ int main(int argc, char const *argv[]) {
   // не уверен зачем тут может потребоваться энтити
   // проблема в том что тут довольно серьезную оптимизацию нужно предпринять по уменьшению занимаемой памяти
   // да и ко всему прочему очень мало данных у каждой энтити
-
-  keys_setup();
+  
+  //keys_setup();
 
   // по идее хорошим дизайном будет запускать интерфейс без условно всегда
   // просто следить чтобы там во время появлялись нужные функции интерфейса
@@ -119,11 +126,13 @@ int main(int argc, char const *argv[]) {
     input::update_time(time);
     poll_events();
     if (global::get<render::window>()->close()) break;
-    mouse_input(ent, time);
+    mouse_input(&camera, time);
     key_input(time, current_game_state_index, loading);
-    zoom_input(ent);
+    zoom_input(&camera);
     next_nk_frame(time);
-    camera::strategic(ent);
+    camera::strategic(&camera);
+    
+    camera.update(time);
 
     // здесь наверное будет обновлять интерфейс (где главное меню?)
 //     if (base_systems.menu->exist()) input::block();

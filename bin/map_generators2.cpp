@@ -1,4 +1,5 @@
 #include "map_generators2.h"
+
 #include "utils/logging.h"
 #include "figures.h"
 #include "utils/works_utils.h"
@@ -15,6 +16,7 @@
 #include "game_time.h"
 #include "seasons.h"
 #include "render/shared_structures.h"
+#include "image_parser.h"
 
 namespace devils_engine {
   namespace map {
@@ -51,12 +53,12 @@ namespace devils_engine {
     };
 
     render::color_t make_color_from_index(const uint32_t &index) {
-      const uint32_t val1 = render::lcg(index);
-      const uint32_t val2 = render::lcg(val1);
-      const uint32_t val3 = render::lcg(val2);
-      const float f1 = render::lcg_normalize(val1);
-      const float f2 = render::lcg_normalize(val2);
-      const float f3 = render::lcg_normalize(val3);
+      const uint32_t val1 = render::prng(index);
+      const uint32_t val2 = render::prng(val1);
+      const uint32_t val3 = render::prng(val2);
+      const float f1 = render::prng_normalize(val1);
+      const float f2 = render::prng_normalize(val2);
+      const float f3 = render::prng_normalize(val3);
       return render::make_color(f1, f2, f3, 1.0f);
     }
 
@@ -205,17 +207,18 @@ namespace devils_engine {
 
       ASSERT(angle1 != 0.0f);
       ASSERT(angle2 != 0.0f);
-      PRINT_VAR("angle1", angle1)
-      PRINT_VAR("angle2", angle2)
+//       PRINT_VAR("angle1", angle1)
+//       PRINT_VAR("angle2", angle2)
 
       // нужно создать случайную матрицу поворота
       glm::mat4 mat1 = glm::rotate(glm::mat4(1.0f), angle2, glm::vec3(0.0f, 1.0f, 0.0f));
                 mat1 = glm::rotate(mat1,            angle1, glm::vec3(1.0f, 0.0f, 0.0f));
       glm::mat3 mat(mat1);
+                mat1 = glm::scale(mat1, glm::vec3(core::map::world_radius, core::map::world_radius, core::map::world_radius));
 
-      PRINT_VEC3("mat", mat[0])
-      PRINT_VEC3("mat", mat[1])
-      PRINT_VEC3("mat", mat[2])
+//       PRINT_VEC3("mat", mat[0])
+//       PRINT_VEC3("mat", mat[1])
+//       PRINT_VEC3("mat", mat[2])
       map::container generated_core(core::map::world_radius, core::map::detail_level, mat); // возможно нужно как то это ускорить
 
       auto map = ctx->map;
@@ -229,6 +232,20 @@ namespace devils_engine {
       utils::submit_works_async(ctx->pool, generated_core.tiles.size(), [&generated_core] (const size_t &start, const size_t &count) {
         for (size_t i = start; i < start+count; ++i) {
           generated_core.fix_tile(i);
+        }
+      });
+      utils::async_wait(ctx->pool);
+      
+      utils::submit_works_async(ctx->pool, generated_core.tiles.size(), [&generated_core] (const size_t &start, const size_t &count) {
+        for (size_t i = start; i < start+count; ++i) {
+          generated_core.fix_tile2(i);
+        }
+      });
+      utils::async_wait(ctx->pool);
+      
+      utils::submit_works_async(ctx->pool, generated_core.points.size(), [&generated_core, mat1] (const size_t &start, const size_t &count) {
+        for (size_t i = start; i < start+count; ++i) {
+          generated_core.apply_matrix(i, mat1);
         }
       });
       utils::async_wait(ctx->pool);
@@ -1009,12 +1026,12 @@ namespace devils_engine {
 //         ctx->map->set_tile_tectonic_plate(i, oceanic);
         ctx->map->set_tile_height(i, height);
 //         ctx->map->set_tile_biom(i, plate_index);
-        const uint32_t rand_num1 = render::lcg(plate_index);
-        const uint32_t rand_num2 = render::lcg(rand_num1);
-        const uint32_t rand_num3 = render::lcg(rand_num2);
-        const float color_r = render::lcg_normalize(rand_num1);
-        const float color_g = render::lcg_normalize(rand_num2);
-        const float color_b = render::lcg_normalize(rand_num3);
+        const uint32_t rand_num1 = render::prng(plate_index);
+        const uint32_t rand_num2 = render::prng(rand_num1);
+        const uint32_t rand_num3 = render::prng(rand_num2);
+        const float color_r = render::prng_normalize(rand_num1);
+        const float color_g = render::prng_normalize(rand_num2);
+        const float color_b = render::prng_normalize(rand_num3);
         ctx->map->set_tile_color(i, render::make_color(color_r, color_b, color_g, 1.0f));
         water_counter += uint32_t(oceanic);
       }
@@ -2135,6 +2152,400 @@ namespace devils_engine {
     void create_biomes(generator::context* ctx, sol::table &table) {
       (void)table;
       utils::time_log log("creating biomes");
+      
+      {
+        auto image_table = global::get<sol::state>()->create_table();
+        image_table["id"] = "hex_grass1";
+        image_table["path"] = "apates_quest/textures/biomes/hex_grass4.png";
+        image_table["type"] = 0; // тут индекс
+        image_table["sampler"] = 1;
+        utils::add_image(image_table);
+      }
+      
+      {
+        auto image_table = global::get<sol::state>()->create_table();
+        image_table["id"] = "hex_grass2";
+        image_table["path"] = "apates_quest/textures/biomes/hex_grass5.png";
+        image_table["type"] = 0; // тут индекс
+        image_table["sampler"] = 1;
+        utils::add_image(image_table);
+      }
+      
+      {
+        auto image_table = global::get<sol::state>()->create_table();
+        image_table["id"] = "hex_water";
+        image_table["path"] = "apates_quest/textures/biomes/hex_water.png";
+        image_table["type"] = 0; // тут индекс
+        image_table["sampler"] = 1;
+        utils::add_image(image_table);
+      }
+      
+      {
+        auto image_table = global::get<sol::state>()->create_table();
+        image_table["id"] = "hex_snow";
+        image_table["path"] = "apates_quest/textures/biomes/hex_snow.png";
+        image_table["type"] = 0; // тут индекс
+        image_table["sampler"] = 1;
+        utils::add_image(image_table);
+      }
+      
+      {
+        auto image_table = global::get<sol::state>()->create_table();
+        image_table["id"] = "hex_cold_water";
+        image_table["path"] = "apates_quest/textures/biomes/hex_cold_water.png";
+        image_table["type"] = 0; // тут индекс
+        image_table["sampler"] = 1;
+        utils::add_image(image_table);
+      }
+      
+      {
+        auto image_table = global::get<sol::state>()->create_table();
+        image_table["id"] = "hex_desert";
+        image_table["path"] = "apates_quest/textures/biomes/hex_desert.png";
+        image_table["type"] = 0; // тут индекс
+        image_table["sampler"] = 1;
+        utils::add_image(image_table);
+      }
+      
+      {
+        auto image_table = global::get<sol::state>()->create_table();
+        image_table["id"] = "rain_tree";
+        image_table["path"] = "apates_quest/textures/biomes/upper_palm.png";
+        //auto atlas = image_table["atlas_data"].get_or_create<sol::table>();
+        auto scale = image_table["scale"].get_or_create<sol::table>();
+        scale["width"] = 32;
+        scale["height"] = 32;
+        scale["filter"] = 1; // nearest
+        image_table["type"] = 0; // тут индекс
+        image_table["sampler"] = 1;
+        utils::add_image(image_table);
+      }
+      
+      {
+        auto image_table = global::get<sol::state>()->create_table();
+        image_table["id"] = "deciduous_tree";
+        image_table["path"] = "apates_quest/textures/biomes/upper_tree5.png";
+        //auto atlas = image_table["atlas_data"].get_or_create<sol::table>();
+        auto scale = image_table["scale"].get_or_create<sol::table>();
+        scale["width"] = 32;
+        scale["height"] = 32;
+        scale["filter"] = 1; // nearest
+        image_table["type"] = 0; // тут индекс
+        image_table["sampler"] = 1;
+        utils::add_image(image_table);
+      }
+      
+      {
+        auto image_table = global::get<sol::state>()->create_table();
+        image_table["id"] = "coniferous_tree";
+        image_table["path"] = "apates_quest/textures/biomes/upper_spruce2.png";
+        //auto atlas = image_table["atlas_data"].get_or_create<sol::table>();
+        auto scale = image_table["scale"].get_or_create<sol::table>();
+        scale["width"] = 32;
+        scale["height"] = 32;
+        scale["filter"] = 1; // nearest
+        image_table["type"] = 0; // тут индекс
+        image_table["sampler"] = 1;
+        utils::add_image(image_table);
+      }
+      
+//       {
+//         auto image_table = global::get<sol::state>()->create_table();
+//         image_table["id"] = "test_img2";
+//         image_table["path"] = "apates_quest/textures/biomes/upper_tree.png";
+//         //auto atlas = image_table["atlas_data"].get_or_create<sol::table>();
+//         auto scale = image_table["scale"].get_or_create<sol::table>();
+//         scale["width"] = 32;
+//         scale["height"] = 32;
+//         scale["filter"] = 1; // nearest
+//         image_table["type"] = 0; // тут индекс
+//         image_table["sampler"] = 0;
+//         utils::add_image(image_table);
+//       }
+//       
+//       {
+//         auto image_table = global::get<sol::state>()->create_table();
+//         image_table["id"] = "test_img3";
+//         image_table["path"] = "apates_quest/textures/biomes/upper_tree.png";
+//         //auto atlas = image_table["atlas_data"].get_or_create<sol::table>();
+//         image_table["type"] = 0; // тут индекс
+//         image_table["sampler"] = 0;
+//         utils::add_image(image_table);
+//       }
+//       
+//       {
+//         auto image_table = global::get<sol::state>()->create_table();
+//         image_table["id"] = "test_img4";
+//         image_table["path"] = "apates_quest/textures/biomes/upper_tree.png";
+//         //auto atlas = image_table["atlas_data"].get_or_create<sol::table>();
+//         auto scale = image_table["scale"].get_or_create<sol::table>();
+//         scale["width"] = 512;
+//         scale["height"] = 512;
+//         scale["filter"] = 1; // nearest
+//         image_table["type"] = 0; // тут индекс
+//         image_table["sampler"] = 0;
+//         utils::add_image(image_table);
+//       }
+
+      // нужно с цветами немного поработать, слишком яркие, более менее нашел текстурки для биомов
+      // почему то некоторые изображения плохо грузятся (например, upper_tree6.png)
+      {
+        auto biome_table = global::get<sol::state>()->create_table();
+//         biome_table["texture"] = "hex_water";
+        biome_table["color"] = render::make_color(0.2f, 0.2f, 0.8f, 1.0f).container;
+        //biome_table["color"] = render::make_color(0.545f, 0.882f, 0.922f, 1.0f).container;
+        biome_table["object1"] = sol::nil;
+        biome_table["object2"] = sol::nil;
+        biome_table["min_scale1"] = 0.0f;
+        biome_table["max_scale1"] = 0.0f;
+        biome_table["min_scale2"] = 0.1f;
+        biome_table["max_scale2"] = 0.3f;
+        biome_table["density"] = 9.0f;
+        biome_table["height1"] = 0.0f;
+        biome_table["height2"] = 0.0f;
+        // может быть добавится множитель uv координат
+        // + может быть добавятся флаги
+        const uint32_t biome_ocean = ctx->seasons->add_biome(biome_table);
+        ASSERT(biome_ocean == render::biome_ocean);
+        UNUSED_VARIABLE(biome_ocean);
+      }
+      
+      {
+        auto biome_table = global::get<sol::state>()->create_table();
+//         biome_table["texture"] = "hex_cold_water";
+        biome_table["color"] = render::make_color(0.8f, 0.8f, 1.0f, 1.0f).container;
+        biome_table["object1"] = sol::nil;
+        biome_table["object2"] = sol::nil;
+        biome_table["min_scale1"] = 0.0f;
+        biome_table["max_scale1"] = 0.0f;
+        biome_table["min_scale2"] = 0.0f;
+        biome_table["max_scale2"] = 0.0f;
+        biome_table["density"] = 0.0f;
+        biome_table["height1"] = 0.0f;
+        biome_table["height2"] = 0.0f;
+        const uint32_t biome_ocean = ctx->seasons->add_biome(biome_table);
+        ASSERT(biome_ocean == render::biome_ocean_glacier);
+        UNUSED_VARIABLE(biome_ocean);
+      }
+      
+      {
+        auto biome_table = global::get<sol::state>()->create_table();
+//         biome_table["texture"] = "hex_desert";
+        biome_table["color"] = render::make_color(0.914f, 0.914f, 0.2f, 1.0f).container;
+        biome_table["object1"] = sol::nil;
+        biome_table["object2"] = sol::nil;
+        biome_table["min_scale1"] = 0.0f;
+        biome_table["max_scale1"] = 0.0f;
+        biome_table["min_scale2"] = 0.0f;
+        biome_table["max_scale2"] = 0.0f;
+        biome_table["density"] = 0.0f;
+        biome_table["height1"] = 0.0f;
+        biome_table["height2"] = 0.0f;
+        const uint32_t biome_ocean = ctx->seasons->add_biome(biome_table);
+        ASSERT(biome_ocean == render::biome_desert);
+        UNUSED_VARIABLE(biome_ocean);
+      }
+      
+      {
+        auto biome_table = global::get<sol::state>()->create_table();
+//         biome_table["texture"] = "hex_grass1";
+        biome_table["color"] = render::make_color(0.0f, 0.7f, 0.2f, 1.0f).container;
+        biome_table["object1"] = sol::nil;
+        biome_table["object2"] = "rain_tree";
+        biome_table["min_scale1"] = 0.0f;
+        biome_table["max_scale1"] = 0.0f;
+        biome_table["min_scale2"] = 0.3f;
+        biome_table["max_scale2"] = 1.0f;
+        biome_table["density"] = 9.0f;
+        biome_table["height1"] = 0.0f;
+        biome_table["height2"] = 0.0f;
+        const uint32_t biome_ocean = ctx->seasons->add_biome(biome_table);
+        ASSERT(biome_ocean == render::biome_rain_forest);
+        UNUSED_VARIABLE(biome_ocean);
+      }
+      
+      {
+        auto biome_table = global::get<sol::state>()->create_table();
+        biome_table["texture"] = sol::nil;
+        biome_table["color"] = render::make_color(1.0f, 0.2f, 0.2f, 1.0f).container;
+        biome_table["object1"] = sol::nil;
+        biome_table["object2"] = sol::nil;
+        biome_table["min_scale1"] = 0.0f;
+        biome_table["max_scale1"] = 0.0f;
+        biome_table["min_scale2"] = 0.0f;
+        biome_table["max_scale2"] = 0.0f;
+        biome_table["density"] = 0.0f;
+        biome_table["height1"] = 0.0f;
+        biome_table["height2"] = 0.0f;
+        const uint32_t biome_ocean = ctx->seasons->add_biome(biome_table);
+        ASSERT(biome_ocean == render::biome_rocky);
+        UNUSED_VARIABLE(biome_ocean);
+      }
+      
+      {
+        auto biome_table = global::get<sol::state>()->create_table();
+//         biome_table["texture"] = "hex_grass2";
+        biome_table["color"] = render::make_color(0.553f, 0.769f, 0.208f, 1.0f).container;
+        biome_table["object1"] = sol::nil;
+        biome_table["object2"] = sol::nil;
+        biome_table["min_scale1"] = 0.0f;
+        biome_table["max_scale1"] = 0.0f;
+        biome_table["min_scale2"] = 0.0f;
+        biome_table["max_scale2"] = 0.0f;
+        biome_table["density"] = 0.0f;
+        biome_table["height1"] = 0.0f;
+        biome_table["height2"] = 0.0f;
+        const uint32_t biome_ocean = ctx->seasons->add_biome(biome_table);
+        ASSERT(biome_ocean == render::biome_plains);
+        UNUSED_VARIABLE(biome_ocean);
+      }
+      
+      {
+        auto biome_table = global::get<sol::state>()->create_table();
+        biome_table["texture"] = sol::nil;
+        biome_table["color"] = render::make_color(0.0f, 1.0f, 0.0f, 1.0f).container;
+        biome_table["object1"] = sol::nil;
+        biome_table["object2"] = sol::nil;
+        biome_table["min_scale1"] = 0.0f;
+        biome_table["max_scale1"] = 0.0f;
+        biome_table["min_scale2"] = 0.0f;
+        biome_table["max_scale2"] = 0.0f;
+        biome_table["density"] = 0.0f;
+        biome_table["height1"] = 0.0f;
+        biome_table["height2"] = 0.0f;
+        const uint32_t biome_ocean = ctx->seasons->add_biome(biome_table);
+        ASSERT(biome_ocean == render::biome_swamp);
+        UNUSED_VARIABLE(biome_ocean);
+      }
+      
+      {
+        auto biome_table = global::get<sol::state>()->create_table();
+//         biome_table["texture"] = "hex_grass2";
+//         biome_table["color"] = render::make_color(0.2f, 1.0f, 0.2f, 1.0f).container;
+//         biome_table["color"] = render::make_color(0.412f, 0.757f, 0.153f, 1.0f).container;
+        biome_table["color"] = render::make_color(0.553f, 0.769f, 0.208f, 1.0f).container;
+        biome_table["object1"] = sol::nil;
+        biome_table["object2"] = sol::nil;
+        biome_table["min_scale1"] = 0.0f;
+        biome_table["max_scale1"] = 0.0f;
+        biome_table["min_scale2"] = 0.5f;
+        biome_table["max_scale2"] = 1.0f;
+        biome_table["density"] = 4.0f;
+        biome_table["height1"] = 0.0f;
+        biome_table["height2"] = 0.0f;
+        const uint32_t biome_ocean = ctx->seasons->add_biome(biome_table);
+        ASSERT(biome_ocean == render::biome_grassland);
+        UNUSED_VARIABLE(biome_ocean);
+      }
+      
+      {
+        auto biome_table = global::get<sol::state>()->create_table();
+//         biome_table["texture"] = "hex_grass1";
+        biome_table["color"] = render::make_color(0.0f, 0.8f, 0.0f, 1.0f).container;
+        biome_table["object1"] = sol::nil;
+        biome_table["object2"] = "deciduous_tree";
+        biome_table["min_scale1"] = 0.0f;
+        biome_table["max_scale1"] = 0.0f;
+        biome_table["min_scale2"] = 0.4f;
+        biome_table["max_scale2"] = 1.0f;
+        biome_table["density"] = 6.0f;
+        biome_table["height1"] = 0.0f;
+        biome_table["height2"] = 0.0f;
+        const uint32_t biome_ocean = ctx->seasons->add_biome(biome_table);
+        ASSERT(biome_ocean == render::biome_deciduous_forest);
+        UNUSED_VARIABLE(biome_ocean);
+      }
+      
+      {
+        auto biome_table = global::get<sol::state>()->create_table();
+        biome_table["texture"] = sol::nil;
+        biome_table["color"] = render::make_color(0.6f, 0.6f, 0.6f, 1.0f).container;
+        biome_table["object1"] = sol::nil;
+        biome_table["object2"] = sol::nil;
+        biome_table["min_scale1"] = 0.0f;
+        biome_table["max_scale1"] = 0.0f;
+        biome_table["min_scale2"] = 0.0f;
+        biome_table["max_scale2"] = 0.0f;
+        biome_table["density"] = 0.0f;
+        biome_table["height1"] = 0.0f;
+        biome_table["height2"] = 0.0f;
+        const uint32_t biome_ocean = ctx->seasons->add_biome(biome_table);
+        ASSERT(biome_ocean == render::biome_tundra);
+        UNUSED_VARIABLE(biome_ocean);
+      }
+      
+      {
+        auto biome_table = global::get<sol::state>()->create_table();
+//         biome_table["texture"] = "hex_snow";
+        biome_table["color"] = render::make_color(0.914f, 0.988f, 1.0f, 1.0f).container;
+        biome_table["object1"] = sol::nil;
+        biome_table["object2"] = sol::nil;
+        biome_table["min_scale1"] = 0.0f;
+        biome_table["max_scale1"] = 0.0f;
+        biome_table["min_scale2"] = 0.0f;
+        biome_table["max_scale2"] = 0.0f;
+        biome_table["density"] = 0.0f;
+        biome_table["height1"] = 0.0f;
+        biome_table["height2"] = 0.0f;
+        const uint32_t biome_ocean = ctx->seasons->add_biome(biome_table);
+        ASSERT(biome_ocean == render::biome_land_glacier);
+        UNUSED_VARIABLE(biome_ocean);
+      }
+      
+{
+        auto biome_table = global::get<sol::state>()->create_table();
+//         biome_table["texture"] = "hex_grass1";
+        biome_table["color"] = render::make_color(0.0f, 0.6f, 0.0f, 1.0f).container;
+        biome_table["object1"] = sol::nil;
+        biome_table["object2"] = "coniferous_tree";
+        biome_table["min_scale1"] = 0.0f;
+        biome_table["max_scale1"] = 0.0f;
+        biome_table["min_scale2"] = 0.5f;
+        biome_table["max_scale2"] = 1.2f;
+        biome_table["density"] = 9.0f;
+        biome_table["height1"] = 0.0f;
+        biome_table["height2"] = 0.0f;
+        const uint32_t biome_ocean = ctx->seasons->add_biome(biome_table);
+        ASSERT(biome_ocean == render::biome_conifer_forest);
+        UNUSED_VARIABLE(biome_ocean);
+      }
+      
+      {
+        auto biome_table = global::get<sol::state>()->create_table();
+        biome_table["texture"] = sol::nil;
+        biome_table["color"] = render::make_color(0.2f, 0.2f, 0.2f, 1.0f).container;
+        biome_table["object1"] = sol::nil;
+        biome_table["object2"] = sol::nil;
+        biome_table["min_scale1"] = 0.0f;
+        biome_table["max_scale1"] = 0.0f;
+        biome_table["min_scale2"] = 0.0f;
+        biome_table["max_scale2"] = 0.0f;
+        biome_table["density"] = 0.0f;
+        biome_table["height1"] = 0.0f;
+        biome_table["height2"] = 0.0f;
+        const uint32_t biome_ocean = ctx->seasons->add_biome(biome_table);
+        ASSERT(biome_ocean == render::biome_mountain);
+        UNUSED_VARIABLE(biome_ocean);
+      }
+      
+      {
+        auto biome_table = global::get<sol::state>()->create_table();
+//         biome_table["texture"] = "hex_snow";
+//         biome_table["color"] = render::make_color(1.0f, 1.0f, 1.0f, 1.0f).container;
+        biome_table["color"] = render::make_color(0.914f, 0.988f, 1.0f, 1.0f).container;
+        biome_table["object1"] = sol::nil;
+        biome_table["object2"] = sol::nil;
+        biome_table["min_scale1"] = 0.0f;
+        biome_table["max_scale1"] = 0.0f;
+        biome_table["min_scale2"] = 0.0f;
+        biome_table["max_scale2"] = 0.0f;
+        biome_table["density"] = 0.0f;
+        biome_table["height1"] = 0.0f;
+        biome_table["height2"] = 0.0f;
+        const uint32_t biome_ocean = ctx->seasons->add_biome(biome_table);
+        ASSERT(biome_ocean == render::biome_snowy_mountain);
+        UNUSED_VARIABLE(biome_ocean);
+      }
 
       ctx->seasons->create_biome(render::biome_ocean, {
         { GPU_UINT_MAX }, render::make_color(0.2f, 0.2f, 0.8f, 1.0f), { GPU_UINT_MAX }, { GPU_UINT_MAX },
@@ -2219,8 +2630,7 @@ namespace devils_engine {
           ctx->seasons->set_tile_biome(tile_index, biome_id);
         }
       }, ctx);
-      ctx->pool->compute();
-      while (ctx->pool->working_count() != 1 || ctx->pool->tasks_count() != 0) { std::this_thread::sleep_for(std::chrono::microseconds(1)); }
+      utils::async_wait(ctx->pool);
 
       for (size_t i = 0; i < tile_biome.size(); ++i) {
         ctx->container->set_data<uint32_t>(debug::entities::tile, i, debug::properties::tile::biome, tile_biome[i]);
@@ -4214,12 +4624,12 @@ namespace devils_engine {
       const uint32_t tiles_count_color = ctx->container->entities_count(debug::entities::tile);
       for (size_t i = 0; i < tiles_count_color; ++i) {
         const uint32_t country_index = ctx->container->get_data<uint32_t>(debug::entities::tile, i, debug::properties::tile::country_index);
-        const uint32_t rand_num1 = render::lcg(country_index);
-        const uint32_t rand_num2 = render::lcg(rand_num1);
-        const uint32_t rand_num3 = render::lcg(rand_num2);
-        const float color_r = render::lcg_normalize(rand_num1);
-        const float color_g = render::lcg_normalize(rand_num2);
-        const float color_b = render::lcg_normalize(rand_num3);
+        const uint32_t rand_num1 = render::prng(country_index);
+        const uint32_t rand_num2 = render::prng(rand_num1);
+        const uint32_t rand_num3 = render::prng(rand_num2);
+        const float color_r = render::prng_normalize(rand_num1);
+        const float color_g = render::prng_normalize(rand_num2);
+        const float color_b = render::prng_normalize(rand_num3);
         ctx->map->set_tile_color(i, render::make_color(color_r, color_b, color_g, 1.0f));
       }
 
@@ -4265,16 +4675,16 @@ namespace devils_engine {
     }
 
     void gen_title_color(sol::table &table, const uint32_t &index) {
-      const uint32_t val1 = render::lcg(index);
-      const uint32_t val2 = render::lcg(val1);
-      const uint32_t val3 = render::lcg(val2);
-      const uint32_t val4 = render::lcg(val3);
-      const uint32_t val5 = render::lcg(val4);
-      const float f1 = render::lcg_normalize(val1);
-      const float f2 = render::lcg_normalize(val2);
-      const float f3 = render::lcg_normalize(val3);
-      const float f4 = render::lcg_normalize(val4);
-      const float f5 = render::lcg_normalize(val5);
+      const uint32_t val1 = render::prng(index);
+      const uint32_t val2 = render::prng(val1);
+      const uint32_t val3 = render::prng(val2);
+      const uint32_t val4 = render::prng(val3);
+      const uint32_t val5 = render::prng(val4);
+      const float f1 = render::prng_normalize(val1);
+      const float f2 = render::prng_normalize(val2);
+      const float f3 = render::prng_normalize(val3);
+      const float f4 = render::prng_normalize(val4);
+      const float f5 = render::prng_normalize(val5);
       table["main_color"] = render::make_color(f1, f2, f3, 1.0f).container;
       table["border_color1"] = render::make_color(f2, f3, f4, 1.0f).container;
       table["border_color2"] = render::make_color(f3, f4, f5, 1.0f).container;
@@ -6342,3 +6752,4 @@ namespace devils_engine {
 
   }
 }
+

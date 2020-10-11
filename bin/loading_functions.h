@@ -4,6 +4,9 @@
 #include <cstddef>
 #include <cstdint>
 #include <string>
+#include <array>
+
+#define MAX_BIOMES_COUNT 0xff
 
 namespace dt {
   class thread_pool;
@@ -23,6 +26,8 @@ namespace devils_engine {
   namespace systems {
     struct core_t;
     struct map_t;
+    
+    std::array<std::pair<uint32_t, uint32_t>, MAX_BIOMES_COUNT> get_season_biomes_data(const systems::map_t* map_system);
     
     void setup_map_generator(const systems::map_t* map_data);
     

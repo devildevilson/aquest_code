@@ -4,26 +4,60 @@
 //#include "utils/ecs.h"
 #include "utils/utility.h"
 
+// камера должна быть хотя бы побыстрее + она должна быть плавной (!)
+// еще немаловажно это менять угол камеры так чтобы мы смотрели не только сверху 
+// плавность достигается за счет формулы camera_pos += (end_pos - camera_pos) * CONST
+// как настроить поворот камеры? как же она работает в других играх
+// позиция, поворот, конечная позиция, и конечный поворот, 
+// для анимирования камеры это все может пригодиться
+// причем видимо у меня должен быть еще способ зафорсить изменение положение камеры
+// у камеры еще должен быть метод апдейт
+// в реддите сказали что стандарт камеры это 45 градусов
+// мне было бы неплохо сделать до какого то удаления камеру 45 градусов 
+// а потом плавный переход к камере сверху
+// осталось только по коэффициентам пройтись
+// а для этого нужно сделать настройки
+
 namespace yacs {
   class entity;
 }
 
 namespace devils_engine {
+  namespace components {
+    class camera;
+  }
+  
   namespace camera {
-    void strategic(yacs::entity* ent);
+    //void strategic(yacs::entity* ent);
+    void strategic(components::camera* camera);
   }
   
   namespace components {
     class camera {
     public:
+      // некоторые из этих констант неплохо было бы вынести в defines
       constexpr static const float min_zoom = 0.0f;
       constexpr static const float max_zoom = 100.0f;
       constexpr static const float zoom_k = 5.0f;
+      constexpr static const float minimum_camera_height = 20.0f;
       
-      camera(yacs::entity* ent);
+      camera(const glm::vec3 &pos);
+      
+      void update(const size_t &time);
       
       void move(const float &horisontal_angle, const float &vertical_angle);
       void zoom_add(const float &val);
+      
+      // метод перемещения к какой то точке, причем несколько разными способами
+      // мне обязательно нужно сделать так чтобы камера именно смотрела на определенную точку
+      // есть по крайней мере 2 метода: прилететь конкретно к точке, максимально близко
+      // и подлететь к точке так чтобы направление камеры указывало ровно на точку
+      // + еще есть необходимость летать на определенной высоте
+      
+      void set_end_pos(const glm::vec3 &end_pos);   // мы летим максимально близко к точке, причем летим мы по сфере
+      void set_end_point(const glm::vec3 &end_pos); // мы летим к точке такой чтобы камера была напралена к точке
+      
+      glm::vec3 current_pos() const;
       
       float zoom() const;
       glm::vec3 dir() const;
@@ -32,14 +66,22 @@ namespace devils_engine {
       glm::vec3 right() const;
       glm::vec3 up() const;
     private:
-      yacs::entity* m_ent;
-      float m_zoom;
+      glm::vec3 m_spherical_pos;
+      glm::vec3 m_spherical_end_pos;
       glm::vec3 m_dir;
+      glm::vec3 m_end_dir;
+      
       glm::vec3 m_front;
       glm::vec3 m_right;
       glm::vec3 m_up;
       float m_horisontal_angle;
       float m_vertical_angle;
+      float m_zoom;
+      float m_accumulation_zoom;
+      
+      // нужно еще сделать направление камеры, камера должна менять направление от высоты над картой
+      // тут мы должны по идее просто считать от положения
+      glm::vec3 compute_dir(const glm::vec3 &normal, const float zoom);
     };
     
     struct transform {

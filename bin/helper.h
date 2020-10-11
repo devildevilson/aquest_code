@@ -21,6 +21,7 @@
 #include "utils/interface_container.h"
 #include "utils/main_menu.h"
 #include "utils/quest_states.h"
+#include "utils/settings.h"
 //#include "utils/perlin.h"
 #include "FastNoise.h"
 
@@ -85,9 +86,9 @@ namespace devils_engine {
   void return_cursor();
   
   void keys_setup();
-  void mouse_input(yacs::entity* ent, const size_t &time);
+  void mouse_input(components::camera* camera, const size_t &time);
   void key_input(const size_t &time, const uint32_t &current_state, const bool loading);
-  void zoom_input(yacs::entity* ent);
+  void zoom_input(components::camera* camera);
   uint32_t cast_mouse_ray();
   void next_nk_frame(const size_t &time);
 

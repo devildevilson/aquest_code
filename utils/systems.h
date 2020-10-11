@@ -33,10 +33,12 @@ namespace devils_engine {
   }
   
   namespace render {
-    struct container;
     class slots;
     class stage_container;
+    class image_container;
+    struct container;
     struct world_map_buffers;
+    struct image_controller;
   }
   
   namespace map {
@@ -52,6 +54,8 @@ namespace devils_engine {
       input::data* input_data;
       render::container* graphics_container;
       render::slots* render_slots;
+      render::image_container* image_container;
+      render::image_controller* image_controller;
       interface::context* context;
       utils::interface* interface;
       utils::main_menu* menu;

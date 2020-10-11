@@ -11,6 +11,7 @@ namespace devils_engine {
     void setup_lua_types(sol::state &lua);
     void setup_lua_input(sol::state &lua);
     void setup_lua_game_logic(sol::state &lua);
+    void setup_lua_settings(sol::state &lua);
   }
 }
 

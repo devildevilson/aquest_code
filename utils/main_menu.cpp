@@ -1,6 +1,9 @@
 #include "main_menu.h"
+
 #include "interface_container.h"
 #include "demiurge.h"
+#include "settings.h"
+#include "globals.h"
 #include <iostream>
 
 namespace devils_engine {
@@ -20,7 +23,7 @@ namespace devils_engine {
         case invalid: break;
         case save_game_manager: break;
         case worlds_manager: pointer = new demiurge(container); break;
-        case settings: break;
+        case settings: pointer = global::get<struct utils::settings>(); break;
         case multiplayer_manager: break;
         case back_to_menu: break;
         default: throw std::runtime_error("Bad menu type");
@@ -32,7 +35,7 @@ namespace devils_engine {
         case invalid: break;
         case save_game_manager: break;
         case worlds_manager: delete reinterpret_cast<demiurge*>(pointer); pointer = nullptr; break;
-        case settings: break;
+        case settings: pointer = nullptr; break;
         case multiplayer_manager: break;
         case back_to_menu: break;
         //default: throw std::runtime_error("Bad menu type");
@@ -47,7 +50,7 @@ namespace devils_engine {
         case invalid: break;
         case save_game_manager: break;
         case worlds_manager: return sol::make_object(lua, reinterpret_cast<demiurge*>(pointer));
-        case settings: break;
+        case settings: return sol::make_object(lua, reinterpret_cast<struct utils::settings*>(pointer)); break;
         case multiplayer_manager: break;
         case back_to_menu: break;
         //default: throw std::runtime_error("Bad menu type");
@@ -62,6 +65,8 @@ namespace devils_engine {
       menu_types.insert(std::make_pair("main_menu_map", invalid));
       menu_types.insert(std::make_pair("worlds_window", worlds_manager));
       menu_types.insert(std::make_pair("back_to_main_menu", back_to_menu));
+      menu_types.insert(std::make_pair("options_window", settings));
+      menu_types.insert(std::make_pair("graphics_window", settings));
     }
     
     void main_menu::push(const std::string &menu) {
@@ -72,7 +77,7 @@ namespace devils_engine {
       //std::cout << "main_menu::push " << menu << "\n";
       menu_stack.emplace(itr->first, itr->second, container);
       // нужен тип
-      const bool ret = container->close_layer(menu_layer);
+      container->close_layer(menu_layer); // const bool ret =     
       if (menu == "back_to_main_menu") return;
 //       ASSERT(menu == "main_menu" || ret);
       container->open_layer(menu_layer, menu_stack.top().window_name, {sol::make_object(container->lua, this), make_object(container->lua, menu_stack.top().type, menu_stack.top().pointer)});

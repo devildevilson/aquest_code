@@ -9,6 +9,7 @@
 #include "bin/map_creator.h"
 #include "bin/loading_functions.h"
 #include "bin/logic.h"
+#include "render/image_controller.h"
 
 namespace devils_engine {
   namespace utils {
@@ -192,7 +193,7 @@ namespace devils_engine {
           case game_state::battle:
           case game_state::encounter:
           case game_state::loading:
-          case game_state::count: throw std::runtime_error("What should I do?");
+          default: throw std::runtime_error("What should I do?");
         }
       }
     }
@@ -204,6 +205,19 @@ namespace devils_engine {
       base->interface_container->close_all();
       base->menu->clear();
       base->interface_container->collect_garbage();
+      
+      // здесь нужно удалять ресурсы используемые картой
+      // текущий удалятор довольно долгий (обходим все пачки изображений в мапе)
+      base->image_controller->clear_type(render::image_controller::image_type::system); // уберем из удаления позже
+      base->image_controller->clear_type(render::image_controller::image_type::world_biome);
+      base->image_controller->clear_type(render::image_controller::image_type::architecture); // какие то здания на карте
+      base->image_controller->clear_type(render::image_controller::image_type::face); // вряд ли нужен где то еще
+      if (m_next_state == quest_state::main_menu) { // выход в главное меню должен сопровождаться чисткой всего 
+        base->image_controller->clear_type(render::image_controller::image_type::card);
+        base->image_controller->clear_type(render::image_controller::image_type::heraldy);
+        base->image_controller->clear_type(render::image_controller::image_type::icon);
+      }
+      
       m_next_state = UINT32_MAX;
     }
 

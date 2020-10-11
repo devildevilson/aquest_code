@@ -133,6 +133,7 @@ namespace devils_engine {
 
       data::array<data::vector<data::string>, static_cast<size_t>(core::structure::count)> data_array;
       data::array<render::biome_data_t, core::seasons::maximum_biomes> biomes;
+      data::vector<data::string> image_data;
       data::vector<tile_data> tiles_array; //  world_serializator::tiles_count
       data::vector<uint8_t> tiles_seasons;
     };
@@ -155,6 +156,14 @@ namespace devils_engine {
     void world_serializator::add_data(const core::structure &type, std::string &&data) {
       const uint32_t index = static_cast<uint32_t>(type);
       ptr->data_array[index].emplace_back(std::move(data));
+    }
+    
+    void world_serializator::add_image_data(const std::string &data) {
+      ptr->image_data.push_back(data);
+    }
+    
+    void world_serializator::add_image_data(std::string &&data) {
+      ptr->image_data.emplace_back(std::move(data));
     }
 
     void world_serializator::set_world_matrix(const glm::mat4 &mat) {
@@ -665,6 +674,15 @@ namespace devils_engine {
       const auto &arr = ptr->data_array[data_index];
       if (index >= arr.size()) throw std::runtime_error("Bad data index");
       return arr[index];
+    }
+    
+    uint32_t world_serializator::get_images_count() const {
+      return ptr->image_data.size();
+    }
+    
+    std::string_view world_serializator::get_image_data(const uint32_t &index) const {
+      if (index >= ptr->image_data.size()) throw std::runtime_error("Bad image index");
+      return ptr->image_data[index];
     }
 
     glm::mat4 world_serializator::get_world_matrix() const {

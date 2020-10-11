@@ -604,8 +604,19 @@ namespace devils_engine {
       // нужно ли запоминать в кнопке что к ней обращается? 
       // по идее мне это нужно только для того чтобы подтвердить что пользователь не прилепил на одну кнопку несколько эвентов
       // думаю что это можно сделать отдельно
+      if (key == INT32_MAX) return;
+      if (size_t(key) >= container_size) throw std::runtime_error("Bad key index");
       auto &cont = global::get<data>()->key_events.container;
+      if (cont[key].data[0].id == id) return;
+      auto old_id = cont[key].data[0].id;
       cont[key].data[0].id = id;
+      if (!old_id.valid()) return;
+      
+      ASSERT(false);
+      auto event_keys_container = container.event_keys.find(old_id);
+      ASSERT(event_keys_container != container.event_keys.end());
+      if (event_keys_container->second.keys[0] == key) event_keys_container->second.keys[0] = INT32_MAX;
+      if (event_keys_container->second.keys[1] == key) event_keys_container->second.keys[1] = INT32_MAX;
     }
 
     event_data get_event_data(const int &key) {

@@ -55,6 +55,8 @@ namespace devils_engine {
       void set_noise_seed(const uint32_t &seed);
       void add_data(const core::structure &type, const std::string &data);
       void add_data(const core::structure &type, std::string &&data);
+      void add_image_data(const std::string &data); // нужно видимо и с картинками примерно так же сделать как с основными данными
+      void add_image_data(std::string &&data);      // то есть распределить их по типам 
       void set_world_matrix(const glm::mat4 &mat);
       void set_tile_data(const uint32_t &index, const tile_data &data);
       void copy_seasons(core::seasons* s);
@@ -68,6 +70,8 @@ namespace devils_engine {
       uint32_t get_noise_seed() const;
       uint32_t get_data_count(const core::structure &type) const;
       std::string_view get_data(const core::structure &type, const uint32_t &index) const;
+      uint32_t get_images_count() const;
+      std::string_view get_image_data(const uint32_t &index) const;
       glm::mat4 get_world_matrix() const;
       tile_data get_tile_data(const uint32_t &index) const;
       void fill_seasons(core::seasons* s) const;

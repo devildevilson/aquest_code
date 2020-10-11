@@ -190,6 +190,8 @@ file(GLOB_RECURSE GLSL_SOURCE_FILES
   raw_shaders/one_tile.frag
   raw_shaders/walls.comp
   raw_shaders/walls.vert
+  raw_shaders/first_object.vert
+  raw_shaders/first_object.frag
 )
 
 foreach(GLSL ${GLSL_SOURCE_FILES})
@@ -248,6 +250,7 @@ set(SRC_LIST
   utils/lua_initialization_main_menu.cpp
   utils/lua_initialization_constants.cpp
   utils/lua_initialization_package.cpp
+  utils/lua_initialization_settings.cpp
   utils/lua_initialization_internal_enums.cpp
   utils/lua_initialization_internal_building_type.cpp
   utils/lua_initialization_internal_character.cpp
@@ -262,6 +265,7 @@ set(SRC_LIST
   utils/interface_container.cpp
   utils/main_menu.cpp
   utils/demiurge.cpp
+  utils/settings.cpp
   bin/interface2.cpp
   include/FastNoise/FastNoise.cpp
   include/whereami/src/whereami.c
@@ -301,6 +305,7 @@ set(HDR_LIST
   utils/interface_container.h
   utils/main_menu.h
   utils/demiurge.h
+  utils/settings.h
   bin/interface2.h
   include/FastNoise/FastNoise.h
   include/whereami/src/whereami.h
@@ -330,6 +335,7 @@ set(SRC_LIST
   render/render_mode_container.cpp
   render/pipeline_mode_updater.cpp
   render/image_container.cpp
+  render/image_controller.cpp
   render/persistent_resources.cpp
   render/slots.cpp
 )
@@ -355,6 +361,7 @@ set(HDR_LIST
   render/render_mode_container.h
   render/pipeline_mode_updater.h
   render/image_container.h
+  render/image_controller.h
   render/persistent_resources.h
   render/slots.h
 )
@@ -413,6 +420,7 @@ set(SRC_LIST
   bin/city_data_parser.cpp
   bin/character_data_parser.cpp
   bin/building_data_parser.cpp
+  bin/image_parser.cpp
   bin/logic.cpp
   utils/quest_states.cpp
 )
@@ -437,6 +445,7 @@ set(HDR_LIST
   bin/core_context.h
   bin/stats.h
   bin/data_parser.h
+  bin/image_parser.h
   bin/logic.h
   utils/quest_states.h
   utils/quest_state.h
@@ -444,6 +453,7 @@ set(HDR_LIST
 add_executable(${TARGET_NAME} ${SRC_LIST} ${HDR_LIST})
 target_link_libraries(${TARGET_NAME} systems ai render utils serialization)
 add_dependencies(${TARGET_NAME} shaders)
+
 if (MSVC)
   if (CMAKE_BUILD_TYPE MATCHES "Debug")
     set_property(TARGET ${TARGET_NAME} APPEND PROPERTY LINK_FLAGS /DEBUG)
@@ -466,3 +476,27 @@ if (CMAKE_BUILD_TYPE STREQUAL Release AND UNIX)
     add_custom_command(TARGET ${TARGET_NAME} POST_BUILD
             COMMAND ${CMAKE_STRIP} -s "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${TARGET_NAME}")
 endif()
+
+make_directory(${PROJECT_DIR}/scripts)
+file(GLOB LUA_SCRIPTS
+  "lua_scripts/*.lua"
+)
+file(COPY ${LUA_SCRIPTS} DESTINATION "${PROJECT_DIR}/scripts/")
+
+macro(configure_files srcDir destDir)
+    message(STATUS "Configuring directory ${destDir}")
+    make_directory(${destDir})
+
+    file(GLOB_RECURSE templateFiles RELATIVE ${srcDir} ${srcDir}/*)
+    foreach(templateFile ${templateFiles})
+        set(srcTemplatePath ${srcDir}/${templateFile})
+        if(NOT IS_DIRECTORY ${srcTemplatePath})
+            message(STATUS "Configuring file ${templateFile}")
+            configure_file(
+                    ${srcTemplatePath}
+                    ${destDir}/${templateFile}
+                    @ONLY)
+        endif(NOT IS_DIRECTORY ${srcTemplatePath})
+    endforeach(templateFile)
+endmacro(configure_files)
+configure_files("textures/" "${PROJECT_DIR}/textures/")

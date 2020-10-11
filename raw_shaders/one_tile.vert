@@ -16,15 +16,15 @@ layout(push_constant) uniform push {
   uint tile_index;
 } pc;
 
-layout(std140, set = 1, binding = 0) readonly buffer tiles_buffer {
+layout(std140, set = 2, binding = 0) readonly buffer tiles_buffer {
   light_map_tile_t tiles[];
 };
 
-layout(std140, set = 1, binding = 1) readonly buffer biomes_buffer {
+layout(std140, set = 2, binding = 1) readonly buffer biomes_buffer {
   packed_biom_data_t biomes[];
 };
 
-layout(std140, set = 1, binding = 2) readonly buffer tile_points_buffer {
+layout(std140, set = 2, binding = 2) readonly buffer tile_points_buffer {
   vec4 tile_points[];
 };
 

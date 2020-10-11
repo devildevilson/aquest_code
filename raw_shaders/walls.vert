@@ -3,6 +3,13 @@
 #extension GL_GOOGLE_include_directive : enable
 #include "../render/shared_structures.h"
 
+const vec2 uv_arr[] = {
+  vec2(0.0f, 0.0f),
+  vec2(1.0f, 0.0f),
+  vec2(0.0f, 1.0f),
+  vec2(1.0f, 1.0f)
+};
+
 layout(set = 0, binding = 0) uniform Camera {
   mat4 viewproj;
   mat4 view;
@@ -11,15 +18,15 @@ layout(set = 0, binding = 0) uniform Camera {
   uvec4 dim;
 } camera;
 
-layout(std140, set = 1, binding = 0) readonly buffer walls_datas {
+layout(std140, set = 2, binding = 0) readonly buffer walls_datas {
   uvec4 datas[];
 };
 
-layout(std140, set = 2, binding = 0) readonly buffer tiles_buffer {
+layout(std140, set = 3, binding = 0) readonly buffer tiles_buffer {
   light_map_tile_t tiles[];
 };
 
-layout(std140, set = 2, binding = 2) readonly buffer tile_points_buffer {
+layout(std140, set = 3, binding = 2) readonly buffer tile_points_buffer {
   vec4 tile_points[];
 };
 
@@ -99,7 +106,8 @@ void main() {
   const float r = get_color_r(color) * 0.85f; // возможно чуть побольше значения сделать
   const float g = get_color_g(color) * 0.85f;
   const float b = get_color_b(color) * 0.85f;
-  out_biom_texture.container = tiles[tile1_index].tile_indices.y;
+  //out_biom_texture.container = tiles[tile1_index].tile_indices.y;
+  out_biom_texture.container = GPU_UINT_MAX;
   out_biom_color = make_color1(r, g, b, 1.0f);
-  out_uv = vec2(0.0f, 0.0f);
+  out_uv = uv_arr[index_wall];
 }

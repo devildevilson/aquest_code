@@ -19,6 +19,10 @@ layout(std140, set = 1, binding = 0) readonly buffer tiles_buffer {
   light_map_tile_t tiles[];
 };
 
+layout(std140, set = 1, binding = 1) readonly buffer biome_data_buffer {
+  packed_biome_data_t packed_biome_datas[];
+};
+
 layout(std140, set = 1, binding = 2) readonly buffer tile_points_buffer {
   vec4 tile_points[];
 };
@@ -27,7 +31,7 @@ layout(std140, set = 1, binding = 3) readonly buffer triangles_buffer {
   packed_fast_triangle_t triangles[];
 };
 
-layout(std430, set = 1, binding = 4) readonly buffer triangles_tile_indices_buffer {
+layout(std140, set = 1, binding = 4) readonly buffer triangles_tile_indices_buffer {
   uvec4 triangles_tile_indices[];
 };
 
@@ -40,18 +44,27 @@ layout(std140, set = 2, binding = 0) buffer tile_indirect_buffer {
   uvec4 walls_data;
   // сюда можно засунуть фрустум
   frustum_t frustum;
+
+  // uvec4 objects_indirect; // 256 штук?
+  // uvec4 objects_data;
+  // uvec4 biome_data[256*2/4];
+  biome_objects_data_t biome_objects_data[MAX_BIOMES_COUNT];
 };
 
-layout(std430, set = 2, binding = 1) buffer tiles_indices_buffer {
+layout(std140, set = 2, binding = 1) buffer tiles_indices_buffer {
   instance_data_t tiles_indices[];
 };
 
-layout(std430, set = 2, binding = 2) buffer borders_indices_buffer {
+layout(std140, set = 2, binding = 2) buffer borders_indices_buffer {
   instance_data_t borders_indices[];
 };
 
-layout(std430, set = 2, binding = 3) buffer walls_indices_buffer {
+layout(std140, set = 2, binding = 3) buffer walls_indices_buffer {
   instance_data_t walls_indices[];
+};
+
+layout(std140, set = 2, binding = 4) buffer objects_indices_buffer {
+  instance_data_t objects_indices[];
 };
 
 #define FAR_PLANE 256.0f
@@ -149,79 +162,121 @@ void main() {
   }
 
   // теперь мы можем проверить и добавить границы и соединения
-  if (walls_indices_count == 0) return;
-  for (uint i = 0; i < triangle.data[1]; ++i) {
-    const uint tile_index = get_accel_triangle_tile_index(triangle.data[0] + i);
-    const uint walls_data = tiles[tile_index].packed_data4[1]; // блин у меня весь буффер используется только для двух переменных, наверное стоит вытащить их в другой буфер
-    if (walls_data == GPU_UINT_MAX) continue;
+  if (walls_indices_count != 0) {
+    for (uint i = 0; i < triangle.data[1]; ++i) {
+      const uint tile_index = get_accel_triangle_tile_index(triangle.data[0] + i);
+      const uint walls_data = tiles[tile_index].packed_data4[1]; // блин у меня весь буффер используется только для двух переменных, наверное стоит вытащить их в другой буфер
+      if (walls_data == GPU_UINT_MAX) continue;
 
-    // было бы неплохо убрать те соединения, которые мы не видим
-    // как это сделать? мне для этого нужен буфер со стенами
-    const uint size = (walls_data >> 28) & connections_size_mask;
-    const uint offset = walls_data & connections_offset_mask;
-    const uint index_offset = atomicAdd(walls_indirect.x, size*(PACKED_INDEX_COEF+1));
+      // было бы неплохо убрать те соединения, которые мы не видим
+      // как это сделать? мне для этого нужен буфер со стенами
+      const uint size = (walls_data >> 28) & connections_size_mask;
+      const uint offset = walls_data & connections_offset_mask;
+      const uint index_offset = atomicAdd(walls_indirect.x, size*(PACKED_INDEX_COEF+1));
 
-    for (uint j = 0; j < size; ++j) { // каждое соединение добавляем отдельно
-      const uint index = index_offset + j*(PACKED_INDEX_COEF+1);
-      const uint wall_index = offset + j;
-      const uint packed_index = wall_index * PACKED_INDEX_COEF;
-      for (uint k = 0; k < PACKED_INDEX_COEF; ++k) {
-        const uint final_index = index + k;
+      for (uint j = 0; j < size; ++j) { // каждое соединение добавляем отдельно
+        const uint index = index_offset + j*(PACKED_INDEX_COEF+1);
+        const uint wall_index = offset + j;
+        const uint packed_index = wall_index * PACKED_INDEX_COEF;
+        for (uint k = 0; k < PACKED_INDEX_COEF; ++k) {
+          const uint final_index = index + k;
+          const uint vec_index = final_index / 4;
+          const uint slot_index = final_index % 4;
+          walls_indices[vec_index].index[slot_index] = packed_index + k;
+        }
+
+        const uint final_index = index + PACKED_INDEX_COEF;
         const uint vec_index = final_index / 4;
         const uint slot_index = final_index % 4;
-        walls_indices[vec_index].index[slot_index] = packed_index + k;
+        walls_indices[vec_index].index[slot_index] = GPU_UINT_MAX;
       }
-
-      const uint final_index = index + PACKED_INDEX_COEF;
-      const uint vec_index = final_index / 4;
-      const uint slot_index = final_index % 4;
-      walls_indices[vec_index].index[slot_index] = GPU_UINT_MAX;
     }
   }
 
   // borders_data.z должно указывать нужно ли пропускать рендер границ
-  if (bool(borders_data[2]) || borders_indices_count == 0) return;
-  for (uint i = 0; i < triangle.data[1]; ++i) {
-    const uint tile_index = get_accel_triangle_tile_index(triangle.data[0] + i);
-    const uint borders_data = tiles[tile_index].packed_data4[0];
-    if (borders_data == GPU_UINT_MAX) continue;
+  if (!(bool(borders_data[2]) || borders_indices_count == 0)) {
+    for (uint i = 0; i < triangle.data[1]; ++i) {
+      const uint tile_index = get_accel_triangle_tile_index(triangle.data[0] + i);
+      const uint borders_data = tiles[tile_index].packed_data4[0];
+      if (borders_data == GPU_UINT_MAX) continue;
 
-    const uint size = (borders_data >> 28) & border_size_mask;
-    const uint offset = borders_data & border_offset_mask;
-    const uint index_offset = atomicAdd(borders_indirect.x, size*(PACKED_INDEX_COEF+1));
+      const uint size = (borders_data >> 28) & border_size_mask;
+      const uint offset = borders_data & border_offset_mask;
+      const uint index_offset = atomicAdd(borders_indirect.x, size*(PACKED_INDEX_COEF+1));
 
-    for (uint j = 0; j < size; ++j) { // каждую границу добавляем отдельно
-      const uint index = index_offset + j*(PACKED_INDEX_COEF+1);
-      const uint border_index = offset + j;
-      const uint packed_index = border_index * PACKED_INDEX_COEF;
-      for (uint k = 0; k < PACKED_INDEX_COEF; ++k) {
-        const uint final_index = index + k;
+      for (uint j = 0; j < size; ++j) { // каждую границу добавляем отдельно
+        const uint index = index_offset + j*(PACKED_INDEX_COEF+1);
+        const uint border_index = offset + j;
+        const uint packed_index = border_index * PACKED_INDEX_COEF;
+        for (uint k = 0; k < PACKED_INDEX_COEF; ++k) {
+          const uint final_index = index + k;
+          const uint vec_index = final_index / 4;
+          const uint slot_index = final_index % 4;
+          borders_indices[vec_index].index[slot_index] = packed_index + k;
+        }
+
+        const uint final_index = index + PACKED_INDEX_COEF;
         const uint vec_index = final_index / 4;
         const uint slot_index = final_index % 4;
-        borders_indices[vec_index].index[slot_index] = packed_index + k;
+        borders_indices[vec_index].index[slot_index] = GPU_UINT_MAX;
       }
-
-      const uint final_index = index + PACKED_INDEX_COEF;
-      const uint vec_index = final_index / 4;
-      const uint slot_index = final_index % 4;
-      borders_indices[vec_index].index[slot_index] = GPU_UINT_MAX;
     }
   }
 
-  // мне необходимо два миллиона тайлов проверить на видимость
-  // крайне быстрый способ заключается в том что я могу легко продотать
-  // все тайлы и убрать те из них что смотрят в другую сторону
-  // вообще справедливо то что множество гексов останутся от кадра к кадру
+  // составляем индексы для объектов на тайле
+  for (uint i = 0; i < triangle.data[1]; ++i) {
+    const uint tile_index = get_accel_triangle_tile_index(triangle.data[0] + i);
+    const uint biome_index = tiles[tile_index].packed_data4[2];
 
-  // на 3-ем и 4-ом уровнях иерархической структуры лежат 1280 и 5120 треугольников соответственно
-  // на самом деле достаточно проверить лишь это количество треугольников
-  // в этом случае должно быть гораздо быстрее
+    const biome_data_t biome = unpack_data(packed_biome_datas[biome_index]);
+    if (!is_image_valid(biome.object_texture2)) continue;
 
-  // 5120 треугольников выдают по 100 тайлов каждый примерно (7 уровень детализации)
-  // tile_indices - это инстансный буфер, мы его можем расширить,
-  // например нам возможно потребуется посчитать uv координаты
-  // вообще uv координаты зависят не от тайла, а от точки,
-  // и для всех точек uv развертку можно посчитать заранее
+    const float density = biome.density;
+    const uint instances = uint(max(density, 1.0f));
+
+    // может как то преобразовать? у меня tile_index может быть равен 0
+    // так что в любом случае надо что то сделать с индексом
+    // кажется с новым prng нам не нужно об этом думать
+    const uint prng_state = prng(tile_index);
+    const float val_norm = 1.0f - prng_normalize(prng_state);
+    //const float val_norm = 1.0f;
+    if (val_norm > density) continue;
+
+    const uint offset = biome_objects_data[biome_index].objects_data[1];
+
+    const uint place = atomicAdd(biome_objects_data[biome_index].objects_indirect[0], PACKED_INDEX_COEF+1);
+    biome_objects_data[biome_index].objects_indirect[1] = instances;
+    biome_objects_data[biome_index].objects_indirect[2] = offset;
+
+    const uint packed_tile_index = tile_index * PACKED_INDEX_COEF;
+    const uint index = offset + place;
+    for (uint j = 0; j < PACKED_INDEX_COEF; ++j) {
+      const uint final_index = index + j;
+      const uint vec_index = final_index / 4;
+      const uint slot_index = final_index % 4;
+      objects_indices[vec_index].index[slot_index] = packed_tile_index + j;
+    }
+
+    const uint final_index = index + PACKED_INDEX_COEF;
+    const uint vec_index = final_index / 4;
+    const uint slot_index = final_index % 4;
+    objects_indices[vec_index].index[slot_index] = GPU_UINT_MAX;
+  }
+
+  // нужно переходить к тому чтобы нарисовать какие то красивости
+  // мне нужно добавить много деревьев мелких на тайл
+  // для этого нужно сгенерить позиции для каждого дерева
+  // как я могу это сделать? если я отсортирую рисуемые тайлы
+  // то я могу просто задать много инстансов и по инстансам отрендерить
+
+  // я могу засунуть все индексы по оффсетам в буфер
+  // а потом сколько угодно раз его рисовать в инстансах
+  // нам нужно пихнуть 5 индексов
+  // если плотность меньше единицы то понятно че делать
+  // принимаем решение пихать/не пихать прямо здесь
+  // что делать если плотность больше единицы? у нас нет возможности как то
+  // прикинуть будет или не будет на этом тайле столько объектов
+  // наверное можно просто сделать количество по целому значению переменной
 }
 
 float distance2(const vec4 a, const vec4 b) {
@@ -273,3 +328,18 @@ uint get_accel_triangle_tile_index(const uint index) {
   const uint vec4_offset = index % 4;
   return triangles_tile_indices[vec4_index][vec4_offset];
 }
+
+// мне необходимо два миллиона тайлов проверить на видимость
+// крайне быстрый способ заключается в том что я могу легко продотать
+// все тайлы и убрать те из них что смотрят в другую сторону
+// вообще справедливо то что множество гексов останутся от кадра к кадру
+
+// на 3-ем и 4-ом уровнях иерархической структуры лежат 1280 и 5120 треугольников соответственно
+// на самом деле достаточно проверить лишь это количество треугольников
+// в этом случае должно быть гораздо быстрее
+
+// 5120 треугольников выдают по 100 тайлов каждый примерно (7 уровень детализации)
+// tile_indices - это инстансный буфер, мы его можем расширить,
+// например нам возможно потребуется посчитать uv координаты
+// вообще uv координаты зависят не от тайла, а от точки,
+// и для всех точек uv развертку можно посчитать заранее

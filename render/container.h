@@ -37,6 +37,13 @@ namespace devils_engine {
         uint32_t api_version;
       };
       
+      struct window_info {
+        uint32_t width;
+        uint32_t height;
+        uint32_t video_mode; // это относится к фуллскрину
+        bool fullscreen;
+      };
+      
       static const size_t bit_field_size = physical_device_properties_count / SIZE_WIDTH + 1;
       
       utils::typeless_container mem;
@@ -51,7 +58,7 @@ namespace devils_engine {
       ~container();
 
       yavf::Instance* create_instance(const std::vector<const char*> &extensions, const application_info* app_info);
-      struct window* create_window();
+      struct window* create_window(const window_info &info);
       yavf::Device* create_device();
       render::stage_container* create_system(const size_t &system_container_size);
       void create_tasks();

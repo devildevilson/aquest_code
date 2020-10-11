@@ -76,6 +76,8 @@ namespace devils_engine {
         uint32_t padding3[3];
 //         glm::uvec4 data;
         utils::frustum frustum;
+        
+        biome_objects_data_t biome_data[MAX_BIOMES_COUNT];
       };
       
       static_assert(sizeof(indirect_buffer) % (sizeof(uint32_t)*4) == 0);
@@ -93,9 +95,12 @@ namespace devils_engine {
       yavf::Buffer* tiles_index_buffer() const;
       yavf::Buffer* borders_index_buffer() const;
       yavf::Buffer* walls_index_buffer() const;
+      yavf::Buffer* objects_index_buffer() const;
       
       void set_borders_count(const uint32_t &count);
       void set_connections_count(const uint32_t &count);
+      
+      void set_biome_tile_count(const std::array<std::pair<uint32_t, uint32_t>, MAX_BIOMES_COUNT> &data);
       
       void set_border_rendering(const bool value);
       bool is_rendering_border() const;
@@ -105,6 +110,7 @@ namespace devils_engine {
       yavf::Buffer* tiles_indices;
       yavf::Buffer* borders_indices;
       yavf::Buffer* walls_indices;
+      yavf::Buffer* objects_indices;
       yavf::DescriptorSet* set;
       yavf::Pipeline pipe;
     };
@@ -213,6 +219,7 @@ namespace devils_engine {
       yavf::Pipeline one_tile_pipe;
 //       yavf::Buffer* indices;
       yavf::Buffer* points_indices;
+      yavf::DescriptorSet* images_set;
       uint32_t picked_tile_index;
 
       void create_render_pass();
@@ -267,6 +274,31 @@ namespace devils_engine {
       tile_optimizer* opt;
       yavf::Pipeline pipe;
       world_map_buffers* map_buffers;
+      yavf::DescriptorSet* images_set;
+    };
+    
+    class tile_object_render : public stage {
+    public:
+      struct create_info {
+        yavf::Device* device;
+        tile_optimizer* opt;
+        world_map_buffers* map_buffers;
+      };
+      tile_object_render(const create_info &info);
+      ~tile_object_render();
+
+      void begin() override;
+      void proccess(context* ctx) override;
+      void clear() override;
+
+//       void recreate_pipelines(const game::image_resources_t* resource) override;
+//       void change_rendering_mode(const uint32_t &render_mode, const uint32_t &water_mode, const uint32_t &render_slot, const uint32_t &water_slot, const glm::vec3 &color);
+    private:
+      yavf::Device* device;
+      tile_optimizer* opt;
+      yavf::Pipeline pipe;
+      world_map_buffers* map_buffers;
+      yavf::DescriptorSet* images_set;
     };
     
     class world_map_render : public pipeline_stage, public stage_container {

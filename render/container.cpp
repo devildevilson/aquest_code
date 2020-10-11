@@ -62,8 +62,8 @@ namespace devils_engine {
       return instance;
     }
 
-    struct window* container::create_window() {
-      window = mem.create<struct window>(window::create_info{instance, false, 0, 0, 0.0f, 0});
+    struct window* container::create_window(const window_info &info) {
+      window = mem.create<struct window>(window::create_info{instance, info.fullscreen, info.width, info.height, 0.0f, info.video_mode});
       return window;
     }
 
@@ -156,7 +156,9 @@ namespace devils_engine {
       {
         yavf::DescriptorLayoutMaker dlm(device);
 
-        uniform_layout = dlm.binding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_ALL).create(UNIFORM_BUFFER_LAYOUT_NAME);
+        uniform_layout = dlm.binding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_ALL)
+                            .binding(1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_ALL)
+                            .create(UNIFORM_BUFFER_LAYOUT_NAME);
         storage_layout = dlm.binding(0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_ALL).create(STORAGE_BUFFER_LAYOUT_NAME);
       }
 

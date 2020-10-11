@@ -20,7 +20,8 @@ namespace devils_engine {
         VMA_MEMORY_USAGE_GPU_ONLY
       );
       
-      image->createView(layers == 1 ? VK_IMAGE_VIEW_TYPE_2D : VK_IMAGE_VIEW_TYPE_2D_ARRAY, VK_IMAGE_ASPECT_COLOR_BIT);
+      //image->createView(layers == 1 ? VK_IMAGE_VIEW_TYPE_2D : VK_IMAGE_VIEW_TYPE_2D_ARRAY, VK_IMAGE_ASPECT_COLOR_BIT);
+      image->createView(VK_IMAGE_VIEW_TYPE_2D_ARRAY, VK_IMAGE_ASPECT_COLOR_BIT);
     }
     
     utils::extent_2d image_container::image_pool::image_size() const {
@@ -78,18 +79,32 @@ namespace devils_engine {
       return image->info().arrayLayers;
     }
     
+    const size_t image_container::image_pool::max_size;
+    
     image_container::image_container(const create_info &info) : device(info.device) {
       null_image = device->create(yavf::ImageCreateInfo::texture2D({1, 1}, VK_IMAGE_USAGE_SAMPLED_BIT), VMA_MEMORY_USAGE_GPU_ONLY);
-      null_image->createView(VK_IMAGE_VIEW_TYPE_2D, VK_IMAGE_ASPECT_COLOR_BIT);
+      null_image->createView(VK_IMAGE_VIEW_TYPE_2D_ARRAY, VK_IMAGE_ASPECT_COLOR_BIT);
+      
+      auto task = device->allocateGraphicTask();
+      task->begin();
+      task->setBarrier(null_image, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+      task->end();
+      
+      task->start();
+      task->wait();
+      
+      device->deallocate(task);
     }
     
     image_container::~image_container() {
       for (auto pool : slots) {
+        if (pool == nullptr) continue;
         device->destroy(pool->image);
         image_memory.destroy(pool);
       }
       
       device->destroy(null_image);
+      null_image = nullptr;
     }
     
     void image_container::set_slots(const size_t &slots) {
@@ -99,6 +114,20 @@ namespace devils_engine {
     
     size_t image_container::pool_count() const {
       return slots.size();
+    }
+    
+    size_t image_container::first_empty_pool() const {
+      for (size_t i = 0; i < slots.size(); ++i) {
+        if (pool_exists(i)) continue;
+        return i;
+      }
+      
+      return SIZE_MAX;
+    }
+    
+    bool image_container::pool_exists(const size_t &index) const {
+      if (index >= slots.size()) return false;
+      return slots[index] != nullptr;
     }
     
     const image_container::image_pool* image_container::get_pool(const size_t &index) const {
@@ -111,6 +140,12 @@ namespace devils_engine {
       const uint32_t free_index = slots[pool_index]->occupy_free_index();
       if (free_index == UINT32_MAX) return {GPU_UINT_MAX};
       return render::create_image(pool_index, free_index, 0, false, false); //  {static_cast<uint32_t>(pool_index), free_index}
+    }
+    
+    uint32_t image_container::reserve_image(const size_t &pool_index) {
+      if (pool_index >= slots.size()) return GPU_UINT_MAX;
+      const uint32_t free_index = slots[pool_index]->occupy_free_index();
+      return free_index;
     }
     
     void image_container::release_image(const render::image_t &img) {
@@ -129,7 +164,8 @@ namespace devils_engine {
     
     void image_container::destroy_pool(const uint32_t &slot_index) {
       if (slot_index >= slots.size()) throw std::runtime_error("Destruction of uncreated slot");
-      if (slots[slot_index] == nullptr) throw std::runtime_error("Destruction of uncreated slot");
+      //if (slots[slot_index] == nullptr) throw std::runtime_error("Destruction of uncreated slot");
+      if (slots[slot_index] == nullptr) return;
       
       image_memory.destroy(slots[slot_index]);
       slots[slot_index] = nullptr;
@@ -155,6 +191,21 @@ namespace devils_engine {
         yavf::ImageView* view = slots[i] == nullptr ? null_image->view() : slots[i]->image->view();
         set->at(i) = {VK_NULL_HANDLE, view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, static_cast<uint32_t>(i), 0, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE};
       }
+    }
+    
+    size_t image_container::memory() const {
+      size_t counter = 0;
+      for (auto slot : slots) {
+        if (slot == nullptr) continue;
+        const uint32_t layers = slot->layers_count();
+        const bool mip = slot->mip_levels() != 1;
+        const auto size = slot->image_size();
+        const size_t one_image_size = size.width * size.height * 4;
+        const size_t capacity = (one_image_size + mip * one_image_size / 2) * layers;
+        counter += capacity;
+      }
+      
+      return counter;
     }
   }
 }

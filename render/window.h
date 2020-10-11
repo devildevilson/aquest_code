@@ -116,6 +116,7 @@ namespace devils_engine {
       void hide() const;
       bool close() const;
       void toggle_vsync();
+      void toggle_fullscreen();
       void update_buffers() const;
       std::pair<float, float> content_scale() const;
       std::pair<int32_t, int32_t> monitor_physical_size() const;

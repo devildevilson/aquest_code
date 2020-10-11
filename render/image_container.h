@@ -11,6 +11,9 @@
 
 #define TEXTURE_MAX_LAYER_COUNT 2048
 
+// я тут прикинул, мы вполне можем теперь использовать array
+// заполняя слоты нулл текстуркой, другое дело что придется испльно переделать image_pool
+
 namespace yavf {
   class Device;
   class Image;
@@ -63,14 +66,18 @@ namespace devils_engine {
       
       void set_slots(const size_t &slots);
       size_t pool_count() const;
+      size_t first_empty_pool() const;
+      bool pool_exists(const size_t &index) const;
       const image_pool* get_pool(const size_t &index) const;
       render::image_t get_image(const size_t &pool_index);
+      uint32_t reserve_image(const size_t &pool_index);
       void release_image(const render::image_t &img);
       void create_pool(const uint32_t &slot_index, const utils::extent_2d &img_size, const uint32_t &mips, const uint32_t &layers);
       void destroy_pool(const uint32_t &slot_index);
       bool check_image(const render::image_t &img);
       
       void update_descriptor_data(yavf::DescriptorSet* set);
+      size_t memory() const;
     private:
       yavf::Device* device;
       

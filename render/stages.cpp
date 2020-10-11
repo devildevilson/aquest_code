@@ -9,6 +9,7 @@
 #include "bin/interface_context.h"
 #include "utils/input.h"
 #include "utils/systems.h"
+#include "image_controller.h"
 
 #define TILE_RENDER_PIPELINE_LAYOUT_NAME "tile_render_pipeline_layout"
 #define TILE_RENDER_PIPELINE_NAME "tile_render_pipeline"
@@ -64,7 +65,9 @@ namespace devils_engine {
     
 #define WORLD_MAP_RENDER_DESCRIPTOR_POOL "world_map_render_descriptor_pool"
     
-    const size_t max_indices_count = (core::map::hex_count_d(core::map::detail_level) / 2 + 1) * 7; // тут теперь максимальное количество ИНДЕКСОВ
+    const size_t half_tiles_count = (core::map::hex_count_d(core::map::detail_level) / 2 + 1);
+    const size_t max_indices_count = half_tiles_count * 7; // тут теперь максимальное количество ИНДЕКСОВ
+    const size_t max_objects_indices_count = core::map::hex_count_d(core::map::detail_level) * 5;
     //static_assert(max_tiles_count < 500000);
     tile_optimizer::tile_optimizer(const create_info &info) : 
       device(info.device),
@@ -99,6 +102,14 @@ namespace devils_engine {
         VMA_MEMORY_USAGE_GPU_ONLY
       );
       
+      objects_indices = device->create(
+        yavf::BufferCreateInfo::buffer(
+          //(sizeof(instance_data_t)*max_tiles_count)/4+1, 
+          (max_objects_indices_count*4+16-1)/16*16,
+          VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT), 
+        VMA_MEMORY_USAGE_GPU_ONLY
+      );
+      
       auto buffer = reinterpret_cast<struct indirect_buffer*>(indirect->ptr());
       memset(indirect->ptr(), 0, sizeof(struct indirect_buffer));
       buffer->padding1[0] = core::map::tri_count_d(core::map::accel_struct_detail_level);
@@ -127,6 +138,7 @@ namespace devils_engine {
                                   .binding(1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT)
                                   .binding(2, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT)
                                   .binding(3, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT)
+                                  .binding(4, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT)
                                   .create("tiles_indices_layout");
       }
       
@@ -137,6 +149,7 @@ namespace devils_engine {
         set->add({tiles_indices, 0, tiles_indices->info().size, 0, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER});
         set->add({borders_indices, 0, borders_indices->info().size, 0, 2, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER});
         set->add({walls_indices, 0, walls_indices->info().size, 0, 3, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER});
+        set->add({objects_indices, 0, objects_indices->info().size, 0, 4, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER});
         set->update();
 //         indirect->setDescriptor(desc, index);
       }
@@ -206,6 +219,15 @@ namespace devils_engine {
       buffer->walls_command.firstInstance = 0;
       
       memcpy(&buffer->frustum, &fru, sizeof(utils::frustum));
+      
+      for (uint32_t i = 0; i < MAX_BIOMES_COUNT; ++i) {
+        buffer->biome_data[i].objects_indirect[0] = 0; // индексы
+        buffer->biome_data[i].objects_indirect[1] = 0; // инстансы
+        buffer->biome_data[i].objects_indirect[2] = 0; // ферст индекс
+        buffer->biome_data[i].objects_indirect[3] = 0; // вертекс оффсет
+        buffer->biome_data[i].objects_data[0] = 0; // ферст инстанс
+        buffer->biome_data[i].objects_data[3] = 0; // нужно ли?
+      }
     }
     
     void tile_optimizer::proccess(context* ctx) {
@@ -257,6 +279,10 @@ namespace devils_engine {
       return walls_indices;
     }
     
+    yavf::Buffer* tile_optimizer::objects_index_buffer() const {
+      return objects_indices;
+    }
+    
     void tile_optimizer::set_borders_count(const uint32_t &count) {
       const uint32_t indices_count = count*5;
       const uint32_t final_size = (indices_count + 16 - 1) / 16 * 16;
@@ -282,6 +308,15 @@ namespace devils_engine {
       set->at(3) = {walls_indices, 0, walls_indices->info().size, 0, 3, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER};
       set->update();
       PRINT_VAR("walls indices_count", indices_count)
+    }
+    
+    void tile_optimizer::set_biome_tile_count(const std::array<std::pair<uint32_t, uint32_t>, MAX_BIOMES_COUNT> &data) {
+      auto buffer = reinterpret_cast<struct indirect_buffer*>(indirect->ptr());
+      for (uint32_t i = 0; i < MAX_BIOMES_COUNT; ++i) {
+        buffer->biome_data[i].objects_data[1] = data[i].first;  // offset
+        buffer->biome_data[i].objects_data[2] = data[i].second; // size
+        buffer->biome_data[i].objects_data[3] = 0;
+      }
     }
     
     void tile_optimizer::set_border_rendering(const bool value) {
@@ -631,16 +666,22 @@ namespace devils_engine {
       }
       
       auto tiles_data_layout = device->setLayout(TILES_DATA_LAYOUT_NAME);
+      auto images_layout = device->setLayout(IMAGE_CONTAINER_DESCRIPTOR_LAYOUT_NAME);
+      ASSERT(images_layout != VK_NULL_HANDLE);
+      
+      images_set = global::get<systems::core_t>()->image_controller->set;
 
       yavf::PipelineLayout layout = VK_NULL_HANDLE;
       yavf::PipelineLayout layout2 = VK_NULL_HANDLE;
       {
         yavf::PipelineLayoutMaker plm(device);
         layout = plm.addDescriptorLayout(uniform_layout)
+                    .addDescriptorLayout(images_layout)
                     .addDescriptorLayout(tiles_data_layout)
                     .create(TILE_RENDER_PIPELINE_LAYOUT_NAME);
                     
         layout2 = plm.addDescriptorLayout(uniform_layout)
+                     .addDescriptorLayout(images_layout)
                      .addDescriptorLayout(tiles_data_layout)
                      .addPushConstRange(0, sizeof(uint32_t))
                      .create("one_tile_pipeline_layout");
@@ -710,6 +751,7 @@ namespace devils_engine {
       device->destroy(one_tile_pipe);
     }
 
+    // виндовс не дает использовать базовый offsetof
 #define offsetof123(s,m) ((::size_t)&reinterpret_cast<char const volatile&>((((s*)0)->m)))
 
     void tile_render::begin() {}
@@ -738,7 +780,7 @@ namespace devils_engine {
       ASSERT(uniform->descriptorSet() != nullptr);
       // забыл создать буферу дескриптор
       ASSERT(tiles->descriptorSet() != nullptr);
-      task->setDescriptor({uniform->descriptorSet()->handle(), tiles->descriptorSet()->handle()}, 0);
+      task->setDescriptor({uniform->descriptorSet()->handle(), images_set->handle(), tiles->descriptorSet()->handle()}, 0);
       
 //       task->setVertexBuffer(indices, 0);
 //       task->setVertexBuffer(points_indices, 1);
@@ -1029,18 +1071,19 @@ namespace devils_engine {
       map_buffers(info.map_buffers)
     {
       yavf::DescriptorSetLayout uniform_layout = device->setLayout(UNIFORM_BUFFER_LAYOUT_NAME);
-      if (uniform_layout == VK_NULL_HANDLE) {
-        yavf::DescriptorLayoutMaker dlm(device);
-        uniform_layout = dlm.binding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_ALL_GRAPHICS).create(UNIFORM_BUFFER_LAYOUT_NAME);
-      }
+      ASSERT(uniform_layout != VK_NULL_HANDLE);
       
       auto tiles_data_layout = device->setLayout(TILES_DATA_LAYOUT_NAME);
       auto storage_layout = device->setLayout(STORAGE_BUFFER_LAYOUT_NAME);
+      auto images_layout = device->setLayout(IMAGE_CONTAINER_DESCRIPTOR_LAYOUT_NAME);
+      ASSERT(images_layout != VK_NULL_HANDLE);
+      images_set = global::get<systems::core_t>()->image_controller->set;
 
       yavf::PipelineLayout layout = VK_NULL_HANDLE;
       {
         yavf::PipelineLayoutMaker plm(device);
         layout = plm.addDescriptorLayout(uniform_layout)
+                    .addDescriptorLayout(images_layout)
                     .addDescriptorLayout(storage_layout)
                     .addDescriptorLayout(tiles_data_layout)
                     .create("walls_rendering_pipeline_layout");
@@ -1104,7 +1147,7 @@ namespace devils_engine {
       ASSERT(uniform->descriptorSet() != nullptr);
       ASSERT(walls_buffer->descriptorSet() != nullptr);
       ASSERT(tiles->descriptorSet() != nullptr);
-      task->setDescriptor({uniform->descriptorSet()->handle(), walls_buffer->descriptorSet()->handle(), tiles->descriptorSet()->handle()}, 0);
+      task->setDescriptor({uniform->descriptorSet()->handle(), images_set->handle(), walls_buffer->descriptorSet()->handle(), tiles->descriptorSet()->handle()}, 0);
       
       //task->setVertexBuffer(vertices_buffer, 0);
       task->setIndexBuffer(indices_buffer);
@@ -1155,6 +1198,85 @@ namespace devils_engine {
                   .colorWriteMask(VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT)
                 .create("walls_rendering_pipeline", pipe.layout(), global::get<render::window>()->render_pass);
     }
+    
+    tile_object_render::tile_object_render(const create_info &info) : device(info.device), opt(info.opt), map_buffers(info.map_buffers) {
+      yavf::DescriptorSetLayout uniform_layout = device->setLayout(UNIFORM_BUFFER_LAYOUT_NAME);
+      ASSERT(uniform_layout != VK_NULL_HANDLE);
+      
+      auto tiles_data_layout = device->setLayout(TILES_DATA_LAYOUT_NAME);
+      auto storage_layout = device->setLayout(STORAGE_BUFFER_LAYOUT_NAME);
+      auto images_layout = device->setLayout(IMAGE_CONTAINER_DESCRIPTOR_LAYOUT_NAME);
+      ASSERT(images_layout != VK_NULL_HANDLE);
+      images_set = global::get<systems::core_t>()->image_controller->set;
+
+      yavf::PipelineLayout layout = VK_NULL_HANDLE;
+      {
+        yavf::PipelineLayoutMaker plm(device);
+        layout = plm.addDescriptorLayout(uniform_layout)
+                    .addDescriptorLayout(images_layout)
+                    //.addDescriptorLayout(storage_layout)
+                    .addDescriptorLayout(tiles_data_layout)
+                    .create("object_rendering_pipeline_layout");
+      }
+      
+      {
+        yavf::raii::ShaderModule vertex  (device, global::root_directory() + "shaders/first_object.vert.spv");
+        //yavf::raii::ShaderModule geom    (device, global::root_directory() + "shaders/tiles.geom.spv"); // nexus 5x не поддерживает геометрический шейдер
+        yavf::raii::ShaderModule fragment(device, global::root_directory() + "shaders/first_object.frag.spv");
+
+        yavf::PipelineMaker pm(device);
+        pm.clearBlending();
+
+        pipe = pm.addShader(VK_SHADER_STAGE_VERTEX_BIT, vertex)
+                 .addShader(VK_SHADER_STAGE_FRAGMENT_BIT, fragment)
+//                  .vertexBinding(0, sizeof(uint32_t))
+//                    .vertexAttribute(0, 0, VK_FORMAT_R32_UINT, 0)
+                 .depthTest(VK_TRUE)
+                 .depthWrite(VK_TRUE)
+                 .frontFace(VK_FRONT_FACE_CLOCKWISE)
+                 .cullMode(VK_CULL_MODE_BACK_BIT)
+                 .assembly(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP, VK_TRUE)
+                 .viewport()
+                 .scissor()
+                 .dynamicState(VK_DYNAMIC_STATE_VIEWPORT)
+                 .dynamicState(VK_DYNAMIC_STATE_SCISSOR)
+                 .colorBlendBegin(VK_FALSE)
+                   .colorWriteMask(VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT)
+                 .create("object_rendering_pipeline", layout, global::get<render::window>()->render_pass);
+      }
+    }
+    
+    tile_object_render::~tile_object_render() {
+      device->destroy(pipe.layout());
+      device->destroy(pipe);
+    }
+
+    void tile_object_render::begin() {}
+    void tile_object_render::proccess(context* ctx) {
+      auto map_systems = global::get<systems::map_t>();
+      if (!map_systems->is_init()) return;
+      auto map = map_systems->map;
+      auto uniform = global::get<render::buffers>()->uniform;
+      auto tiles = map->tiles;
+      
+      auto indirect_buffer = opt->indirect_buffer();
+      auto indices_buffer = opt->objects_index_buffer();
+      if (indices_buffer == nullptr) return;
+      
+      auto task = ctx->graphics();
+      task->setPipeline(pipe);
+      ASSERT(uniform->descriptorSet() != nullptr);
+      ASSERT(tiles->descriptorSet() != nullptr);
+      task->setDescriptor({uniform->descriptorSet()->handle(), images_set->handle(), tiles->descriptorSet()->handle()}, 0);
+      
+      //task->setVertexBuffer(vertices_buffer, 0);
+      task->setIndexBuffer(indices_buffer);
+      for (uint32_t i = 0; i < MAX_BIOMES_COUNT; ++i) {
+        task->drawIndexedIndirect(indirect_buffer, 1, offsetof123(struct tile_optimizer::indirect_buffer, biome_data)+sizeof(biome_objects_data_t)*i);
+      }
+    }
+    
+    void tile_object_render::clear() {}
     
     world_map_render::world_map_render(const create_info &info) : stage_container(info.container_size) {}
     void world_map_render::begin() {

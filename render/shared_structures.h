@@ -14,6 +14,11 @@
 #define SKYBOX_TEXTURE_LAYOUT_NAME "skybox_texture_layout"
 #define TILES_DATA_LAYOUT_NAME "tiles_data_layout"
 
+#define IMAGE_CONTAINER_DESCRIPTOR_POOL_NAME "image_container_descriptor_pool"
+#define IMAGE_CONTAINER_DESCRIPTOR_LAYOUT_NAME "image_container_descriptor_layout"
+#define IMAGE_SAMPLER_LINEAR_NAME "image_sampler_linear"
+#define IMAGE_SAMPLER_NEAREST_NAME "image_sampler_nearest"
+
 #define INLINE inline
 #define INOUT
 
@@ -58,6 +63,7 @@ namespace devils_engine {
 #define GPU_UINT_MAX 0xffffffff
 #define PACKED_INDEX_COEF 4
 #define PACKED_TILE_INDEX_COEF 6
+#define MAX_BIOMES_COUNT 0xff
     
 const uint biome_ocean            = 0;
 const uint biome_ocean_glacier    = 1;
@@ -186,6 +192,7 @@ struct map_tile_t {
   uint neighbours[6];
   uint borders_data;
   uint connections_data;
+  uint biome_index; // все таки вернулся сюда биом индекс
   
   // подъем означает что мне нужно генерить закраску какую для этих областей
   // что хорошо - закраску можно сгенерировать в screen space
@@ -199,7 +206,7 @@ struct map_tile_t {
 // t - переменная от 0 до 1 обозначающая участок линии безье
 // нужно выбрать подходящую степень разбиения и нарисовать кривую
 
-struct packed_biom_data_t {
+struct packed_biome_data_t {
   uvec4 uint_data;
   vec4 scale_data;
   vec4 float_data;
@@ -223,6 +230,11 @@ struct biome_data_t {
   float dummy1; // что тут?
   float dummy2;
   float dummy3;
+};
+
+struct biome_objects_data_t {
+  uvec4 objects_indirect;
+  uvec4 objects_data;
 };
 
 INLINE bool is_image_valid(const image_t img) {
@@ -444,10 +456,11 @@ INLINE map_tile_t unpack_data(const light_map_tile_t data) {
   tile.neighbours[5] = data.packed_data3[3];
   tile.borders_data = data.packed_data4[0];
   tile.connections_data = data.packed_data4[1];
+  tile.biome_index = data.packed_data4[2];
   return tile;
 }
 
-INLINE biome_data_t unpack_data(const packed_biom_data_t data) {
+INLINE biome_data_t unpack_data(const packed_biome_data_t data) {
   biome_data_t biome;
   biome.texture.container = data.uint_data.x;
   biome.color.container = data.uint_data.y;
@@ -488,11 +501,12 @@ INLINE light_map_tile_t pack_data(const map_tile_t tile) {
   packed_data.packed_data3[3] = tile.neighbours[5];
   packed_data.packed_data4[0] = tile.borders_data;
   packed_data.packed_data4[1] = tile.connections_data;
+  packed_data.packed_data4[2] = tile.biome_index;
   return packed_data;
 }
 
-INLINE packed_biom_data_t pack_data(const biome_data_t biome) {
-  packed_biom_data_t packed_data;
+INLINE packed_biome_data_t pack_data(const biome_data_t biome) {
+  packed_biome_data_t packed_data;
   packed_data.uint_data.x = biome.texture.container;
   packed_data.uint_data.y = biome.color.container;
   packed_data.uint_data.z = biome.object_texture1.container;
@@ -520,16 +534,35 @@ INLINE uint compute_height_layer(const float height) {
   return height < 0.0f ? 0 : uint(height / layer_height);
 }
 
-const uint modulus = uint(1) << 31;
-const uint multiplier = 1103515245;
-const uint increment = 12345;
+// const uint modulus = uint(1) << 31;
+// const uint multiplier = 1103515245;
+// const uint increment = 12345;
+// 
+// INLINE uint lcg(const uint prev) {
+//   return (prev * multiplier + increment) % modulus;
+// }
+// 
+// INLINE float lcg_normalize(const uint val) {
+//   return float(val) / float(modulus);
+// }
 
-INLINE uint lcg(const uint prev) {
-  return (prev * multiplier + increment) % modulus;
+INLINE uint prng(uint prev) {
+//   prev ^= prev << 13;
+//   prev ^= prev >> 17;
+//   prev ^= prev << 5;
+//   return prev;
+  
+  uint z = prev + 0x6D2B79F5;
+  z = (z ^ z >> 15) * (1 | z);
+  z ^= z + (z ^ z >> 7) * (61 | z);
+  return z ^ z >> 14;
 }
 
-INLINE float lcg_normalize(const uint val) {
-  return float(val) / float(modulus);
+INLINE float prng_normalize(const uint state) {
+  // float32 - 8 бит экспонента и 23 мантисса
+  const uint float_mask = 0x7f << 23;
+  const uint float_val = float_mask | state >> 9;
+  return uintBitsToFloat(float_val) - 1.0f;
 }
 
 // bool lcg_probability(const float val) {
@@ -577,7 +610,7 @@ INLINE float lcg_normalize(const uint val) {
     }
     
     static_assert(sizeof(light_map_tile_t) % 16 == 0);
-    static_assert(sizeof(packed_biom_data_t) % 16 == 0);
+    static_assert(sizeof(packed_biome_data_t) % 16 == 0);
     static_assert(sizeof(camera_data) % 16 == 0);
   }
 }

@@ -112,9 +112,9 @@ namespace devils_engine {
       // uint32_t width = Global::get<utils::settings>()->graphics.width;
       // uint32_t height = Global::get<utils::settings>()->graphics.height;
       // const float fov = Global::get<utils::settings>()->graphics.fov;
-      const bool fullscreen = false;
-      uint32_t width = 1280;
-      uint32_t height = 720;
+      const bool fullscreen = info.fullscreen;
+      uint32_t width = info.width;
+      uint32_t height = info.height;
       const float fov = 75.0f;
       this->fov = fov;
 
@@ -608,6 +608,21 @@ namespace devils_engine {
       }
 
       resize();
+    }
+    
+    void window::toggle_fullscreen() {
+      flags.set_fullscreen(!flags.fullscreen());
+      if (flags.fullscreen()) {
+        ASSERT(monitor == nullptr);
+        monitor = glfwGetPrimaryMonitor();
+        const GLFWvidmode* mode = glfwGetVideoMode(monitor);
+        glfwSetWindowMonitor(handle, monitor, 0, 0, mode->width, mode->height, mode->refreshRate);
+      } else {
+        ASSERT(monitor != nullptr);
+        const GLFWvidmode* mode = glfwGetVideoMode(monitor);
+        monitor = nullptr;
+        glfwSetWindowMonitor(handle, nullptr, 0, 0, mode->width, mode->height, mode->refreshRate);
+      }
     }
 
     void window::update_buffers() const {

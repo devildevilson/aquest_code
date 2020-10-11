@@ -12,7 +12,7 @@ namespace devils_engine {
 //       biomes  = device->create(yavf::BufferCreateInfo::buffer(sizeof(packed_biom_data_t) * 20,  VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT), VMA_MEMORY_USAGE_CPU_ONLY);
 //       tiles   = device->create(yavf::BufferCreateInfo::buffer(sizeof(light_map_tile_t) * map->tiles.size(),  VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT), VMA_MEMORY_USAGE_CPU_ONLY);
 //       points  = device->create(yavf::BufferCreateInfo::buffer(sizeof(glm::vec4) * map->points.size(), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT), VMA_MEMORY_USAGE_CPU_ONLY);
-      uniform = device->create(yavf::BufferCreateInfo::buffer(sizeof(camera_data), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT), VMA_MEMORY_USAGE_CPU_ONLY);
+      uniform  = device->create(yavf::BufferCreateInfo::buffer(sizeof(camera_data),   VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT), VMA_MEMORY_USAGE_CPU_ONLY);
       matrices = device->create(yavf::BufferCreateInfo::buffer(sizeof(matrices_data), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT), VMA_MEMORY_USAGE_CPU_ONLY);
 //       triangles = device->create(yavf::BufferCreateInfo::buffer(sizeof(packed_fast_triangle_t)*tri_count, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT), VMA_MEMORY_USAGE_CPU_ONLY);
 //       tile_indices = device->create(yavf::BufferCreateInfo::buffer(sizeof(uint32_t)*map->tiles.size(), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT), VMA_MEMORY_USAGE_CPU_ONLY);
@@ -105,8 +105,10 @@ namespace devils_engine {
       {
         yavf::DescriptorMaker dm(device);
         auto desc = dm.layout(uniform_layout).create(pool)[0];
-        size_t index = desc->add({uniform, 0, uniform->info().size, 0, 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER});
-        uniform->setDescriptor(desc, index);
+        size_t index1 = desc->add({uniform,  0, uniform->info().size,  0, 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER});
+                        desc->add({matrices, 0, matrices->info().size, 0, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER}); // size_t index2 = 
+        desc->update();
+        uniform->setDescriptor(desc, index1);
       }
       
 //       auto tiles_arr = reinterpret_cast<map::tile*>(tiles->ptr());

@@ -24,7 +24,7 @@ local next_window_table = {
   "worlds_window",       "Worlds",
   -- "load_game_window",    "Load game",
   -- "multiplayer_window",  "Multiplayer",
-  -- "options_window",      "Options",
+  "options_window",      "Options",
   -- "achievements_window", "Achievements",
   -- "credits_window",      "Credits",
   "quit_game_window",    "Quit game"
@@ -161,6 +161,7 @@ local function core_main_menu(ctx, menu, data, entries_table)
   elseif main_menu_next ~= "main_menu" then
     menu:push(main_menu_next)
     main_menu_next = "main_menu"
+    main_menu_focus = 0
   end
   --if check_event_click(escape) then menu:escape() end -- по идее это не обязательно
   --if back then menu:escape() end
@@ -300,6 +301,7 @@ function worlds_window_func(ctx, menu, demiurge)
     nk.layout_space_push(ctx, {footer_startx+10, footer_starty, button_sizex, footer_height})
     if nk.button(ctx, nil, "Back") then
       menu:escape()
+      option_selected = -1
     end
     if option_selected > -1 then
       nk.layout_space_push(ctx, {footer_startx+10+button_sizex+10+10, footer_starty, button_sizex, footer_height})

@@ -33,24 +33,41 @@
 -- все остальное можно удалить, а после битвы запомнить результаты битвы, удалить карту и заного загрузить все данные
 -- все это должно идти вместе с интерфейсом
 
+-- мы можем указать корневым каталогом apates_quest (или другой мод),
+-- чтобы показать что этот ресурс грузится из каталога с игрой или у другого мода
+
 function load1()
   local load_table = {}
   load_table.id = "test_img"
-  load_table.path = "textures/img/img1.png"
+  load_table.path = "apates_quest/textures/img/img1.png"
   load_table.atlas_data = {
+    start_x = 0,
+    start_y = 0,
     width = 32,
     height = 32,
     rows = 1,
     columns = 5,
-    count = 5
+    count = 5,
   }
-  load_table.scale = {
+  load_table.scale = { -- скейлим каждую картинку атласа
     width = 128,
     height = 128,
     filter = "linear"
   }
   load_table.type = "common"
+  load_table.sampler = "linear"
+
+  -- mipmaping? можно указать ввиде true false, но я очень сомневаюсь что он вообще нужен
   return load_table
+
+  local load_sound = {}
+  load_sound.id = "test_sound"
+  load_sound.path = "apates_quest/sounds/test_sound.wav"
+  load_sound.type = "interface"
+  load_sound.ambient_type = "ambient" -- "war" "???" -- как переключать? в некоторые моменты игры давать возможно
+  load_sound.next = {test_sound1 = 325, test_sound2 = 43, test_sound3 = 326} -- когда даем следующую композицию?
+  load_sound.start_sound = {gain_start = -120, gain_end = 400} -- линейно наращиваем громкость (в микросекундах)
+  load_sound.end_sound   = {gain_start = -120, gain_end = 400} -- линейно сокращаем  громкость (относительно конца звука)
 
   local img = get_image("test_img.1.uv")
 end

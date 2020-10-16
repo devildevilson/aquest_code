@@ -40,6 +40,7 @@ namespace devils_engine {
       glm::mat4 get_inv_view() const;
       glm::mat4 get_inv_view_proj() const;
       glm::vec4 get_pos() const;
+      glm::vec4 get_dir() const;
     };
     
     // в вулкане у нас есть новая перменная gl_VertexIndex

@@ -64,6 +64,7 @@ namespace devils_engine {
 #define PACKED_INDEX_COEF 4
 #define PACKED_TILE_INDEX_COEF 6
 #define MAX_BIOMES_COUNT 0xff
+#define WORLD_RADIUS_CONSTANT 500.0f
     
 const uint biome_ocean            = 0;
 const uint biome_ocean_glacier    = 1;

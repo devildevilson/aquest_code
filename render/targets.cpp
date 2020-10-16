@@ -230,6 +230,11 @@ namespace devils_engine {
       return camera->pos;
     }
     
+    glm::vec4 buffers::get_dir() const {
+      auto camera = reinterpret_cast<camera_data*>(uniform->ptr());
+      return camera->dir;
+    }
+    
 #define WORLD_MAP_DESCRIPTOR_POOL "world_map_descriptor_pool"
     
     world_map_buffers::world_map_buffers(yavf::Device* device) : device(device) {

@@ -48,7 +48,8 @@ namespace devils_engine {
       // уровень детализации карты лучше задавать через константы
       static const uint32_t detail_level = 7;
       static const uint32_t accel_struct_detail_level = 4;
-      constexpr static const float world_radius = 500.0f;
+      constexpr static const float world_radius = WORLD_RADIUS_CONSTANT;
+      constexpr static const float maximum_world_elevation = 15.0f; // кажется этого должно хватить для 
       
       constexpr static size_t tri_count_d(const size_t &detail_level) {
         return 20 * power4(detail_level);
@@ -116,7 +117,7 @@ namespace devils_engine {
       
       uint32_t cast_ray(const utils::ray &ray) const;
       bool intersect_container(const uint32_t &tri_index, const utils::ray &ray) const;
-      bool intersect_tri(const glm::vec4 &v0, const glm::vec4 &v1, const glm::vec4 &v2, const utils::ray &ray) const;
+      bool intersect_tri(const glm::vec4 &v0, const glm::vec4 &v1, const glm::vec4 &v2, const utils::ray &ray, float &t) const;
       bool intersect_tile(const uint32_t &tile_index, const utils::ray &ray) const;
       
       const render::light_map_tile_t get_tile(const uint32_t &index) const;

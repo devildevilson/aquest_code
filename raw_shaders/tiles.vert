@@ -39,7 +39,7 @@ layout(std140, set = 2, binding = 0) readonly buffer tiles_buffer {
 };
 
 layout(std140, set = 2, binding = 1) readonly buffer biomes_buffer {
-  packed_biom_data_t biomes[];
+  packed_biome_data_t biomes[];
 };
 
 layout(std140, set = 2, binding = 2) readonly buffer tile_points_buffer {
@@ -86,7 +86,8 @@ void main() {
   // чтобы избежать этого мы можем сделать несколько вещей: не использовать текстурки вообще,
   // использовать текстурные координаты гексагона или расчитать текстурные координаты кубемап
 
-  const vec3 n = normalize(point.xyz);
+  //const vec3 n = normalize(point.xyz);
+  const vec3 n = point.xyz / WORLD_RADIUS_CONSTANT;
   //const vec2 uv = vec2(atan(n.x, n.z) / (PI_2) + 0.5f, n.y * 0.5f + 0.5f);
   //const vec2 uv = vec2(atan(n.x, n.z) / (PI_2) + 0.5f, asin(n.y) / PI_2 - 0.5f); // в оригинале должно быть asin(n.y) / PI
   // на границах куба получаются полоски плохой текстуры с неправильными координатами

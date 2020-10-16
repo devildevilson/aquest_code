@@ -60,12 +60,8 @@ int main(int argc, char const *argv[]) {
   const float dist = 550.0f;
   const glm::vec3 default_camera_pos = glm::normalize(glm::vec3(1.0f, 0.0f, 0.0f)) * dist;
 
-//   auto ent = world.create_entity();
-//   ent->add<components::transform>(default_camera_pos, glm::vec3(-1.0f, 0.0f, 0.0f));
-//   ent->add<components::camera>(ent); // тут нужно использовать алгоритм тини (?) : camera_pos += (end_pos - camera_pos) * CONST
-  components::camera camera(default_camera_pos);
-//   global::get(&camera);
-  // так камера будет плавно подъезжать к end_pos в зависимости от константы
+  components::camera camera(default_camera_pos); // будем использовать эту камеру только в ворлд мап
+  // для других состояний нам нужны другие камеры
 
   // какие энтити у нас будут? провинции?
   // провинции, города и другие статичные вещи наверное лучше сделать отдельными структурами
@@ -93,6 +89,14 @@ int main(int argc, char const *argv[]) {
   // перед сменой состояния нам нужно будет все не нужное удалить
 //   map_systems.setup_map_generator();
 //   setup_map_generator(map_systems);
+  
+  // потихоньку переходим к геймплею
+  // нужно сделать города и какие то постройки: снабдить какой то иконкой (гербом)
+  // нужно сделать юнитов на глобальной карте: непосредственно юнита и знамя, чтобы было легче выбирать
+  // нужно сделать движение юнитов: выделение юнита и чекать куда я могу передвинуть модельку
+  // интерфейс для всего этого
+  // с чего начать? постройки... для этого нужно сделать рейтрейсинг нормальный, а для этого нужно сделать 
+  // 3д иерархию, в чем прикол? нужно проверить многоугольник, 8 треугольников
 
   const std::vector<std::string> base_interfaces = { // как передать данные?
     "main_menu",
@@ -150,11 +154,16 @@ int main(int argc, char const *argv[]) {
         const uint32_t index = current_game_state->next_state();
         current_game_state->clean(); // ождается что здесь мы почистим все ресурсы доконца и обратно вернем next_state к UINT32_MAX
         current_game_state = game_states[index];
-        current_game_state->enter();
+        current_game_state->enter(); // здесь мы должны подготовить системы к использованию
         loading = true;
         current_game_state_index = index;
       }
     }
+    
+    // сделал, теперь наконец алгортим учитывает все нововведения
+    // все остальное зависит от того где мы применяем функцию
+    const uint32_t tile_index = cast_mouse_ray();
+    if (tile_index != UINT32_MAX) global::get<render::tile_highlights_render>()->add(tile_index);
 
     // ошибки с отрисовкой непосредственно тайлов могут быть связаны с недостаточным буфером для индексов (исправил)
     // еще меня беспокоит то что игра занимает уже 270 мб оперативы

@@ -262,6 +262,7 @@ namespace devils_engine {
     if (ypos < 0.0) return UINT32_MAX;
 
     const glm::vec4 camera_pos = buffers->get_pos();
+//     const glm::vec4 camera_dir = buffers->get_dir();
 
     const glm::mat4 inv_proj = buffers->get_inv_proj();
     const glm::mat4 inv_view = buffers->get_inv_view();
@@ -280,37 +281,33 @@ namespace devils_engine {
     glm::vec3 ray_wor = glm::vec3(inv_view * ray_eye);
     // don't forget to normalise the vector at some point
     const glm::vec4 dir = glm::vec4(glm::normalize(ray_wor), 0.0f);
-    const glm::vec4 final_dir = glm::normalize(dir);
-
-    // такое чувство, что сществует неверные треугольники
-    // которые дают ошибку при вычислении
+    //const glm::vec4 final_dir = camera_dir;
+    const glm::vec4 final_dir = dir;
 
     const utils::ray intersect_sphere{
       camera_pos,
       final_dir
     };
 
-    const float hit = hit_sphere(glm::vec4(0.0f, 0.0f, 0.0f, 1.0f), 500.0f, intersect_sphere);
-    if (hit < 0.0f) return UINT32_MAX;
+//     const float hit = hit_sphere(glm::vec4(0.0f, 0.0f, 0.0f, 1.0f), 500.0f, intersect_sphere);
+//     if (hit < 0.0f) return UINT32_MAX;
+// 
+//     //PRINT_VAR("hit", hit)
+// 
+//     const glm::vec4 point_on_sphere = intersect_sphere.pos + intersect_sphere.dir * hit;
+//     const glm::vec4 new_dir = glm::normalize(-glm::vec4(glm::vec3(point_on_sphere), 0.0f));
+// 
+//     const utils::ray casting_ray{
+//       point_on_sphere - new_dir * 5.0f,
+//       new_dir
+//     };
+// 
+//     const uint32_t tile_index_local1 = global::get<core::map>()->cast_ray(casting_ray);
+    auto map_system = global::get<systems::map_t>();
+    if (!map_system->is_init()) return UINT32_MAX;
+    if (map_system->map->status() != core::map::status::valid) return UINT32_MAX;
+    const uint32_t tile_index_local1 = map_system->map->cast_ray(intersect_sphere);
 
-    //PRINT_VAR("hit", hit)
-
-    const glm::vec4 point_on_sphere = intersect_sphere.pos + intersect_sphere.dir * hit;
-    const glm::vec4 new_dir = glm::normalize(-glm::vec4(glm::vec3(point_on_sphere), 0.0f));
-
-    const utils::ray casting_ray{
-      point_on_sphere - new_dir * 5.0f,
-      new_dir
-    };
-
-    const uint32_t tile_index_local1 = global::get<core::map>()->cast_ray(casting_ray);
-    //PRINT_VEC4("point_on_sphere", point_on_sphere)
-//     if (tile_index_local1 != UINT32_MAX) {
-//       const auto &tile_data = render::unpack_data(global::get<core::map>()->get_tile(tile_index_local1));
-//       const glm::vec4 center = global::get<core::map>()->get_point(tile_data.center);
-//       PRINT_VEC4("tile center     ", center)
-//       PRINT_VEC4("point_on_sphere ", point_on_sphere)
-//     }
     return tile_index_local1;
   }
 

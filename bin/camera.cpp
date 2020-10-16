@@ -46,7 +46,7 @@ namespace devils_engine {
       buffers->update_projection_matrix(persp);
       buffers->update_view_matrix(view);
       buffers->update_pos(pos);
-      buffers->update_dir(camera->front());
+      buffers->update_dir(dir);
     }
   }
   

@@ -301,6 +301,37 @@ namespace devils_engine {
       yavf::DescriptorSet* images_set;
     };
     
+    // новый класс для выделения?
+    // как добавлять тайлы? просто закидывать их в буфер? почему бы и нет
+    // как их рисовать? прозрачный слой над обычными тайлами? наверное можно будет придумать что то еще
+    // но в остальных стратегиях примерно так и было
+    
+    class tile_highlights_render : public stage {
+    public:
+      struct create_info {
+        yavf::Device* device;
+//         tile_optimizer* opt;
+        world_map_buffers* map_buffers;
+      };
+      tile_highlights_render(const create_info &info);
+      ~tile_highlights_render();
+      
+      void begin() override;
+      void proccess(context* ctx) override;
+      void clear() override;
+      
+      void add(const uint32_t &tile_index);
+    private:
+      yavf::Device* device;
+//       tile_optimizer* opt;
+      yavf::Pipeline pipe;
+      world_map_buffers* map_buffers;
+      // кажется текстуры здесь не нужны, нужно ли здесь время, чтобы сделать мигание выделения? 
+      // какой максимум? 
+      yavf::Buffer* tiles_indices;
+      std::atomic<uint32_t> tiles_count;
+    };
+    
     class world_map_render : public pipeline_stage, public stage_container {
     public:
       struct create_info {

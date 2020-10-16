@@ -622,7 +622,8 @@ namespace devils_engine {
       const size_t render_size = sizeof(render::tile_render) +
         sizeof(render::tile_border_render) +
         sizeof(render::tile_connections_render) +
-        sizeof(render::tile_object_render);
+        sizeof(render::tile_object_render) +
+        sizeof(render::tile_highlights_render);
       
       ASSERT(optimizators_container == nullptr);
       ASSERT(render_container == nullptr);
@@ -643,11 +644,13 @@ namespace devils_engine {
       auto borders = render_container->add_stage<render::tile_border_render>(render::tile_border_render::create_info{device, opt1, buffers});
       auto walls   = render_container->add_stage<render::tile_connections_render>(render::tile_connections_render::create_info{device, opt1, buffers});
                      render_container->add_stage<render::tile_object_render>(render::tile_object_render::create_info{device, opt1, buffers});
+      auto thl     = render_container->add_stage<render::tile_highlights_render>(render::tile_highlights_render::create_info{device, buffers});
       systems->render_slots->set_stage(7, render_container);
       
       global::get(tiles);
       global::get(walls);
       global::get(opt1);
+      global::get(thl);
 //       global::get(opt2);
 //       global::get(opt3);
       UNUSED_VARIABLE(borders);

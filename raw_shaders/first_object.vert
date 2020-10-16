@@ -84,7 +84,7 @@ void main() {
   const uint additional = prng(prng_state);
   const float val_norm1 = prng_normalize(prng_state);
   const float val_norm2 = prng_normalize(additional);
-  const vec4 normal = normalize(center);
+  const vec4 normal = normalize(center); // центр к сожалению стоит чуть ближе чем обычные точки
   // нужно найти точку на тайле, мы можем легко найти точку в квадрате
   // но лучше будет искать точку в радиусе
   const float norm1 = val_norm1 * 2.0f * PI;

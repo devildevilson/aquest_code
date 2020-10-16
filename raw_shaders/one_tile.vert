@@ -12,28 +12,33 @@ layout(set = 0, binding = 0) uniform Camera {
   uvec4 dim;
 } camera;
 
-layout(push_constant) uniform push {
-  uint tile_index;
-} pc;
-
-layout(std140, set = 2, binding = 0) readonly buffer tiles_buffer {
+layout(std140, set = 1, binding = 0) readonly buffer tiles_buffer {
   light_map_tile_t tiles[];
 };
 
-layout(std140, set = 2, binding = 1) readonly buffer biomes_buffer {
-  packed_biom_data_t biomes[];
+layout(std140, set = 1, binding = 1) readonly buffer biomes_buffer {
+  packed_biome_data_t biomes[];
 };
 
-layout(std140, set = 2, binding = 2) readonly buffer tile_points_buffer {
+layout(std140, set = 1, binding = 2) readonly buffer tile_points_buffer {
   vec4 tile_points[];
 };
 
-layout(location = 0) in uint point_index; // буфер вида [0,...,4,0,...,5], указываем оффсет
-
 void main() {
-  const map_tile_t tile = unpack_data(tiles[pc.tile_index]);
+  const uint tile_index  = gl_VertexIndex / PACKED_TILE_INDEX_COEF;
+  const uint point_index = gl_VertexIndex % PACKED_TILE_INDEX_COEF;
+  const map_tile_t tile = unpack_data(tiles[tile_index]);
   const uint point_id = tile.points[point_index];
   const vec4 point = tile_points[point_id];
 
-  gl_Position = camera.viewproj * point;
+  const bool is_pentagon = tile_index < 12;
+  const vec3 n = point.xyz / WORLD_RADIUS_CONSTANT;
+
+  const uint height_layer = compute_height_layer(tile.height);
+  const float final_height = layer_height * height_layer;
+  const float computed_height = final_height * render_tile_height + 0.3f;
+
+  gl_Position = camera.viewproj * (point + vec4(n, 0.0f) * computed_height);
 }
+
+// нужно ли ривсовать какие либо текстурки на этом выделении?

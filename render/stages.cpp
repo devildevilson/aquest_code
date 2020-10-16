@@ -680,19 +680,19 @@ namespace devils_engine {
                     .addDescriptorLayout(tiles_data_layout)
                     .create(TILE_RENDER_PIPELINE_LAYOUT_NAME);
                     
-        layout2 = plm.addDescriptorLayout(uniform_layout)
-                     .addDescriptorLayout(images_layout)
-                     .addDescriptorLayout(tiles_data_layout)
-                     .addPushConstRange(0, sizeof(uint32_t))
-                     .create("one_tile_pipeline_layout");
+//         layout2 = plm.addDescriptorLayout(uniform_layout)
+//                      .addDescriptorLayout(images_layout)
+//                      .addDescriptorLayout(tiles_data_layout)
+//                      .addPushConstRange(0, sizeof(uint32_t))
+//                      .create("one_tile_pipeline_layout");
       }
 
       {
         yavf::raii::ShaderModule vertex  (device, global::root_directory() + "shaders/tiles.vert.spv");
         //yavf::raii::ShaderModule geom    (device, global::root_directory() + "shaders/tiles.geom.spv"); // nexus 5x не поддерживает геометрический шейдер
         yavf::raii::ShaderModule fragment(device, global::root_directory() + "shaders/tiles.frag.spv");
-        yavf::raii::ShaderModule vertex2  (device, global::root_directory() + "shaders/one_tile.vert.spv");
-        yavf::raii::ShaderModule fragment2(device, global::root_directory() + "shaders/one_tile.frag.spv");
+//         yavf::raii::ShaderModule vertex2  (device, global::root_directory() + "shaders/one_tile.vert.spv");
+//         yavf::raii::ShaderModule fragment2(device, global::root_directory() + "shaders/one_tile.frag.spv");
 
         yavf::PipelineMaker pm(device);
         pm.clearBlending();
@@ -716,23 +716,23 @@ namespace devils_engine {
                    .colorWriteMask(VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT)
                  .create(TILE_RENDER_PIPELINE_NAME, layout, global::get<render::window>()->render_pass);
                  
-        pm.clearBlending();
-        one_tile_pipe = pm.addShader(VK_SHADER_STAGE_VERTEX_BIT, vertex2)
-                 .addShader(VK_SHADER_STAGE_FRAGMENT_BIT, fragment2)
-                 .vertexBinding(0, sizeof(uint32_t))
-                   .vertexAttribute(0, 0, VK_FORMAT_R32_UINT, 0)
-                 .depthTest(VK_FALSE)
-                 .depthWrite(VK_FALSE)
-                 .frontFace(VK_FRONT_FACE_COUNTER_CLOCKWISE)
-                 .cullMode(VK_CULL_MODE_FRONT_BIT)
-                 .assembly(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN)
-                 .viewport()
-                 .scissor()
-                 .dynamicState(VK_DYNAMIC_STATE_VIEWPORT)
-                 .dynamicState(VK_DYNAMIC_STATE_SCISSOR)
-                 .colorBlendBegin(VK_FALSE)
-                   .colorWriteMask(VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT)
-                 .create("one_tile_pipeline", layout2, global::get<render::window>()->render_pass);
+//         pm.clearBlending();
+//         one_tile_pipe = pm.addShader(VK_SHADER_STAGE_VERTEX_BIT, vertex2)
+//                  .addShader(VK_SHADER_STAGE_FRAGMENT_BIT, fragment2)
+//                  .vertexBinding(0, sizeof(uint32_t))
+//                    .vertexAttribute(0, 0, VK_FORMAT_R32_UINT, 0)
+//                  .depthTest(VK_FALSE)
+//                  .depthWrite(VK_FALSE)
+//                  .frontFace(VK_FRONT_FACE_COUNTER_CLOCKWISE)
+//                  .cullMode(VK_CULL_MODE_FRONT_BIT)
+//                  .assembly(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN)
+//                  .viewport()
+//                  .scissor()
+//                  .dynamicState(VK_DYNAMIC_STATE_VIEWPORT)
+//                  .dynamicState(VK_DYNAMIC_STATE_SCISSOR)
+//                  .colorBlendBegin(VK_FALSE)
+//                    .colorWriteMask(VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT)
+//                  .create("one_tile_pipeline", layout2, global::get<render::window>()->render_pass);
       }
 
       // {
@@ -747,8 +747,8 @@ namespace devils_engine {
       device->destroy(points_indices);
       device->destroy(pipe.layout());
       device->destroy(pipe);
-      device->destroy(one_tile_pipe.layout());
-      device->destroy(one_tile_pipe);
+//       device->destroy(one_tile_pipe.layout());
+//       device->destroy(one_tile_pipe);
     }
 
     // виндовс не дает использовать базовый offsetof
@@ -1204,7 +1204,7 @@ namespace devils_engine {
       ASSERT(uniform_layout != VK_NULL_HANDLE);
       
       auto tiles_data_layout = device->setLayout(TILES_DATA_LAYOUT_NAME);
-      auto storage_layout = device->setLayout(STORAGE_BUFFER_LAYOUT_NAME);
+//       auto storage_layout = device->setLayout(STORAGE_BUFFER_LAYOUT_NAME);
       auto images_layout = device->setLayout(IMAGE_CONTAINER_DESCRIPTOR_LAYOUT_NAME);
       ASSERT(images_layout != VK_NULL_HANDLE);
       images_set = global::get<systems::core_t>()->image_controller->set;
@@ -1277,6 +1277,93 @@ namespace devils_engine {
     }
     
     void tile_object_render::clear() {}
+    
+    tile_highlights_render::tile_highlights_render(const create_info &info) : device(info.device), map_buffers(info.map_buffers), tiles_indices(nullptr), tiles_count(0) {
+      yavf::DescriptorSetLayout uniform_layout = device->setLayout(UNIFORM_BUFFER_LAYOUT_NAME);
+      ASSERT(uniform_layout != VK_NULL_HANDLE);
+      
+      auto tiles_data_layout = device->setLayout(TILES_DATA_LAYOUT_NAME);
+      yavf::PipelineLayout layout = VK_NULL_HANDLE;
+      {
+        yavf::PipelineLayoutMaker plm(device);
+        layout = plm.addDescriptorLayout(uniform_layout)
+//                     .addDescriptorLayout(images_layout)
+                    //.addDescriptorLayout(storage_layout)
+                    .addDescriptorLayout(tiles_data_layout)
+                    .create("tiling_highlights_rendering_pipeline_layout");
+      }
+      
+      {
+        yavf::raii::ShaderModule vertex  (device, global::root_directory() + "shaders/one_tile.vert.spv");
+        //yavf::raii::ShaderModule geom    (device, global::root_directory() + "shaders/tiles.geom.spv"); // nexus 5x не поддерживает геометрический шейдер
+        yavf::raii::ShaderModule fragment(device, global::root_directory() + "shaders/one_tile.frag.spv");
+
+        yavf::PipelineMaker pm(device);
+        //pm.clearBlending();
+
+        pipe = pm.addShader(VK_SHADER_STAGE_VERTEX_BIT, vertex)
+                 .addShader(VK_SHADER_STAGE_FRAGMENT_BIT, fragment)
+//                  .vertexBinding(0, sizeof(uint32_t))
+//                    .vertexAttribute(0, 0, VK_FORMAT_R32_UINT, 0)
+                 .depthTest(VK_TRUE)
+                 .depthWrite(VK_TRUE)
+                 .frontFace(VK_FRONT_FACE_CLOCKWISE)
+                 .cullMode(VK_CULL_MODE_BACK_BIT)
+                 .assembly(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN, VK_TRUE)
+                 .viewport()
+                 .scissor()
+                 .dynamicState(VK_DYNAMIC_STATE_VIEWPORT)
+                 .dynamicState(VK_DYNAMIC_STATE_SCISSOR)
+                 .colorBlendBegin(VK_TRUE)
+                   //.colorBlending(VK_)
+                   //.colorWriteMask(VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT)
+                 .create("tiling_highlights_rendering_pipeline", layout, global::get<render::window>()->render_pass);
+      }
+      
+      const size_t size = (max_indices_count * 4 + 16 - 1) / 16 * 16;
+      tiles_indices = device->create(yavf::BufferCreateInfo::buffer(size, VK_BUFFER_USAGE_INDEX_BUFFER_BIT), VMA_MEMORY_USAGE_CPU_ONLY);
+    }
+    
+    tile_highlights_render::~tile_highlights_render() {
+      device->destroy(pipe.layout());
+      device->destroy(pipe);
+      device->destroy(tiles_indices);
+    }
+    
+    void tile_highlights_render::begin() {}
+    void tile_highlights_render::proccess(context* ctx) {
+      if (tiles_count == 0) return;
+      
+      auto map_systems = global::get<systems::map_t>();
+      if (!map_systems->is_init()) return;
+      auto map = map_systems->map;
+      auto uniform = global::get<render::buffers>()->uniform;
+      auto tiles = map->tiles;
+      
+      auto task = ctx->graphics();
+      task->setPipeline(pipe);
+      ASSERT(uniform->descriptorSet() != nullptr);
+      ASSERT(tiles->descriptorSet() != nullptr);
+      task->setDescriptor({uniform->descriptorSet()->handle(), tiles->descriptorSet()->handle()}, 0);
+      task->setIndexBuffer(tiles_indices);
+      task->drawIndexed(tiles_count, 1, 0, 0, 0);
+    }
+    
+    void tile_highlights_render::clear() {
+      tiles_count = 0;
+    }
+    
+    void tile_highlights_render::add(const uint32_t &tile_index) {
+      const uint32_t packed_tile_index = tile_index*PACKED_TILE_INDEX_COEF;
+      const uint32_t p_count = tile_index < 12 ? 5 : 6; // кажется так разделяются тайлы
+      const uint32_t offset = tiles_count.fetch_add(p_count+1);
+      auto tiles_indices_ptr = reinterpret_cast<uint32_t*>(tiles_indices->ptr());
+      for (uint32_t i = 0; i < p_count; ++i) {
+        tiles_indices_ptr[offset+i] = packed_tile_index+i;
+      }
+      
+      tiles_indices_ptr[offset+p_count] = GPU_UINT_MAX;
+    }
     
     world_map_render::world_map_render(const create_info &info) : stage_container(info.container_size) {}
     void world_map_render::begin() {

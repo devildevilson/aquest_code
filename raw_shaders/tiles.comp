@@ -75,16 +75,9 @@ vec4 get_triangle_dir(const vec4 a, const vec4 b, const vec4 c);
 bool triangle_frustum_test(const vec4 a, const vec4 b, const vec4 c, const frustum_t frustum);
 uint get_accel_triangle_tile_index(const uint index);
 
-//shared uint pentagon_count;
-//shared uint hexagon_count;
 layout(local_size_x = WORK_GROUP, local_size_y = 1, local_size_z = 1) in;
 
 void main() {
-  // pentagon_count = 0;
-  // hexagon_count = 0;
-  //
-  // barrier();
-
   const uint triangle_count = tiles_data[1];
   const uint max_indices_count = tiles_data[2];
   const uint triangle_index = gl_GlobalInvocationID.x;

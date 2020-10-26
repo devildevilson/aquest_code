@@ -192,6 +192,7 @@ file(GLOB_RECURSE GLSL_SOURCE_FILES
   raw_shaders/walls.vert
   raw_shaders/first_object.vert
   raw_shaders/first_object.frag
+  raw_shaders/structure.vert
 )
 
 foreach(GLSL ${GLSL_SOURCE_FILES})
@@ -251,6 +252,7 @@ set(SRC_LIST
   utils/lua_initialization_constants.cpp
   utils/lua_initialization_package.cpp
   utils/lua_initialization_settings.cpp
+  utils/lua_initialization_tiles.cpp
   utils/lua_initialization_internal_enums.cpp
   utils/lua_initialization_internal_building_type.cpp
   utils/lua_initialization_internal_character.cpp
@@ -423,6 +425,7 @@ set(SRC_LIST
   bin/image_parser.cpp
   bin/logic.cpp
   utils/quest_states.cpp
+  bin/tiles_funcs.cpp
 )
 
 set(HDR_LIST
@@ -449,6 +452,7 @@ set(HDR_LIST
   bin/logic.h
   utils/quest_states.h
   utils/quest_state.h
+  bin/tiles_funcs.h
 )
 add_executable(${TARGET_NAME} ${SRC_LIST} ${HDR_LIST})
 target_link_libraries(${TARGET_NAME} systems ai render utils serialization)

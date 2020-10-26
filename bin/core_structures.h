@@ -45,6 +45,8 @@ namespace devils_engine {
       // например для того чтобы описать правильно режим отображения карты
       float height; // вообще то это уже задано
       uint32_t province;
+      uint32_t city;
+      uint32_t struct_index;
       
       // темплейт
       tile();
@@ -136,8 +138,13 @@ namespace devils_engine {
       size_t name_id;
       size_t desc_id;
       // графика
-      render::image_t city_image;
+      // как перейти от тайла к городу? нужно хранить какую то информацию в тайле, мы можем использовать 
+      // 1 32bit int для того чтобы хранить индекс биома и индекс того что стоит на тайле
+      // 
+      render::image_t city_image_top;
+      render::image_t city_image_face;
       render::image_t city_icon;
+      float scale;
       
       city_type();
     };

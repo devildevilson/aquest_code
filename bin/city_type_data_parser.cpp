@@ -5,6 +5,7 @@
 #include "utils/string_container.h"
 #include "core_context.h"
 #include "utils/serializator_helper.h"
+#include "render/image_controller.h"
 
 namespace devils_engine {
   namespace utils {
@@ -37,7 +38,22 @@ namespace devils_engine {
             core::offsets::city_stats, core::offsets::city_stats + core::city_stats::count, {}
           }
         }
-      }
+      },
+      {
+        "image_top",
+        check_table_value::type::string_t,
+        check_table_value::value_required, 0, {}
+      },
+      {
+        "image_face",
+        check_table_value::type::string_t,
+        check_table_value::value_required, 0, {}
+      },
+      {
+        "scale",
+        check_table_value::type::float_t,
+        check_table_value::value_required, 0, {}
+      },
     };
     
     size_t add_city_type(const sol::table &table) {
@@ -115,8 +131,40 @@ namespace devils_engine {
         }
       }
       
+      auto controller = global::get<render::image_controller>();
       {
-        // графика
+        const std::string str = table.get<std::string>("image_top");
+        std::string_view img_id;
+        uint32_t layer;
+        bool mirror_u;
+        bool mirror_v;
+        const bool ret = render::parse_image_id(str, img_id, layer, mirror_u, mirror_v);
+        if (!ret) throw std::runtime_error("Bad texture id " + std::string(str));
+        
+        const auto image_id = std::string(img_id);
+        auto view = controller->get_view(image_id);
+        if (layer >= view->count) throw std::runtime_error("Image pack " + image_id + " does not have " + std::to_string(layer) + " amount of images");
+        city_type->city_image_top = view->get_image(layer, mirror_u, mirror_v);
+      }
+      
+      {
+        const std::string str = table.get<std::string>("image_face");
+        std::string_view img_id;
+        uint32_t layer;
+        bool mirror_u;
+        bool mirror_v;
+        const bool ret = render::parse_image_id(str, img_id, layer, mirror_u, mirror_v);
+        if (!ret) throw std::runtime_error("Bad texture id " + std::string(str));
+        
+        const auto image_id = std::string(img_id);
+        auto view = controller->get_view(image_id);
+        if (layer >= view->count) throw std::runtime_error("Image pack " + image_id + " does not have " + std::to_string(layer) + " amount of images");
+        city_type->city_image_face = view->get_image(layer, mirror_u, mirror_v);
+      }
+      
+      {
+        const float scale = table.get<float>("scale");
+        city_type->scale = scale;
       }
     }
   }

@@ -35,7 +35,15 @@ namespace devils_engine {
       auto window = global::get<render::window>();
       auto buffers = global::get<render::buffers>();
       
-      const glm::mat4 persp = glm::perspective(glm::radians(75.0f), float(window->surface.extent.width) / float(window->surface.extent.height), 0.1f, 256.0f);
+      const float minimum_dist = 100.0f;
+      const float maximum_dist = 256.0f;
+      
+      const float raw_zoom = camera->zoom();
+      const float zoom_norm = (raw_zoom - components::camera::min_zoom) / (components::camera::max_zoom - components::camera::min_zoom);
+      
+      const float final_dist = glm::mix(minimum_dist, maximum_dist, zoom_norm); // нужно поиграть со значениями
+      
+      const glm::mat4 persp = glm::perspective(glm::radians(75.0f), float(window->surface.extent.width) / float(window->surface.extent.height), 0.1f, final_dist);
       const glm::vec3 pos   = camera->current_pos();
       const glm::vec3 dir   = camera->dir();
       const glm::vec3 up    = camera->up();
@@ -47,6 +55,7 @@ namespace devils_engine {
       buffers->update_view_matrix(view);
       buffers->update_pos(pos);
       buffers->update_dir(dir);
+      buffers->update_zoom(zoom_norm);
     }
   }
   

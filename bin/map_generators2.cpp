@@ -6686,6 +6686,24 @@ namespace devils_engine {
         building["time"] = 4;
         utils::add_building(building);
       }
+      
+      {
+        auto image_table = global::get<sol::state>()->create_table();
+        image_table["id"] = "castle_top";
+        image_table["path"] = "apates_quest/textures/structures/castle_top.png";
+        image_table["type"] = 0; // тут индекс
+        image_table["sampler"] = 1;
+        utils::add_image(image_table);
+      }
+      
+      {
+        auto image_table = global::get<sol::state>()->create_table();
+        image_table["id"] = "castle_face";
+        image_table["path"] = "apates_quest/textures/structures/castle_face.png";
+        image_table["type"] = 0; // тут индекс
+        image_table["sampler"] = 1;
+        utils::add_image(image_table);
+      }
 
       {
         auto city_type = global::get<sol::state>()->create_table();
@@ -6695,6 +6713,9 @@ namespace devils_engine {
         buildings[1] = "test_building2";
         auto stats = city_type.create<std::string>("stats");
         stats[magic_enum::enum_name<core::city_stats::values>(core::city_stats::tax_income)] = 1.0f;
+        city_type["image_top"] = "castle_top";
+        city_type["image_face"] = "castle_face";
+        city_type["scale"] = 0.5f;
         utils::add_city_type(city_type);
       }
 
@@ -6706,6 +6727,9 @@ namespace devils_engine {
         buildings[1] = "test_building2";
         auto stats = city_type.create<std::string>("stats");
         stats[magic_enum::enum_name<core::city_stats::values>(core::city_stats::tax_income)] = 1.0f;
+        city_type["image_top"] = "castle_top";
+        city_type["image_face"] = "castle_face";
+        city_type["scale"] = 0.5f;
         utils::add_city_type(city_type);
       }
 

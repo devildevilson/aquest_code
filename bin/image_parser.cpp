@@ -472,6 +472,8 @@ namespace devils_engine {
         
         controller->device->deallocate(task);
       
+        // отказывается грузить нормально изображения размер которых не степень двойки
+        // это странно в том плане что во многих источниках используется изображения где не соблюдается это правило
         for (size_t i = 0; i < concrete_datas.size(); ++i) {
           for (size_t j = 0; j < concrete_datas[i].copy_datas.size(); ++j) {
             controller->device->destroy(concrete_datas[i].copy_datas[j].src);
@@ -506,7 +508,7 @@ namespace devils_engine {
         render::biome_data_t b;
         if (auto texture_proxy = table["texture"]; texture_proxy.valid()) {
           const std::string_view str = texture_proxy.get<std::string_view>();
-          PRINT(str)
+//           PRINT(str)
           std::string_view img_id;
           uint32_t layer;
           bool mirror_u;
@@ -514,7 +516,7 @@ namespace devils_engine {
           const bool ret = render::parse_image_id(str, img_id, layer, mirror_u, mirror_v);
           if (!ret) throw std::runtime_error("Bad texture id " + std::string(str));
           const auto image_id = std::string(img_id);
-          auto view = controller->get_view(std::string(image_id));
+          auto view = controller->get_view(image_id);
           if (layer >= view->count) throw std::runtime_error("Image pack " + image_id + " does not have " + std::to_string(layer) + " amount of images");
           b.texture = view->get_image(layer, mirror_u, mirror_v);
         } else b.texture = { GPU_UINT_MAX };
@@ -534,7 +536,7 @@ namespace devils_engine {
           const bool ret = render::parse_image_id(str, img_id, layer, mirror_u, mirror_v);
           if (!ret) throw std::runtime_error("Bad texture id " + std::string(str));
           const auto image_id = std::string(img_id);
-          auto view = controller->get_view(std::string(image_id));
+          auto view = controller->get_view(image_id);
           if (layer >= view->count) throw std::runtime_error("Image pack " + image_id + " does not have " + std::to_string(layer) + " amount of images");
           b.object_texture1 = view->get_image(layer, mirror_u, mirror_v);
         } else b.object_texture1 = { GPU_UINT_MAX };
@@ -548,7 +550,7 @@ namespace devils_engine {
           const bool ret = render::parse_image_id(str, img_id, layer, mirror_u, mirror_v);
           if (!ret) throw std::runtime_error("Bad texture id " + std::string(str));
           const auto image_id = std::string(img_id);
-          auto view = controller->get_view(std::string(image_id));
+          auto view = controller->get_view(image_id);
           if (layer >= view->count) throw std::runtime_error("Image pack " + image_id + " does not have " + std::to_string(layer) + " amount of images");
           b.object_texture2 = view->get_image(layer, mirror_u, mirror_v);
         } else b.object_texture2 = { GPU_UINT_MAX };

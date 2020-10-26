@@ -97,6 +97,7 @@ namespace devils_engine {
       // + какие то объекты на карте, что с ними? нужно придумать какой то способ нарисовать спрайт так чтобы он выглядел максимально 3дшно
       // у нас есть жесткие ограничения по тому как мы видим объекты на карте, мы их видим в основном сверху и чуть с юга
       yavf::Buffer* biomes;
+      yavf::Buffer* structures;
       yavf::Buffer* provinces; // скорее всего не пригодится (и далее)
       yavf::Buffer* faiths;
       yavf::Buffer* cultures;
@@ -133,6 +134,7 @@ namespace devils_engine {
       void set_tile_indices(const uint32_t &triangle_index, const glm::uvec3 &points, const std::vector<uint32_t> &indices, const uint32_t &offset, const uint32_t &count, const bool has_pentagon);
       void flush_data();
       void flush_points();
+      void flush_structures();
       //void set_tile_biom(const uint32_t &tile_index, const uint32_t &biom_index);
       void set_tile_color(const uint32_t &tile_index, const render::color_t &color);
       void set_tile_texture(const uint32_t &tile_index, const render::image_t &texture);
@@ -145,6 +147,8 @@ namespace devils_engine {
       
       void copy_biomes(const seasons* s);
       void set_tile_biome(const seasons* s);
+      
+      void set_tile_structure_index(const uint32_t &tile_index, const uint32_t &struct_index);
       
       enum status status() const;
       void set_status(const enum status s);

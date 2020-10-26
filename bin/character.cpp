@@ -26,7 +26,7 @@ namespace devils_engine {
     
     const structure city_type::s_type;
     const size_t city_type::maximum_buildings;
-    city_type::city_type() : buildings{nullptr}, city_image{GPU_UINT_MAX}, city_icon{GPU_UINT_MAX} { memset(stats, 0, sizeof(stats[0]) * city_stats::count); }
+    city_type::city_type() : buildings{nullptr}, city_image_top{GPU_UINT_MAX}, city_image_face{GPU_UINT_MAX}, city_icon{GPU_UINT_MAX}, scale(1.0f) { memset(stats, 0, sizeof(stats[0]) * city_stats::count); }
     const structure city::s_type;
     const size_t city::modificators_container_size;
     const size_t city::events_container_size;

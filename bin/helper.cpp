@@ -310,6 +310,13 @@ namespace devils_engine {
 
     return tile_index_local1;
   }
+  
+  void draw_tooltip(const uint32_t &index, const sol::function &tile_func) {
+//     if (tile_index != UINT32_MAX) {
+//       global::get<render::tile_highlights_render>()->add(tile_index);
+//       if (current_game_state == &world_map_state && !loading) tile_func(base_systems.interface_container->moonnuklear_ctx, tile_index);
+//     }
+  }
 
   bool long_key(const int &key, const size_t &time) {
     UNUSED_VARIABLE(time);
@@ -442,12 +449,13 @@ namespace devils_engine {
     glfwSetWindowSizeCallback(window->handle, window_resize_callback);
   }
 
-  void basic_interface_functions(systems::core_t &base_systems) {
+  sol::function basic_interface_functions(systems::core_t &base_systems) {
     const std::string script_folder = global::root_directory() + "scripts/";
     base_systems.interface_container->process_script_file(script_folder + "generator_progress.lua");
     base_systems.interface_container->process_script_file(script_folder + "user_interface.lua");
     base_systems.interface_container->process_script_file(script_folder + "player_layer.lua");
     base_systems.interface_container->process_script_file(script_folder + "settings_menu.lua");
+    base_systems.interface_container->process_script_file(script_folder + "tile_interface.lua");
     //options_window
     base_systems.interface_container->register_function("progress_bar", "progress_bar");
     base_systems.interface_container->register_function("main_menu_window", "main_menu");
@@ -456,6 +464,10 @@ namespace devils_engine {
     base_systems.interface_container->register_function("main_interface_layer", "player_interface");
     base_systems.interface_container->register_function("options_menu_window", "options_window");
     base_systems.interface_container->register_function("graphics_options_window", "graphics_window");
+    
+    const auto proxy = base_systems.interface_container->lua["tile_window"];
+    if (proxy.get_type() != sol::type::function) throw std::runtime_error("Bad tile interface function");
+    return proxy.get<sol::function>();
   }
 
   #define OUTSIDE 0

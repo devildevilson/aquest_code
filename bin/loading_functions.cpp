@@ -14,6 +14,7 @@
 #include "logic.h"
 #include "map_creator.h"
 #include "utils/main_menu.h"
+#include "render/container.h"
 #include "render/targets.h"
 #include "render/stages.h"
 #include "render/yavf.h"
@@ -109,6 +110,39 @@ namespace devils_engine {
       };
 
       ptr->create("Countries generator", "gen_part3_fun", pairs);
+    }
+  }
+  
+//   void copy_structure_data(const core::city_type* data, const size_t &size, const size_t &offset, yavf::Buffer* buffer) {
+//     auto buffer_data = reinterpret_cast<render::world_structure_t*>(buffer->ptr());
+//     for (size_t i = 0; i < size; ++i) {
+//       const size_t index = offset+i;
+//       buffer_data[index].city_image_top = data[i].city_image_top;
+//       buffer_data[index].city_image_face = data[i].city_image_face;
+//       buffer_data[index].scale = data[i].scale;
+//       buffer_data[index].dummy = 0;
+//     }
+//   }
+
+  void copy_structure_data(const core::context* context, const size_t &offset, core::map* map, yavf::Buffer* buffer) {
+    std::unordered_map<const core::city_type*, uint32_t> type_map;
+    auto buffer_data = reinterpret_cast<render::world_structure_t*>(buffer->ptr());
+    for (size_t i = 0; i < context->get_entity_count<core::city_type>(); ++i) {
+      const size_t index = offset+i;
+      auto city_type = context->get_entity<core::city_type>(i);
+      buffer_data[index].city_image_top = city_type->city_image_top;
+      buffer_data[index].city_image_face = city_type->city_image_face;
+      buffer_data[index].scale = city_type->scale;
+      buffer_data[index].dummy = 0;
+      
+      type_map[city_type] = index;
+    }
+    
+    for (size_t i = 0; i < context->get_entity_count<core::city>(); ++i) {
+      auto city = context->get_entity<core::city>(i);
+      const uint32_t struct_index = type_map[city->type];
+      const uint32_t tile_index = city->tile_index;
+      map->set_tile_structure_index(tile_index, struct_index);
     }
   }
 
@@ -668,6 +702,19 @@ namespace devils_engine {
     }
 
     void connect_game_data(core::map* map, core::context* ctx) {
+      std::unordered_map<uint32_t, uint32_t> tile_city_map;
+      
+      {
+        for (size_t i = 0; i < core::map::hex_count_d(core::map::detail_level); ++i) {
+          core::tile t;
+          t.city = UINT32_MAX;
+          t.province = UINT32_MAX;
+          t.struct_index = UINT32_MAX;
+          t.height = map->get_tile_height(i);
+          ctx->set_tile(i, t);
+        }
+      }
+      
       {
         const size_t count = ctx->get_entity_count<core::city>();
         for (size_t i = 0; i < count; ++i) {
@@ -680,6 +727,8 @@ namespace devils_engine {
           ASSERT(city->province->cities_count < core::province::cities_max_game_count);
           city->province->cities[city->province->cities_count] = city;
           ++city->province->cities_count;
+          ASSERT(city->tile_index < core::map::hex_count_d(core::map::detail_level));
+          tile_city_map[city->tile_index] = i;
         }
       }
 
@@ -694,9 +743,13 @@ namespace devils_engine {
           province->title->set_province(province);
           ASSERT(!province->tiles.empty());
           for (const auto &tile_index : province->tiles) {
+            auto itr = tile_city_map.find(tile_index);
+            
             core::tile t;
             t.height = map->get_tile_height(tile_index);
             t.province = i;
+            t.city = itr == tile_city_map.end() ? UINT32_MAX : itr->second;
+            t.struct_index = UINT32_MAX;
             ctx->set_tile(tile_index, t);
           }
         }
@@ -1022,6 +1075,7 @@ namespace devils_engine {
       if (!ret) throw std::runtime_error("There is validation errors");
       
       auto controller = global::get<systems::core_t>()->image_controller;
+      global::get(controller);
       for (size_t i = 0; i < static_cast<size_t>(render::image_controller::image_type::count); ++i) {
         //utils::load_images(controller, image_data, static_cast<uint32_t>(render::image_controller::image_type::system));
         utils::load_images(controller, image_data, i);
@@ -1069,6 +1123,29 @@ namespace devils_engine {
       // могу ли я сериализовать конкретные типы? скорее да чем нет,
       // но при этом мне придется делать отдельный сериализатор для каждого типа
       // понятное дело делать отдельный сериализатор не сруки
+      
+      {
+        auto device = global::get<systems::core_t>()->graphics_container->device;
+        const size_t structures_count = ctx->get_entity_count<core::city>();
+        const size_t structure_data_size = ctx->get_entity_count<core::city_type>() * sizeof(render::world_structure_t);
+        yavf::Buffer buf(device, yavf::BufferCreateInfo::buffer(structure_data_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT), VMA_MEMORY_USAGE_CPU_ONLY);
+        auto map = map_systems->map;
+        map_systems->lock_map();
+        copy_structure_data(ctx, 0, map, &buf);
+        map->structures->resize(structure_data_size);
+        
+        auto task = device->allocateTransferTask();
+        task->begin();
+        task->copy(&buf, map->structures);
+        task->end();
+        task->start();
+        task->wait();
+        device->deallocate(task);
+        
+        global::get<render::tile_optimizer>()->set_max_structures_count(structures_count);
+        map->flush_structures();
+        map_systems->unlock_map();
+      }
 
       advance_progress(prog, "serializing world"); // 4
 
@@ -1077,7 +1154,7 @@ namespace devils_engine {
 
       for (size_t i = 0; i < core::map::hex_count_d(core::map::detail_level); ++i) {
         const auto &d = ctx->get_tile(i);
-        cont.set_tile_data(i, {d.height, d.province});
+        cont.set_tile_data(i, {d.height, d.province}); // тут даже по идее ничего делать особо не нужно
       }
 
       cont.serialize(); //
@@ -1150,6 +1227,7 @@ namespace devils_engine {
 
       global::get(reinterpret_cast<utils::data_string_container*>(SIZE_MAX));
       global::get(reinterpret_cast<core::context*>(SIZE_MAX));
+      global::get(reinterpret_cast<render::image_controller*>(SIZE_MAX));
       map_systems->render_modes->at(render::modes::biome)();
     }
 
@@ -1441,9 +1519,19 @@ namespace devils_engine {
       advance_progress(prog, "creating earth");
       // нужно создать непосредственно core map
       load_map_data(map_systems->map, &world_data);
+      
+      sol::state lua;
+      advance_progress(prog, "loading images");
+      const auto image_data = get_images_tables(&world_data, lua);
+      auto controller = global::get<systems::core_t>()->image_controller;
+      global::get(controller);
+      for (size_t i = 0; i < static_cast<size_t>(render::image_controller::image_type::count); ++i) {
+        //utils::load_images(controller, image_data, static_cast<uint32_t>(render::image_controller::image_type::system));
+        utils::load_images(controller, image_data, i);
+      }
+      //utils::load_biomes(controller, map_systems->seasons, tables->get_biome_tables());
 
       advance_progress(prog, "creating entities");
-      sol::state lua;
       create_entity_without_id<core::province>(map_systems->core_context, &world_data);
       create_entity<core::building_type>(map_systems->core_context, &world_data, lua, &to_data);
       create_entity<core::city_type>(map_systems->core_context, &world_data, lua, &to_data);
@@ -1456,16 +1544,6 @@ namespace devils_engine {
   //     map_systems->core_context->create_container<core::titulus>(world_data.get_data_count(core::structure::titulus));
       //map_systems->core_context->create_container<core::character>(world_data.get_data_count(core::structure::character));
       create_characters(map_systems->core_context, &world_data, lua);
-      
-      advance_progress(prog, "loading images");
-      
-      const auto image_data = get_images_tables(&world_data, lua);
-      auto controller = global::get<systems::core_t>()->image_controller;
-      for (size_t i = 0; i < static_cast<size_t>(render::image_controller::image_type::count); ++i) {
-        //utils::load_images(controller, image_data, static_cast<uint32_t>(render::image_controller::image_type::system));
-        utils::load_images(controller, image_data, i);
-      }
-      //utils::load_biomes(controller, map_systems->seasons, tables->get_biome_tables());
 
       advance_progress(prog, "parsing entities");
       parse_entities<core::titulus>(map_systems->core_context, &world_data, lua, utils::parse_title);
@@ -1480,6 +1558,7 @@ namespace devils_engine {
       connect_game_data(map_systems->map, map_systems->core_context);
       // тут тупое копирование для того чтобы это работало нужно расположить данные так же как они были до сохранения
       // это зависит от расположения картинок в массиве и по идее это расположение не изменяется
+      // мы можем просто добавить таблицы биомов в сохранку
       
       advance_progress(prog, "preparing biomes");
       world_data.fill_seasons(map_systems->seasons);
@@ -1492,10 +1571,35 @@ namespace devils_engine {
       map_systems->unlock_map();
       
       map_systems->map->set_tile_biome(map_systems->seasons);
+      
+      {
+        auto ctx = map_systems->core_context;
+        auto device = global::get<systems::core_t>()->graphics_container->device;
+        const size_t structures_count = ctx->get_entity_count<core::city>();
+        const size_t structure_data_size = ctx->get_entity_count<core::city_type>() * sizeof(render::world_structure_t);
+        yavf::Buffer buf(device, yavf::BufferCreateInfo::buffer(structure_data_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT), VMA_MEMORY_USAGE_CPU_ONLY);
+        auto map = map_systems->map;
+        map_systems->lock_map();
+        copy_structure_data(ctx, 0, map, &buf);
+        map->structures->resize(structure_data_size);
+        
+        auto task = device->allocateTransferTask();
+        task->begin();
+        task->copy(&buf, map->structures);
+        task->end();
+        task->start();
+        task->wait();
+        device->deallocate(task);
+        
+        global::get<render::tile_optimizer>()->set_max_structures_count(structures_count);
+        map->flush_structures();
+        map_systems->unlock_map();
+      }
 
       map_systems->render_modes->at(render::modes::biome)();
       global::get(reinterpret_cast<utils::data_string_container*>(SIZE_MAX));
       global::get(reinterpret_cast<core::context*>(SIZE_MAX));
+      global::get(reinterpret_cast<render::image_controller*>(SIZE_MAX));
 
       advance_progress(prog, "filling tile connections");
       generate_tile_connections(map_systems->map, global::get<dt::thread_pool>());

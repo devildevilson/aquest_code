@@ -90,11 +90,12 @@ namespace devils_engine {
   void key_input(const size_t &time, const uint32_t &current_state, const bool loading);
   void zoom_input(components::camera* camera);
   uint32_t cast_mouse_ray();
+  void draw_tooltip(const uint32_t &index, const sol::function &tile_func);
   void next_nk_frame(const size_t &time);
 
   void create_render_system(systems::core_t &base_systems);
   void setup_callbacks();
-  void basic_interface_functions(systems::core_t &base_systems);
+  sol::function basic_interface_functions(systems::core_t &base_systems);
 
   uint32_t sphere_frustum_test(const glm::vec3 &pos, const float &radius, const utils::frustum &fru);
   

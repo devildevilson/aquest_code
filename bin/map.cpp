@@ -16,6 +16,7 @@ namespace devils_engine {
       tiles(nullptr),
       accel_triangles(nullptr),
       biomes(nullptr),
+      structures(nullptr),
       provinces(nullptr),
       faiths(nullptr),
       cultures(nullptr),
@@ -41,6 +42,11 @@ namespace devils_engine {
         VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT
       ), VMA_MEMORY_USAGE_CPU_ONLY); // это можно засунуть сразу в гпу память
       
+      structures = device->create(yavf::BufferCreateInfo::buffer(
+        sizeof(glm::uvec4), 
+        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT
+      ), VMA_MEMORY_USAGE_GPU_ONLY);
+      
       memset(tile_indices->ptr(), 0, tile_indices->info().size);
       
       size_t accum = 0;
@@ -59,6 +65,7 @@ namespace devils_engine {
                                .binding(2, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_ALL)
                                .binding(3, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_ALL)
                                .binding(4, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_ALL)
+                               .binding(5, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_ALL)
                                .create(TILES_DATA_LAYOUT_NAME);
       }
       
@@ -77,6 +84,7 @@ namespace devils_engine {
                        tiles_set->add({points, 0, points->info().size, 0, 2, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER});
                        tiles_set->add({accel_triangles, 0, accel_triangles->info().size, 0, 3, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER});
                        tiles_set->add({tile_indices, 0, tile_indices->info().size, 0, 4, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER});
+                       tiles_set->add({structures, 0, structures->info().size, 0, 5, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER});
         tiles_set->update();
         tiles->setDescriptor(tiles_set, index);
       }
@@ -88,6 +96,7 @@ namespace devils_engine {
       device->destroy(accel_triangles);
       device->destroy(biomes);
       device->destroy(tile_indices);
+      device->destroy(structures);
       device->destroyDescriptorPool(MAP_CONTAINER_DESCRIPTOR_POOL_NAME);
 //       device->destroy(provinces);
 //       device->destroy(faiths);
@@ -662,6 +671,7 @@ namespace devils_engine {
         tiles_set->at(2) = {points, 0, points->info().size, 0, 2, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER};
         tiles_set->at(3) = {accel_triangles, 0, accel_triangles->info().size, 0, 3, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER};
         tiles_set->at(4) = {tile_indices, 0, tile_indices->info().size, 0, 4, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER};
+        tiles_set->at(5) = {structures, 0, structures->info().size, 0, 5, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER};
         tiles_set->update();
         
 //         yavf::DescriptorMaker dm(device);
@@ -697,7 +707,13 @@ namespace devils_engine {
       tiles_set->at(2) = {points, 0, points->info().size, 0, 2, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER};
       tiles_set->at(3) = {accel_triangles, 0, accel_triangles->info().size, 0, 3, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER};
       tiles_set->at(4) = {tile_indices, 0, tile_indices->info().size, 0, 4, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER};
+      tiles_set->at(5) = {structures, 0, structures->info().size, 0, 5, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER};
       tiles_set->update();
+    }
+    
+    void map::flush_structures() {
+      tiles_set->at(5) = {structures, 0, structures->info().size, 0, 5, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER};
+      tiles_set->update(5);
     }
     
 //     void map::set_tile_biom(const uint32_t &tile_index, const uint32_t &biom_index) {
@@ -780,9 +796,19 @@ namespace devils_engine {
       std::unique_lock<std::mutex> lock(mutex);
       auto tiles_arr = reinterpret_cast<render::light_map_tile_t*>(tiles->ptr());
       for (size_t i = 0; i < tiles_count(); ++i) {
-        const uint32_t index = s->get_tile_biome(i);
-        tiles_arr[i].packed_data4[2] = index;
+        const uint8_t index = s->get_tile_biome(i);
+        const uint32_t mask = 0x00ffffff;
+        const uint32_t final_container = uint32_t(index) << 24 | mask;
+        tiles_arr[i].packed_data4[2] = final_container;
       }
+    }
+    
+    void map::set_tile_structure_index(const uint32_t &tile_index, const uint32_t &struct_index) {
+      ASSERT(tile_index < tiles_count());
+      ASSERT(struct_index < render::maximum_structure_types);
+      auto tiles_arr = reinterpret_cast<render::light_map_tile_t*>(tiles->ptr());
+      const uint8_t biome_index = uint8_t(tiles_arr[tile_index].packed_data4[2] >> 24);
+      tiles_arr[tile_index].packed_data4[2] = uint32_t(biome_index) << 24 | struct_index;
     }
     
     enum map::status map::status() const {

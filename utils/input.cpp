@@ -425,13 +425,17 @@ namespace devils_engine {
     
     std::tuple<type, size_t> input_event_state(const utils::id &id) {
       const auto &container = global::get<data>()->key_events;
-      auto itr = container.event_keys.find(id);
-      if (itr == container.event_keys.end()) return {release, SIZE_MAX};
+      //auto itr = container.event_keys.find(id);
+      //if (itr == container.event_keys.end()) return {release, SIZE_MAX};
+      auto itr = container.events_map.find(id);
+      if (itr == container.events_map.end()) return { release, SIZE_MAX };
       
+      const size_t event_index = itr->second;
       int index = INT32_MAX;
-      if (itr->second.keys[1] == INT32_MAX) index = itr->second.keys[0];
-      else if (container.container[itr->second.keys[0]].event_time < container.container[itr->second.keys[1]].event_time) index = itr->second.keys[0]; // стейт тайм?
-      else index = itr->second.keys[1];
+      const auto& found_event = container.event_keys[event_index].second;
+      if (found_event.keys[1] == INT32_MAX) index = found_event.keys[0];
+      else if (container.container[found_event.keys[0]].event_time < container.container[found_event.keys[1]].event_time) index = found_event.keys[0]; // стейт тайм?
+      else index = found_event.keys[1];
       ASSERT(index != INT32_MAX);
       
       return {container.container[index].event, container.container[index].event_time};
@@ -439,37 +443,45 @@ namespace devils_engine {
 
     bool is_event_pressed(const utils::id &id) {
       const auto &container = global::get<data>()->key_events;
-      auto itr = container.event_keys.find(id);
-      if (itr == container.event_keys.end()) return false;
-      if (itr->second.keys[1] == INT32_MAX) {
-        const int index = itr->second.keys[0];
+      //auto itr = container.event_keys.find(id);
+      //if (itr == container.event_keys.end()) return false;
+      auto itr = container.events_map.find(id);
+      if (itr == container.events_map.end()) return false;
+      const size_t event_index = itr->second;
+      const auto& found_event = container.event_keys[event_index].second;
+      if (found_event.keys[1] == INT32_MAX) {
+        const int index = found_event.keys[0];
         return container.container[index].event != release;
       }
       
-      if (container.container[itr->second.keys[0]].event_time < container.container[itr->second.keys[1]].event_time) {
-        const int index = itr->second.keys[0];
+      if (container.container[found_event.keys[0]].event_time < container.container[found_event.keys[1]].event_time) {
+        const int index = found_event.keys[0];
         return container.container[index].event != release;
       }
       
-      const int index = itr->second.keys[1];
+      const int index = found_event.keys[1];
       return container.container[index].event != release;
     }
 
     bool is_event_released(const utils::id &id) {
       const auto &container = global::get<data>()->key_events;
-      auto itr = container.event_keys.find(id);
-      if (itr == container.event_keys.end()) return false;
-      if (itr->second.keys[1] == INT32_MAX) {
-        const int index = itr->second.keys[0];
+      //auto itr = container.event_keys.find(id);
+      //if (itr == container.event_keys.end()) return false;
+      auto itr = container.events_map.find(id);
+      if (itr == container.events_map.end()) return false;
+      const size_t event_index = itr->second;
+      const auto& found_event = container.event_keys[event_index].second;
+      if (found_event.keys[1] == INT32_MAX) {
+        const int index = found_event.keys[0];
         return container.container[index].event == release;
       }
       
-      if (container.container[itr->second.keys[0]].event_time < container.container[itr->second.keys[1]].event_time) {
-        const int index = itr->second.keys[0];
+      if (container.container[found_event.keys[0]].event_time < container.container[found_event.keys[1]].event_time) {
+        const int index = found_event.keys[0];
         return container.container[index].event == release;
       }
       
-      const int index = itr->second.keys[1];
+      const int index = found_event.keys[1];
       return container.container[index].event == release;
     }
 
@@ -567,8 +579,12 @@ namespace devils_engine {
     const char* get_event_key_name(const utils::id &id, const uint8_t &slot) {
       assert(slot < event_key_slots);
       const auto &container = global::get<data>()->key_events;
-      auto itr = container.event_keys.find(id);
-      const int key = itr->second.keys[slot];
+      auto itr = container.events_map.find(id);
+      if (itr == container.events_map.end()) return nullptr;
+
+      const size_t event_index = itr->second;
+      const auto& found_event = container.event_keys[event_index].second;
+      const int key = found_event.keys[slot];
       return get_key_name(key);
     }
 
@@ -596,12 +612,20 @@ namespace devils_engine {
     void set_key(const int &key, const utils::id &id, const uint8_t &slot) {
       assert(slot < event_key_slots);
       auto &container = global::get<data>()->key_events;
-      auto itr = container.event_keys.find(id);
-      if (itr == container.event_keys.end()) {
-        itr = container.event_keys.insert(std::make_pair(id, keys::event_keys_container{INT32_MAX, INT32_MAX})).first;
+      auto itr = container.events_map.find(id);
+      if (itr == container.events_map.end()) {
+        const size_t index = container.event_keys.size();
+        container.event_keys.emplace_back(id, keys::event_keys_container{INT32_MAX, INT32_MAX});
+        itr = container.events_map.insert(std::make_pair(id, index)).first;
       }
+      //auto itr = container.event_keys.find(id);
+      //if (itr == container.event_keys.end()) {
+      //   itr = container.event_keys.insert(std::make_pair(id, keys::event_keys_container{INT32_MAX, INT32_MAX})).first;
+      //}
       
-      itr->second.keys[slot] = key;
+      const size_t event_index = itr->second;
+      container.event_keys[event_index].second.keys[slot] = key;
+      //itr->second.keys[slot] = key;
       // нужно ли запоминать в кнопке что к ней обращается? 
       // по идее мне это нужно только для того чтобы подтвердить что пользователь не прилепил на одну кнопку несколько эвентов
       // думаю что это можно сделать отдельно
@@ -614,10 +638,11 @@ namespace devils_engine {
       if (!old_id.valid()) return;
       
       ASSERT(false);
-      auto event_keys_container = container.event_keys.find(old_id);
-      ASSERT(event_keys_container != container.event_keys.end());
-      if (event_keys_container->second.keys[0] == key) event_keys_container->second.keys[0] = INT32_MAX;
-      if (event_keys_container->second.keys[1] == key) event_keys_container->second.keys[1] = INT32_MAX;
+      auto event_keys_container = container.events_map.find(old_id);
+      ASSERT(event_keys_container != container.events_map.end());
+      const size_t old_event_index = event_keys_container->second;
+      if (container.event_keys[old_event_index].second.keys[0] == key) container.event_keys[old_event_index].second.keys[0] = INT32_MAX;
+      if (container.event_keys[old_event_index].second.keys[1] == key) container.event_keys[old_event_index].second.keys[1] = INT32_MAX;
     }
 
     event_data get_event_data(const int &key) {
@@ -650,13 +675,17 @@ namespace devils_engine {
     bool check_event(const utils::id &event, const uint32_t &states) {
       auto &container = global::get<data>()->key_events;
       if (container.blocked == 1) return false;
-      auto itr = container.event_keys.find(event);
-      if (itr == container.event_keys.end()) return false;
+      //auto itr = container.event_keys.find(event);
+      //if (itr == container.event_keys.end()) return false;
+      auto itr = container.events_map.find(event);
+      if (itr == container.events_map.end()) return false;
+      const size_t event_index = itr->second;
+      const auto& found_event = container.event_keys[event_index].second;
       
       int index = INT32_MAX;
-      if (itr->second.keys[1] == INT32_MAX) index = itr->second.keys[0];
-      else if (container.container[itr->second.keys[0]].state_time < container.container[itr->second.keys[1]].state_time) index = itr->second.keys[0]; // стейт тайм?
-      else index = itr->second.keys[1];
+      if (found_event.keys[1] == INT32_MAX) index = found_event.keys[0];
+      else if (container.container[found_event.keys[0]].state_time < container.container[found_event.keys[1]].state_time) index = found_event.keys[0]; // стейт тайм?
+      else index = found_event.keys[1];
       
       if (container.container[index].event_layer == UINT32_MAX) container.container[index].event_layer = container.current_event_layer;
       if (container.container[index].event_layer != container.current_event_layer) return false;
@@ -668,15 +697,17 @@ namespace devils_engine {
     bool timed_check_event(const utils::id &event, const uint32_t &states, const size_t &wait, const size_t &period) {
       auto &container = global::get<data>()->key_events;
       if (container.blocked == 1) return false;
-      auto itr = container.event_keys.find(event);
-      if (itr == container.event_keys.end()) return false;
+      auto itr = container.events_map.find(event);
+      if (itr == container.events_map.end()) return false;
+      const size_t event_index = itr->second;
+      const auto& found_event = container.event_keys[event_index].second;
       
       const size_t last_frame_time = global::get<data>()->last_frame_time;
       
       int index = INT32_MAX;
-      if (itr->second.keys[1] == INT32_MAX) index = itr->second.keys[0];
-      else if (container.container[itr->second.keys[0]].state_time < container.container[itr->second.keys[1]].state_time) index = itr->second.keys[0]; // стейт тайм?
-      else index = itr->second.keys[1];
+      if (found_event.keys[1] == INT32_MAX) index = found_event.keys[0];
+      else if (container.container[found_event.keys[0]].state_time < container.container[found_event.keys[1]].state_time) index = found_event.keys[0]; // стейт тайм?
+      else index = found_event.keys[1];
       
       if (container.container[index].event_layer == UINT32_MAX) container.container[index].event_layer = container.current_event_layer;
       if (container.container[index].event_layer != container.current_event_layer) return false;

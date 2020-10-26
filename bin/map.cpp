@@ -231,7 +231,7 @@ namespace devils_engine {
             const float height = tile_data.height;
             const uint32_t p_count = render::is_pentagon(tile_data) ? 5 : 6;
             const uint32_t point_a_index = tile_data.center;
-            const uint height_layer = render::compute_height_layer(height);
+            const uint32_t height_layer = render::compute_height_layer(height);
             const float final_height = render::layer_height * height_layer;
             const float computed_height = final_height * render::render_tile_height;
             

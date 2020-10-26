@@ -10,6 +10,7 @@
 #include "utils/input.h"
 #include "utils/systems.h"
 #include "image_controller.h"
+#include <array>
 
 #define TILE_RENDER_PIPELINE_LAYOUT_NAME "tile_render_pipeline_layout"
 #define TILE_RENDER_PIPELINE_NAME "tile_render_pipeline"

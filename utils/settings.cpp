@@ -106,7 +106,8 @@ namespace devils_engine {
     }
     
     settings::game::game() : camera_movement(5.0f), camera_movement_x(1.0f), camera_movement_y(1.0f), sens(1.0f), sens_x(1.0f), sens_y(1.0f), target_fps(500.0f), game_cursor(false) {}
-    settings::keys::keys() : key_iterator(nullptr) {} // проблема в том что у нас может и не готов utils::id к этом моменту
+    settings::keys::keys() : //key_iterator(nullptr), 
+      key_iterator(0) {} // проблема в том что у нас может и не готов utils::id к этом моменту
     
     void settings::keys::setup_default_mapping() {
       const utils::id map_move = utils::id::get("map_move");
@@ -176,25 +177,34 @@ namespace devils_engine {
       return global::get<input::data>()->key_events.event_keys.size();
     }
     
+    // нужно сделать нормальную итерацию по клавишам, причем мы еще должны учитывать эвенты которые не используем
+    // видимо придется завести еще один массив
     std::tuple<utils::id, int, int> settings::keys::get_next_event(const uint32_t &type) {
-      auto itr = global::get<input::data>()->key_events.event_keys.begin();
-      static_assert(sizeof(itr) == sizeof(void*));
-      if (key_iterator == nullptr) {
-        memcpy(&key_iterator, &itr, sizeof(itr));
-      }
+      //auto itr = global::get<input::data>()->key_events.event_keys.begin();
+      //static_assert(sizeof(itr) == sizeof(void*));
+      //if (key_iterator == nullptr) {
+      //  memcpy(&key_iterator, &itr, sizeof(itr));
+      //}
       
-      memcpy(reinterpret_cast<void*>(&itr), &key_iterator, sizeof(itr));
-      
-      if (itr == global::get<input::data>()->key_events.event_keys.end()) {
-        key_iterator = nullptr;
+      //memcpy(reinterpret_cast<void*>(&itr), &key_iterator, sizeof(itr));
+
+      if (key_iterator >= global::get<input::data>()->key_events.event_keys.size()) {
+        key_iterator = 0;
         return std::make_tuple(utils::id(), INT32_MAX, INT32_MAX);
       }
       
+      //if (itr == global::get<input::data>()->key_events.event_keys.end()) {
+      //  key_iterator = nullptr;
+      //  return std::make_tuple(utils::id(), INT32_MAX, INT32_MAX);
+      //}
+      
       (void)type;
       
+      const auto itr = &global::get<input::data>()->key_events.event_keys[key_iterator];
       const auto ret = std::make_tuple(itr->first, itr->second.keys[0], itr->second.keys[1]);
-      ++itr;
-      memcpy(&key_iterator, &itr, sizeof(itr));
+      //++itr;
+      //memcpy(&key_iterator, &itr, sizeof(itr));
+      ++key_iterator;
       return ret;
     }
     

@@ -225,7 +225,7 @@ namespace devils_engine {
         const auto table = image_tables[i];
         
         const int32_t type_check = table["type"];
-        if (type_check < 0 || type_check >= static_cast<int32_t>(render::image_controller::image_type::count)) throw std::runtime_error("Bad image " + std::string(table["id"]) + " type");
+        if (type_check < 0 || type_check >= static_cast<int32_t>(render::image_controller::image_type::count)) throw std::runtime_error("Bad image " + table["id"].get<std::string>() + " type");
         
         // разные типы загрузок у нас могут быть (наверное нужно разделить типы изображений которые мы грузим сейчас)
         // 
@@ -294,7 +294,7 @@ namespace devils_engine {
         
         std::filesystem::path p(img_datas.path);
         auto itr = p.begin();
-        std::string current_mod2 = *itr;
+        std::string current_mod2 = (*itr).string();
         ASSERT(current_mod2 == "apates_quest");
         
         const std::string &root = global::root_directory();

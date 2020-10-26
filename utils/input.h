@@ -66,8 +66,10 @@ namespace devils_engine {
       uint32_t current_event_layer;
       uint32_t blocked;
       // если одна из этих кнопок нажата то эвент срабатывает
-      // а что если у одной кнопки двойное нажатие, а другой длинное? нужно 
-      std::unordered_map<utils::id, event_keys_container> event_keys;
+      // а что если у одной кнопки двойное нажатие, а другой длинное? скорее всего двойное нажатие или его отсутствие я спрячу
+      //std::unordered_map<utils::id, event_keys_container> event_keys;
+      std::vector<std::pair<utils::id, event_keys_container>> event_keys;
+      std::unordered_map<utils::id, size_t> events_map;
     };
 
     struct data {

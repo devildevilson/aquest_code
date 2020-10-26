@@ -47,7 +47,8 @@ namespace devils_engine {
         // эвенты и две кнопки? нужно наверное еще описание какое и название не техническое
         //std::unordered_map<id, std::pair<int, int>> mapping;
         utils::id awaiting_key;
-        void* key_iterator;
+        //void* key_iterator;
+        size_t key_iterator;
         
         keys();
         void setup_default_mapping();

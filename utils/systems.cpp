@@ -194,7 +194,7 @@ namespace devils_engine {
       context = container.create<interface::context>(graphics_container->device, window);
       global::get(context);
       
-      render::create_persistent_resources(graphics_container->device);
+//       render::create_persistent_resources(graphics_container->device);
       
       image_container = container.create<render::image_container>(render::image_container::create_info{graphics_container->device});
       image_controller = container.create<render::image_controller>(graphics_container->device, image_container);
@@ -291,6 +291,7 @@ namespace devils_engine {
       interface_container->init_game_logic();
       utils::setup_lua_main_menu(interface_container->lua);
       utils::setup_lua_settings(interface_container->lua);
+      utils::setup_lua_tile(interface_container->lua);
       
       interface = container.create<utils::interface>(interface_container);
       menu = container.create<utils::main_menu>(interface_container);
@@ -600,6 +601,7 @@ namespace devils_engine {
       global::get(reinterpret_cast<render::tile_connections_render*>(SIZE_MAX));
       global::get(reinterpret_cast<render::tile_borders_optimizer*>(SIZE_MAX));
       global::get(reinterpret_cast<render::tile_walls_optimizer*>(SIZE_MAX));
+//       global::get(reinterpret_cast<render::world_map_buffers*>(SIZE_MAX));
       
       world_buffers = nullptr;
       
@@ -623,7 +625,8 @@ namespace devils_engine {
         sizeof(render::tile_border_render) +
         sizeof(render::tile_connections_render) +
         sizeof(render::tile_object_render) +
-        sizeof(render::tile_highlights_render);
+        sizeof(render::tile_highlights_render) +
+        sizeof(render::tile_structure_render);
       
       ASSERT(optimizators_container == nullptr);
       ASSERT(render_container == nullptr);
@@ -645,12 +648,14 @@ namespace devils_engine {
       auto walls   = render_container->add_stage<render::tile_connections_render>(render::tile_connections_render::create_info{device, opt1, buffers});
                      render_container->add_stage<render::tile_object_render>(render::tile_object_render::create_info{device, opt1, buffers});
       auto thl     = render_container->add_stage<render::tile_highlights_render>(render::tile_highlights_render::create_info{device, buffers});
+                     render_container->add_stage<render::tile_structure_render>(render::tile_structure_render::create_info{device, opt1, world_buffers});
       systems->render_slots->set_stage(7, render_container);
       
       global::get(tiles);
       global::get(walls);
       global::get(opt1);
       global::get(thl);
+//       global::get(world_buffers);
 //       global::get(opt2);
 //       global::get(opt3);
       UNUSED_VARIABLE(borders);

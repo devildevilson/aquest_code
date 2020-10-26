@@ -50,10 +50,12 @@ namespace devils_engine {
         target.set_function("is_event_released", input::is_event_released);
         target.set_function("get_event_key_name", input::get_event_key_name);
         target.set_function("get_event", input::get_event);
+        target.set_function("get_cursor_pos", input::get_cursor_pos);
         target.set_function("get_framebuffer_size", input::get_framebuffer_size);
         target.set_function("get_window_content_scale", input::get_window_content_scale);
         target.set_function("get_monitor_content_scale", input::get_monitor_content_scale);
         target.set_function("get_monitor_physical_size", input::get_monitor_physical_size);
+        
 
         // тут добавятся несколько функций для того чтобы задать клавишу в настройках
         sol::table x = lua.create_table_with(sol::meta_function::new_index, sol::detail::fail_on_newindex, sol::meta_function::index, target);

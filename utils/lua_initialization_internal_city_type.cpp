@@ -22,7 +22,8 @@ namespace devils_engine {
           "stats", sol::readonly_property([] (const core::city_type* self) { return std::ref(self->stats); }),
           "name_id", sol::readonly(&core::city_type::name_id),
           "desc_id", sol::readonly(&core::city_type::desc_id),
-          "city_image", sol::readonly(&core::city_type::city_image),
+          "city_image_top", sol::readonly(&core::city_type::city_image_top),
+          "city_image_face", sol::readonly(&core::city_type::city_image_face),
           "city_icon", sol::readonly(&core::city_type::city_icon),
           "maximum_buildings", sol::var(core::city_type::maximum_buildings),
           "stats_count", sol::var(core::city_stats::count)

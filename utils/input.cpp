@@ -5,6 +5,7 @@
 #include <cstring>
 #include <iostream>
 #include "render/window.h"
+#include "GLFW/glfw3.h"
 
 namespace devils_engine {
   namespace utils {
@@ -685,6 +686,13 @@ namespace devils_engine {
       if (container.container[index].event_time % period >= last_frame_time) return false;
       const uint32_t final_state = container.container[index].state == state_click && container.container[index].state_time != 0 ? state_initial : container.container[index].state;
       return (final_state & states) != 0;
+    }
+    
+    std::tuple<double, double> get_cursor_pos() {
+      auto w = global::get<render::window>();
+      double x,y;
+      glfwGetCursorPos(w->handle, &x, &y);
+      return std::tie(x, y);
     }
     
     std::tuple<uint32_t, uint32_t> get_framebuffer_size() {

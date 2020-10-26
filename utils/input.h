@@ -120,6 +120,7 @@ namespace devils_engine {
     bool timed_check_key(const int &key, const uint32_t &states, const size_t &wait, const size_t &period);
     bool check_event(const utils::id &event, const uint32_t &states);
     bool timed_check_event(const utils::id &event, const uint32_t &states, const size_t &wait, const size_t &period);
+    std::tuple<double, double> get_cursor_pos();
     std::tuple<uint32_t, uint32_t> get_framebuffer_size();
     std::tuple<float, float> get_window_content_scale();
     std::tuple<float, float> get_monitor_content_scale();

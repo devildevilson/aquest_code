@@ -84,7 +84,7 @@ void main() {
   const uint additional = prng(prng_state);
   const float val_norm1 = prng_normalize(prng_state);
   const float val_norm2 = prng_normalize(additional);
-  const vec4 normal = normalize(center); // центр к сожалению стоит чуть ближе чем обычные точки
+  const vec4 normal = vec4(normalize(center.xyz), 0.0f); // центр к сожалению стоит чуть ближе чем обычные точки
   // нужно найти точку на тайле, мы можем легко найти точку в квадрате
   // но лучше будет искать точку в радиусе
   const float norm1 = val_norm1 * 2.0f * PI;
@@ -111,7 +111,7 @@ void main() {
   // первый объект - это объект у которого только одна степерь свободы (как у объектов в думе)
   // второй объект - это объект у которого две степени свободы (билборд) (потестировав, я не уверен нужно ли мне первый тип объектов теперь вообще)
   // сейчас пока что мы сделаем второй объект
-  const uint biome_index = tiles[tile_index].packed_data4[2];
+  const uint biome_index = tiles[tile_index].packed_data4[2] >> 24;
   const biome_data_t biome = unpack_data(packed_biome_datas[biome_index]);
   const float min_scale = biome.min_scale2;
   const float max_scale = biome.max_scale2;
@@ -121,8 +121,6 @@ void main() {
   // тут нужно вычислить несколько матриц
   const vec4 point = center + x * cos_num + y * sin_num + normal * (final_height * render_tile_height + obj_scale/2); // как то вот так выглядит неплохо
   mat4 translaion = translate(mat4(1.0f), point);
-  //vec4 addition = vec4(-point.xyz, 0.0f);
-  //model = rotate(model, PI, );
   const mat3 rot = mat3(camera_matrices.invView);
   mat4 rotation = mat4(rot); // говорят что этого достаточно
   mat4 scaling = scale(rotation, vec4(obj_scale, -obj_scale, obj_scale, 0.0f)); // по идее так объекты должны стоять "на ногах"

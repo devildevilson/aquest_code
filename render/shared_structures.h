@@ -86,10 +86,12 @@ const float render_tile_height = 7.0f;
 const float mountain_height = 0.5f;
 const float layer_height = 1.0f / float(layers_count);
 
-const uint border_offset_mask = 0xfffffff; // 2^28
-const uint border_size_mask   = 0xf;       // 2^4
-const uint connections_offset_mask = 0xfffffff; // 2^28
-const uint connections_size_mask   = 0xf;       // 2^4
+const uint border_offset_mask      = 0x0fffffff; // 2^28
+const uint border_size_mask        = 0x0000000f; // 2^4
+const uint connections_offset_mask = 0x0fffffff; // 2^28
+const uint connections_size_mask   = 0x0000000f; // 2^4
+
+const uint maximum_structure_types = 0x00ffffff; // 2^24
 
 struct image_t {
   uint container;
@@ -193,7 +195,13 @@ struct map_tile_t {
   uint neighbours[6];
   uint borders_data;
   uint connections_data;
-  uint biome_index; // все таки вернулся сюда биом индекс
+  uint biome_index; 
+  // все таки вернулся сюда биом индекс
+  // рядом с ним мы можем поставить индекс структуры
+  // нам еще потребуется решить вопрос с дорогами
+  // нам нужно только указать в какие стороны направлена дорога (6 бит)
+  // тип дороги? довольно полезно, как указать? 
+  // еще было бы неплохо сделать подъем дороги (наверное)
   
   // подъем означает что мне нужно генерить закраску какую для этих областей
   // что хорошо - закраску можно сгенерировать в screen space
@@ -213,6 +221,7 @@ struct packed_biome_data_t {
   vec4 float_data;
 };
 
+// один из object_texture наверное не потребуется
 struct biome_data_t {
   image_t texture;
   color_t color;
@@ -231,6 +240,17 @@ struct biome_data_t {
   float dummy1; // что тут?
   float dummy2;
   float dummy3;
+};
+
+struct world_structure_t {
+  image_t city_image_top;
+  image_t city_image_face;
+  float scale;
+  uint dummy;
+  // что то еще? где то это должно находится? по идее по центру тайла
+  // размер строения, возможно нужно менять изображения по ходу дела
+  // как нужно подстроить лес для объекта? мне тогда придется понять на каком тайле что стоит
+  // а это и так переусложнение и без того тяжелого шейдера
 };
 
 struct biome_objects_data_t {

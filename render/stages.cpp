@@ -110,6 +110,13 @@ namespace devils_engine {
         VMA_MEMORY_USAGE_GPU_ONLY
       );
       
+      structures_indices = device->create(
+        yavf::BufferCreateInfo::buffer(
+          16,
+          VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT), 
+        VMA_MEMORY_USAGE_GPU_ONLY
+      );
+      
       auto buffer = reinterpret_cast<struct indirect_buffer*>(indirect->ptr());
       memset(indirect->ptr(), 0, sizeof(struct indirect_buffer));
       buffer->padding1[0] = core::map::tri_count_d(core::map::accel_struct_detail_level);
@@ -139,17 +146,19 @@ namespace devils_engine {
                                   .binding(2, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT)
                                   .binding(3, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT)
                                   .binding(4, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT)
+                                  .binding(5, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT)
                                   .create("tiles_indices_layout");
       }
       
       {
         yavf::DescriptorMaker dm(device);
         set = dm.layout(tiles_indices_layout).create(pool)[0];
-        set->add({indirect, 0, indirect->info().size, 0, 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER});
-        set->add({tiles_indices, 0, tiles_indices->info().size, 0, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER});
-        set->add({borders_indices, 0, borders_indices->info().size, 0, 2, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER});
-        set->add({walls_indices, 0, walls_indices->info().size, 0, 3, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER});
-        set->add({objects_indices, 0, objects_indices->info().size, 0, 4, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER});
+        set->add({indirect,           0, indirect->info().size,           0, 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER});
+        set->add({tiles_indices,      0, tiles_indices->info().size,      0, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER});
+        set->add({borders_indices,    0, borders_indices->info().size,    0, 2, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER});
+        set->add({walls_indices,      0, walls_indices->info().size,      0, 3, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER});
+        set->add({objects_indices,    0, objects_indices->info().size,    0, 4, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER});
+        set->add({structures_indices, 0, structures_indices->info().size, 0, 5, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER});
         set->update();
 //         indirect->setDescriptor(desc, index);
       }
@@ -200,23 +209,29 @@ namespace devils_engine {
       auto camera_data = reinterpret_cast<render::camera_data*>(uniform->ptr());
       const auto fru = utils::compute_frustum(camera_data->viewproj);
       
-      buffer->tiles_command.indexCount = 0;
+      buffer->tiles_command.indexCount    = 0;
       buffer->tiles_command.instanceCount = 1;
-      buffer->tiles_command.firstIndex = 0;
-      buffer->tiles_command.vertexOffset = 0;
+      buffer->tiles_command.firstIndex    = 0;
+      buffer->tiles_command.vertexOffset  = 0;
       buffer->tiles_command.firstInstance = 0;
       
-      buffer->borders_command.indexCount = 0;
+      buffer->borders_command.indexCount    = 0;
       buffer->borders_command.instanceCount = 1;
-      buffer->borders_command.firstIndex = 0;
-      buffer->borders_command.vertexOffset = 0;
+      buffer->borders_command.firstIndex    = 0;
+      buffer->borders_command.vertexOffset  = 0;
       buffer->borders_command.firstInstance = 0;
       
-      buffer->walls_command.indexCount = 0;
+      buffer->walls_command.indexCount    = 0;
       buffer->walls_command.instanceCount = 1;
-      buffer->walls_command.firstIndex = 0;
-      buffer->walls_command.vertexOffset = 0;
+      buffer->walls_command.firstIndex    = 0;
+      buffer->walls_command.vertexOffset  = 0;
       buffer->walls_command.firstInstance = 0;
+      
+      buffer->structures_command.indexCount    = 0;
+      buffer->structures_command.instanceCount = 1;
+      buffer->structures_command.firstIndex    = 0;
+      buffer->structures_command.vertexOffset  = 0;
+      buffer->structures_command.firstInstance = 0;
       
       memcpy(&buffer->frustum, &fru, sizeof(utils::frustum));
       
@@ -225,8 +240,8 @@ namespace devils_engine {
         buffer->biome_data[i].objects_indirect[1] = 0; // инстансы
         buffer->biome_data[i].objects_indirect[2] = 0; // ферст индекс
         buffer->biome_data[i].objects_indirect[3] = 0; // вертекс оффсет
-        buffer->biome_data[i].objects_data[0] = 0; // ферст инстанс
-        buffer->biome_data[i].objects_data[3] = 0; // нужно ли?
+        buffer->biome_data[i].objects_data[0]     = 0; // ферст инстанс
+        buffer->biome_data[i].objects_data[3]     = 0; // нужно ли?
       }
     }
     
@@ -283,6 +298,10 @@ namespace devils_engine {
       return objects_indices;
     }
     
+    yavf::Buffer* tile_optimizer::structures_index_buffer() const {
+      return structures_indices;
+    }
+    
     void tile_optimizer::set_borders_count(const uint32_t &count) {
       const uint32_t indices_count = count*5;
       const uint32_t final_size = (indices_count + 16 - 1) / 16 * 16;
@@ -308,6 +327,18 @@ namespace devils_engine {
       set->at(3) = {walls_indices, 0, walls_indices->info().size, 0, 3, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER};
       set->update();
       PRINT_VAR("walls indices_count", indices_count)
+    }
+    
+    void tile_optimizer::set_max_structures_count(const uint32_t &count) {
+      const uint32_t indices_count = count*5;
+      const uint32_t final_size = (indices_count*4 + 16 - 1) / 16 * 16;
+      if (structures_indices->info().size == final_size) return;
+      structures_indices->resize(final_size);
+      auto buffer = reinterpret_cast<struct indirect_buffer*>(indirect->ptr());
+      buffer->padding3[0] = indices_count;
+      
+      set->at(5) = {structures_indices, 0, structures_indices->info().size, 0, 5, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER};
+      set->update();
     }
     
     void tile_optimizer::set_biome_tile_count(const std::array<std::pair<uint32_t, uint32_t>, MAX_BIOMES_COUNT> &data) {
@@ -1364,6 +1395,83 @@ namespace devils_engine {
       
       tiles_indices_ptr[offset+p_count] = GPU_UINT_MAX;
     }
+    
+    tile_structure_render::tile_structure_render(const create_info &info) : device(info.device), opt(info.opt), map_buffers(info.map_buffers) {
+      yavf::DescriptorSetLayout uniform_layout = device->setLayout(UNIFORM_BUFFER_LAYOUT_NAME);
+      ASSERT(uniform_layout != VK_NULL_HANDLE);
+      
+      auto tiles_data_layout = device->setLayout(TILES_DATA_LAYOUT_NAME);
+//       auto storage_layout = device->setLayout(STORAGE_BUFFER_LAYOUT_NAME);
+      auto images_layout = device->setLayout(IMAGE_CONTAINER_DESCRIPTOR_LAYOUT_NAME);
+      ASSERT(images_layout != VK_NULL_HANDLE);
+      images_set = global::get<systems::core_t>()->image_controller->set;
+
+      yavf::PipelineLayout layout = VK_NULL_HANDLE;
+      {
+        yavf::PipelineLayoutMaker plm(device);
+        layout = plm.addDescriptorLayout(uniform_layout)
+                    .addDescriptorLayout(images_layout)
+                    //.addDescriptorLayout(storage_layout)
+                    .addDescriptorLayout(tiles_data_layout)
+                    .create("tile_structure_rendering_pipeline_layout");
+      }
+      
+      {
+        yavf::raii::ShaderModule vertex  (device, global::root_directory() + "shaders/structure.vert.spv");
+        //yavf::raii::ShaderModule geom    (device, global::root_directory() + "shaders/tiles.geom.spv"); // nexus 5x не поддерживает геометрический шейдер
+        yavf::raii::ShaderModule fragment(device, global::root_directory() + "shaders/first_object.frag.spv");
+
+        yavf::PipelineMaker pm(device);
+        pm.clearBlending();
+
+        pipe = pm.addShader(VK_SHADER_STAGE_VERTEX_BIT, vertex)
+                 .addShader(VK_SHADER_STAGE_FRAGMENT_BIT, fragment)
+//                  .vertexBinding(0, sizeof(uint32_t))
+//                    .vertexAttribute(0, 0, VK_FORMAT_R32_UINT, 0)
+                 .depthTest(VK_TRUE)
+                 .depthWrite(VK_TRUE)
+                 .frontFace(VK_FRONT_FACE_CLOCKWISE)
+                 .cullMode(VK_CULL_MODE_NONE)
+                 .assembly(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP, VK_TRUE)
+                 .viewport()
+                 .scissor()
+                 .dynamicState(VK_DYNAMIC_STATE_VIEWPORT)
+                 .dynamicState(VK_DYNAMIC_STATE_SCISSOR)
+                 .colorBlendBegin(VK_FALSE)
+                   .colorWriteMask(VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT)
+                 .create("tile_structure_rendering_pipeline", layout, global::get<render::window>()->render_pass);
+      }
+    }
+    
+    tile_structure_render::~tile_structure_render() {
+      device->destroy(pipe.layout());
+      device->destroy(pipe);
+    }
+    
+    void tile_structure_render::begin() {}
+    void tile_structure_render::proccess(context* ctx) {
+      auto map_systems = global::get<systems::map_t>();
+      if (!map_systems->is_init()) return;
+      auto map = map_systems->map;
+      auto uniform = global::get<render::buffers>()->uniform;
+      auto tiles = map->tiles;
+      
+      auto indirect_buffer = opt->indirect_buffer();
+      auto indices_buffer = opt->structures_index_buffer();
+      if (indices_buffer == nullptr) return;
+      
+      auto task = ctx->graphics();
+      task->setPipeline(pipe);
+      ASSERT(uniform->descriptorSet() != nullptr);
+      ASSERT(tiles->descriptorSet() != nullptr);
+      task->setDescriptor({uniform->descriptorSet()->handle(), images_set->handle(), tiles->descriptorSet()->handle()}, 0);
+      
+      //task->setVertexBuffer(vertices_buffer, 0);
+      task->setIndexBuffer(indices_buffer);
+      task->drawIndexedIndirect(indirect_buffer, 1, offsetof123(struct tile_optimizer::indirect_buffer, structures_command));
+    }
+    
+    void tile_structure_render::clear() {}
     
     world_map_render::world_map_render(const create_info &info) : stage_container(info.container_size) {}
     void world_map_render::begin() {

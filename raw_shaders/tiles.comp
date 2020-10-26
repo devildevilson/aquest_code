@@ -42,6 +42,8 @@ layout(std140, set = 2, binding = 0) buffer tile_indirect_buffer {
   uvec4 borders_data;
   uvec4 walls_indirect;
   uvec4 walls_data;
+  uvec4 structures_indirect;
+  uvec4 structures_data;
   // сюда можно засунуть фрустум
   frustum_t frustum;
 
@@ -65,6 +67,10 @@ layout(std140, set = 2, binding = 3) buffer walls_indices_buffer {
 
 layout(std140, set = 2, binding = 4) buffer objects_indices_buffer {
   instance_data_t objects_indices[];
+};
+
+layout(std140, set = 2, binding = 5) buffer structures_indices_buffer {
+  instance_data_t structures_indices[];
 };
 
 #define FAR_PLANE 256.0f
@@ -219,7 +225,8 @@ void main() {
   // составляем индексы для объектов на тайле
   for (uint i = 0; i < triangle.data[1]; ++i) {
     const uint tile_index = get_accel_triangle_tile_index(triangle.data[0] + i);
-    const uint biome_index = tiles[tile_index].packed_data4[2];
+    //const uint biome_index = tiles[tile_index].packed_data4[2];
+    const uint biome_index = tiles[tile_index].packed_data4[2] >> 24;
 
     const biome_data_t biome = unpack_data(packed_biome_datas[biome_index]);
     if (!is_image_valid(biome.object_texture2)) continue;
@@ -270,6 +277,34 @@ void main() {
   // что делать если плотность больше единицы? у нас нет возможности как то
   // прикинуть будет или не будет на этом тайле столько объектов
   // наверное можно просто сделать количество по целому значению переменной
+
+  // строения на карте (города, данжи)
+  // рисуются довольно просто: здесь нам нужно получить индекс типа строения на тайле
+  // и мы отправляем дальше 4 индекса как в случае с деревьями
+  // нам в любом случае нужен тайл
+  for (uint i = 0; i < triangle.data[1]; ++i) {
+    const uint tile_index = get_accel_triangle_tile_index(triangle.data[0] + i);
+    //const uint biome_index = tiles[tile_index].packed_data4[2];
+    const uint structure_type_index = tiles[tile_index].packed_data4[2] & maximum_structure_types;
+    if (structure_type_index == maximum_structure_types) continue;
+
+    const uint offset = atomicAdd(structures_indirect.x, PACKED_INDEX_COEF+1);
+
+    // передаем опять тайлы, буфер слава богам в этом случае будет мелкий
+    const uint packed_tile_index = tile_index * PACKED_INDEX_COEF;
+    const uint index = offset;
+    for (uint j = 0; j < PACKED_INDEX_COEF; ++j) {
+      const uint final_index = index + j;
+      const uint vec_index = final_index / 4;
+      const uint slot_index = final_index % 4;
+      structures_indices[vec_index].index[slot_index] = packed_tile_index + j;
+    }
+
+    const uint final_index = index + PACKED_INDEX_COEF;
+    const uint vec_index = final_index / 4;
+    const uint slot_index = final_index % 4;
+    structures_indices[vec_index].index[slot_index] = GPU_UINT_MAX;
+  }
 }
 
 float distance2(const vec4 a, const vec4 b) {

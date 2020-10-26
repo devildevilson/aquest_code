@@ -2,6 +2,7 @@
 
 #include "shared_structures.h"
 #include "yavf.h"
+#include "bin/core_structures.h"
 
 #include <cstring>
 
@@ -159,6 +160,11 @@ namespace devils_engine {
       camera->dir = glm::vec4(dir, 0.0f);
     }
     
+    void buffers::update_zoom(const float &zoom) {
+      auto camera = reinterpret_cast<camera_data*>(uniform->ptr());
+      camera->dim[2] = glm::floatBitsToUint(zoom);
+    }
+    
 //     void buffers::set_tile_data(const map::tile &tile, const uint32_t &index) {
 //       auto tiles_arr = reinterpret_cast<light_map_tile_t*>(tiles->ptr());
 //       const map_tile_t map_tile{
@@ -193,6 +199,9 @@ namespace devils_engine {
     void buffers::recreate(const uint32_t &width, const uint32_t &height) {
       const glm::mat4 persp = glm::perspective(glm::radians(75.0f), float(width) / float(height), 0.1f, 256.0f);
       update_projection_matrix(persp);
+      auto camera = reinterpret_cast<camera_data*>(uniform->ptr());
+      camera->dim[0] = width;
+      camera->dim[1] = height;
     }
     
     glm::mat4 buffers::get_matrix() const {
@@ -237,10 +246,11 @@ namespace devils_engine {
     
 #define WORLD_MAP_DESCRIPTOR_POOL "world_map_descriptor_pool"
     
-    world_map_buffers::world_map_buffers(yavf::Device* device) : device(device) {
+    world_map_buffers::world_map_buffers(yavf::Device* device) : device(device), structure_buffer(nullptr) {
       border_buffer = device->create(yavf::BufferCreateInfo::buffer(sizeof(glm::vec4)*4, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT), VMA_MEMORY_USAGE_CPU_ONLY);
       border_types = device->create(yavf::BufferCreateInfo::buffer(sizeof(glm::vec4)*4, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT), VMA_MEMORY_USAGE_CPU_ONLY);
       tiles_connections = device->create(yavf::BufferCreateInfo::buffer(sizeof(glm::uvec4)*4, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT), VMA_MEMORY_USAGE_CPU_ONLY);
+      structure_buffer = device->create(yavf::BufferCreateInfo::buffer(sizeof(glm::uvec4)*4, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT), VMA_MEMORY_USAGE_GPU_ONLY);
       
       //auto pool = device->descriptorPool(DEFAULT_DESCRIPTOR_POOL_NAME);
       auto storage_layout = device->setLayout(STORAGE_BUFFER_LAYOUT_NAME);
@@ -278,12 +288,39 @@ namespace devils_engine {
       device->destroy(border_buffer);
       device->destroy(border_types);
       device->destroy(tiles_connections);
+      //if (structure_buffer != nullptr) 
+      device->destroy(structure_buffer);
       device->destroyDescriptorPool(WORLD_MAP_DESCRIPTOR_POOL);
     }
     
     void world_map_buffers::recreate(const uint32_t &width, const uint32_t &height) {
       (void)width;
       (void)height;
+    }
+    
+    void world_map_buffers::set_structure_data(const uint32_t &size, core::city_type* data) {
+      if (structure_buffer == nullptr) {
+        structure_buffer = device->create(yavf::BufferCreateInfo::buffer(size*sizeof(render::world_structure_t), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT), VMA_MEMORY_USAGE_GPU_ONLY);
+      }
+      
+      yavf::Buffer buf(device, yavf::BufferCreateInfo::buffer(size*sizeof(render::world_structure_t), VK_BUFFER_USAGE_TRANSFER_SRC_BIT), VMA_MEMORY_USAGE_CPU_ONLY);
+      auto buffer_ptr = reinterpret_cast<render::world_structure_t*>(buf.ptr());
+      for (size_t i = 0; i < size; ++i) {
+        buffer_ptr[i].city_image_face = data[i].city_image_face;
+        buffer_ptr[i].city_image_top = data[i].city_image_top;
+        buffer_ptr[i].scale = data[i].scale;
+      }
+      
+      auto task = device->allocateTransferTask();
+      
+      task->begin();
+      task->copy(&buf, structure_buffer);
+      task->end();
+      
+      task->start();
+      task->wait();
+      
+      device->deallocate(task);
     }
   }
 }

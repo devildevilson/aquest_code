@@ -74,6 +74,8 @@ namespace devils_engine {
         uint32_t padding2[3];
         VkDrawIndexedIndirectCommand walls_command;
         uint32_t padding3[3];
+        VkDrawIndexedIndirectCommand structures_command;
+        uint32_t padding4[3];
 //         glm::uvec4 data;
         utils::frustum frustum;
         
@@ -96,9 +98,11 @@ namespace devils_engine {
       yavf::Buffer* borders_index_buffer() const;
       yavf::Buffer* walls_index_buffer() const;
       yavf::Buffer* objects_index_buffer() const;
+      yavf::Buffer* structures_index_buffer() const;
       
       void set_borders_count(const uint32_t &count);
       void set_connections_count(const uint32_t &count);
+      void set_max_structures_count(const uint32_t &count);
       
       void set_biome_tile_count(const std::array<std::pair<uint32_t, uint32_t>, MAX_BIOMES_COUNT> &data);
       
@@ -111,6 +115,7 @@ namespace devils_engine {
       yavf::Buffer* borders_indices;
       yavf::Buffer* walls_indices;
       yavf::Buffer* objects_indices;
+      yavf::Buffer* structures_indices;
       yavf::DescriptorSet* set;
       yavf::Pipeline pipe;
     };
@@ -330,6 +335,28 @@ namespace devils_engine {
       // какой максимум? 
       yavf::Buffer* tiles_indices;
       std::atomic<uint32_t> tiles_count;
+    };
+    
+    class tile_structure_render : public stage {
+    public:
+      struct create_info {
+        yavf::Device* device;
+        tile_optimizer* opt;
+        world_map_buffers* map_buffers;
+      };
+      
+      tile_structure_render(const create_info &info);
+      ~tile_structure_render();
+      
+      void begin() override;
+      void proccess(context* ctx) override;
+      void clear() override;
+    private:
+      yavf::Device* device;
+      tile_optimizer* opt;
+      world_map_buffers* map_buffers;
+      yavf::Pipeline pipe;
+      yavf::DescriptorSet* images_set;
     };
     
     class world_map_render : public pipeline_stage, public stage_container {

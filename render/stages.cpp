@@ -10,6 +10,7 @@
 #include "utils/input.h"
 #include "utils/systems.h"
 #include "image_controller.h"
+#include "utils/frustum.h"
 #include <array>
 
 #define TILE_RENDER_PIPELINE_LAYOUT_NAME "tile_render_pipeline_layout"
@@ -27,11 +28,16 @@ namespace devils_engine {
     void task_end::begin() {}
     void task_end::proccess(context* ctx) { ctx->interface()->end(); }
     void task_end::clear() {}
+    render_pass_begin::render_pass_begin(const uint32_t &index) : index(index) {}
     void render_pass_begin::begin() {}
     void render_pass_begin::proccess(context* ctx) {
       auto w = global::get<window>();
       ctx->graphics()->setRenderTarget(w);
-      ctx->graphics()->beginRenderPass();
+      if (index == 0) {
+        ctx->graphics()->beginRenderPass(w->render_pass);
+      } else {
+        ctx->graphics()->beginRenderPass(w->render_pass_objects);
+      }
     }
 
     void render_pass_begin::clear() {}
@@ -69,6 +75,7 @@ namespace devils_engine {
     const size_t half_tiles_count = (core::map::hex_count_d(core::map::detail_level) / 2 + 1);
     const size_t max_indices_count = half_tiles_count * 7; // тут теперь максимальное количество ИНДЕКСОВ
     const size_t max_objects_indices_count = core::map::hex_count_d(core::map::detail_level) * 5;
+    //const size_t max_objects_indices_count = half_tiles_count * 5;
     //static_assert(max_tiles_count < 500000);
     tile_optimizer::tile_optimizer(const create_info &info) : 
       device(info.device),
@@ -76,21 +83,24 @@ namespace devils_engine {
       tiles_indices(nullptr),
       borders_indices(nullptr),
       walls_indices(nullptr),
+      objects_indices(nullptr),
+      structures_indices(nullptr),
+      heraldy_indices(nullptr),
       set(nullptr)
     {
-      indirect = device->create(yavf::BufferCreateInfo::buffer(sizeof(struct indirect_buffer), VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT), VMA_MEMORY_USAGE_CPU_ONLY);
+      indirect = device->create(yavf::BufferCreateInfo::buffer(sizeof(struct indirect_buffer), VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT), VMA_MEMORY_USAGE_CPU_ONLY);
       tiles_indices = device->create(
         yavf::BufferCreateInfo::buffer(
           //(sizeof(instance_data_t)*max_tiles_count)/4+1, 
           (max_indices_count*4+16-1)/16*16,
-          VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT), 
-        VMA_MEMORY_USAGE_GPU_ONLY
+          VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT), 
+        VMA_MEMORY_USAGE_GPU_ONLY // возможно нужно сделать буффер в памяти хоста
       );
       
       borders_indices = device->create(
         yavf::BufferCreateInfo::buffer(
           //(sizeof(instance_data_t)*max_tiles_count)/4+1, 
-          16,
+          std::min((max_indices_count*4+16-1)/16*16, (max_objects_indices_count*4+16-1)/16*16),
           VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT), 
         VMA_MEMORY_USAGE_GPU_ONLY
       );
@@ -98,7 +108,7 @@ namespace devils_engine {
       walls_indices = device->create(
         yavf::BufferCreateInfo::buffer(
           //(sizeof(instance_data_t)*max_tiles_count)/4+1, 
-          16,
+          std::min((max_indices_count*4+16-1)/16*16, (max_objects_indices_count*4+16-1)/16*16),
           VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT), 
         VMA_MEMORY_USAGE_GPU_ONLY
       );
@@ -115,8 +125,15 @@ namespace devils_engine {
         yavf::BufferCreateInfo::buffer(
           16,
           VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT), 
-        VMA_MEMORY_USAGE_GPU_ONLY
+        VMA_MEMORY_USAGE_CPU_ONLY
       );
+      
+//       heraldy_indices = device->create(
+//         yavf::BufferCreateInfo::buffer(
+//           16,
+//           VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT), 
+//         VMA_MEMORY_USAGE_GPU_ONLY
+//       );
       
       auto buffer = reinterpret_cast<struct indirect_buffer*>(indirect->ptr());
       memset(indirect->ptr(), 0, sizeof(struct indirect_buffer));
@@ -148,6 +165,7 @@ namespace devils_engine {
                                   .binding(3, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT)
                                   .binding(4, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT)
                                   .binding(5, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT)
+                                  .binding(6, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT)
                                   .create("tiles_indices_layout");
       }
       
@@ -160,6 +178,7 @@ namespace devils_engine {
         set->add({walls_indices,      0, walls_indices->info().size,      0, 3, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER});
         set->add({objects_indices,    0, objects_indices->info().size,    0, 4, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER});
         set->add({structures_indices, 0, structures_indices->info().size, 0, 5, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER});
+//         set->add({heraldy_indices,    0, heraldy_indices->info().size,    0, 6, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER});
         set->update();
 //         indirect->setDescriptor(desc, index);
       }
@@ -216,11 +235,15 @@ namespace devils_engine {
       buffer->tiles_command.vertexOffset  = 0;
       buffer->tiles_command.firstInstance = 0;
       
+      buffer->padding1[2] = glm::floatBitsToUint(10000.0f);
+      
       buffer->borders_command.indexCount    = 0;
       buffer->borders_command.instanceCount = 1;
       buffer->borders_command.firstIndex    = 0;
       buffer->borders_command.vertexOffset  = 0;
       buffer->borders_command.firstInstance = 0;
+      
+      buffer->padding2[2] = UINT32_MAX;
       
       buffer->walls_command.indexCount    = 0;
       buffer->walls_command.instanceCount = 1;
@@ -228,11 +251,23 @@ namespace devils_engine {
       buffer->walls_command.vertexOffset  = 0;
       buffer->walls_command.firstInstance = 0;
       
+      buffer->padding3[2] = 1;
+      
       buffer->structures_command.indexCount    = 0;
       buffer->structures_command.instanceCount = 1;
       buffer->structures_command.firstIndex    = 0;
       buffer->structures_command.vertexOffset  = 0;
       buffer->structures_command.firstInstance = 0;
+      
+      buffer->padding4[2] = 0;
+      
+      buffer->heraldies_command.indexCount    = 0;
+      buffer->heraldies_command.instanceCount = 1;
+      buffer->heraldies_command.firstIndex    = 0;
+      buffer->heraldies_command.vertexOffset  = 0;
+      buffer->heraldies_command.firstInstance = 0;
+      
+      buffer->dispatch_indirect_command = glm::uvec4(0, 1, 1, 0);
       
       memcpy(&buffer->frustum, &fru, sizeof(utils::frustum));
       
@@ -303,16 +338,24 @@ namespace devils_engine {
       return structures_indices;
     }
     
+    yavf::Buffer* tile_optimizer::heraldy_index_buffer() const {
+      return heraldy_indices;
+    }
+    
+    yavf::DescriptorSet* tile_optimizer::buffers_set() const {
+      return set;
+    }
+    
     void tile_optimizer::set_borders_count(const uint32_t &count) {
       const uint32_t indices_count = count*5;
       const uint32_t final_size = (indices_count + 16 - 1) / 16 * 16;
-      if (borders_indices->info().size == final_size) return;
-      borders_indices->resize(final_size);
       auto buffer = reinterpret_cast<struct indirect_buffer*>(indirect->ptr());
       buffer->padding2[0] = indices_count;
+      if (borders_indices->info().size >= final_size) return;
+      borders_indices->resize(final_size);
       
       set->at(2) = {borders_indices, 0, borders_indices->info().size, 0, 2, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER};
-      set->update();
+      set->update(2);
       
       PRINT_VAR("borders indices_count", indices_count)
     }
@@ -320,26 +363,39 @@ namespace devils_engine {
     void tile_optimizer::set_connections_count(const uint32_t &count) {
       const uint32_t indices_count = count*5;
       const uint32_t final_size = (indices_count*4 + 16 - 1) / 16 * 16;
-      if (walls_indices->info().size == final_size) return;
-      walls_indices->resize(final_size);
       auto buffer = reinterpret_cast<struct indirect_buffer*>(indirect->ptr());
       buffer->padding3[0] = indices_count;
+      if (walls_indices->info().size >= final_size) return;
+      walls_indices->resize(final_size);
       
       set->at(3) = {walls_indices, 0, walls_indices->info().size, 0, 3, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER};
-      set->update();
+      set->update(3);
       PRINT_VAR("walls indices_count", indices_count)
     }
     
     void tile_optimizer::set_max_structures_count(const uint32_t &count) {
       const uint32_t indices_count = count*5;
       const uint32_t final_size = (indices_count*4 + 16 - 1) / 16 * 16;
-      if (structures_indices->info().size == final_size) return;
-      structures_indices->resize(final_size);
       auto buffer = reinterpret_cast<struct indirect_buffer*>(indirect->ptr());
-      buffer->padding3[0] = indices_count;
+      buffer->padding4[0] = indices_count;
+      if (structures_indices->info().size >= final_size) return;
+      structures_indices->resize(final_size);
       
       set->at(5) = {structures_indices, 0, structures_indices->info().size, 0, 5, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER};
-      set->update();
+      set->update(5);
+    }
+    
+    void tile_optimizer::set_max_heraldy_count(const uint32_t &count) {
+      if (heraldy_indices == nullptr) return; // пока так оставим, индексы геральдики попадают теперь в большой буффер объектов
+      const uint32_t indices_count = count*5;
+      const uint32_t final_size = (indices_count*4 + 16 - 1) / 16 * 16;
+      auto buffer = reinterpret_cast<struct indirect_buffer*>(indirect->ptr());
+      buffer->padding5[0] = indices_count;
+      if (heraldy_indices->info().size >= final_size) return;
+      heraldy_indices->resize(final_size);
+      
+      set->at(6) = {heraldy_indices, 0, heraldy_indices->info().size, 0, 6, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER};
+      set->update(6);
     }
     
     void tile_optimizer::set_biome_tile_count(const std::array<std::pair<uint32_t, uint32_t>, MAX_BIOMES_COUNT> &data) {
@@ -359,6 +415,146 @@ namespace devils_engine {
     bool tile_optimizer::is_rendering_border() const {
       auto buffer = reinterpret_cast<struct indirect_buffer*>(indirect->ptr());
       return !bool(buffer->padding2[1]);  
+    }
+    
+    void tile_optimizer::set_selection_box(const aabb_t &box) {
+      auto buffer = reinterpret_cast<struct indirect_buffer*>(indirect->ptr());
+      buffer->selection_box = box;
+    }
+    
+    void tile_optimizer::set_selection_frustum(const utils::frustum &frustum) {
+      auto buffer = reinterpret_cast<struct indirect_buffer*>(indirect->ptr());
+      buffer->selection_frustum = frustum;
+    }
+    
+    tile_objects_optimizer::tile_objects_optimizer(const create_info &info) : device(info.device), opt(info.opt) {
+      auto tiles_data_layout = device->setLayout(TILES_DATA_LAYOUT_NAME);
+      auto uniform_layout = device->setLayout(UNIFORM_BUFFER_LAYOUT_NAME);
+      auto tiles_indices_layout = device->setLayout("tiles_indices_layout");
+      
+      yavf::PipelineLayout p_layout = VK_NULL_HANDLE;
+      {
+        yavf::PipelineLayoutMaker plm(device);
+        p_layout = plm.addDescriptorLayout(uniform_layout)
+                      .addDescriptorLayout(tiles_data_layout)
+                      .addDescriptorLayout(tiles_indices_layout)
+                      .create("tile_objects_optimizer_pipeline_layout");
+      }
+      
+      {
+        yavf::raii::ShaderModule compute(device, global::root_directory() + "shaders/map_objects.comp.spv");
+        
+        yavf::ComputePipelineMaker cpm(device);
+        pipe = cpm.shader(compute).create("tile_objects_optimizer_pipeline", p_layout);
+      }
+    }
+    
+    tile_objects_optimizer::~tile_objects_optimizer() {
+      device->destroy(pipe);
+      device->destroy(pipe.layout());
+    }
+    
+    void tile_objects_optimizer::begin() {
+      auto indirect = opt->indirect_buffer();
+      auto buffer = reinterpret_cast<struct tile_optimizer::indirect_buffer*>(indirect->ptr());
+      
+//       PRINT_VAR("tiles   indices  ", buffer->tiles_command.indexCount)
+//       PRINT_VAR("borders indices  ", buffer->borders_command.indexCount)
+//       PRINT_VAR("walls   indices  ", buffer->walls_command.indexCount)
+      
+//       buffer->tiles_command.indexCount    = 0;
+//       buffer->tiles_command.instanceCount = 1;
+//       buffer->tiles_command.firstIndex    = 0;
+//       buffer->tiles_command.vertexOffset  = 0;
+//       buffer->tiles_command.firstInstance = 0;
+//       
+      buffer->padding1[2] = glm::floatBitsToUint(10000.0f);
+      
+//       buffer->borders_command.indexCount    = 0;
+//       buffer->borders_command.instanceCount = 1;
+//       buffer->borders_command.firstIndex    = 0;
+//       buffer->borders_command.vertexOffset  = 0;
+//       buffer->borders_command.firstInstance = 0;
+      
+      buffer->padding2[2] = UINT32_MAX;
+      
+//       buffer->walls_command.indexCount    = 0;
+//       buffer->walls_command.instanceCount = 1;
+//       buffer->walls_command.firstIndex    = 0;
+//       buffer->walls_command.vertexOffset  = 0;
+//       buffer->walls_command.firstInstance = 0;
+      
+      buffer->padding3[2] = 1;
+      
+//       buffer->structures_command.indexCount    = 0;
+//       buffer->structures_command.instanceCount = 1;
+//       buffer->structures_command.firstIndex    = 0;
+//       buffer->structures_command.vertexOffset  = 0;
+//       buffer->structures_command.firstInstance = 0;
+      
+      buffer->padding4[2] = 0;
+    }
+    
+    // виндовс не дает использовать базовый offsetof
+#define offsetof123(s,m) ((::size_t)&reinterpret_cast<char const volatile&>((((s*)0)->m)))
+    
+    void tile_objects_optimizer::proccess(context* ctx) {
+      auto map_systems = global::get<systems::map_t>();
+      if (!map_systems->is_init()) return;
+      auto map = map_systems->map;
+      //if (map->status() != core::map::status::valid) return;
+//       if (map->status() == core::map::status::initial) return;
+      
+      auto uniform = global::get<render::buffers>()->uniform;
+      auto tiles = map->tiles;
+      auto set = opt->buffers_set();
+      auto indirect = opt->indirect_buffer();
+//       auto points = global::get<render::buffers>()->points;
+      
+      auto task = ctx->compute();
+      
+//       task->setBarrier();
+      
+//       task->setBarrier(VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT | VK_PIPELINE_STAGE_VERTEX_INPUT_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+//                        VK_ACCESS_INDIRECT_COMMAND_READ_BIT | VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT, VK_ACCESS_SHADER_WRITE_BIT);
+      
+      const uint32_t data = 0;
+      task->update(indirect, offsetof123(struct tile_optimizer::indirect_buffer, borders_command), sizeof(uint32_t), &data);
+      task->update(indirect, offsetof123(struct tile_optimizer::indirect_buffer, walls_command), sizeof(uint32_t), &data);
+      task->update(indirect, offsetof123(struct tile_optimizer::indirect_buffer, structures_command), sizeof(uint32_t), &data);
+      task->update(indirect, offsetof123(struct tile_optimizer::indirect_buffer, heraldies_command), sizeof(uint32_t), &data);
+      
+      task->setBarrier(
+        VK_PIPELINE_STAGE_TRANSFER_BIT, 
+        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+        VK_ACCESS_TRANSFER_WRITE_BIT,
+        VK_ACCESS_SHADER_READ_BIT
+      );
+      
+      task->setPipeline(pipe);
+      task->setDescriptor({
+        uniform->descriptorSet()->handle(), 
+        tiles->descriptorSet()->handle(), 
+//         points->descriptorSet()->handle(), 
+        set->handle()
+//         tiles_indices->descriptorSet()->handle()
+      }, 0);
+      
+      task->dispatchIndirect(indirect, offsetof123(struct tile_optimizer::indirect_buffer, dispatch_indirect_command));
+      
+//       task->setBarrier(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT | VK_PIPELINE_STAGE_VERTEX_INPUT_BIT,
+//                        VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_INDIRECT_COMMAND_READ_BIT | VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT);
+      
+//       task->setBarrier(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_VERTEX_INPUT_BIT,
+//                        VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT);
+    }
+    
+    void tile_objects_optimizer::clear() {
+#ifndef _NDEBUG
+      auto indirect = opt->indirect_buffer();
+      auto buffer = reinterpret_cast<struct tile_optimizer::indirect_buffer*>(indirect->ptr());
+      ASSERT(buffer->padding3[2] == 1);
+#endif
     }
     
     tile_borders_optimizer::tile_borders_optimizer(const create_info &info) : 
@@ -650,13 +846,16 @@ namespace devils_engine {
     
     void barriers::begin() {}
     void barriers::proccess(context* ctx) {
-      auto task = ctx->compute();
-      task->setBarrier(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT,
-                       VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_INDIRECT_COMMAND_READ_BIT);
+      (void)ctx;
+//       auto task = ctx->compute();
+//       task->setBarrier(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT,
+//                        VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_INDIRECT_COMMAND_READ_BIT);
+//       
+//       task->setBarrier(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_VERTEX_INPUT_BIT,
+//                        VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT);
       
-      task->setBarrier(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_VERTEX_INPUT_BIT,
-                       VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT);
-      
+//       task->setBarrier(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT | VK_PIPELINE_STAGE_VERTEX_INPUT_BIT,
+//                        VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_INDIRECT_COMMAND_READ_BIT | VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT);
     }
     
     void barriers::clear() {}
@@ -704,7 +903,7 @@ namespace devils_engine {
       images_set = global::get<systems::core_t>()->image_controller->set;
 
       yavf::PipelineLayout layout = VK_NULL_HANDLE;
-      yavf::PipelineLayout layout2 = VK_NULL_HANDLE;
+//       yavf::PipelineLayout layout2 = VK_NULL_HANDLE;
       {
         yavf::PipelineLayoutMaker plm(device);
         layout = plm.addDescriptorLayout(uniform_layout)
@@ -782,9 +981,6 @@ namespace devils_engine {
 //       device->destroy(one_tile_pipe.layout());
 //       device->destroy(one_tile_pipe);
     }
-
-    // виндовс не дает использовать базовый offsetof
-#define offsetof123(s,m) ((::size_t)&reinterpret_cast<char const volatile&>((((s*)0)->m)))
 
     void tile_render::begin() {}
     void tile_render::proccess(context* ctx) {
@@ -1458,7 +1654,8 @@ namespace devils_engine {
       auto tiles = map->tiles;
       
       auto indirect_buffer = opt->indirect_buffer();
-      auto indices_buffer = opt->structures_index_buffer();
+      //auto indices_buffer = opt->structures_index_buffer();
+      auto indices_buffer = opt->borders_index_buffer();
       if (indices_buffer == nullptr) return;
       
       auto task = ctx->graphics();
@@ -1469,10 +1666,174 @@ namespace devils_engine {
       
       //task->setVertexBuffer(vertices_buffer, 0);
       task->setIndexBuffer(indices_buffer);
-      task->drawIndexedIndirect(indirect_buffer, 1, offsetof123(struct tile_optimizer::indirect_buffer, structures_command));
+      //task->drawIndexedIndirect(indirect_buffer, 1, offsetof123(struct tile_optimizer::indirect_buffer, structures_command));
+      task->drawIndexedIndirect(indirect_buffer, 1, offsetof123(struct tile_optimizer::indirect_buffer, borders_command));
     }
     
     void tile_structure_render::clear() {}
+    
+    heraldies_render::heraldies_render(const create_info &info) : device(info.device), opt(info.opt), map_buffers(info.map_buffers) {
+      yavf::DescriptorSetLayout uniform_layout = device->setLayout(UNIFORM_BUFFER_LAYOUT_NAME);
+      ASSERT(uniform_layout != VK_NULL_HANDLE);
+      
+      auto tiles_data_layout = device->setLayout(TILES_DATA_LAYOUT_NAME);
+      auto storage_layout = device->setLayout(STORAGE_BUFFER_LAYOUT_NAME);
+      auto images_layout = device->setLayout(IMAGE_CONTAINER_DESCRIPTOR_LAYOUT_NAME);
+      ASSERT(images_layout != VK_NULL_HANDLE);
+      images_set = global::get<systems::core_t>()->image_controller->set;
+
+      yavf::PipelineLayout layout = VK_NULL_HANDLE;
+      {
+        yavf::PipelineLayoutMaker plm(device);
+        layout = plm.addDescriptorLayout(uniform_layout)
+                    .addDescriptorLayout(images_layout)
+                    //.addDescriptorLayout(storage_layout)
+                    .addDescriptorLayout(tiles_data_layout)
+                    .addDescriptorLayout(storage_layout)
+                    .create("heraldies_rendering_pipeline_layout");
+      }
+      
+      {
+        yavf::raii::ShaderModule vertex  (device, global::root_directory() + "shaders/heraldy.vert.spv");
+        //yavf::raii::ShaderModule geom    (device, global::root_directory() + "shaders/tiles.geom.spv"); // nexus 5x не поддерживает геометрический шейдер
+        yavf::raii::ShaderModule fragment(device, global::root_directory() + "shaders/heraldy.frag.spv");
+
+        yavf::PipelineMaker pm(device);
+//         pm.clearBlending();
+
+        pipe = pm.addShader(VK_SHADER_STAGE_VERTEX_BIT, vertex)
+                 .addShader(VK_SHADER_STAGE_FRAGMENT_BIT, fragment)
+//                  .vertexBinding(0, sizeof(uint32_t))
+//                    .vertexAttribute(0, 0, VK_FORMAT_R32_UINT, 0)
+                 .depthTest(VK_TRUE)
+                 .depthWrite(VK_TRUE)
+                 .frontFace(VK_FRONT_FACE_CLOCKWISE)
+                 .cullMode(VK_CULL_MODE_NONE)
+                 .assembly(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP, VK_TRUE)
+                 .viewport()
+                 .scissor()
+                 .dynamicState(VK_DYNAMIC_STATE_VIEWPORT)
+                 .dynamicState(VK_DYNAMIC_STATE_SCISSOR)
+                 .colorBlendBegin(VK_TRUE)
+                   
+//                    .colorWriteMask(VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT)
+                 .create("heraldies_rendering_pipeline", layout, global::get<render::window>()->render_pass);
+      }
+    }
+    
+    heraldies_render::~heraldies_render() {
+      device->destroyLayout("heraldies_rendering_pipeline_layout");
+      device->destroy(pipe);
+    }
+    
+    void heraldies_render::begin() {}
+    void heraldies_render::proccess(context* ctx) {
+      auto map_systems = global::get<systems::map_t>();
+      if (!map_systems->is_init()) return;
+      auto map = map_systems->map;
+      auto uniform = global::get<render::buffers>()->uniform;
+      auto heraldy = global::get<render::buffers>()->heraldy;
+      auto tiles = map->tiles;
+      
+      auto indirect_buffer = opt->indirect_buffer();
+      //auto indices_buffer = opt->heraldy_index_buffer();
+      auto indices_buffer = opt->walls_index_buffer();
+      if (indices_buffer == nullptr) return;
+      
+      auto task = ctx->graphics();
+      task->setPipeline(pipe);
+      ASSERT(uniform->descriptorSet() != nullptr);
+      ASSERT(tiles->descriptorSet() != nullptr);
+      task->setDescriptor({uniform->descriptorSet()->handle(), images_set->handle(), tiles->descriptorSet()->handle(), heraldy->descriptorSet()->handle()}, 0);
+      
+      //task->setVertexBuffer(vertices_buffer, 0);
+      task->setIndexBuffer(indices_buffer);
+      //task->drawIndexedIndirect(indirect_buffer, 1, offsetof123(struct tile_optimizer::indirect_buffer, heraldies_command));
+      task->drawIndexedIndirect(indirect_buffer, 1, offsetof123(struct tile_optimizer::indirect_buffer, walls_command));
+    }
+    
+    void heraldies_render::clear() {}
+    
+    armies_render::armies_render(const create_info &info) : device(info.device), opt(info.opt), map_buffers(info.map_buffers) {
+      yavf::DescriptorSetLayout uniform_layout = device->setLayout(UNIFORM_BUFFER_LAYOUT_NAME);
+      ASSERT(uniform_layout != VK_NULL_HANDLE);
+      
+      auto tiles_data_layout = device->setLayout(TILES_DATA_LAYOUT_NAME);
+      auto storage_layout = device->setLayout(STORAGE_BUFFER_LAYOUT_NAME);
+      auto images_layout = device->setLayout(IMAGE_CONTAINER_DESCRIPTOR_LAYOUT_NAME);
+      ASSERT(images_layout != VK_NULL_HANDLE);
+      images_set = global::get<systems::core_t>()->image_controller->set;
+
+      yavf::PipelineLayout layout = VK_NULL_HANDLE;
+      {
+        yavf::PipelineLayoutMaker plm(device);
+        layout = plm.addDescriptorLayout(uniform_layout)
+                    .addDescriptorLayout(images_layout)
+                    //.addDescriptorLayout(storage_layout)
+                    .addDescriptorLayout(tiles_data_layout)
+                    .addDescriptorLayout(storage_layout)
+                    .create("armies_rendering_pipeline_layout");
+      }
+      
+      {
+        yavf::raii::ShaderModule vertex  (device, global::root_directory() + "shaders/armies.vert.spv");
+        //yavf::raii::ShaderModule geom    (device, global::root_directory() + "shaders/tiles.geom.spv"); // nexus 5x не поддерживает геометрический шейдер
+        yavf::raii::ShaderModule fragment(device, global::root_directory() + "shaders/tiles.frag.spv");
+
+        yavf::PipelineMaker pm(device);
+//         pm.clearBlending();
+
+        pipe = pm.addShader(VK_SHADER_STAGE_VERTEX_BIT, vertex)
+                 .addShader(VK_SHADER_STAGE_FRAGMENT_BIT, fragment)
+//                  .vertexBinding(0, sizeof(uint32_t))
+//                    .vertexAttribute(0, 0, VK_FORMAT_R32_UINT, 0)
+                 .depthTest(VK_TRUE)
+                 .depthWrite(VK_TRUE)
+                 .frontFace(VK_FRONT_FACE_CLOCKWISE)
+                 .cullMode(VK_CULL_MODE_NONE)
+                 .assembly(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP, VK_TRUE)
+                 .viewport()
+                 .scissor()
+                 .dynamicState(VK_DYNAMIC_STATE_VIEWPORT)
+                 .dynamicState(VK_DYNAMIC_STATE_SCISSOR)
+                 .colorBlendBegin(VK_TRUE)
+                   
+//                    .colorWriteMask(VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT)
+                 .create("armies_rendering_pipeline", layout, global::get<render::window>()->render_pass);
+      }
+    }
+    
+    armies_render::~armies_render() {
+      device->destroyLayout("armies_rendering_pipeline_layout");
+      device->destroy(pipe);
+    }
+    
+    void armies_render::begin() {}
+    void armies_render::proccess(context* ctx) {
+      auto map_systems = global::get<systems::map_t>();
+      if (!map_systems->is_init()) return;
+      auto map = map_systems->map;
+      auto uniform = global::get<render::buffers>()->uniform;
+//       auto heraldy = global::get<render::buffers>()->heraldy;
+      auto tiles = map->tiles;
+      
+      auto indirect_buffer = opt->indirect_buffer();
+      auto indices_buffer = opt->objects_index_buffer();
+      if (indices_buffer == nullptr) return;
+      
+      auto task = ctx->graphics();
+      task->setPipeline(pipe);
+      ASSERT(uniform->descriptorSet() != nullptr);
+      ASSERT(tiles->descriptorSet() != nullptr);
+      task->setDescriptor({uniform->descriptorSet()->handle(), images_set->handle(), tiles->descriptorSet()->handle()}, 0); // heraldy->descriptorSet()->handle()
+      
+      //task->setVertexBuffer(vertices_buffer, 0);
+      task->setIndexBuffer(indices_buffer);
+      //task->drawIndexedIndirect(indirect_buffer, 1, offsetof123(struct tile_optimizer::indirect_buffer, heraldies_command));
+      task->drawIndexedIndirect(indirect_buffer, 1, offsetof123(struct tile_optimizer::indirect_buffer, structures_command));
+    }
+    
+    void armies_render::clear() {}
     
     world_map_render::world_map_render(const create_info &info) : stage_container(info.container_size) {}
     void world_map_render::begin() {

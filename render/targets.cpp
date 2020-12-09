@@ -17,6 +17,7 @@ namespace devils_engine {
       matrices = device->create(yavf::BufferCreateInfo::buffer(sizeof(matrices_data), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT), VMA_MEMORY_USAGE_CPU_ONLY);
 //       triangles = device->create(yavf::BufferCreateInfo::buffer(sizeof(packed_fast_triangle_t)*tri_count, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT), VMA_MEMORY_USAGE_CPU_ONLY);
 //       tile_indices = device->create(yavf::BufferCreateInfo::buffer(sizeof(uint32_t)*map->tiles.size(), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT), VMA_MEMORY_USAGE_CPU_ONLY);
+      heraldy = device->create(yavf::BufferCreateInfo::buffer(16,   VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT), VMA_MEMORY_USAGE_GPU_ONLY);
 
       //memcpy(tiles->ptr(), map->tiles.data(), sizeof(map::tile) * map->tiles.size());
       //memcpy(points->ptr(), map->points.data(), sizeof(glm::vec3) * map->points.size());
@@ -42,7 +43,7 @@ namespace devils_engine {
 //       }
 
       auto pool = device->descriptorPool(DEFAULT_DESCRIPTOR_POOL_NAME);
-//       auto storage_layout = device->setLayout(STORAGE_BUFFER_LAYOUT_NAME);
+      auto storage_layout = device->setLayout(STORAGE_BUFFER_LAYOUT_NAME);
       auto uniform_layout = device->setLayout(UNIFORM_BUFFER_LAYOUT_NAME);
       
 //       yavf::DescriptorSetLayout tiles_data_layout = VK_NULL_HANDLE;
@@ -112,6 +113,14 @@ namespace devils_engine {
         uniform->setDescriptor(desc, index1);
       }
       
+      {
+        yavf::DescriptorMaker dm(device);
+        auto desc = dm.layout(storage_layout).create(pool)[0];
+        size_t index1 = desc->add({heraldy,  0, heraldy->info().size,  0, 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER});
+        desc->update();
+        heraldy->setDescriptor(desc, index1);
+      }
+      
 //       auto tiles_arr = reinterpret_cast<map::tile*>(tiles->ptr());
 //       PRINT_VAR("center    index", tiles_arr[0].index)
 //       for (uint32_t i = 0; i < 6; ++i) {
@@ -124,7 +133,7 @@ namespace devils_engine {
     buffers::~buffers() {
       device->destroy(uniform);
       device->destroy(matrices);
-      // device->destroy(uniform);
+      device->destroy(heraldy);
     }
 
 //     void buffers::update_matrix(const glm::mat4 &matrix) {
@@ -163,6 +172,11 @@ namespace devils_engine {
     void buffers::update_zoom(const float &zoom) {
       auto camera = reinterpret_cast<camera_data*>(uniform->ptr());
       camera->dim[2] = glm::floatBitsToUint(zoom);
+    }
+    
+    void buffers::update_cursor_dir(const glm::vec4 &cursor_dir) {
+      auto camera = reinterpret_cast<camera_data*>(uniform->ptr());
+      camera->cursor_dir = cursor_dir;
     }
     
 //     void buffers::set_tile_data(const map::tile &tile, const uint32_t &index) {
@@ -244,13 +258,18 @@ namespace devils_engine {
       return camera->dir;
     }
     
+    glm::vec4 buffers::get_cursor_dir() const {
+      auto camera = reinterpret_cast<camera_data*>(uniform->ptr());
+      return camera->cursor_dir;
+    }
+    
 #define WORLD_MAP_DESCRIPTOR_POOL "world_map_descriptor_pool"
     
     world_map_buffers::world_map_buffers(yavf::Device* device) : device(device), structure_buffer(nullptr) {
       border_buffer = device->create(yavf::BufferCreateInfo::buffer(sizeof(glm::vec4)*4, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT), VMA_MEMORY_USAGE_CPU_ONLY);
       border_types = device->create(yavf::BufferCreateInfo::buffer(sizeof(glm::vec4)*4, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT), VMA_MEMORY_USAGE_CPU_ONLY);
       tiles_connections = device->create(yavf::BufferCreateInfo::buffer(sizeof(glm::uvec4)*4, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT), VMA_MEMORY_USAGE_CPU_ONLY);
-      structure_buffer = device->create(yavf::BufferCreateInfo::buffer(sizeof(glm::uvec4)*4, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT), VMA_MEMORY_USAGE_GPU_ONLY);
+      //structure_buffer = device->create(yavf::BufferCreateInfo::buffer(sizeof(glm::uvec4)*4, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT), VMA_MEMORY_USAGE_GPU_ONLY);
       
       //auto pool = device->descriptorPool(DEFAULT_DESCRIPTOR_POOL_NAME);
       auto storage_layout = device->setLayout(STORAGE_BUFFER_LAYOUT_NAME);
@@ -289,7 +308,7 @@ namespace devils_engine {
       device->destroy(border_types);
       device->destroy(tiles_connections);
       //if (structure_buffer != nullptr) 
-      device->destroy(structure_buffer);
+//       device->destroy(structure_buffer);
       device->destroyDescriptorPool(WORLD_MAP_DESCRIPTOR_POOL);
     }
     

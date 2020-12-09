@@ -385,6 +385,14 @@ namespace yavf {
                          0, nullptr,
                          1, &barrier);
   }
+  
+  void TaskInterface::setBarrier(const VkPipelineStageFlags &srcFlags, const VkPipelineStageFlags &dstFlags, const VkDependencyFlags &depFlags) {
+    vkCmdPipelineBarrier(current,
+                         srcFlags, dstFlags, depFlags,
+                         0, nullptr,
+                         0, nullptr,
+                         0, nullptr);
+  }
 
   void TaskInterface::setBarrier(const VkPipelineStageFlags &srcFlags, const VkPipelineStageFlags &dstFlags,
                     const VkAccessFlags &srcAccess, const VkAccessFlags &dstAccess,
@@ -1029,6 +1037,29 @@ namespace yavf {
       VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
       nullptr,
       target->renderPass(),
+      target->framebuffer(),
+      target->size(),
+      static_cast<uint32_t>(values.size()),
+      values.data()
+    };
+
+    vkCmdBeginRenderPass(current, &info, contents);
+
+    const VkViewport &view = target->viewport();
+    if (view.width != 0 && view.height != 0) vkCmdSetViewport(current, 0, 1, &view);
+    const VkRect2D &scissor = target->scissor();
+    if (scissor.extent.width != 0 && scissor.extent.height != 0) vkCmdSetScissor(current, 0, 1, &scissor);
+
+    renderpassStart = true;
+  }
+  
+  void GraphicTask::beginRenderPass(const VkRenderPass &pass, const VkSubpassContents &contents) {
+    const std::vector<VkClearValue> &values = target->clearValues();
+
+    const VkRenderPassBeginInfo info{
+      VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
+      nullptr,
+      pass,
       target->framebuffer(),
       target->size(),
       static_cast<uint32_t>(values.size()),

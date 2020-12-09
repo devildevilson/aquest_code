@@ -145,6 +145,8 @@ namespace devils_engine {
       glfwWindowHint(GLFW_DOUBLEBUFFER, GLFW_FALSE);
       glfwWindowHint(GLFW_REFRESH_RATE, GLFW_DONT_CARE);
       glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
+      glfwWindowHint(GLFW_FOCUSED, GLFW_FALSE);
+      glfwWindowHint(GLFW_FOCUS_ON_SHOW, GLFW_TRUE);
       if (fullscreen) {
         handle = glfwCreateWindow(width, height, APP_NAME, monitor, nullptr);
       } else {
@@ -155,6 +157,7 @@ namespace devils_engine {
       glfwCreateWindowSurface(inst->handle(), handle, nullptr, &surface.handle));
 
       flags.set_fullscreen(fullscreen);
+      flags.set_focused(false);
     }
 
     window::~window() {
@@ -498,6 +501,22 @@ namespace devils_engine {
 
     void window::create_render_pass() {
       yavf::RenderPassMaker rpm(device);
+      
+      const VkAccessFlags debug = VK_ACCESS_INDIRECT_COMMAND_READ_BIT |
+                                  VK_ACCESS_INDEX_READ_BIT |
+                                  VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT |
+                                  VK_ACCESS_UNIFORM_READ_BIT |
+                                  VK_ACCESS_INPUT_ATTACHMENT_READ_BIT |
+                                  VK_ACCESS_SHADER_READ_BIT |
+                                  VK_ACCESS_SHADER_WRITE_BIT |
+                                  VK_ACCESS_COLOR_ATTACHMENT_READ_BIT |
+                                  VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT |
+                                  VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT |
+                                  VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+//                                   VK_ACCESS_TRANSFER_READ_BIT |
+//                                   VK_ACCESS_TRANSFER_WRITE_BIT |
+//                                   VK_ACCESS_HOST_READ_BIT |
+//                                   VK_ACCESS_HOST_WRITE_BIT;
 
       render_pass = rpm.attachmentBegin(surface.format.format)
                          //.attachmentLoadOp(VK_ATTACHMENT_LOAD_OP_LOAD)
@@ -509,7 +528,7 @@ namespace devils_engine {
                        .attachmentBegin(swapchain.depths[0]->info().format)
                          //.attachmentLoadOp(VK_ATTACHMENT_LOAD_OP_LOAD)
                          .attachmentLoadOp(VK_ATTACHMENT_LOAD_OP_CLEAR)
-                         .attachmentStoreOp(VK_ATTACHMENT_STORE_OP_DONT_CARE)
+                         .attachmentStoreOp(VK_ATTACHMENT_STORE_OP_STORE)
                          //.attachmentInitialLayout(VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
                          .attachmentInitialLayout(VK_IMAGE_LAYOUT_UNDEFINED)
                          .attachmentFinalLayout(VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
@@ -517,16 +536,55 @@ namespace devils_engine {
                          .subpassColorAttachment(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, 0)
                          .subpassDepthStencilAttachment(VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, 1)
                        .dependencyBegin(VK_SUBPASS_EXTERNAL, 0)
-                         .dependencySrcStageMask(VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT) // VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT
-                         .dependencyDstStageMask(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT) // VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT
-                         .dependencySrcAccessMask(VK_ACCESS_MEMORY_WRITE_BIT) // VK_ACCESS_SHADER_WRITE_BIT
-                         .dependencyDstAccessMask(VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT) // VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_INDIRECT_COMMAND_READ_BIT
+//                          .dependencySrcStageMask(VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT) // VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT
+//                          .dependencyDstStageMask(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT) // VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT
+//                          .dependencySrcAccessMask(VK_ACCESS_MEMORY_WRITE_BIT) // VK_ACCESS_SHADER_WRITE_BIT
+//                          .dependencyDstAccessMask(VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT) // VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_INDIRECT_COMMAND_READ_BIT
+                         .dependencySrcStageMask(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT)
+                         .dependencyDstStageMask(VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT)
+                         .dependencySrcAccessMask(VK_ACCESS_SHADER_WRITE_BIT)
+                         .dependencyDstAccessMask(VK_ACCESS_INDIRECT_COMMAND_READ_BIT)
                        .dependencyBegin(0, VK_SUBPASS_EXTERNAL)
+//                          .dependencySrcStageMask(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT)
+//                          .dependencyDstStageMask(VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT) // VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT
+//                          .dependencySrcAccessMask(VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT) //VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | 
+//                          .dependencyDstAccessMask(0)
                          .dependencySrcStageMask(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT)
-                         .dependencyDstStageMask(VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT) // VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT
+                         .dependencyDstStageMask(VK_PIPELINE_STAGE_TRANSFER_BIT) //VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT
                          .dependencySrcAccessMask(VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT) //VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | 
-                         .dependencyDstAccessMask(0)
+                         .dependencyDstAccessMask(VK_ACCESS_TRANSFER_WRITE_BIT)
                        .create("default render pass");
+                       
+       render_pass_objects = rpm.attachmentBegin(surface.format.format)
+                                .attachmentLoadOp(VK_ATTACHMENT_LOAD_OP_LOAD)
+                                .attachmentStoreOp(VK_ATTACHMENT_STORE_OP_STORE)
+                                //.attachmentInitialLayout(VK_IMAGE_LAYOUT_PRESENT_SRC_KHR)
+                                .attachmentInitialLayout(VK_IMAGE_LAYOUT_PRESENT_SRC_KHR)
+                                .attachmentFinalLayout(VK_IMAGE_LAYOUT_PRESENT_SRC_KHR)
+                              .attachmentBegin(swapchain.depths[0]->info().format)
+                                .attachmentLoadOp(VK_ATTACHMENT_LOAD_OP_LOAD)
+                                .attachmentStoreOp(VK_ATTACHMENT_STORE_OP_DONT_CARE)
+                                //.attachmentInitialLayout(VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
+                                .attachmentInitialLayout(VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
+                                .attachmentFinalLayout(VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
+                              .subpassBegin(VK_PIPELINE_BIND_POINT_GRAPHICS)
+                                .subpassColorAttachment(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, 0)
+                                .subpassDepthStencilAttachment(VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, 1)
+                              .dependencyBegin(VK_SUBPASS_EXTERNAL, 0)
+                                .dependencySrcStageMask(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT) // VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT
+                                .dependencyDstStageMask(VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT) // VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT
+                                .dependencySrcAccessMask(VK_ACCESS_SHADER_WRITE_BIT) // VK_ACCESS_SHADER_WRITE_BIT
+                                .dependencyDstAccessMask(VK_ACCESS_INDIRECT_COMMAND_READ_BIT) // VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_INDIRECT_COMMAND_READ_BIT
+//                                 .dependencySrcStageMask(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT) // VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT
+//                                 .dependencyDstStageMask(VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT) // VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT
+//                                 .dependencySrcAccessMask(VK_ACCESS_SHADER_WRITE_BIT) // VK_ACCESS_SHADER_WRITE_BIT
+//                                 .dependencyDstAccessMask(VK_ACCESS_INDIRECT_COMMAND_READ_BIT) // VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_INDIRECT_COMMAND_READ_BIT
+                              .dependencyBegin(0, VK_SUBPASS_EXTERNAL)
+                                .dependencySrcStageMask(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT)
+                                .dependencyDstStageMask(VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT) // VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT
+                                .dependencySrcAccessMask(VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT) //VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | 
+                                .dependencyDstAccessMask(0)
+                              .create("default render pass objects");
     }
 
     yavf::Image* window::image() const {

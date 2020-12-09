@@ -1,8 +1,8 @@
 #version 450 core
 
 #extension GL_GOOGLE_include_directive : enable
-
 #include "../render/shared_structures.h"
+#include "../render/image_container_constants.h"
 
 #define UINT_MAX 0xffffffff
 
@@ -10,8 +10,8 @@ layout(constant_id = 0) const uint imagesCount = 2;
 layout(constant_id = 1) const uint samplersCount = 1;
 
 layout(set = 1, binding = 0) uniform sampler2D font_atlas_texture;
-// layout(set = 2, binding = 0) uniform texture2DArray textures[imagesCount];
-// layout(set = 2, binding = 1) uniform sampler samplers[samplersCount];
+//layout(set = 1, binding = 0) uniform texture2DArray textures[IMAGE_CONTAINER_SLOT_SIZE];
+//layout(set = 1, binding = 1) uniform sampler samplers[IMAGE_SAMPLERS_COUNT];
 
 layout(location = 0) in flat uvec4 in_color;
 layout(location = 1) in vec2 in_uv;

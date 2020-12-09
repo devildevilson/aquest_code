@@ -84,6 +84,7 @@ namespace devils_engine {
       struct flags flags;
       float fov;
       VkRenderPass render_pass;
+      VkRenderPass render_pass_objects;
       std::vector<virtual_frame> frames;
       uint32_t current_frame;
       uint32_t present_family;

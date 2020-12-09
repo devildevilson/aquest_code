@@ -108,7 +108,8 @@ namespace yavf {
                     const uint32_t &oldFamily = VK_QUEUE_FAMILY_IGNORED, const uint32_t &newFamily = VK_QUEUE_FAMILY_IGNORED);
     void setBarrier(VkImage image, const VkImageLayout &oldLayout, const VkImageLayout &newLayout, const VkImageSubresourceRange &range,
                     const uint32_t &oldFamily = VK_QUEUE_FAMILY_IGNORED, const uint32_t &newFamily = VK_QUEUE_FAMILY_IGNORED);
-
+    
+    void setBarrier(const VkPipelineStageFlags &srcFlags, const VkPipelineStageFlags &dstFlags, const VkDependencyFlags &depFlags = 0);
     void setBarrier(const VkPipelineStageFlags &srcFlags, const VkPipelineStageFlags &dstFlags,
                     const VkAccessFlags &srcAccess, const VkAccessFlags &dstAccess,
                     const VkDependencyFlags &depFlags = 0);
@@ -284,6 +285,7 @@ namespace yavf {
     void end() override;
 
     void beginRenderPass(const VkSubpassContents &contents = VK_SUBPASS_CONTENTS_INLINE);
+    void beginRenderPass(const VkRenderPass &pass, const VkSubpassContents &contents = VK_SUBPASS_CONTENTS_INLINE);
     void endRenderPass();
 
     void setViews(const std::vector<VkViewport> &views, const std::vector<VkRect2D> &scissors = {}, const uint32_t &firstView = 0, const uint32_t &firstScissor = 0);

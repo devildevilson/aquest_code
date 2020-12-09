@@ -35,6 +35,10 @@ layout(std140, set = 1, binding = 4) readonly buffer triangles_tile_indices_buff
   uvec4 triangles_tile_indices[];
 };
 
+layout(std140, set = 1, binding = 5) readonly buffer world_structure_buffer {
+  uvec4 world_structures[];
+};
+
 layout(std140, set = 2, binding = 0) buffer tile_indirect_buffer {
   uvec4 tiles_indirect;
   uvec4 tiles_data;
@@ -44,8 +48,14 @@ layout(std140, set = 2, binding = 0) buffer tile_indirect_buffer {
   uvec4 walls_data;
   uvec4 structures_indirect;
   uvec4 structures_data;
+  uvec4 heraldies_indirect;
+  uvec4 heraldies_data;
+  uvec4 dispatch_indirect;
   // сюда можно засунуть фрустум
   frustum_t frustum;
+
+  aabb_t selection_box;
+  frustum_t selection_frustum;
 
   // uvec4 objects_indirect; // 256 штук?
   // uvec4 objects_data;
@@ -73,6 +83,10 @@ layout(std140, set = 2, binding = 5) buffer structures_indices_buffer {
   instance_data_t structures_indices[];
 };
 
+layout(std140, set = 2, binding = 6) buffer heraldies_indices_buffer {
+  instance_data_t heraldies_indices[];
+};
+
 #define FAR_PLANE 256.0f
 #define WORK_GROUP 256
 
@@ -80,6 +94,7 @@ float distance2(const vec4 a, const vec4 b);
 vec4 get_triangle_dir(const vec4 a, const vec4 b, const vec4 c);
 bool triangle_frustum_test(const vec4 a, const vec4 b, const vec4 c, const frustum_t frustum);
 uint get_accel_triangle_tile_index(const uint index);
+world_structure_t unpack(const uvec4 data);
 
 layout(local_size_x = WORK_GROUP, local_size_y = 1, local_size_z = 1) in;
 
@@ -120,11 +135,17 @@ void main() {
 
   // triangle.data[1] - количество тайлов всего, triangle.data[2] - есть ли среди них пентагон
   // пентагон должен быть всегда последним
+  const uint multiplier = PACKED_TILE_INDEX_COEF+1;
   const uint new_tiles_count = triangle.data[1] - triangle.data[2];
-  const uint new_indices_count = (new_tiles_count * 7) + (triangle.data[2] * 6); // 6 индексов + 1 рестарт
+  const uint new_indices_count = (new_tiles_count * multiplier) + (triangle.data[2] * multiplier); // 6 индексов + 1 рестарт
   const uint new_indices_offset = atomicAdd(tiles_indirect.x, new_indices_count);
 
   if (new_indices_offset + new_indices_count >= max_indices_count) return;
+
+  // по идее так должно сработать
+  atomicAdd(structures_data.w, triangle.data[1]);
+  const uint max_dispatch = uint(ceil(float(structures_data.w) / float(WORK_GROUP)));
+  atomicMax(dispatch_indirect.x, max_dispatch);
 
   for (uint i = 0; i < new_tiles_count; ++i) {
     const uint tile_index = get_accel_triangle_tile_index(triangle.data[0] + i);
@@ -154,10 +175,19 @@ void main() {
       tiles_indices[vec_index].index[slot_index] = pack_tile + j;
     }
 
-    const uint index = offset + 5;
-    const uint vec_index = index / 4;
-    const uint slot_index = index % 4;
-    tiles_indices[vec_index].index[slot_index] = GPU_UINT_MAX;
+    {
+      const uint index = offset + 5;
+      const uint vec_index = index / 4;
+      const uint slot_index = index % 4;
+      tiles_indices[vec_index].index[slot_index] = GPU_UINT_MAX;
+    }
+
+    {
+      const uint index = offset + 6;
+      const uint vec_index = index / 4;
+      const uint slot_index = index % 4;
+      tiles_indices[vec_index].index[slot_index] = GPU_UINT_MAX;
+    }
   }
 
   // теперь мы можем проверить и добавить границы и соединения
@@ -282,29 +312,56 @@ void main() {
   // рисуются довольно просто: здесь нам нужно получить индекс типа строения на тайле
   // и мы отправляем дальше 4 индекса как в случае с деревьями
   // нам в любом случае нужен тайл
-  for (uint i = 0; i < triangle.data[1]; ++i) {
-    const uint tile_index = get_accel_triangle_tile_index(triangle.data[0] + i);
-    //const uint biome_index = tiles[tile_index].packed_data4[2];
-    const uint structure_type_index = tiles[tile_index].packed_data4[2] & maximum_structure_types;
-    if (structure_type_index == maximum_structure_types) continue;
-
-    const uint offset = atomicAdd(structures_indirect.x, PACKED_INDEX_COEF+1);
-
-    // передаем опять тайлы, буфер слава богам в этом случае будет мелкий
-    const uint packed_tile_index = tile_index * PACKED_INDEX_COEF;
-    const uint index = offset;
-    for (uint j = 0; j < PACKED_INDEX_COEF; ++j) {
-      const uint final_index = index + j;
-      const uint vec_index = final_index / 4;
-      const uint slot_index = final_index % 4;
-      structures_indices[vec_index].index[slot_index] = packed_tile_index + j;
-    }
-
-    const uint final_index = index + PACKED_INDEX_COEF;
-    const uint vec_index = final_index / 4;
-    const uint slot_index = final_index % 4;
-    structures_indices[vec_index].index[slot_index] = GPU_UINT_MAX;
-  }
+  // for (uint i = 0; i < triangle.data[1]; ++i) {
+  //   const uint tile_index = get_accel_triangle_tile_index(triangle.data[0] + i);
+  //   //const uint biome_index = tiles[tile_index].packed_data4[2];
+  //   const uint structure_type_index = tiles[tile_index].packed_data4[2] & maximum_structure_types;
+  //   if (structure_type_index == maximum_structure_types) continue;
+  //
+  //   const uint offset = atomicAdd(structures_indirect.x, PACKED_INDEX_COEF+1);
+  //
+  //   // передаем опять тайлы, буфер слава богам в этом случае будет мелкий
+  //   const uint packed_tile_index = tile_index * PACKED_INDEX_COEF;
+  //   const uint index = offset;
+  //   for (uint j = 0; j < PACKED_INDEX_COEF; ++j) {
+  //     const uint final_index = index + j;
+  //     const uint vec_index = final_index / 4;
+  //     const uint slot_index = final_index % 4;
+  //     structures_indices[vec_index].index[slot_index] = packed_tile_index + j;
+  //   }
+  //
+  //   const uint final_index = index + PACKED_INDEX_COEF;
+  //   const uint vec_index = final_index / 4;
+  //   const uint slot_index = final_index % 4;
+  //   structures_indices[vec_index].index[slot_index] = GPU_UINT_MAX;
+  //
+  //   // тут же мы можем посчитать геральдику
+  //   const world_structure_t structure_data = unpack(world_structures[structure_type_index]);
+  //   if (structure_data.heraldy_layer_index == GPU_UINT_MAX) continue;
+  //
+  //   // еще один буфер для геральдики (по идее он даже чуть меньше чем буфер городов)
+  //   // геральдику, как и струкутуры (и армии видимо тоже) нужно пихнуть в aabb дерево
+  //   // (ну или в другую иерархическую структуру), чтобы иметь полный контроль над данными
+  //   // у нас уже есть вообще то иерархическая структура
+  //
+  //   {
+  //     const uint offset = atomicAdd(heraldies_indirect.x, PACKED_INDEX_COEF+1);
+  //
+  //     const uint packed_tile_index = tile_index * PACKED_INDEX_COEF;
+  //     const uint index = offset;
+  //     for (uint j = 0; j < PACKED_INDEX_COEF; ++j) {
+  //       const uint final_index = index + j;
+  //       const uint vec_index = final_index / 4;
+  //       const uint slot_index = final_index % 4;
+  //       heraldies_indices[vec_index].index[slot_index] = packed_tile_index + j;
+  //     }
+  //
+  //     const uint final_index = index + PACKED_INDEX_COEF;
+  //     const uint vec_index = final_index / 4;
+  //     const uint slot_index = final_index % 4;
+  //     heraldies_indices[vec_index].index[slot_index] = GPU_UINT_MAX;
+  //   }
+  // }
 }
 
 float distance2(const vec4 a, const vec4 b) {
@@ -355,6 +412,15 @@ uint get_accel_triangle_tile_index(const uint index) {
   const uint vec4_index = index / 4;
   const uint vec4_offset = index % 4;
   return triangles_tile_indices[vec4_index][vec4_offset];
+}
+
+world_structure_t unpack(const uvec4 data) {
+  world_structure_t abc;
+  abc.city_image_top.container = data[0];
+  abc.city_image_face.container = data[1];
+  abc.scale = uintBitsToFloat(data[2]);
+  abc.heraldy_layer_index = data[3];
+  return abc;
 }
 
 // мне необходимо два миллиона тайлов проверить на видимость

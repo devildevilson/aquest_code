@@ -25,6 +25,7 @@ namespace devils_engine {
       yavf::Device* device;
       yavf::Buffer* uniform;
       yavf::Buffer* matrices;
+      yavf::Buffer* heraldy; // данные о геральдике нам много где нужны (везде кроме меню)
 
       buffers(yavf::Device* device);
       ~buffers();
@@ -34,6 +35,7 @@ namespace devils_engine {
       void update_pos(const glm::vec3 &pos);
       void update_dir(const glm::vec3 &dir);
       void update_zoom(const float &zoom);
+      void update_cursor_dir(const glm::vec4 &cursor_dir);
 //       void set_tile_data(const map::tile &tile, const uint32_t &index);
 //       void set_point_data(const glm::vec3 &point, const uint32_t &index);
 //       void set_tile_indices(const uint32_t &triangle_index, const std::vector<uint32_t> &indices, const uint32_t &offset, const uint32_t &count, const bool has_pentagon);
@@ -46,6 +48,7 @@ namespace devils_engine {
       glm::mat4 get_inv_view_proj() const;
       glm::vec4 get_pos() const;
       glm::vec4 get_dir() const;
+      glm::vec4 get_cursor_dir() const;
     };
     
     // в вулкане у нас есть новая перменная gl_VertexIndex

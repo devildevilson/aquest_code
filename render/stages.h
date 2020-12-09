@@ -49,9 +49,12 @@ namespace devils_engine {
 
     class render_pass_begin : public stage {
     public:
+      render_pass_begin(const uint32_t &index);
       void begin() override;
       void proccess(context* ctx) override;
       void clear() override;
+    private:
+      uint32_t index;
     };
 
     class render_pass_end : public stage {
@@ -76,8 +79,13 @@ namespace devils_engine {
         uint32_t padding3[3];
         VkDrawIndexedIndirectCommand structures_command;
         uint32_t padding4[3];
-//         glm::uvec4 data;
+        VkDrawIndexedIndirectCommand heraldies_command;
+        uint32_t padding5[3];
+        glm::uvec4 dispatch_indirect_command;
+        
         utils::frustum frustum;
+        aabb_t selection_box;
+        utils::frustum selection_frustum;
         
         biome_objects_data_t biome_data[MAX_BIOMES_COUNT];
       };
@@ -99,15 +107,23 @@ namespace devils_engine {
       yavf::Buffer* walls_index_buffer() const;
       yavf::Buffer* objects_index_buffer() const;
       yavf::Buffer* structures_index_buffer() const;
+      yavf::Buffer* heraldy_index_buffer() const;
+      yavf::DescriptorSet* buffers_set() const;
       
       void set_borders_count(const uint32_t &count);
       void set_connections_count(const uint32_t &count);
-      void set_max_structures_count(const uint32_t &count);
+      void set_max_structures_count(const uint32_t &count); 
+      void set_max_heraldy_count(const uint32_t &count); 
+      // армейская символика потребует неограниченного количества геральдик...
+      // естественно вряд ли это число будет слишком большим (раза в 3-4 больше чем титульных геральдик)
       
       void set_biome_tile_count(const std::array<std::pair<uint32_t, uint32_t>, MAX_BIOMES_COUNT> &data);
       
       void set_border_rendering(const bool value);
       bool is_rendering_border() const;
+      
+      void set_selection_box(const aabb_t &box);
+      void set_selection_frustum(const utils::frustum &frustum);
     private:
       yavf::Device* device;
       yavf::Buffer* indirect;
@@ -116,7 +132,26 @@ namespace devils_engine {
       yavf::Buffer* walls_indices;
       yavf::Buffer* objects_indices;
       yavf::Buffer* structures_indices;
+      yavf::Buffer* heraldy_indices;
       yavf::DescriptorSet* set;
+      yavf::Pipeline pipe;
+    };
+    
+    class tile_objects_optimizer : public stage {
+    public:
+      struct create_info {
+        yavf::Device* device;
+        tile_optimizer* opt;
+      };
+      tile_objects_optimizer(const create_info &info);
+      ~tile_objects_optimizer();
+      void begin() override;
+      void proccess(context* ctx) override;
+      void clear() override;      
+      
+    private:
+      yavf::Device* device;
+      tile_optimizer* opt;
       yavf::Pipeline pipe;
     };
     
@@ -347,6 +382,50 @@ namespace devils_engine {
       
       tile_structure_render(const create_info &info);
       ~tile_structure_render();
+      
+      void begin() override;
+      void proccess(context* ctx) override;
+      void clear() override;
+    private:
+      yavf::Device* device;
+      tile_optimizer* opt;
+      world_map_buffers* map_buffers;
+      yavf::Pipeline pipe;
+      yavf::DescriptorSet* images_set;
+    };
+    
+    class heraldies_render : public stage {
+    public:
+      struct create_info {
+        yavf::Device* device;
+        tile_optimizer* opt;
+        world_map_buffers* map_buffers;
+      };
+      
+      heraldies_render(const create_info &info);
+      ~heraldies_render();
+      
+      void begin() override;
+      void proccess(context* ctx) override;
+      void clear() override;
+    private:
+      yavf::Device* device;
+      tile_optimizer* opt;
+      world_map_buffers* map_buffers;
+      yavf::Pipeline pipe;
+      yavf::DescriptorSet* images_set;
+    };
+    
+    class armies_render : public stage {
+    public:
+      struct create_info {
+        yavf::Device* device;
+        tile_optimizer* opt;
+        world_map_buffers* map_buffers;
+      };
+      
+      armies_render(const create_info &info);
+      ~armies_render();
       
       void begin() override;
       void proccess(context* ctx) override;

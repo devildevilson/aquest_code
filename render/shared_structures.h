@@ -2,7 +2,7 @@
 #define SHARED_STRUCTURES_H
 
 #ifdef __cplusplus
-#include <cstdint>
+
 //#include "basic_tri.h"
 #include "utils/utility.h"
 
@@ -26,6 +26,10 @@ namespace devils_engine {
   namespace render {
     using glm::floatBitsToUint;
     using glm::uintBitsToFloat;
+    using glm::abs;
+    using glm::dot;
+    using glm::min;
+    using glm::max;
 
     using uint = uint32_t;
     // using mat4 = basic_mat4;
@@ -65,6 +69,9 @@ namespace devils_engine {
 #define PACKED_TILE_INDEX_COEF 6
 #define MAX_BIOMES_COUNT 0xff
 #define WORLD_RADIUS_CONSTANT 500.0f
+#define OUTSIDE_FRUSTUM   0
+#define INTERSECT_FRUSTUM 1
+#define INSIDE_FRUSTUM    2
     
 const uint biome_ocean            = 0;
 const uint biome_ocean_glacier    = 1;
@@ -124,6 +131,7 @@ struct camera_data {
   vec4 pos;
   vec4 dir;
   uvec4 dim;
+  vec4 cursor_dir;
 };
 
 struct matrices_data {
@@ -246,7 +254,7 @@ struct world_structure_t {
   image_t city_image_top;
   image_t city_image_face;
   float scale;
-  uint dummy;
+  uint heraldy_layer_index; // здесь мы наверное будем хранить индекс на первый слой геральдики
   // что то еще? где то это должно находится? по идее по центру тайла
   // размер строения, возможно нужно менять изображения по ходу дела
   // как нужно подстроить лес для объекта? мне тогда придется понять на каком тайле что стоит
@@ -256,6 +264,19 @@ struct world_structure_t {
 struct biome_objects_data_t {
   uvec4 objects_indirect;
   uvec4 objects_data;
+};
+
+struct aabb_t {
+  vec4 min;
+  vec4 max;
+};
+
+struct additional_data_t {
+  uvec4 data[2];
+};
+
+struct army_data_t {
+  vec4 data;
 };
 
 INLINE bool is_image_valid(const image_t img) {
@@ -567,7 +588,7 @@ INLINE uint compute_height_layer(const float height) {
 //   return float(val) / float(modulus);
 // }
 
-INLINE uint prng(uint prev) {
+INLINE uint prng(const uint prev) {
 //   prev ^= prev << 13;
 //   prev ^= prev >> 17;
 //   prev ^= prev << 5;
@@ -584,6 +605,42 @@ INLINE float prng_normalize(const uint state) {
   const uint float_mask = 0x7f << 23;
   const uint float_val = float_mask | state >> 9;
   return uintBitsToFloat(float_val) - 1.0f;
+}
+
+INLINE int frustum_test(const frustum_t frustum, const vec4 center, const vec4 extent) {
+  int result = INSIDE_FRUSTUM;
+  for (uint i = 0; i < 6; ++i) {
+    const vec4 plane = vec4(frustum.planes[i][0], frustum.planes[i][1], frustum.planes[i][2], 0.0f);
+    const float p3 = frustum.planes[i][3];
+    
+    const float d = dot(center,     plane);
+    const float r = dot(extent, abs(plane));
+    const float d_p_r = d + r;
+    const float d_m_r = d - r;
+    
+    result = min(result, d_p_r < -p3 ? OUTSIDE_FRUSTUM   : result);
+    result = min(result, d_m_r < -p3 ? INTERSECT_FRUSTUM : result);
+  }
+  
+  return result;
+}
+
+INLINE bool frustum_test(const frustum_t frustum, const vec4 center, const float radius) {
+  bool result = true;
+  for (uint i = 0; i < 6; ++i) {
+    const float d = dot(center, frustum.planes[i]);
+    const bool res = !(d <= -radius);
+    result = bool(min(uint(result), uint(res)));
+  }
+  
+  return result;
+}
+
+INLINE bool intersect(const aabb_t box1, const aabb_t box2) {
+  return 
+    (box1.min.x <= box2.max.x && box1.max.x >= box2.min.x) && 
+    (box1.min.y <= box2.max.y && box1.max.y >= box2.min.y) && 
+    (box1.min.z <= box2.max.z && box1.max.z >= box2.min.z);
 }
 
 // bool lcg_probability(const float val) {

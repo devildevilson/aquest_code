@@ -46,6 +46,14 @@ layout(std140, set = 2, binding = 2) readonly buffer tile_points_buffer {
   vec4 tile_points[];
 };
 
+layout(std140, set = 2, binding = 3) readonly buffer triangles_buffer {
+  packed_fast_triangle_t triangles[];
+};
+
+layout(std140, set = 2, binding = 4) readonly buffer triangles_tile_indices_buffer {
+  uvec4 triangles_tile_indices[];
+};
+
 layout(std140, set = 2, binding = 5) readonly buffer world_structure_buffer {
   uvec4 world_structures[];
 };
@@ -54,17 +62,12 @@ layout(std140, set = 2, binding = 6) readonly buffer additional_index_buffer {
   additional_data_t additional_indices[];
 };
 
-// где то тут еще должен быть буфер структур
-// было бы неплохо его запихнуть к всем остальным буферам
-
 out gl_PerVertex {
   vec4 gl_Position;
 };
 
-layout(location = 0) out flat image_t out_biom_texture;
-layout(location = 1) out flat color_t out_biom_color;
-layout(location = 2) out vec2 out_uv;
-layout(location = 3) out flat float out_tile_height;
+layout(location = 0) out flat uint out_layer_index;
+layout(location = 1) out vec2 out_uv;
 
 mat4 translate(const mat4 mat, const vec4 vec);
 mat4 rotate(const mat4 mat, const float angle, const vec4 normal);
@@ -75,60 +78,36 @@ void main() {
   const uint tile_index  = gl_VertexIndex / PACKED_INDEX_COEF;
   const uint point_index = gl_VertexIndex % PACKED_INDEX_COEF;
 
-  const vec4 center = tile_points[tiles[tile_index].tile_indices.x];
+  const light_map_tile_t tile = tiles[tile_index];
+  const float tile_height = uintBitsToFloat(tile.tile_indices.w);
+  const vec4 center = tile_points[tile.tile_indices.x];
   const vec4 normal = vec4(normalize(center.xyz), 0.0f);
 
-  const float tile_height = uintBitsToFloat(tiles[tile_index].tile_indices.w);
+  const uint heraldy_layer_index = additional_indices[tile_index].data[0].y;
+  // const uint structure_index = tiles[tile_index].packed_data4.z & maximum_structure_types;
+  // const world_structure_t structure_data = unpack(world_structures[structure_index]);
+  // const uint heraldy_layer_index = structure_data.heraldy_layer_index;
+
+  // нужно нарисовать геральдику на некотором удалении от тайлов
+  // в цк3 геральдику можно выделить и получить немного информации
+  // как это делается? как как нужно посчитать 4 точки и посмотреть куда направлен курсор
+  // можно ли как то это сделать в шейдере?
+
+  // размер зависит от дальности
   const uint height_layer = compute_height_layer(tile_height);
   const float final_height = layer_height * height_layer;
-
-  const uint structure_index = additional_indices[tile_index].data[0].x;
-  //const uint structure_index = tiles[tile_index].packed_data4[2] & maximum_structure_types;
-  const world_structure_t structure = unpack(world_structures[structure_index]);
-  const float obj_scale = structure.scale;
-  //const float obj_scale = 1.2f; // приходит неправильный скейл
-
-  // все что тут нужно сделать это:
-  // вспомнить как сделать дум спрайты
-  // сделать пару матриц
-  const float zoom = uintBitsToFloat(camera.dim[2]);
-
-  const vec4 point = center + normal * (final_height * render_tile_height + obj_scale/2.0f);
+  const float zoom = uintBitsToFloat(camera.dim.z);
+  const float obj_scale = mix(0.5f, 1.0f, zoom); // размер один и тот же? вряд ли
+  const float dist = mix(1.0f, 10.0f, zoom); // независимые государства повыше?
+  const vec4 point = center + normal * (dist + final_height * render_tile_height);
   const mat4 translaion = translate(mat4(1.0f), point);
-  // константа по которой делим приближение?
-    const mat3 rot = mat3(camera_matrices.invView);
-    const mat4 rotation = mat4(rot); // говорят что этого достаточно
-    const mat4 scaling = scale(rotation, vec4(obj_scale, -obj_scale, obj_scale, 0.0f));
-    gl_Position = camera.viewproj * translaion * scaling * (object_points[point_index]);
-    out_uv = object_uv[point_index];
+  const mat3 rot = mat3(camera_matrices.invView);
+  const mat4 rotation = mat4(rot);
+  const mat4 scaling = scale(rotation, vec4(obj_scale, -obj_scale, obj_scale, 0.0f));
 
-  if (zoom > 0.3f) {
-    out_biom_texture = structure.city_image_top;
-  } else {
-    out_biom_texture = structure.city_image_face;
-  }
-
-  // } else {
-  //   // кажется толку с этого не очень много, разве что все равно полезно сменить изображение
-  //   // нам нужно тогда угол сделать гораздо больше, а это не особо имеет смысла
-  //   const vec4 dir = camera.dir;
-  //
-  //   vec4 x, y;
-  //   if (abs(normal.x) < EPSILON && abs(normal.y) < EPSILON) {
-  //     x = vec4(1.0f, 0.0f, 0.0f, 0.0f);
-  //     y = vec4(0.0f, 1.0f, 0.0f, 0.0f);
-  //   } else {
-  //     x = normalize(vec4(-normal[1], normal[0], 0.0f, 0.0f));
-  //     y = normalize(vec4(-normal[0]*normal[2], -normal[1]*normal[2], normal[0]*normal[0] + normal[1]*normal[1], 0.0f));
-  //   }
-  //
-  //   const mat4 mat = mat4(y, normal, x, vec4(0.0f, 0.0f, 0.0f, 1.0f));
-  //   const mat4 scaling = scale(mat, vec4(obj_scale, obj_scale, obj_scale, 0.0f));
-  //
-  //   gl_Position = camera.viewproj * translaion * scaling * (object_points[point_index]);
-  //   out_uv = object_uv[point_index];
-  //   out_biom_texture = structure.city_image_face;
-  // }
+  gl_Position = camera.viewproj * translaion * scaling * (object_points[point_index]);
+  out_uv = object_uv[point_index];
+  out_layer_index = heraldy_layer_index;
 }
 
 mat4 translate(const mat4 mat, const vec4 vec) {

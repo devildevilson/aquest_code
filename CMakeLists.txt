@@ -193,6 +193,10 @@ file(GLOB_RECURSE GLSL_SOURCE_FILES
   raw_shaders/first_object.vert
   raw_shaders/first_object.frag
   raw_shaders/structure.vert
+  raw_shaders/heraldy.vert
+  raw_shaders/heraldy.frag
+  raw_shaders/map_objects.comp
+  raw_shaders/armies.vert
 )
 
 foreach(GLSL ${GLSL_SOURCE_FILES})
@@ -269,6 +273,9 @@ set(SRC_LIST
   utils/demiurge.cpp
   utils/settings.cpp
   bin/interface2.cpp
+  utils/frustum.cpp
+  bin/objects_selector.cpp
+  utils/astar_search.cpp
   include/FastNoise/FastNoise.cpp
   include/whereami/src/whereami.c
   include/fmt/src/format.cc
@@ -309,6 +316,9 @@ set(HDR_LIST
   utils/demiurge.h
   utils/settings.h
   bin/interface2.h
+  utils/frustum.h
+  bin/objects_selector.h
+  utils/astar_search.h
   include/FastNoise/FastNoise.h
   include/whereami/src/whereami.h
 )
@@ -373,11 +383,13 @@ target_link_libraries(render utils ${VULKAN_LIB_NAME} ${GLFW3_LIBRARIES})
 
 set(SRC_LIST
   ai/build_subsystem.cpp
+  ai/path_container.cpp
 )
 
 set(HDR_LIST
   ai/sub_system.h
   ai/build_subsystem.h
+  ai/path_container.h
 )
 
 add_library(ai ${SRC_LIST} ${HDR_LIST})
@@ -423,6 +435,7 @@ set(SRC_LIST
   bin/character_data_parser.cpp
   bin/building_data_parser.cpp
   bin/image_parser.cpp
+  bin/heraldy_parser.cpp
   bin/logic.cpp
   utils/quest_states.cpp
   bin/tiles_funcs.cpp
@@ -449,6 +462,7 @@ set(HDR_LIST
   bin/stats.h
   bin/data_parser.h
   bin/image_parser.h
+  bin/heraldy_parser.h
   bin/logic.h
   utils/quest_states.h
   utils/quest_state.h

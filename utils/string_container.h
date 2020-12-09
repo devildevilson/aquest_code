@@ -38,10 +38,14 @@ namespace devils_engine {
     
     class numeric_string_container {
     public:
+      ~numeric_string_container();
       std::string_view insert(const std::string &str, const size_t &data);
       size_t get(const std::string_view &str) const;
+      std::string_view get(const size_t &data) const;
     private:
-      std::unordered_map<std::string_view, std::pair<std::string, size_t>> container;
+      memory_pool<std::string, sizeof(std::string)*100> string_pool;
+      std::unordered_map<size_t, std::string*> int_container;
+      std::unordered_map<std::string_view, std::pair<std::string*, size_t>> str_container;
     };
     
     class data_string_container {

@@ -12,6 +12,7 @@
 #include "main_menu.h"
 #include "lua_initialization.h"
 #include "settings.h"
+#include "astar_search.h"
 
 #include "render/window.h"
 #include "render/render.h"
@@ -40,6 +41,8 @@
 #include "bin/interface2.h"
 #include "bin/seasons.h"
 #include "bin/game_time.h"
+#include "bin/objects_selector.h"
+#include "ai/path_container.h"
 
 static const std::vector<const char*> instanceLayers = {
   "VK_LAYER_LUNARG_standard_validation",
@@ -65,7 +68,9 @@ namespace devils_engine {
 //         sizeof(utils::data_string_container) +
         sizeof(utils::sequential_string_container) +
         sizeof(utils::calendar) +
-        sizeof(utils::progress_container)
+        sizeof(utils::progress_container) +
+        sizeof(utils::objects_selector) +
+        sizeof(struct path_managment)
       ),
       input_data(nullptr),
       graphics_container(nullptr),
@@ -79,7 +84,9 @@ namespace devils_engine {
 //       string_container(nullptr),
       sequential_string_container(nullptr),
       game_calendar(nullptr),
-      loading_progress(nullptr)
+      loading_progress(nullptr),
+      objects_selector(nullptr),
+      path_managment(nullptr)
     {}
     
     core_t::~core_t() {
@@ -96,6 +103,8 @@ namespace devils_engine {
       RELEASE_CONTAINER_DATA(sequential_string_container)
       RELEASE_CONTAINER_DATA(game_calendar)
       RELEASE_CONTAINER_DATA(loading_progress)
+      RELEASE_CONTAINER_DATA(objects_selector)
+      RELEASE_CONTAINER_DATA(path_managment)
     }
     
     void core_t::create_utility_systems() {
@@ -116,6 +125,12 @@ namespace devils_engine {
 //       g.initialize_state(1);
       
       loading_progress = container.create<utils::progress_container>();
+      
+      objects_selector = container.create<utils::objects_selector>();
+      path_managment = container.create<struct path_managment>(std::thread::hardware_concurrency());
+      
+      global::get(objects_selector);
+      global::get(path_managment);
     }
     
     void core_t::create_render_system(const char** ext, const uint32_t &count) {
@@ -228,7 +243,7 @@ namespace devils_engine {
 //       auto opt3    = system->add_stage<render::tile_walls_optimizer>(render::tile_walls_optimizer::create_info{device});
       auto barriers= system->add_stage<render::barriers>();
                   
-      auto rp_begin= system->add_stage<render::render_pass_begin>(); // TODO: должно быть отдельно!!!
+      auto rp_begin= system->add_stage<render::render_pass_begin>(0); // TODO: должно быть отдельно!!!
 //       auto tiles   = system->add_stage<render::tile_render>(render::tile_render::create_info{device, opt});
 //       auto borders = system->add_stage<render::tile_border_render>(render::tile_border_render::create_info{device, opt2});
 //       auto walls   = system->add_stage<render::tile_connections_render>(render::tile_connections_render::create_info{device, opt3});
@@ -327,6 +342,10 @@ namespace devils_engine {
       release_container();
     }
     
+    double vectors_angle(const glm::dvec4 &first, const glm::dvec4 &second) {
+      return glm::acos(glm::dot(first, second) / (glm::length(first)*glm::length(second)));
+    }
+    
 //     bool map_t::is_init() const { return container.inited(); }
     void map_t::create_map_container() {
       if (is_init()) return;
@@ -342,6 +361,46 @@ namespace devils_engine {
       render_modes = container.create<render::mode_container, 4>();
       
       create_render_stages();
+      
+      const auto local_map = map;
+      utils::astar_search::set_vertex_cost_f([local_map] (const uint32_t &current_tile_index, const uint32_t &neighbour_tile_index) -> utils::astar_search::float_t {
+        const auto &current_tile_data = render::unpack_data(local_map->get_tile(current_tile_index));
+        const auto &neighbour_tile_data = render::unpack_data(local_map->get_tile(neighbour_tile_index));
+        
+        if (neighbour_tile_data.height > 0.5f) return 1000.0;
+        
+        const uint32_t current_height_layer = render::compute_height_layer(current_tile_data.height);
+        const uint32_t neighbour_height_layer = render::compute_height_layer(neighbour_tile_data.height);
+        
+        // какая высота ограничивает передвижение? у меня кажется максимальная высота 20? мне надо прикинуть что 
+        // 20 слоев это весь подьем от моря до самой высокой горы, и примерно с 10 слоя (по идее) начинаются горы (проходимые?)
+        // то есть мне нужно ориентироваться в рамках 10 слоев?
+        
+        if (current_height_layer > neighbour_height_layer || current_height_layer == neighbour_height_layer) return 1.0;
+        //if (neighbour_height_layer - current_height_layer > 3) return 1000.0;
+        
+        return (neighbour_height_layer - current_height_layer) + 1.0;
+        //return 1.0;
+      });
+      
+      utils::astar_search::set_goal_cost_f([local_map] (const uint32_t &current_tile_index, const uint32_t &goal_tile_index) -> utils::astar_search::float_t {
+        const auto &current_tile_data = local_map->get_tile(current_tile_index);
+        const auto current_tile_point_index = current_tile_data.tile_indices.x;
+        const auto current_tile_center = local_map->get_point(current_tile_point_index);
+        const auto current_tile_vec = glm::dvec4(glm::dvec3(current_tile_center), 0.0);
+        
+        const auto &goal_tile_data = local_map->get_tile(goal_tile_index);
+        const auto goal_tile_point_index = goal_tile_data.tile_indices.x;
+        const auto goal_tile_center = local_map->get_point(goal_tile_point_index);
+        const auto goal_tile_vec = glm::dvec4(glm::dvec3(goal_tile_center), 0.0);
+        
+        const double angle = vectors_angle(current_tile_vec, goal_tile_vec);
+        
+        //return angle * core::map::world_radius;
+        return glm::distance(current_tile_center, goal_tile_center); // по углу похоже неверный результат иногда выдает
+      });
+      
+      // нужно ли специально обнулять эти функции? врядли
     }
     
     void map_t::setup_rendering_modes() {
@@ -605,8 +664,8 @@ namespace devils_engine {
       
       world_buffers = nullptr;
       
-      RELEASE_CONTAINER_DATA(map)
       RELEASE_CONTAINER_DATA(core_context)
+      RELEASE_CONTAINER_DATA(map)
       RELEASE_CONTAINER_DATA(seasons)
       RELEASE_CONTAINER_DATA(ai_systems)
       RELEASE_CONTAINER_DATA(map_creator)
@@ -626,7 +685,12 @@ namespace devils_engine {
         sizeof(render::tile_connections_render) +
         sizeof(render::tile_object_render) +
         sizeof(render::tile_highlights_render) +
-        sizeof(render::tile_structure_render);
+        sizeof(render::render_pass_end) +
+        sizeof(render::tile_objects_optimizer) +
+        sizeof(render::render_pass_begin) +
+        sizeof(render::tile_structure_render) +
+        sizeof(render::heraldies_render) +
+        sizeof(render::armies_render);
       
       ASSERT(optimizators_container == nullptr);
       ASSERT(render_container == nullptr);
@@ -648,7 +712,12 @@ namespace devils_engine {
       auto walls   = render_container->add_stage<render::tile_connections_render>(render::tile_connections_render::create_info{device, opt1, buffers});
                      render_container->add_stage<render::tile_object_render>(render::tile_object_render::create_info{device, opt1, buffers});
       auto thl     = render_container->add_stage<render::tile_highlights_render>(render::tile_highlights_render::create_info{device, buffers});
+                     render_container->add_stage<render::render_pass_end>();
+                     render_container->add_stage<render::tile_objects_optimizer>(render::tile_objects_optimizer::create_info{device, opt1});
+                     render_container->add_stage<render::render_pass_begin>(1);
                      render_container->add_stage<render::tile_structure_render>(render::tile_structure_render::create_info{device, opt1, world_buffers});
+                     render_container->add_stage<render::heraldies_render>(render::heraldies_render::create_info{device, opt1, world_buffers});
+                     render_container->add_stage<render::armies_render>(render::armies_render::create_info{device, opt1, world_buffers});
       systems->render_slots->set_stage(7, render_container);
       
       global::get(tiles);

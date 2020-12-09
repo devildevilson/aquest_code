@@ -393,12 +393,19 @@ namespace devils_engine {
     }
 
     input_event next_input_event(size_t &mem, const size_t &tolerancy) {
+//       static const auto home = utils::id::get("home");
       const auto &container = global::get<data>()->key_events;
       for (size_t i = mem; i < container_size; ++i) {
+        const auto id = container.container[i].data[utils::current_player_state()].id;
+//         if (id == home) {
+//           PRINT_VAR("id  ", id.name())
+//           PRINT_VAR("time", container.container[i].event_time)
+//           PRINT_VAR("type", container.container[i].event)
+//         }
         //if (i == 290 && container.container[i].event_time <= tolerancy) { ASSERT(container.container[i].data[utils::current_player_state()].id.valid()); }
-        if (container.container[i].data[utils::current_player_state()].id.valid() && container.container[i].event_time <= tolerancy) {
+        if (id.valid() && container.container[i].event_time <= tolerancy) {
           mem = i+1;
-          return {container.container[i].data[utils::current_player_state()].id, container.container[i].event};
+          return {id, container.container[i].event};
         }
       }
 
@@ -611,6 +618,7 @@ namespace devils_engine {
 
     void set_key(const int &key, const utils::id &id, const uint8_t &slot) {
       assert(slot < event_key_slots);
+      ASSERT(id.valid());
       auto &container = global::get<data>()->key_events;
       auto itr = container.events_map.find(id);
       if (itr == container.events_map.end()) {
@@ -618,18 +626,22 @@ namespace devils_engine {
         container.event_keys.emplace_back(id, keys::event_keys_container{INT32_MAX, INT32_MAX});
         itr = container.events_map.insert(std::make_pair(id, index)).first;
       }
-      //auto itr = container.event_keys.find(id);
-      //if (itr == container.event_keys.end()) {
-      //   itr = container.event_keys.insert(std::make_pair(id, keys::event_keys_container{INT32_MAX, INT32_MAX})).first;
-      //}
       
       const size_t event_index = itr->second;
       container.event_keys[event_index].second.keys[slot] = key;
+      
+//       PRINT_VAR("setting id ", id.name())
+//       static const auto home = utils::id::get("home");
+//       if (id == home) {
+//         PRINT_VAR("set home key to ", home.name())
+//         PRINT_VAR("home key is ", get_key_name(key))
+//       }
+      
       //itr->second.keys[slot] = key;
       // нужно ли запоминать в кнопке что к ней обращается? 
       // по идее мне это нужно только для того чтобы подтвердить что пользователь не прилепил на одну кнопку несколько эвентов
       // думаю что это можно сделать отдельно
-      if (key == INT32_MAX) return;
+      if (key == INT32_MAX) return; // так мы по идее должны отвязать кнопку от эвента
       if (size_t(key) >= container_size) throw std::runtime_error("Bad key index");
       auto &cont = global::get<data>()->key_events.container;
       if (cont[key].data[0].id == id) return;

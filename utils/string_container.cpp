@@ -40,20 +40,35 @@ namespace devils_engine {
       return *ids[id];
     }
     
-    std::string_view numeric_string_container::insert(const std::string &str, const size_t &data) {
-      auto itr = container.find(str);
-      if (itr == container.end()) {
-        std::pair<std::string, size_t> copy = std::make_pair(str, data);
-        std::string_view strv = copy.first;
-        itr = container.try_emplace(std::move(strv), std::move(copy)).first;
+    numeric_string_container::~numeric_string_container() {
+      for (const auto &pair : int_container) {
+        string_pool.destroy(pair.second);
       }
-      return std::string_view(itr->first);
+    }
+    
+    std::string_view numeric_string_container::insert(const std::string &str, const size_t &data) {
+      auto itr = str_container.find(str);
+      if (itr == str_container.end()) {
+        auto ptr = string_pool.create(str);
+        std::pair<std::string*, size_t> copy = std::make_pair(ptr, data);
+        std::string_view strv = *ptr;
+        itr = str_container.try_emplace(strv, copy).first;
+        int_container.try_emplace(data, ptr);
+      }
+      
+      return itr->first;
     }
     
     size_t numeric_string_container::get(const std::string_view &str) const {
-      auto itr = container.find(str);
-      if (itr == container.end()) return SIZE_MAX;
+      auto itr = str_container.find(str);
+      if (itr == str_container.end()) return SIZE_MAX;
       return itr->second.second;
+    }
+    
+    std::string_view numeric_string_container::get(const size_t &data) const {
+      auto itr = int_container.find(data);
+      if (itr == int_container.end()) return "";
+      return *itr->second;
     }
     
     void data_string_container::insert(const std::string_view &str, const size_t &data) {

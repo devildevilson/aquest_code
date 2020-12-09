@@ -67,7 +67,7 @@ namespace devils_engine {
         free_memory = reinterpret_cast<char*>(ptr);
       }
       
-      size_t block_elem_count() const {
+      constexpr size_t block_elem_count() const {
         return N / sizeof(T);
       }
       
@@ -92,7 +92,7 @@ namespace devils_engine {
       char* last_memory;
       char* free_memory;
       
-      size_t ptr_align() const {
+      constexpr size_t ptr_align() const {
         return std::max(alignof(T), alignof(T*));
       }
       

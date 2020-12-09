@@ -111,7 +111,11 @@ namespace devils_engine {
     
     void settings::keys::setup_default_mapping() {
       const utils::id map_move = utils::id::get("map_move");
-      input::set_key(GLFW_MOUSE_BUTTON_RIGHT, map_move);
+      input::set_key(GLFW_MOUSE_BUTTON_MIDDLE, map_move);
+      const utils::id control_click  = utils::id::get("control_click");
+      input::set_key(GLFW_MOUSE_BUTTON_RIGHT, control_click);
+      const utils::id activate_click = utils::id::get("activate_click");
+      input::set_key(GLFW_MOUSE_BUTTON_LEFT, activate_click);
 
       const auto biome_render_mode = utils::id::get("biome_render_mode");
       const auto cultures_render_mode = utils::id::get("cultures_render_mode");
@@ -149,6 +153,9 @@ namespace devils_engine {
       
       const utils::id border_render = utils::id::get("border_render");
       input::set_key(GLFW_KEY_B, border_render);
+      
+      const utils::id go_to_capital = utils::id::get("home");
+      input::set_key(GLFW_KEY_HOME, go_to_capital);
     }
     
     bool settings::keys::is_awaits_key() const {

@@ -50,10 +50,22 @@ namespace devils_engine {
     }
     
     // использовать только для тредов в тредпуле (то есть для вторичных тредов (не главный))
-    inline void async_wait(dt::thread_pool* pool) {
+    inline void async_wait(dt::thread_pool* pool) noexcept {
       pool->compute();
       while (pool->working_count() != 1 || pool->tasks_count() != 0) { std::this_thread::sleep_for(std::chrono::microseconds(1)); }
       ASSERT(pool->working_count() == 1 && pool->tasks_count() == 0);
+    }
+    
+    template <typename T>
+    void atomic_max(std::atomic<T> &maximum_value, const T &value) noexcept {
+      T prev_value = maximum_value;
+      while (prev_value < value && !maximum_value.compare_exchange_weak(prev_value, value));
+    }
+    
+    template <typename T>
+    void atomic_min(std::atomic<T> &maximum_value, const T &value) noexcept {
+      T prev_value = maximum_value;
+      while (prev_value > value && !maximum_value.compare_exchange_weak(prev_value, value));
     }
   }
 }

@@ -26,6 +26,7 @@ namespace devils_engine {
     class sequential_string_container;
     struct calendar;
     class progress_container;
+    struct objects_selector;
   }
   
   namespace interface {
@@ -45,7 +46,12 @@ namespace devils_engine {
     class creator;
   }
   
+  namespace ai {
+    struct path_managment;
+  }
+  
   namespace systems {
+    using devils_engine::ai::path_managment;
     class ai;
     
     struct core_t {
@@ -64,6 +70,8 @@ namespace devils_engine {
       utils::sequential_string_container* sequential_string_container;
       utils::calendar* game_calendar;
       utils::progress_container* loading_progress;
+      utils::objects_selector* objects_selector;
+      struct path_managment* path_managment;
       
       core_t();
       ~core_t();

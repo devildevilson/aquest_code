@@ -167,7 +167,8 @@ namespace devils_engine {
       ASSERT(size != 0);
       const bool is_id_array = array_check[0].key == ID_ARRAY;
       const bool is_stats_array = array_check[0].key == STATS_ARRAY;
-      const bool basic_check = !is_id_array && !is_stats_array;
+      const bool is_numeric_array = array_check[0].key == NUM_ARRAY;
+      const bool basic_check = !is_id_array && !is_stats_array && !is_numeric_array;
       
       if (!basic_check) {
         ASSERT(current_check->value_type == check_table_value::type::array_t);
@@ -177,6 +178,7 @@ namespace devils_engine {
         size_t minimum_key_num = array_check[0].flags;
         if (is_stats_array) { key_type = sol::type::number; value_type = sol::type::number; }
         if (is_id_array) { value_type = sol::type::string; }
+        if (is_numeric_array) { value_type = sol::type::number; }
         
         size_t data_counter = 0;
         for (auto itr = table.begin(); itr != table.end(); ++itr) {
@@ -195,8 +197,9 @@ namespace devils_engine {
         }
         
         const size_t max_data_values = current_check->max_count == 0 ? SIZE_MAX : current_check->max_count;
-        if (data_counter >= max_data_values) {
+        if (data_counter > max_data_values) {
           PRINT("Too many data in container " + std::string(current_check->key) + " in table " + std::string(id)); ++counter;
+          //throw std::runtime_error("fs;amsfs");
         }
       }
       

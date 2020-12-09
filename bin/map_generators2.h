@@ -150,6 +150,7 @@ namespace devils_engine {
     void calculating_province_neighbours(generator::context* ctx, sol::table &table);
     void generate_cultures(generator::context* ctx, sol::table &table);
     void generate_countries(generator::context* ctx, sol::table &table);
+    void generate_heraldy(generator::context* ctx, sol::table &table);
     void generate_titles(generator::context* ctx, sol::table &table);
     void generate_characters(generator::context* ctx, sol::table &table);
     void generate_tech_level(generator::context* ctx, sol::table &table);

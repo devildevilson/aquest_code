@@ -9,6 +9,7 @@
 #include "utils/utility.h"
 #include "render/shared_structures.h"
 #include "utils/ray.h"
+#include "utils/frustum.h"
 
 // все данные карты должны хранится здесь
 // точки, гексы, треугольники, биомы, провинции, религии, культуры (это из основных)
@@ -79,11 +80,40 @@ namespace devils_engine {
         return points_count_t(tri_count_d(detail_level));
       }
       
+      struct aabb {
+        glm::vec4 pos;
+        glm::vec4 extents;
+      };
+      
+      struct user_data {
+        enum class type {
+          army,
+          city,
+          structure,
+          title,
+          count
+        };
+        enum type type;
+        uint32_t index;
+      };
+      
+      struct object {
+        struct aabb aabb;
+        void* user_data;
+      };
+      
+      // теперь нужно определиться с тем где будут храниться указатели на объекты на карте
+      // либо на последнем уровне разбиения, либо могут храниться на каждом в зависимости от того попадают ли объекты полностью
+      // последнее требует функции проверки нахождения внутри фигуры состоящей из 5 плоскостей, 
+      // по идее должно быть по схожему алгоритму с фрустумом
       struct triangle {
         uint32_t points[3];
         uint32_t current_level;
         uint32_t upper_level_index;
         uint32_t next_level[4];
+        // тут должна быть возможность добавлять произвольные данные (какие? юзердата указатель на что? может быть два индекса?)
+        // нужно учесть: армии, города, структуры, знамена, скорее всего что то еще
+        // дело в том что данные у нас копируются и не стоит тут добавлять еще данные
       };
       
       // почти все мы тут можем сгенерировать
@@ -98,12 +128,17 @@ namespace devils_engine {
       // у нас есть жесткие ограничения по тому как мы видим объекты на карте, мы их видим в основном сверху и чуть с юга
       yavf::Buffer* biomes;
       yavf::Buffer* structures;
+      yavf::Buffer* tile_object_indices; // тут по идее мы будем хранить кучу всяких индексов
+      yavf::Buffer* army_data_buffer;
       yavf::Buffer* provinces; // скорее всего не пригодится (и далее)
       yavf::Buffer* faiths;
       yavf::Buffer* cultures;
       yavf::DescriptorSet* tiles_set;
       std::vector<triangle> triangles;
+      std::vector<std::vector<object>> triangles_data;
       float max_triangle_size; // 23.8457f
+      uint32_t free_army_slot;
+      uint32_t armies_count;
       
       glm::mat4 world_matrix;
       
@@ -120,6 +155,14 @@ namespace devils_engine {
       bool intersect_container(const uint32_t &tri_index, const utils::ray &ray) const;
       bool intersect_tri(const glm::vec4 &v0, const glm::vec4 &v1, const glm::vec4 &v2, const utils::ray &ray, float &t) const;
       bool intersect_tile(const uint32_t &tile_index, const utils::ray &ray) const;
+      
+      // добавляем объект, нужно их добавлять каждый ход? нужно сделать как можно меньше добавлений
+      // нужно запомнить какую то информацию для быстрого удаления
+      size_t add_object(const object &obj);
+      void remove_object(const size_t &place);
+      void* cast_ray_object(const utils::ray &ray, float &dist) const;
+      bool test_triangle_frustum(const uint32_t &tri_index, const utils::frustum &frustum) const;
+      int32_t frustum_culling(const utils::frustum &frustum, std::vector<void*> &objects) const;
       
       const render::light_map_tile_t get_tile(const uint32_t &index) const;
       const glm::vec4 get_point(const uint32_t &index) const;
@@ -142,6 +185,17 @@ namespace devils_engine {
       void set_tile_height(const uint32_t &tile_index, const float &tile_hight);
       void set_tile_border_data(const uint32_t &tile_index, const uint32_t &offset, const uint32_t &size);
       void set_tile_connections_data(const uint32_t &tile_index, const uint32_t &offset, const uint32_t &size);
+      
+      uint32_t get_tile_objects_index(const uint32_t &tile_index, const uint32_t &data_index) const;
+      void set_tile_objects_index(const uint32_t &tile_index, const uint32_t &data_index, const uint32_t &data);
+      bool tile_objects_index_comp_swap(const uint32_t &tile_index, const uint32_t &data_index, uint32_t &comp, const uint32_t &data);
+      
+      uint32_t allocate_army_data();
+      void release_army_data(const uint32_t &index);
+      void set_army_pos(const uint32_t &index, const glm::vec3 &pos);
+      void set_army_image(const uint32_t &index, const render::image_t &img);
+      glm::vec3 get_army_pos(const uint32_t &index) const;
+      render::image_t get_army_image(const uint32_t &index) const;
       
       float get_tile_height(const uint32_t &tile_index) const;
       

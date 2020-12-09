@@ -5,11 +5,26 @@
 #include <thread>
 #include <chrono>
 #include "seasons.h"
+#include "utils/thread_pool.h"
+#include "utils/works_utils.h"
+#include <atomic>
 
 #define MAP_CONTAINER_DESCRIPTOR_POOL_NAME "map_container_descriptor_pool"
 
 namespace devils_engine {
   namespace core {
+    static_assert(sizeof(std::atomic<uint32_t>) == sizeof(uint32_t));
+    static_assert(alignof(std::atomic<uint32_t>) == alignof(uint32_t));
+    
+    struct c_tile_data {
+      std::atomic<uint32_t> data[2][4];
+      
+      c_tile_data() : data{{GPU_UINT_MAX, GPU_UINT_MAX, GPU_UINT_MAX, GPU_UINT_MAX}, {GPU_UINT_MAX, GPU_UINT_MAX, GPU_UINT_MAX, GPU_UINT_MAX}} {}
+    };
+    
+    static_assert(sizeof(c_tile_data) == sizeof(render::additional_data_t));
+    static_assert(alignof(c_tile_data) == alignof(render::additional_data_t));
+    
     map::map(const create_info &info) : 
       device(info.device),
       points(nullptr),
@@ -20,6 +35,8 @@ namespace devils_engine {
       provinces(nullptr),
       faiths(nullptr),
       cultures(nullptr),
+      free_army_slot(UINT32_MAX),
+      armies_count(0),
       s(status::initial)
     {
       const uint32_t accel_triangles_count = tri_count_d(accel_struct_detail_level);
@@ -47,7 +64,27 @@ namespace devils_engine {
         VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT
       ), VMA_MEMORY_USAGE_GPU_ONLY);
       
+      tile_object_indices = device->create(yavf::BufferCreateInfo::buffer(
+        sizeof(c_tile_data) * tiles_count,
+        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
+      ), VMA_MEMORY_USAGE_CPU_ONLY);
+      
+      army_data_buffer = device->create(yavf::BufferCreateInfo::buffer(
+        sizeof(render::army_data_t) * 16,
+        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
+      ), VMA_MEMORY_USAGE_CPU_ONLY);
+      
       memset(tile_indices->ptr(), 0, tile_indices->info().size);
+      using array_data_type = c_tile_data;
+      auto object_indices = reinterpret_cast<array_data_type*>(tile_object_indices->ptr());
+      const uint32_t vec_count = sizeof(array_data_type) / sizeof(glm::uvec4);
+      for (size_t i = 0; i < tiles_count; ++i) {
+        for (uint32_t j = 0; j < vec_count; ++j) {
+          for (uint32_t k = 0; k < 4; ++k) {
+            object_indices[i].data[j][k] = GPU_UINT_MAX;
+          }
+        }
+      }
       
       size_t accum = 0;
       for (uint32_t i = 0; i < detail_level; ++i) {
@@ -56,6 +93,7 @@ namespace devils_engine {
       accum += tri_count_d(detail_level);
       
       triangles.resize(accum);
+      triangles_data.resize(accum);
       
       yavf::DescriptorSetLayout tiles_data_layout = device->setLayout(TILES_DATA_LAYOUT_NAME);
       if (tiles_data_layout == VK_NULL_HANDLE) {
@@ -66,6 +104,8 @@ namespace devils_engine {
                                .binding(3, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_ALL)
                                .binding(4, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_ALL)
                                .binding(5, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_ALL)
+                               .binding(6, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_ALL)
+                               .binding(7, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_ALL)
                                .create(TILES_DATA_LAYOUT_NAME);
       }
       
@@ -85,6 +125,8 @@ namespace devils_engine {
                        tiles_set->add({accel_triangles, 0, accel_triangles->info().size, 0, 3, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER});
                        tiles_set->add({tile_indices, 0, tile_indices->info().size, 0, 4, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER});
                        tiles_set->add({structures, 0, structures->info().size, 0, 5, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER});
+                       tiles_set->add({tile_object_indices, 0, tile_object_indices->info().size, 0, 6, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER});
+                       tiles_set->add({army_data_buffer, 0, army_data_buffer->info().size, 0, 7, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER});
         tiles_set->update();
         tiles->setDescriptor(tiles_set, index);
       }
@@ -97,6 +139,8 @@ namespace devils_engine {
       device->destroy(biomes);
       device->destroy(tile_indices);
       device->destroy(structures);
+      device->destroy(tile_object_indices);
+      device->destroy(army_data_buffer);
       device->destroyDescriptorPool(MAP_CONTAINER_DESCRIPTOR_POOL_NAME);
 //       device->destroy(provinces);
 //       device->destroy(faiths);
@@ -470,9 +514,9 @@ namespace devils_engine {
       const local_vec4 point1_normal = local_vec4(local_vec3(point1) / local_float(world_radius), 0.0f);
       const local_vec4 point2_normal = local_vec4(local_vec3(point2) / local_float(world_radius), 0.0f);
       const local_vec4 point3_normal = local_vec4(local_vec3(point3) / local_float(world_radius), 0.0f);
-      const local_vec4 point4 = point1_normal * local_float(world_radius + local_float(maximum_world_elevation) * 20.0); // так по каким то причинам получше
-      const local_vec4 point5 = point2_normal * local_float(world_radius + local_float(maximum_world_elevation) * 20.0); // 
-      const local_vec4 point6 = point3_normal * local_float(world_radius + local_float(maximum_world_elevation) * 20.0);
+      const local_vec4 point4 = local_vec4(local_vec3(point1_normal) * local_float(world_radius + local_float(maximum_world_elevation) * 20.0), 1.0f); // так по каким то причинам получше
+      const local_vec4 point5 = local_vec4(local_vec3(point2_normal) * local_float(world_radius + local_float(maximum_world_elevation) * 20.0), 1.0f); // 
+      const local_vec4 point6 = local_vec4(local_vec3(point3_normal) * local_float(world_radius + local_float(maximum_world_elevation) * 20.0), 1.0f);
       
       // не все треугольники я могу проверить таким образом, почему?
       // ошибки с float'ом? вряд ли, треугольники были направлены в неверную сторону
@@ -552,6 +596,357 @@ namespace devils_engine {
       }
 
       return false;
+    }
+    
+#define INTERSECT 2
+#define INSIDE 1
+#define OUTSIDE 0
+
+    int test_hierarchic_triangle(const std::initializer_list<glm::vec4> &triangles, const map::aabb &box) {
+      int result = INSIDE;
+      for (size_t i = 0; i < triangles.size(); ++i) {
+        const glm::vec4 plane = glm::vec4(triangles.begin()[i][0], triangles.begin()[i][1], triangles.begin()[i][2], 0.0f);
+        const float p3 = triangles.begin()[i][3];
+
+        const float d = glm::dot(box.pos,      plane);
+
+        const float r = glm::dot(box.extents, glm::abs(plane));
+
+        const float d_p_r = d + r;
+        const float d_m_r = d - r;
+
+        //frustumPlane.w
+        if (d_p_r < -p3) {
+          result = OUTSIDE;
+          break;
+        } else if (d_m_r < -p3) result = INTERSECT;
+      }
+
+      return result;
+    }
+    
+    size_t map::add_object(const object &obj) {
+      static const std::function<size_t(const uint32_t &, const object &)> req_func = [this] (const uint32_t &index, const object &obj) {
+        ASSERT(index < triangles.size());
+        const auto &tri = triangles[index];
+        
+        // нужно найти 5 нормалей
+        // а хотя нужно проверить 3 треугольника на самом деле
+        // что делать в случае если объект стоит на перечении? хороший вопрос, 
+        // если с нижними уровнями понятно что мы просто пихаем наверх, то 
+        // что делать с объектами которые не попадают в первые треугольники?
+        // добавлять в какой нибудь, так как скорее всего и луч и фрустум заденут объект 
+        
+        auto points_arr = reinterpret_cast<glm::vec4*>(points->ptr());
+        
+        using local_vec4 = glm::vec4;
+        using local_vec3 = glm::vec3;
+        using local_float = float;
+        
+        const local_vec4 point1 = points_arr[tri.points[0]];
+        const local_vec4 point2 = points_arr[tri.points[1]];
+        const local_vec4 point3 = points_arr[tri.points[2]];
+        
+        const local_vec4 point1_normal = local_vec4(local_vec3(point1) / local_float(world_radius), 0.0f);
+        const local_vec4 point2_normal = local_vec4(local_vec3(point2) / local_float(world_radius), 0.0f);
+//         const local_vec4 point3_normal = local_vec4(local_vec3(point3) / local_float(world_radius), 0.0f);
+        const local_vec4 point4 = local_vec4(local_vec3(point1_normal) * local_float(world_radius + local_float(maximum_world_elevation) * 20.0), 1.0f); // так по каким то причинам получше
+        const local_vec4 point5 = local_vec4(local_vec3(point2_normal) * local_float(world_radius + local_float(maximum_world_elevation) * 20.0), 1.0f); // 
+//         const local_vec4 point6 = local_vec4(local_vec3(point3_normal) * local_float(world_radius + local_float(maximum_world_elevation) * 20.0), 1.0f);
+        
+        // 3 треугольника
+        
+        ASSERT(glm::cross(glm::vec3(1.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f)) == glm::vec3(0.0f, 0.0f, 1.0f));
+        
+        if (tri.current_level != detail_level) {
+          const auto normal1 = surface_normal(std::tie(point1, point4, point3)); // glm::normalize(
+          const auto normal2 = surface_normal(std::tie(point1, point4, point2));
+          const auto normal3 = surface_normal(std::tie(point2, point3, point5));
+          
+          const local_float d1 = glm::dot(normal1, point1);
+          const local_float d2 = glm::dot(normal2, point1);
+          const local_float d3 = glm::dot(normal3, point2);
+          
+          const auto normal1d = glm::vec4(glm::vec3(normal1), d1);
+          const auto normal2d = glm::vec4(glm::vec3(normal2), d2);
+          const auto normal3d = glm::vec4(glm::vec3(normal3), d3);
+          
+          const int ret = test_hierarchic_triangle({normal1d, normal2d, normal3d}, obj.aabb);
+          
+          if (ret == OUTSIDE) return SIZE_MAX;
+          
+          if (ret == INSIDE) {
+            for (uint32_t j = 0; j < 4; ++j) {
+              const uint32_t triangle_index = tri.next_level[j];
+              const size_t ret = req_func(triangle_index, obj);
+              if (ret != SIZE_MAX) return ret;
+            }
+          }
+        }
+        
+        // по идее можно добавить в первый пересекающий треугольник
+        
+        ASSERT(index < triangles_data.size());
+        for (size_t j = 0; j < triangles_data[index].size(); ++j) {
+          if (triangles_data[index][j].user_data == nullptr) {
+            triangles_data[index][j] = obj;
+            const size_t ret = (size_t(index) << 32) | j;
+            return ret;
+          }
+        }
+        
+        const size_t new_index = triangles_data[index].size();
+        triangles_data[index].push_back(obj);
+        const size_t ret = (size_t(index) << 32) | new_index;
+        return ret;
+      };
+      
+      ASSERT(obj.user_data != nullptr);
+      // тут нужно обойти все фигуры
+      
+      const uint32_t current_detail_level = 0;
+      for (size_t i = 0; i < 20*power4(current_detail_level); ++i) {
+        const uint32_t triangle_index = i;
+        const size_t ret = req_func(triangle_index, obj);
+        if (ret != SIZE_MAX) return ret;
+      }
+      
+      return SIZE_MAX;
+    }
+    
+    void map::remove_object(const size_t &place) {
+      const uint32_t tri_index = uint32_t(place >> 32);
+      const uint32_t obj_index = uint32_t(place);
+      
+      ASSERT(triangles.size() == triangles_data.size());
+      
+      if (tri_index >= triangles.size()) throw std::runtime_error("Bad object removing");
+      if (obj_index >= triangles_data[tri_index].size()) throw std::runtime_error("Bad object removing");
+      if (triangles_data[tri_index][obj_index].user_data == nullptr) throw std::runtime_error("Could not find object at this place");
+      
+      triangles_data[tri_index][obj_index].user_data = nullptr;
+    }
+    
+    bool test_ray_aabb(const utils::ray &ray, const map::aabb &box, float &dist) {
+      const glm::vec4 box_max = box.pos + box.extents;
+      const glm::vec4 box_min = box.pos - box.extents;
+      
+      const auto ray_inv_dir = 1.0f / ray.dir;
+      float t1 = (box_min[0] - ray.pos[0])*ray_inv_dir[0];
+      float t2 = (box_max[0] - ray.pos[0])*ray_inv_dir[0];
+
+      float tmin = glm::min(t1, t2);
+      float tmax = glm::max(t1, t2);
+
+      for (int i = 1; i < 3; ++i) {
+          t1 = (box_min[i] - ray.pos[i])*ray_inv_dir[i];
+          t2 = (box_max[i] - ray.pos[i])*ray_inv_dir[i];
+
+          tmin = glm::max(tmin, glm::min(glm::min(t1, t2), tmax));
+          tmax = glm::min(tmax, glm::max(glm::max(t1, t2), tmin));
+      }
+      
+      if (tmax > glm::max(tmin, 0.0f)) {
+        dist = tmin > 0.0f ? tmin : tmax;
+        return true;
+      }
+      
+      return false;
+    }
+    
+    void* map::cast_ray_object(const utils::ray &ray, float &dist) const {
+      // тут мы делаем то же самое что и в случае с тайлами
+      // только проверяем боксы вместо тайлов
+      
+      static const std::function<void*(const utils::ray &ray, const uint32_t &tri_index, float &distance)> reck = [this] (const utils::ray &ray, const uint32_t &tri_index, float &distance) -> void* {
+        const bool ret = intersect_container(tri_index, ray);
+        if (!ret) return nullptr;
+        
+        const triangle &tri = triangles[tri_index];
+        
+        const uint32_t level = tri.current_level;
+        
+        float global_dist = MAX_VALUE;
+        void* global_obj = nullptr;
+        if (level != detail_level) {
+          for (size_t i = 0; i < 4; ++i) {
+            const uint32_t tri_index = tri.next_level[i];
+            
+            float dist = MAX_VALUE;
+            void* obj = reck(ray, tri_index, dist);
+            
+            if (obj == nullptr) continue;
+            
+            if (dist < global_dist) {
+              global_dist = dist;
+              global_obj = obj;
+            }
+          }
+        }
+        
+        for (size_t i = 0; i < triangles_data[tri_index].size(); ++i) {
+          float dist = 1000000.0f;
+          const bool ret = test_ray_aabb(ray, triangles_data[tri_index][i].aabb, dist);
+          
+          if (ret && dist < global_dist) {
+            global_dist = dist;
+            global_obj = triangles_data[tri_index][i].user_data;
+          }
+        }
+        
+        distance = global_dist;
+        return global_obj;
+      };
+      
+      void* object_ptr = nullptr;
+      float distance = 1000000.0f;
+      for (size_t i = 0; i < 20*power4(0); ++i) {
+        float d = 1000000.0f;
+        void* ptr = reck(ray, i, d);
+        
+        if (d < distance) {
+          distance = d;
+          object_ptr = ptr;
+        }
+      }
+      
+      if (distance < dist) {
+        dist = distance;
+        return object_ptr;
+      }
+      
+      return nullptr;
+    }
+    
+    bool map::test_triangle_frustum(const uint32_t &tri_index, const utils::frustum &frustum) const {
+      const auto &tri = triangles[tri_index];
+      auto points_arr = reinterpret_cast<glm::vec4*>(points->ptr());
+        
+      using local_vec4 = glm::vec4;
+      using local_vec3 = glm::vec3;
+      using local_float = float;
+      
+      local_vec4 points_vec[6];
+      points_vec[0] = points_arr[tri.points[0]];
+      points_vec[1] = points_arr[tri.points[1]];
+      points_vec[2] = points_arr[tri.points[2]];
+      
+      const local_vec4 point1_normal = local_vec4(local_vec3(points_vec[0]) / local_float(world_radius), 0.0f);
+      const local_vec4 point2_normal = local_vec4(local_vec3(points_vec[1]) / local_float(world_radius), 0.0f);
+      const local_vec4 point3_normal = local_vec4(local_vec3(points_vec[2]) / local_float(world_radius), 0.0f);
+      points_vec[3] = glm::vec4(glm::vec3(point1_normal) * local_float(world_radius + local_float(maximum_world_elevation) * 20.0), 1.0f); // так по каким то причинам получше
+      points_vec[4] = glm::vec4(glm::vec3(point2_normal) * local_float(world_radius + local_float(maximum_world_elevation) * 20.0), 1.0f); // 
+      points_vec[5] = glm::vec4(glm::vec3(point3_normal) * local_float(world_radius + local_float(maximum_world_elevation) * 20.0), 1.0f);
+      
+      local_vec4 min = points_vec[0], max = points_vec[0];
+      for (uint32_t i = 1; i < 6; ++i) {
+        min = glm::min(min, points_vec[i]);
+        max = glm::max(max, points_vec[i]);
+      }
+      
+      const aabb box{
+                (max + min) / 2.0f,
+        glm::abs(max - min) / 2.0f
+      };
+      
+      ASSERT(box.pos.w == 1.0f);
+      ASSERT(box.extents.w == 0.0f);
+      
+      const int ret = test_hierarchic_triangle({
+        frustum.planes[0],
+        frustum.planes[1],
+        frustum.planes[2],
+        frustum.planes[3],
+        frustum.planes[4],
+        frustum.planes[5]
+      }, box);
+      
+      return ret != OUTSIDE;
+    }
+    
+    // эта функция рискует оказаться довольно тяжелой
+    int32_t map::frustum_culling(const utils::frustum &frustum, std::vector<void*> &objects) const {
+      // тут нам потребуется мультитрединг, для этого нам всего лишь нужно правильно увеличить размер массива
+      
+      static const std::function<void(const uint32_t &tri_index, const utils::frustum &frustum, const size_t &max_count, std::atomic<size_t> &counter, std::vector<void*> &objects)> req_func = 
+        [this] (const uint32_t &tri_index, const utils::frustum &frustum, const size_t &max_count, std::atomic<size_t> &counter, std::vector<void*> &objects) {
+        // 1. проверяем треугольник на фрустум
+        // 2. обходим треугольники ниже по иерархии
+        // 3. проверяем все объекты
+        
+        const bool test = test_triangle_frustum(tri_index, frustum); // кажется не работает
+        if (!test) return;
+        
+        const auto &tri = triangles[tri_index];
+        if (tri.current_level != detail_level) {
+          for (uint32_t i = 0; i < 4; ++i) {
+            const uint32_t tri_index = tri.next_level[i];
+            req_func(tri_index, frustum, max_count, std::ref(counter), std::ref(objects));
+          }
+        }
+        
+        for (size_t i = 0; i < triangles_data[tri_index].size(); ++i) {
+          if (triangles_data[tri_index][i].user_data == nullptr) continue;
+          
+          const int ret = test_hierarchic_triangle({
+            frustum.planes[0],
+            frustum.planes[1],
+            frustum.planes[2],
+            frustum.planes[3],
+            frustum.planes[4],
+            frustum.planes[5]
+          }, triangles_data[tri_index][i].aabb);
+          
+          if (ret == OUTSIDE) continue;
+          
+          const size_t index = counter.fetch_add(1);
+          if (index >= max_count) return;
+          objects[index] = triangles_data[tri_index][i].user_data;
+        }
+      };
+      
+      auto pool = global::get<dt::thread_pool>();
+      std::atomic<size_t> counter(0);
+      const size_t max_count = objects.size(); // по идее мы можем взять эту инфу у вектора, а вектор увеличивать извне
+      
+//       for (size_t i = 0; i < 20*power4(0); ++i) {
+//         pool->submitnr(req_func, i, frustum, max_count, std::ref(counter), std::ref(objects));
+//       }
+//       
+//       pool->compute();
+//       pool->wait();
+      
+      // так получше работает, что странно
+      utils::submit_works(pool, triangles_data.size(), [&] (const size_t &start, const size_t &count) {
+        for (size_t i = start; i < start+count; ++i) {
+          for (size_t j = 0; j < triangles_data[i].size(); ++j) {
+            const auto &obj = triangles_data[i][j];
+            if (obj.user_data == nullptr) continue;
+            
+            // кажется работает, возможно просто нужно проверить треугольники как в шейдере
+            // а хотя зачем вообще я проверяю 2 раза? я же могу использовать данные предыдущего кадра
+            const int ret = test_hierarchic_triangle({
+              frustum.planes[0],
+              frustum.planes[1],
+              frustum.planes[2],
+              frustum.planes[3],
+              frustum.planes[4],
+              frustum.planes[5]
+            }, obj.aabb);
+            
+            if (ret == OUTSIDE) continue;
+            
+            const size_t index = counter.fetch_add(1);
+            if (index >= max_count) return;
+            objects[index] = obj.user_data;
+          }
+        }
+      });
+      
+      // неплохо было бы вернуть на сколько необходимо увеличить размер, не, наверное так себе идея
+      // нужно выходить если недостаточно места в буфере
+      if (counter >= max_count) return -1;
+      return counter;
     }
     
     const render::light_map_tile_t map::get_tile(const uint32_t &index) const {
@@ -672,6 +1067,8 @@ namespace devils_engine {
         tiles_set->at(3) = {accel_triangles, 0, accel_triangles->info().size, 0, 3, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER};
         tiles_set->at(4) = {tile_indices, 0, tile_indices->info().size, 0, 4, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER};
         tiles_set->at(5) = {structures, 0, structures->info().size, 0, 5, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER};
+        tiles_set->at(6) = {tile_object_indices, 0, tile_object_indices->info().size, 0, 6, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER};
+        tiles_set->at(7) = {army_data_buffer, 0, army_data_buffer->info().size, 0, 7, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER};
         tiles_set->update();
         
 //         yavf::DescriptorMaker dm(device);
@@ -708,6 +1105,8 @@ namespace devils_engine {
       tiles_set->at(3) = {accel_triangles, 0, accel_triangles->info().size, 0, 3, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER};
       tiles_set->at(4) = {tile_indices, 0, tile_indices->info().size, 0, 4, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER};
       tiles_set->at(5) = {structures, 0, structures->info().size, 0, 5, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER};
+      tiles_set->at(6) = {tile_object_indices, 0, tile_object_indices->info().size, 0, 6, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER};
+      tiles_set->at(7) = {army_data_buffer, 0, army_data_buffer->info().size, 0, 7, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER};
       tiles_set->update();
     }
     
@@ -765,6 +1164,122 @@ namespace devils_engine {
       std::unique_lock<std::mutex> lock(mutex);
       auto tiles_arr = reinterpret_cast<render::light_map_tile_t*>(tiles->ptr());
       tiles_arr[tile_index].packed_data4[1] = packed_connections_data;
+    }
+    
+    uint32_t map::get_tile_objects_index(const uint32_t &tile_index, const uint32_t &data_index) const {
+      //using array_data_type = render::additional_data_t;
+      using array_data_type = c_tile_data;
+      
+      ASSERT(tile_index < tiles_count());
+      const uint32_t data_count = sizeof(array_data_type) / sizeof(uint32_t);
+      ASSERT(data_index < data_count);
+      const uint32_t lesser_data_count = sizeof(glm::uvec4) / sizeof(uint32_t);
+      auto array = reinterpret_cast<array_data_type*>(tile_object_indices->ptr());
+      
+      const uint32_t index1 = data_index / lesser_data_count;
+      const uint32_t index2 = data_index % lesser_data_count;
+      
+      return array[tile_index].data[index1][index2];
+    }
+    
+    void map::set_tile_objects_index(const uint32_t &tile_index, const uint32_t &data_index, const uint32_t &data) {
+      //using array_data_type = render::additional_data_t;
+      using array_data_type = c_tile_data;
+      
+      ASSERT(tile_index < tiles_count());
+      const uint32_t data_count = sizeof(array_data_type) / sizeof(uint32_t);
+      ASSERT(data_index < data_count);
+      const uint32_t lesser_data_count = sizeof(glm::uvec4) / sizeof(uint32_t);
+      
+      auto array = reinterpret_cast<array_data_type*>(tile_object_indices->ptr());
+      const uint32_t index1 = data_index / lesser_data_count;
+      const uint32_t index2 = data_index % lesser_data_count;
+      
+      array[tile_index].data[index1][index2] = data;
+    }
+    
+    bool map::tile_objects_index_comp_swap(const uint32_t &tile_index, const uint32_t &data_index, uint32_t &comp, const uint32_t &data) {
+      using array_data_type = c_tile_data;
+      
+      ASSERT(tile_index < tiles_count());
+      const uint32_t data_count = sizeof(array_data_type) / sizeof(uint32_t);
+      ASSERT(data_index < data_count);
+      const uint32_t lesser_data_count = sizeof(glm::uvec4) / sizeof(uint32_t);
+      
+      auto array = reinterpret_cast<array_data_type*>(tile_object_indices->ptr());
+      const uint32_t index1 = data_index / lesser_data_count;
+      const uint32_t index2 = data_index % lesser_data_count;
+      
+      return array[tile_index].data[index1][index2].compare_exchange_strong(comp, data);
+    }
+    
+    uint32_t map::allocate_army_data() {
+      auto data_ptr = reinterpret_cast<render::army_data_t*>(army_data_buffer->ptr());
+      if (free_army_slot != UINT32_MAX) {
+        const uint32_t next_index = glm::floatBitsToUint(data_ptr[free_army_slot].data.w);
+        const uint32_t current_index = free_army_slot;
+        free_army_slot = next_index;
+        
+        data_ptr[current_index].data = glm::vec4(0.0f, 0.0f, 0.0f, glm::uintBitsToFloat(UINT32_MAX));
+        return current_index;
+      }
+      
+      const uint32_t current_index = armies_count;
+      ++armies_count;
+      
+      if (current_index * sizeof(render::army_data_t) >= army_data_buffer->info().size) {
+        const size_t prev_size = army_data_buffer->info().size;
+        auto ptr = new char[prev_size];
+        memcpy(ptr, data_ptr, prev_size);
+        army_data_buffer->resize(prev_size*2);
+        data_ptr = reinterpret_cast<render::army_data_t*>(army_data_buffer->ptr());
+        memcpy(data_ptr, ptr, prev_size);
+        delete [] ptr;
+        
+        tiles_set->at(7) = {army_data_buffer, 0, army_data_buffer->info().size, 0, 7, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER};
+        tiles_set->update(7);
+      }
+      
+      data_ptr[current_index].data = glm::vec4(0.0f, 0.0f, 0.0f, glm::uintBitsToFloat(UINT32_MAX));
+      return current_index;
+    }
+    
+    void map::release_army_data(const uint32_t &index) {
+      ASSERT(index * sizeof(render::army_data_t) < army_data_buffer->info().size); 
+      ASSERT(index < armies_count);
+      auto data_ptr = reinterpret_cast<render::army_data_t*>(army_data_buffer->ptr());
+      data_ptr[index].data.w = glm::uintBitsToFloat(free_army_slot);
+      free_army_slot = index;
+    }
+    
+    void map::set_army_pos(const uint32_t &index, const glm::vec3 &pos) {
+      ASSERT(index * sizeof(render::army_data_t) < army_data_buffer->info().size); 
+      ASSERT(index < armies_count);
+      auto data_ptr = reinterpret_cast<render::army_data_t*>(army_data_buffer->ptr());
+      data_ptr[index].data.x = pos.x;
+      data_ptr[index].data.y = pos.y;
+      data_ptr[index].data.z = pos.z;
+    }
+    
+    void map::set_army_image(const uint32_t &index, const render::image_t &img) {
+      ASSERT(index * sizeof(render::army_data_t) < army_data_buffer->info().size); 
+      ASSERT(index < armies_count);
+      auto data_ptr = reinterpret_cast<render::army_data_t*>(army_data_buffer->ptr());
+      data_ptr[index].data.w = glm::uintBitsToFloat(img.container);
+    }
+    
+    glm::vec3 map::get_army_pos(const uint32_t &index) const {
+      ASSERT(index * sizeof(render::army_data_t) < army_data_buffer->info().size); 
+      ASSERT(index < armies_count);
+      auto data_ptr = reinterpret_cast<render::army_data_t*>(army_data_buffer->ptr());
+      return glm::vec3(data_ptr[index].data.x, data_ptr[index].data.y, data_ptr[index].data.z);
+    }
+    
+    render::image_t map::get_army_image(const uint32_t &index) const {
+      ASSERT(index * sizeof(render::army_data_t) < army_data_buffer->info().size); 
+      ASSERT(index < armies_count);
+      auto data_ptr = reinterpret_cast<render::army_data_t*>(army_data_buffer->ptr());
+      return {glm::floatBitsToUint(data_ptr[index].data.w)};
     }
     
     float map::get_tile_height(const uint32_t &tile_index) const {
@@ -838,5 +1353,3 @@ namespace devils_engine {
 #endif
   }
 }
-
-

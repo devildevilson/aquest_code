@@ -2,6 +2,7 @@
 #define FIGURES_H
 
 #include "utils/utility.h"
+#include "utils/frustum.h"
 #include <vector>
 #include <unordered_map>
 #include <unordered_set>
@@ -26,9 +27,7 @@ namespace devils_engine {
 //       glm::vec3 dir;
 //     };
 
-    struct frustum {
-      glm::vec4 planes[6];
-    };
+    
 
 //     class timer {
 //     public:
@@ -43,7 +42,6 @@ namespace devils_engine {
 //       std::string str;
 //     };
     
-    utils::frustum compute_frustum(const glm::mat4 &matrix);
   }
 
   namespace map {

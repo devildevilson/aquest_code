@@ -107,6 +107,9 @@ struct nk_context;
 #define MODIFIERS_ARRAY "modifiers_array"
 #define STAT_ID "stat"
 #define INDEX_ARRAY "index_array"
+#define COLOR_ARRAY "color_array"
+#define VEC4_ARRAY "vec4_array"
+#define NUM_ARRAY "num_array"
 
 namespace devils_engine {
   namespace utils {

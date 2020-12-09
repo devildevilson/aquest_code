@@ -22,6 +22,7 @@
 #include "utils/main_menu.h"
 #include "utils/quest_states.h"
 #include "utils/settings.h"
+#include "utils/astar_search.h"
 //#include "utils/perlin.h"
 #include "FastNoise.h"
 
@@ -38,6 +39,7 @@
 #include "ai/sub_system.h"
 #include "ai/build_subsystem.h"
 #include "ai/ai_system.h"
+#include "ai/path_container.h"
 
 #include "figures.h"
 #include "camera.h"
@@ -59,6 +61,8 @@
 #include "game_time.h"
 #include "logic.h"
 #include "seasons.h"
+#include "tiles_funcs.h"
+#include "objects_selector.h"
 
 #include <set>
 #include <vector>
@@ -85,10 +89,11 @@ namespace devils_engine {
   void poll_events();
   void return_cursor();
   
-  void keys_setup();
-  void mouse_input(components::camera* camera, const size_t &time);
+  void keys_setup(); // это не работает !!!!!!!! функционал перенесен в сеттингс
+  void mouse_input(components::camera* camera, const size_t &time, const uint32_t &casted_tile_index);
   void key_input(const size_t &time, const uint32_t &current_state, const bool loading);
   void zoom_input(components::camera* camera);
+  glm::vec4 get_cursor_dir(render::buffers* buffers, render::window* window, const double xpos, const double ypos);
   uint32_t cast_mouse_ray();
   void draw_tooltip(const uint32_t &index, const sol::function &tile_func);
   void next_nk_frame(const size_t &time);
@@ -107,6 +112,8 @@ namespace devils_engine {
   void sync(utils::frame_time &frame_time, const size_t &time);
   
   void check_tile(const map::container* map, const uint32_t &tile_index);
+  
+  void advance_army(core::army* army);
 
   void callback(int error, const char* description);
   int lua_panic(lua_State* s);

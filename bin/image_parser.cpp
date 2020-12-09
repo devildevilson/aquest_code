@@ -107,7 +107,7 @@ namespace devils_engine {
     };
     
     void add_image(const sol::table &table) {
-      global::get<utils::table_container>()->add_image_table(table);
+      global::get<utils::table_container>()->add_table(utils::table_container::additional_data::image, table);
     }
     
     bool validate_image(const uint32_t &index, const sol::table &table) {

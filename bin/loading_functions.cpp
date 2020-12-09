@@ -20,6 +20,7 @@
 #include "render/yavf.h"
 #include "game_time.h"
 #include "image_parser.h"
+#include "heraldy_parser.h"
 
 #include "render/image_container.h"
 #include "render/image_controller.h"
@@ -104,6 +105,7 @@ namespace devils_engine {
         map::default_generator_pairs[16],
         map::default_generator_pairs[17],
         map::default_generator_pairs[18],
+        map::default_generator_pairs[22], // геральдики
         map::default_generator_pairs[19],
         map::default_generator_pairs[20],
         map::default_generator_pairs[21],
@@ -124,6 +126,146 @@ namespace devils_engine {
 //     }
 //   }
 
+  void make_random_player_character() {
+    auto ctx = global::get<systems::map_t>()->core_context;
+    const size_t chars_count = ctx->characters_count();
+    utils::rng::state s = {67586, 987699695};
+    s = utils::rng::next(s);
+    const double val = utils::rng::normalize(utils::rng::value(s));
+    const size_t index = chars_count * val;
+    auto c = ctx->get_character(index);
+    c->make_player();
+    game::update_player(c);
+    
+    auto title = c->factions[core::character::self]->titles;
+    core::city* city = nullptr;
+    while (title != nullptr) {
+      title->heraldy = 1;
+      if (city == nullptr && title->type == core::titulus::type::city) city = title->get_city();
+      title = title->next;
+    }
+    
+    ASSERT(city != nullptr);
+    const uint32_t city_tile_index = city->tile_index;
+    
+    auto map = global::get<systems::map_t>()->map;
+//     const auto data = map->get_tile_objects_indices(tile_index);
+//     map->set_tile_objects_indices(tile_index, glm::uvec4(data.x, 1, data.z, data.w));
+    {
+      std::unique_lock<std::mutex> lock(map->mutex);
+      map->set_tile_objects_index(city_tile_index, 1, 1);
+    }
+    // сработало, и камера еще довольно удачно встает
+    // камеру стоит расчитывать при старте карты
+    
+    // создаем две армии, пока что нет никакой принадлежности у армий
+    auto army1 = ctx->create_army();
+    auto army2 = ctx->create_army();
+    // их нужно расположить рядом с городом игрока
+    auto province = city->province;
+    uint32_t army_tile1 = UINT32_MAX;
+    uint32_t army_tile2 = UINT32_MAX;
+    uint32_t attempts = 0;
+    while ((army_tile1 == UINT32_MAX || army_tile2 == UINT32_MAX) && attempts < 100) {
+      s = utils::rng::next(s);
+      const double val = utils::rng::normalize(utils::rng::value(s));
+      ++attempts;
+      ASSERT(province->tiles.size() != 0);
+      const uint32_t rand_index = (province->tiles.size()-1) * val;
+      const uint32_t tile_index = province->tiles[rand_index];
+      const float height = map->get_tile_height(tile_index);
+      if (height < 0.0f) continue;
+      if (height > 0.5f) continue;
+      
+      if (army_tile1 == UINT32_MAX) army_tile1 = tile_index;
+      if (army_tile1 != tile_index) army_tile2 = tile_index;
+    }
+    
+    ASSERT(army_tile1 != UINT32_MAX);
+    ASSERT(army_tile2 != UINT32_MAX);
+    
+    army1->tile_index = army_tile1;
+    army2->tile_index = army_tile2;
+    
+    {
+      const auto tile_data = map->get_tile(army_tile1);
+      const uint32_t point_index = tile_data.tile_indices.x;
+      const glm::vec4 center = map->get_point(point_index);
+      const glm::vec4 normal = glm::normalize(glm::vec4(glm::vec3(center), 0.0f));
+      const float height = map->get_tile_height(army_tile1);
+      
+      const glm::vec4 final_point = center + normal * (height + 1.0f);
+      army1->set_pos(glm::vec3(final_point));
+      
+//       PRINT_VEC3("army1", final_point)
+    }
+    
+    {
+      const auto tile_data = map->get_tile(army_tile2);
+      const uint32_t point_index = tile_data.tile_indices.x;
+      const glm::vec4 center = map->get_point(point_index);
+      const glm::vec4 normal = glm::normalize(glm::vec4(glm::vec3(center), 0.0f));
+      const float height = map->get_tile_height(army_tile2);
+      
+      const glm::vec4 final_point = center + normal * (height + 1.0f);
+      army2->set_pos(glm::vec3(final_point));
+      
+//       PRINT_VEC3("army2", final_point)
+    }
+    
+    auto img_cont = global::get<systems::core_t>()->image_controller;
+    auto view = img_cont->get_view("hero_img");
+    
+    army1->set_img(view->get_image(0, false, false));
+    army2->set_img(view->get_image(0, false, false));
+    
+    std::unique_lock<std::mutex> lock(map->mutex);
+    map->set_tile_objects_index(army_tile1, 4, army1->army_gpu_slot);
+    map->set_tile_objects_index(army_tile2, 4, army2->army_gpu_slot);
+    
+    {
+      const uint32_t testing_tile = 317116;
+      const auto &tile_data = render::unpack_data(map->get_tile(testing_tile));
+      const uint32_t n_count = render::is_pentagon(tile_data) ? 5 : 6;
+      PRINT_VAR("tile index ", testing_tile)
+      PRINT_VAR("n_count    ", n_count)
+      for (uint32_t i = 0; i < n_count; ++i) {
+        const uint32_t n_index = tile_data.neighbours[i];
+        PRINT_VAR("neighbour  " + std::to_string(i), n_index)
+        const auto &n_tile_data = render::unpack_data(map->get_tile(n_index));
+        const uint32_t n_n_count = render::is_pentagon(tile_data) ? 5 : 6;
+        bool found = false;
+        for (uint32_t j = 0; j < n_n_count; ++j) {
+          const uint32_t n_index = n_tile_data.neighbours[j];
+          if (n_index == testing_tile) found = true;
+        }
+        
+        ASSERT(found);
+      }
+    }
+    
+    {
+      const uint32_t testing_tile = 318586;
+      const auto &tile_data = render::unpack_data(map->get_tile(testing_tile));
+      const uint32_t n_count = render::is_pentagon(tile_data) ? 5 : 6;
+      PRINT_VAR("tile index ", testing_tile)
+      PRINT_VAR("n_count    ", n_count)
+      for (uint32_t i = 0; i < n_count; ++i) {
+        const uint32_t n_index = tile_data.neighbours[i];
+        PRINT_VAR("neighbour  " + std::to_string(i), n_index)
+        const auto &n_tile_data = render::unpack_data(map->get_tile(n_index));
+        const uint32_t n_n_count = render::is_pentagon(tile_data) ? 5 : 6;
+        bool found = false;
+        for (uint32_t j = 0; j < n_n_count; ++j) {
+          const uint32_t n_index = n_tile_data.neighbours[j];
+          if (n_index == testing_tile) found = true;
+        }
+        
+        ASSERT(found);
+      }
+    }
+  }
+
   void copy_structure_data(const core::context* context, const size_t &offset, core::map* map, yavf::Buffer* buffer) {
     std::unordered_map<const core::city_type*, uint32_t> type_map;
     auto buffer_data = reinterpret_cast<render::world_structure_t*>(buffer->ptr());
@@ -133,7 +275,7 @@ namespace devils_engine {
       buffer_data[index].city_image_top = city_type->city_image_top;
       buffer_data[index].city_image_face = city_type->city_image_face;
       buffer_data[index].scale = city_type->scale;
-      buffer_data[index].dummy = 0;
+      buffer_data[index].heraldy_layer_index = 0;
       
       type_map[city_type] = index;
     }
@@ -143,6 +285,19 @@ namespace devils_engine {
       const uint32_t struct_index = type_map[city->type];
       const uint32_t tile_index = city->tile_index;
       map->set_tile_structure_index(tile_index, struct_index);
+      auto title = city->title;
+      auto faction = title->owner;
+      core::titulus* first_city_title = nullptr;
+      auto first_title = faction->titles;
+      while (first_title != nullptr) {
+        if (first_title->type == core::titulus::type::city) first_city_title = first_title;
+        auto next = first_title->next;
+        first_title = next;
+      }
+      
+      //map->set_tile_objects_indices(tile_index, glm::uvec4(struct_index, title == first_city_title ? 0 : UINT32_MAX, 0, UINT32_MAX));
+      map->set_tile_objects_index(tile_index, 0, struct_index);
+      map->set_tile_objects_index(tile_index, 1, title == first_city_title ? 0 : UINT32_MAX);
     }
   }
 
@@ -1001,6 +1156,15 @@ namespace devils_engine {
         parsing_func(ptr, data[i]);
       }
     }
+    
+//     void register_heraldy_data(utils::table_container* tables) {
+//       auto to_data = global::get<utils::data_string_container>();
+//       
+//       const auto &datas = tables->get_tables(utils::table_container::additional_data::heraldy);
+//       for (const auto &table : datas) {
+//         
+//       }
+//     }
 
     void validate_and_create_data(systems::map_t* map_systems, utils::progress_container* prog) { //systems::core_t* systems,
       auto ctx = map_systems->core_context;
@@ -1008,6 +1172,8 @@ namespace devils_engine {
       auto tables = &creator->table_container();
       utils::data_string_container string_container;
       global::get(&string_container);
+      utils::numeric_string_container heraldy_container;
+      global::get(&heraldy_container);
 
       advance_progress(prog, "validating data"); // 1
 
@@ -1065,14 +1231,22 @@ namespace devils_engine {
         }
       }
       
-      const auto &image_data = tables->get_image_tables();
+      const auto &image_data = tables->get_tables(utils::table_container::additional_data::image);
       size_t counter = 0;
       for (const auto &table : image_data) {
         ret = ret && utils::validate_image_and_save(counter, lua.lua_state(), table, &cont);
         ++counter;
       }
       
+      const auto &heraldy_data = tables->get_tables(utils::table_container::additional_data::heraldy);
+      for (size_t i = 0; i < heraldy_data.size(); ++i) {
+        const auto &table = heraldy_data[i];
+        ret = ret && utils::validate_heraldy_layer_and_save(i, lua.lua_state(), table, &cont);
+      }
+      
       if (!ret) throw std::runtime_error("There is validation errors");
+      
+      auto device = global::get<systems::core_t>()->graphics_container->device;
       
       auto controller = global::get<systems::core_t>()->image_controller;
       global::get(controller);
@@ -1080,7 +1254,9 @@ namespace devils_engine {
         //utils::load_images(controller, image_data, static_cast<uint32_t>(render::image_controller::image_type::system));
         utils::load_images(controller, image_data, i);
       }
-      utils::load_biomes(controller, map_systems->seasons, tables->get_biome_tables());
+      utils::load_biomes(controller, map_systems->seasons, tables->get_tables(utils::table_container::additional_data::biome));
+      yavf::Buffer heraldy_tmp(device, yavf::BufferCreateInfo::buffer(16, VK_BUFFER_USAGE_TRANSFER_SRC_BIT), VMA_MEMORY_USAGE_CPU_ONLY);
+      utils::load_heraldy_layers(controller, heraldy_data, &heraldy_tmp);
       
       const auto &data = get_season_biomes_data(map_systems);
       
@@ -1125,7 +1301,7 @@ namespace devils_engine {
       // понятное дело делать отдельный сериализатор не сруки
       
       {
-        auto device = global::get<systems::core_t>()->graphics_container->device;
+        auto buffers = global::get<render::buffers>();
         const size_t structures_count = ctx->get_entity_count<core::city>();
         const size_t structure_data_size = ctx->get_entity_count<core::city_type>() * sizeof(render::world_structure_t);
         yavf::Buffer buf(device, yavf::BufferCreateInfo::buffer(structure_data_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT), VMA_MEMORY_USAGE_CPU_ONLY);
@@ -1133,16 +1309,19 @@ namespace devils_engine {
         map_systems->lock_map();
         copy_structure_data(ctx, 0, map, &buf);
         map->structures->resize(structure_data_size);
+        buffers->heraldy->resize(heraldy_tmp.info().size);
         
         auto task = device->allocateTransferTask();
         task->begin();
         task->copy(&buf, map->structures);
+        task->copy(&heraldy_tmp, buffers->heraldy);
         task->end();
         task->start();
         task->wait();
         device->deallocate(task);
         
         global::get<render::tile_optimizer>()->set_max_structures_count(structures_count);
+        global::get<render::tile_optimizer>()->set_max_heraldy_count(structures_count);
         map->flush_structures();
         map_systems->unlock_map();
       }
@@ -1226,6 +1405,7 @@ namespace devils_engine {
       //
 
       global::get(reinterpret_cast<utils::data_string_container*>(SIZE_MAX));
+      global::get(reinterpret_cast<utils::numeric_string_container*>(SIZE_MAX));
       global::get(reinterpret_cast<core::context*>(SIZE_MAX));
       global::get(reinterpret_cast<render::image_controller*>(SIZE_MAX));
       map_systems->render_modes->at(render::modes::biome)();
@@ -1264,14 +1444,7 @@ namespace devils_engine {
   //     create_ai_systems(systems);
       // нужно выбрать себе какого нибудь персонажа
       // кажется у меня сейчас все персонажи живы, так что можно любого
-      const size_t chars_count = ctx->characters_count();
-      utils::rng::state s = {67586, 987699695};
-      s = utils::rng::next(s);
-      const double val = utils::rng::normalize(utils::rng::value(s));
-      const size_t index = chars_count * val;
-      auto c = ctx->get_character(index);
-      c->make_player();
-      game::update_player(c);
+      make_random_player_character();
     }
 
     void load_map_data(core::map* map, utils::world_serializator* world) {
@@ -1496,6 +1669,23 @@ namespace devils_engine {
       
       return tables;
     }
+    
+    std::vector<sol::table> get_heraldy_layers_tables(const utils::world_serializator* w, sol::state_view state) {
+      std::vector<sol::table> tables;
+      for (size_t i = 0; i < w->get_heraldies_count(); ++i) {
+        auto ret = state.script("return " + std::string(w->get_heraldy_data(i)));
+        if (!ret.valid()) {
+          sol::error err = ret;
+          std::cout << err.what();
+          throw std::runtime_error("Could not load heraldy table");
+        }
+        
+        sol::table t = ret;
+        tables.push_back(t);
+      }
+      
+      return tables;
+    }
 
     void loading_world(systems::map_t* map_systems, utils::progress_container* prog, const std::string &world_path) {
       ASSERT(!world_path.empty());
@@ -1504,6 +1694,8 @@ namespace devils_engine {
       world_data.deserialize(world_path);
       utils::data_string_container to_data;
       global::get(&to_data);
+      utils::numeric_string_container heraldy_data_container;
+      global::get(&heraldy_data_container);
       global::get(map_systems->core_context);
 
       map_systems->world_name = world_data.get_name();
@@ -1520,9 +1712,11 @@ namespace devils_engine {
       // нужно создать непосредственно core map
       load_map_data(map_systems->map, &world_data);
       
+      auto device = global::get<systems::core_t>()->graphics_container->device;
       sol::state lua;
       advance_progress(prog, "loading images");
       const auto image_data = get_images_tables(&world_data, lua);
+      const auto heraldies_data = get_heraldy_layers_tables(&world_data, lua);
       auto controller = global::get<systems::core_t>()->image_controller;
       global::get(controller);
       for (size_t i = 0; i < static_cast<size_t>(render::image_controller::image_type::count); ++i) {
@@ -1530,6 +1724,8 @@ namespace devils_engine {
         utils::load_images(controller, image_data, i);
       }
       //utils::load_biomes(controller, map_systems->seasons, tables->get_biome_tables());
+      yavf::Buffer heraldy_tmp(device, yavf::BufferCreateInfo::buffer(16, VK_BUFFER_USAGE_TRANSFER_SRC_BIT), VMA_MEMORY_USAGE_CPU_ONLY);
+      utils::load_heraldy_layers(controller, heraldies_data, &heraldy_tmp);
 
       advance_progress(prog, "creating entities");
       create_entity_without_id<core::province>(map_systems->core_context, &world_data);
@@ -1573,8 +1769,8 @@ namespace devils_engine {
       map_systems->map->set_tile_biome(map_systems->seasons);
       
       {
+        auto buffers = global::get<render::buffers>();
         auto ctx = map_systems->core_context;
-        auto device = global::get<systems::core_t>()->graphics_container->device;
         const size_t structures_count = ctx->get_entity_count<core::city>();
         const size_t structure_data_size = ctx->get_entity_count<core::city_type>() * sizeof(render::world_structure_t);
         yavf::Buffer buf(device, yavf::BufferCreateInfo::buffer(structure_data_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT), VMA_MEMORY_USAGE_CPU_ONLY);
@@ -1582,16 +1778,19 @@ namespace devils_engine {
         map_systems->lock_map();
         copy_structure_data(ctx, 0, map, &buf);
         map->structures->resize(structure_data_size);
+        buffers->heraldy->resize(heraldy_tmp.info().size);
         
         auto task = device->allocateTransferTask();
         task->begin();
         task->copy(&buf, map->structures);
+        task->copy(&heraldy_tmp, buffers->heraldy);
         task->end();
         task->start();
         task->wait();
         device->deallocate(task);
         
         global::get<render::tile_optimizer>()->set_max_structures_count(structures_count);
+        global::get<render::tile_optimizer>()->set_max_heraldy_count(structures_count);
         map->flush_structures();
         map_systems->unlock_map();
       }
@@ -1600,11 +1799,14 @@ namespace devils_engine {
       global::get(reinterpret_cast<utils::data_string_container*>(SIZE_MAX));
       global::get(reinterpret_cast<core::context*>(SIZE_MAX));
       global::get(reinterpret_cast<render::image_controller*>(SIZE_MAX));
+      global::get(reinterpret_cast<utils::numeric_string_container*>(SIZE_MAX));
 
       advance_progress(prog, "filling tile connections");
       generate_tile_connections(map_systems->map, global::get<dt::thread_pool>());
       advance_progress(prog, "creating borders");
       find_border_points(map_systems->map, map_systems->core_context); // после генерации нужно сделать много вещей
+      
+      make_random_player_character();
     }
 
     void from_menu_to_create_map(utils::progress_container* prog) {

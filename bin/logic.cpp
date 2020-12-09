@@ -23,6 +23,10 @@ namespace devils_engine {
       player = c;
     }
     
+    core::character* get_player() {
+      return player;
+    }
+    
     static std::atomic<gameplay_state> new_state = gameplay_state::turn_advancing;
     static gameplay_state current_state = gameplay_state::player_turn;
     void player_has_ended_turn() { // перед этим мы должны проверить сделал ли игрок все вещи (ответил на все эвенты, всеми походил)

@@ -69,7 +69,7 @@ namespace devils_engine {
       
       dynasty* create_dynasty();
       character* create_character(const bool male, const bool dead);
-      army* create_army();
+      army* create_army(); // армии то поди без полководца могут быть
       faction* create_faction();
       hero_troop* create_hero_troop();
       
@@ -81,8 +81,10 @@ namespace devils_engine {
       void destroy(faction* f); // удаляем когда теряем все владения
       void destroy(hero_troop* h);
       
-      dynasty* get_dynasty(const size_t &index);
-      character* get_character(const size_t &index);
+      dynasty* get_dynasty(const size_t &index) const;
+      character* get_character(const size_t &index) const;
+      army* get_army(const size_t &index) const;
+      hero_troop* get_hero_troop(const size_t &index) const;
       
       size_t characters_count() const;
       size_t dynasties_count() const;

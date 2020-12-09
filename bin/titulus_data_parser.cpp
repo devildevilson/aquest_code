@@ -34,6 +34,11 @@ namespace devils_engine {
         check_table_value::type::int_t,
         check_table_value::value_required, UINT32_MAX, {}
       }, 
+      {
+        "heraldy",
+        check_table_value::type::string_t,
+        0, 0, {}
+      }
     };
     
     size_t add_title(const sol::table &table) {
@@ -70,6 +75,7 @@ namespace devils_engine {
     
     void parse_title(core::titulus* title, const sol::table &table) {
       auto to_data = global::get<utils::data_string_container>();
+      auto heraldy_data = global::get<utils::numeric_string_container>();
       auto ctx = global::get<core::context>();
       
       // мы создаем титул до городов? наверное сначало город, тогда нам можно не заполнять детей
@@ -159,6 +165,14 @@ namespace devils_engine {
         const uint32_t col = table["border_color2"];
         render::color_t c{col};
         title->border_color2 = c;
+      }
+      
+      if (auto proxy = table["heraldy"]; proxy.valid()) {
+        const std::string str = proxy;
+        const size_t index = heraldy_data->get(str);
+        if (index == SIZE_MAX) throw std::runtime_error("Could not find heraldy " + str);
+        if (index >= UINT32_MAX) throw std::runtime_error("Could bad heraldy " + str + " index");
+        title->heraldy = index;
       }
       
       // добавится герб

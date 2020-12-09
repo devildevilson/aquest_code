@@ -2,9 +2,11 @@
 #include <stdexcept>
 #include "utils/assert.h"
 #include "utils/globals.h"
+#include "utils/systems.h"
 #include "generator_container.h"
 #include "core_context.h"
 #include "game_time.h"
+#include "map.h"
 
 namespace devils_engine {
   namespace core {
@@ -98,13 +100,81 @@ namespace devils_engine {
     const size_t army::modificators_container_size;
     const size_t army::events_container_size;
     const size_t army::flags_container_size;
-    army::army() : troops_count(0), tile_index(UINT32_MAX), map_img{GPU_UINT_MAX} {}
+    army::army() : 
+      troops_count(0), 
+      tile_index(UINT32_MAX), 
+//       map_img{GPU_UINT_MAX}, 
+      current_pos(0.0f), 
+      path(nullptr), 
+      path_size(0), 
+      current_path(0), 
+      start_tile(UINT32_MAX), 
+      end_tile(UINT32_MAX),
+      path_task(0)
+    {
+      auto map = global::get<systems::map_t>()->map;
+      std::unique_lock<std::mutex> lock(map->mutex);
+      army_gpu_slot = map->allocate_army_data();
+    }
+    
+    army::~army() {
+      auto map = global::get<systems::map_t>()->map;
+      std::unique_lock<std::mutex> lock(map->mutex);
+      map->release_army_data(army_gpu_slot);
+    }
+    
+    void army::set_pos(const glm::vec3 &pos) {
+      auto map = global::get<systems::map_t>()->map;
+      std::unique_lock<std::mutex> lock(map->mutex); // по идее это нужно
+      map->set_army_pos(army_gpu_slot, pos);
+    }
+    
+    glm::vec3 army::get_pos() const {
+      auto map = global::get<systems::map_t>()->map;
+      return map->get_army_pos(army_gpu_slot);
+    }
+    
+    void army::set_img(const render::image_t &img) {
+      auto map = global::get<systems::map_t>()->map;
+      std::unique_lock<std::mutex> lock(map->mutex); // по идее это нужно
+      map->set_army_image(army_gpu_slot, img);
+    }
+    
+    render::image_t army::get_img() const {
+      auto map = global::get<systems::map_t>()->map;
+      return map->get_army_image(army_gpu_slot);
+    }
+    
     hero::hero() : character(nullptr) {}
     const structure hero_troop::s_type;
     const size_t hero_troop::modificators_container_size;
     const size_t hero_troop::events_container_size;
     const size_t hero_troop::flags_container_size;
-    hero_troop::hero_troop() : party_size(0), max_party_size(0), tile_index(UINT32_MAX) {}
+    const size_t hero_troop::max_game_party_size;
+    hero_troop::hero_troop() : 
+      party_size(0), 
+      max_party_size(0), 
+      path_task(0),
+      path(nullptr), 
+      path_size(0), 
+      current_path(0), 
+      start_tile(UINT32_MAX), 
+      end_tile(UINT32_MAX), 
+      current_pos(0.0f), 
+      tile_index(UINT32_MAX),
+      army_gpu_slot(UINT32_MAX) 
+    {
+      auto map = global::get<systems::map_t>()->map;
+      std::unique_lock<std::mutex> lock(map->mutex);
+      army_gpu_slot = map->allocate_army_data();
+    }
+    
+    hero_troop::~hero_troop() {
+      auto map = global::get<systems::map_t>()->map;
+      std::unique_lock<std::mutex> lock(map->mutex);
+      map->release_army_data(army_gpu_slot);
+    }
+    
     const structure decision::s_type;
     decision::decision() : name_id(SIZE_MAX), description_id(SIZE_MAX), target(UINT32_MAX) {}
     const structure religion_group::s_type;
@@ -221,6 +291,8 @@ namespace devils_engine {
         hero,
         male,
         dead,
+        has_troop,
+        has_army,
         
         count
       };
@@ -390,6 +462,14 @@ namespace devils_engine {
     
     bool character::is_ai_playable() const {
       return factions[self] != nullptr && factions[self]->main_title->type != titulus::type::city;
+    }
+    
+    bool character::is_troop_owner() const {
+      return data.get(system::has_troop);
+    }
+    
+    bool character::is_army_owner() const {
+      return data.get(system::has_army);
     }
     
     void character::set_dead() {

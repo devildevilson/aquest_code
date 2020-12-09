@@ -54,8 +54,9 @@ namespace devils_engine {
       }
       
       inline uint32_t add_biome(const sol::table &table) {
-        if (global::get<utils::table_container>()->get_biome_tables().size() == maximum_biomes) throw std::runtime_error("Too many biomes");
-        return global::get<utils::table_container>()->add_biome_table(table);
+        auto cont = global::get<utils::table_container>();
+        if (cont->get_tables(utils::table_container::additional_data::biome).size() == maximum_biomes) throw std::runtime_error("Too many biomes");
+        return cont->add_table(utils::table_container::additional_data::biome, table);
       }
     };
     

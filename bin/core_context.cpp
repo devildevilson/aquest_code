@@ -48,7 +48,9 @@ namespace devils_engine {
     
     army* context::create_army() {
       auto ptr = armies_pool.create();
-      armies.push_back(ptr);
+      //armies.push_back(ptr); // не думаю что это нужно, хотя армия может быть и без полководца
+      if (armies.size() <= ptr->army_gpu_slot) armies.resize(ptr->army_gpu_slot+1, nullptr);
+      armies[ptr->army_gpu_slot] = ptr;
       return ptr;
     }
     
@@ -83,14 +85,17 @@ namespace devils_engine {
     }
     
     void context::destroy(army* a) {
-      for (size_t i = 0; i < armies.size(); ++i) {
-        if (armies[i] == a) {
-          armies_pool.destroy(armies[i]);
-          std::swap(armies.back(), armies[i]);
-          armies.pop_back();
-          break;
-        }
-      }
+//       for (size_t i = 0; i < armies.size(); ++i) {
+//         if (armies[i] == a) {
+//           armies_pool.destroy(armies[i]);
+//           std::swap(armies.back(), armies[i]);
+//           armies.pop_back();
+//           break;
+//         }
+//       }
+      
+      armies[a->army_gpu_slot] = nullptr;
+      armies_pool.destroy(a);
     }
     
     void context::destroy(faction* f) {
@@ -101,14 +106,24 @@ namespace devils_engine {
       hero_troops_pool.destroy(h);
     }
     
-    dynasty* context::get_dynasty(const size_t &index) {
+    dynasty* context::get_dynasty(const size_t &index) const {
       ASSERT(index < dynasties.size());
       return dynasties[index];
     }
     
-    character* context::get_character(const size_t &index) {
+    character* context::get_character(const size_t &index) const {
       ASSERT(index < characters.size());
       return characters[index];
+    }
+    
+    army* context::get_army(const size_t &index) const {
+      ASSERT(index < armies.size());
+      return armies[index];
+    }
+    
+    hero_troop* context::get_hero_troop(const size_t &index) const {
+      ASSERT(index < armies.size());
+      return nullptr;
     }
     
     size_t context::characters_count() const {

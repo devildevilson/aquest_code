@@ -17,21 +17,22 @@
 #include "seasons.h"
 #include "render/shared_structures.h"
 #include "image_parser.h"
+#include "heraldy_parser.h"
 
 namespace devils_engine {
   namespace map {
     const generator_pair default_generator_pairs[] = {
-      generator_pair("begin", begin),
+      generator_pair("begin", begin), // 0
       generator_pair("seting up generator", setup_generator),
       generator_pair("generating plates", generate_plates),
       generator_pair("generating plate datas", generate_plate_datas),
       generator_pair("computing boundary edges", compute_boundary_edges),
-      generator_pair("computing plate boundary stress", compute_plate_boundary_stress),
+      generator_pair("computing plate boundary stress", compute_plate_boundary_stress), // 5
       generator_pair("computing plate boundary distances", compute_plate_boundary_distances),
       generator_pair("calculating vertex elevation", calculate_vertex_elevation),
       generator_pair("bluring tile elevation", blur_tile_elevation),
       generator_pair("normalizing tile elevation", std::bind(normalize_fractional_values, std::placeholders::_1, std::placeholders::_2, debug::entities::tile, debug::properties::tile::elevation)),
-      generator_pair("computing tile heat", compute_tile_heat),
+      generator_pair("computing tile heat", compute_tile_heat), // 10
       generator_pair("computing water tile distances", std::bind(compute_tile_distances, std::placeholders::_1, std::placeholders::_2, [] (
         const generator::context* ctx,
         const sol::table&,
@@ -43,13 +44,14 @@ namespace devils_engine {
       generator_pair("computing tile moisture", compute_tile_moisture),
       generator_pair("creating biomes", create_biomes),
       generator_pair("generating provinces", generate_provinces),
-      generator_pair("province postprocessing", province_postprocessing),
+      generator_pair("province postprocessing", province_postprocessing),// 15
       generator_pair("calculating province neighbours", calculating_province_neighbours),
       generator_pair("generating cultures", generate_cultures),
       generator_pair("generating countries", generate_countries),
       generator_pair("generating titles", generate_titles),
-      generator_pair("generate cities", generate_cities),
-      generator_pair("generate characters", generate_characters)
+      generator_pair("generate cities", generate_cities), // 20
+      generator_pair("generate characters", generate_characters),
+      generator_pair("generate heraldies", generate_heraldy)
     };
 
     render::color_t make_color_from_index(const uint32_t &index) {
@@ -307,7 +309,7 @@ namespace devils_engine {
       ASSERT(ctx->pool->working_count() == 1 && ctx->pool->tasks_count() == 0);
 
       ASSERT(generated_core.triangles.size() == map->triangles.size());
-      ASSERT(sizeof(core::map::triangle) == sizeof(map::triangle));
+      static_assert(sizeof(core::map::triangle) == sizeof(map::triangle));
       {
         std::unique_lock<std::mutex> lock(map->mutex);
         memcpy(map->triangles.data(), generated_core.triangles.data(), map->triangles.size()*sizeof(core::map::triangle));
@@ -2244,6 +2246,20 @@ namespace devils_engine {
         scale["width"] = 32;
         scale["height"] = 32;
         scale["filter"] = 1; // nearest
+        image_table["type"] = 0; // тут индекс
+        image_table["sampler"] = 1;
+        utils::add_image(image_table);
+      }
+      
+      {
+        auto image_table = global::get<sol::state>()->create_table();
+        image_table["id"] = "hero_img";
+        image_table["path"] = "apates_quest/textures/armies_and_heroes/KnightHorseback7_128_nearest.png";
+        //auto atlas = image_table["atlas_data"].get_or_create<sol::table>();
+//         auto scale = image_table["scale"].get_or_create<sol::table>();
+//         scale["width"] = 32;
+//         scale["height"] = 32;
+//         scale["filter"] = 1; // nearest
         image_table["type"] = 0; // тут индекс
         image_table["sampler"] = 1;
         utils::add_image(image_table);
@@ -4689,6 +4705,124 @@ namespace devils_engine {
       table["border_color1"] = render::make_color(f2, f3, f4, 1.0f).container;
       table["border_color2"] = render::make_color(f3, f4, f5, 1.0f).container;
     }
+    
+    void generate_heraldy(generator::context* ctx, sol::table &table) {
+      // тут нам нужно загрузить во первых картинки геральдик
+      // во вторых составить несколько слоев геральдик
+      {
+        // какое разрешение у геральдики? я планировал использовать 128х128
+        // думаю что это максимум, который я могу себе позволить, 
+        // геральдик все же будет довольно много (несколько щитов + огромное количество символик)
+        auto image_table = global::get<sol::state>()->create_table();
+        image_table["id"] = "heraldy_shield1";
+        image_table["path"] = "apates_quest/textures/heraldy/shield_straight.png";
+        image_table["type"] = 0; // тут индекс
+        image_table["sampler"] = 0;
+        utils::add_image(image_table);
+      }
+      
+      {
+        auto image_table = global::get<sol::state>()->create_table();
+        image_table["id"] = "heraldy_quarterly";
+        image_table["path"] = "apates_quest/textures/heraldy/quarterly.png";
+        image_table["type"] = 0; // тут индекс
+        image_table["sampler"] = 1;
+        utils::add_image(image_table);
+      }
+      
+      {
+        auto image_table = global::get<sol::state>()->create_table();
+        image_table["id"] = "heraldy_lion1";
+        image_table["path"] = "apates_quest/textures/heraldy/royal_lion.png";
+        //auto atlas = image_table["atlas_data"].get_or_create<sol::table>();
+        //auto scale = image_table["scale"].get_or_create<sol::table>();
+        //scale["width"] = 128;
+        //scale["height"] = 128;
+        //scale["filter"] = 1; // nearest
+        image_table["type"] = 0; // тут индекс
+        image_table["sampler"] = 0;
+        utils::add_image(image_table);
+      }
+      
+      {
+        auto heraldy_table = global::get<sol::state>()->create_table();
+        heraldy_table["id"] = "shield_layer";
+        heraldy_table["stencil"] = "heraldy_shield1";
+        heraldy_table["next_layer"] = "lion_layer";
+        auto colors = heraldy_table["colors"].get_or_create<sol::table>();
+        colors.add(render::make_color(0.0f, 0.0f, 0.0f, 1.0f).container);
+        colors.add(render::make_color(0.0f, 0.0f, 0.0f, 1.0f).container);
+        colors.add(render::make_color(0.0f, 0.0f, 0.0f, 1.0f).container);
+        colors.add(render::make_color(0.7f, 0.0f, 0.0f, 1.0f).container);
+        auto coords = heraldy_table["coords"].get_or_create<sol::table>();
+        coords.add(0.0f, 0.0f, 1.0f, 1.0f);
+        auto tex_coords = heraldy_table["tex_coords"].get_or_create<sol::table>();
+        tex_coords.add(0.0f, 0.0f, 1.0f, 1.0f);
+        heraldy_table["discard_layer"] = false;
+        heraldy_table["continue_layer"] = false;
+        utils::add_heraldy_layer(heraldy_table);
+      }
+      
+      {
+        auto heraldy_table = global::get<sol::state>()->create_table();
+        heraldy_table["id"] = "shield_player_layer";
+        heraldy_table["stencil"] = "heraldy_shield1";
+        heraldy_table["next_layer"] = "lion_layer";
+        auto colors = heraldy_table["colors"].get_or_create<sol::table>();
+        colors.add(render::make_color(0.0f, 0.0f, 0.0f, 1.0f).container);
+        colors.add(render::make_color(0.0f, 0.0f, 0.0f, 1.0f).container);
+        colors.add(render::make_color(0.0f, 0.0f, 0.0f, 1.0f).container);
+        colors.add(render::make_color(0.0f, 0.7f, 0.0f, 1.0f).container);
+        auto coords = heraldy_table["coords"].get_or_create<sol::table>();
+        coords.add(0.0f, 0.0f, 1.0f, 1.0f);
+        auto tex_coords = heraldy_table["tex_coords"].get_or_create<sol::table>();
+        tex_coords.add(0.0f, 0.0f, 1.0f, 1.0f);
+        heraldy_table["discard_layer"] = false;
+        heraldy_table["continue_layer"] = false;
+        utils::add_heraldy_layer(heraldy_table);
+      }
+      
+      {
+        auto heraldy_table = global::get<sol::state>()->create_table();
+        heraldy_table["id"] = "lion_layer";
+        heraldy_table["stencil"] = "heraldy_lion1";
+        heraldy_table["next_layer"] = "quarterly_layer";
+        auto colors = heraldy_table["colors"].get_or_create<sol::table>();
+        colors.add(render::make_color(0.0f, 0.0f, 0.0f, 1.0f).container);
+        colors.add(render::make_color(0.0f, 0.0f, 0.0f, 1.0f).container);
+        colors.add(render::make_color(0.0f, 0.0f, 0.0f, 1.0f).container);
+        colors.add(render::make_color(0.0f, 0.7f, 0.0f, 1.0f).container);
+        auto coords = heraldy_table["coords"].get_or_create<sol::table>();
+        coords.add(0.15f, 0.1f, 0.85f, 0.8f);
+        auto tex_coords = heraldy_table["tex_coords"].get_or_create<sol::table>();
+        tex_coords.add(0.0f, 0.0f, 1.0f, 1.0f);
+        heraldy_table["discard_layer"] = true;
+        heraldy_table["continue_layer"] = false;
+        utils::add_heraldy_layer(heraldy_table);
+      }
+      
+      {
+        auto heraldy_table = global::get<sol::state>()->create_table();
+        heraldy_table["id"] = "quarterly_layer";
+        heraldy_table["stencil"] = "heraldy_quarterly";
+        heraldy_table["next_layer"] = sol::nil;
+        auto colors = heraldy_table["colors"].get_or_create<sol::table>();
+        colors.add(render::make_color(0.8f, 0.6f, 0.0f, 1.0f).container);
+        colors.add(render::make_color(0.9f, 0.9f, 0.9f, 1.0f).container);
+        colors.add(render::make_color(0.9f, 0.9f, 0.9f, 1.0f).container);
+        colors.add(render::make_color(0.8f, 0.6f, 0.0f, 1.0f).container);
+        auto coords = heraldy_table["coords"].get_or_create<sol::table>();
+        coords.add(0.15f, 0.1f, 0.85f, 0.8f);
+        auto tex_coords = heraldy_table["tex_coords"].get_or_create<sol::table>();
+        tex_coords.add(0.0f, 0.0f, 0.2f, 0.2f);
+        heraldy_table["discard_layer"] = false;
+        heraldy_table["continue_layer"] = false;
+        utils::add_heraldy_layer(heraldy_table);
+      }
+      
+      (void)ctx;
+      (void)table;
+    }
 
     void generate_titles(generator::context* ctx, sol::table &table) {
       utils::time_log log("generating titles");
@@ -4718,12 +4852,19 @@ namespace devils_engine {
       // то есть: Дженерик текст %character_name% дженерик текст
       // причем еще нужно продумать какую то возможность учитывать падежи
       // вообще идеально как-то помечать какой то участок текста и выводить например тултип
+      // я могу так сделать разделив текст на несколько частей
       // но это видимо что-то из разряда фантастики
       // (наверное можно вычислить квадрат где находится этот участок)
 
       // осталось понять как адекватно сделать базы со строками
       // я думаю что нужно предсгенерировать много имен, положить их в массивы строк по типам
       // и во время игры просто доставать их оттуда
+      
+      // нужно сгенерировать геральдики: для этого нужно сделать и загрузить большое количество трафаретов
+      // трафарет - это, в моем случае, картинка с альфа каналом + зарегестрированы 4 цвета (чистые ргб и черный)
+      // мне нужны трафареты щитов, королевских животных, религиозных символик и проч
+      // все эти трафареты наверное нужно ужать до 128x128... какой размер использует цк2? 88х88 какой то такой (в атласе)
+      // 
 
       // нужно сгенерировать титулы герцогские (несколько баронств), королевские (несколько герцогств) и имперские (несколько королевств)
       // возможно добавить еще одну иерархию титулов (что-то вроде благословления богини, но ее можно создать только внутриигровым эвентом)
@@ -5755,12 +5896,13 @@ namespace devils_engine {
         emp_title["id"] = emp_id;
         emp_title["type"] = core::titulus::type::imperial;
         gen_title_color(emp_title, empire_index);
+        emp_title["heraldy"] = "shield_layer";
         const size_t emp_dbg_index = utils::add_title(emp_title);
 
-        if (empire_index == 14) {
-          PRINT_VAR("emp_dbg_index", emp_dbg_index)
-          PRINT_VAR("emp_id", emp_id)
-        }
+//         if (empire_index == 14) {
+//           PRINT_VAR("emp_dbg_index", emp_dbg_index)
+//           PRINT_VAR("emp_id", emp_id)
+//         }
 
 //         ASSERT(empire_index != 14);
 //         emp_title["count"] = empires[empire_index].size();
@@ -5784,6 +5926,7 @@ namespace devils_engine {
           king_title["id"] = king_id;
           king_title["type"] = core::titulus::type::king;
           king_title["parent"] = emp_id;
+          king_title["heraldy"] = "shield_layer";
           gen_title_color(king_title, king_offset + kingdom_index);
           utils::add_title(king_title);
 //           king_title["count"] = kingdoms[kingdom_index].size();
@@ -5803,6 +5946,7 @@ namespace devils_engine {
             duchy_title["id"] = duchy_id;
             duchy_title["type"] = core::titulus::type::duke;
             duchy_title["parent"] = king_id;
+            duchy_title["heraldy"] = "shield_layer";
             gen_title_color(duchy_title, duchy_offset + duchy_index);
             utils::add_title(duchy_title);
 //             duchy_title["count"] = duchies[duchy_index].size();
@@ -5826,6 +5970,7 @@ namespace devils_engine {
               baron_title["id"] = baron_id;
               baron_title["type"] = core::titulus::type::baron;
               baron_title["parent"] = duchy_id;
+              baron_title["heraldy"] = "shield_layer";
               baron_title["province"] = baron_index;
               gen_title_color(baron_title, baron_offset + baron_index);
               utils::add_title(baron_title);
@@ -5857,6 +6002,7 @@ namespace devils_engine {
         const std::string king_id = "king" + std::to_string(kingdom_index) + "_title";
         king_title["id"] = king_id;
         king_title["type"] = core::titulus::type::king;
+        king_title["heraldy"] = "shield_layer";
         gen_title_color(king_title, king_offset + kingdom_index);
         utils::add_title(king_title);
 
@@ -5871,6 +6017,7 @@ namespace devils_engine {
           duchy_title["id"] = duchy_id;
           duchy_title["type"] = core::titulus::type::duke;
           duchy_title["parent"] = king_id;
+          duchy_title["heraldy"] = "shield_layer";
           gen_title_color(duchy_title, duchy_offset + duchy_index);
           utils::add_title(duchy_title);
 
@@ -5888,6 +6035,7 @@ namespace devils_engine {
             baron_title["type"] = core::titulus::type::baron;
             baron_title["parent"] = duchy_id;
             baron_title["province"] = baron_index;
+            baron_title["heraldy"] = "shield_layer";
             gen_title_color(baron_title, baron_offset + baron_index);
             utils::add_title(baron_title);
 
@@ -5904,6 +6052,7 @@ namespace devils_engine {
         const std::string duchy_id = "duke" + std::to_string(duchy_index) + "_title";
         duchy_title["id"] = duchy_id;
         duchy_title["type"] = core::titulus::type::duke;
+        duchy_title["heraldy"] = "shield_layer";
         gen_title_color(duchy_title, duchy_offset + duchy_index);
         utils::add_title(duchy_title);
 
@@ -5919,6 +6068,7 @@ namespace devils_engine {
           baron_title["type"] = core::titulus::type::baron;
           baron_title["parent"] = duchy_id;
           baron_title["province"] = baron_index;
+          baron_title["heraldy"] = "shield_layer";
           gen_title_color(baron_title, baron_offset + baron_index);
           utils::add_title(baron_title);
 
@@ -5935,6 +6085,7 @@ namespace devils_engine {
         baron_title["id"] = baron_id;
         baron_title["type"] = core::titulus::type::baron;
         baron_title["province"] = baron_index;
+        baron_title["heraldy"] = "shield_layer";
         gen_title_color(baron_title, baron_offset + baron_index);
         utils::add_title(baron_title);
       }

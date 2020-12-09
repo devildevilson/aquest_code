@@ -236,7 +236,7 @@ namespace devils_engine {
       render::color_t main_color;    // цвет будет использоваться на глобальной карте для страны
       render::color_t border_color1; // думаю двух цветов достаточно, нужно посмотреть как сделано в цк2
       render::color_t border_color2;
-      // герб
+      uint32_t heraldy;
       
       // думаю что в титулах маленькие контейнеры потребуются
       events_container<events_container_size> events; // должно хватить
@@ -363,6 +363,13 @@ namespace devils_engine {
       character* next_courtier;
       character* prev_courtier;
       
+      // здесь еще должны добавиться указатели на данные героя и армии
+      // героем персонаж может стать если выполнит определенные условия (статы + может что то еще)
+      // армия у персонажа может появиться если он нанят как полководец или правитель
+      // как создать армию верно? мне нужно выделить память и найти свободный армейский слот
+      struct hero_troop* troop; // как подтвердить владение?
+      struct army* army;        // как подтвердить владение?
+      
       struct family family;
       struct relations relations;
       const struct culture* culture;
@@ -396,6 +403,8 @@ namespace devils_engine {
       bool is_dead() const;
       bool has_dynasty() const;
       bool is_ai_playable() const;
+      bool is_troop_owner() const; // было бы неплохо оставить указатель после смерти, чтобы разместить там известных членов партии для истории
+      bool is_army_owner() const;
       
       void set_dead();
       void make_hero();

@@ -1,0 +1,64 @@
+#version 450
+
+#extension GL_GOOGLE_include_directive : enable
+#include "../render/shared_structures.h"
+#include "../render/shared_battle_structures.h"
+#include "../utils/shared_mathematical_constant.h"
+
+layout(set = 0, binding = 0) uniform Camera {
+  mat4 viewproj;
+  mat4 view;
+  vec4 pos;
+  vec4 dir;
+  uvec4 dim;
+} camera;
+
+layout(std140, set = 1, binding = 0) readonly buffer tiles_buffer {
+  battle_map_tile_data_t tiles[];
+};
+
+layout(std140, set = 2, binding = 0) buffer tile_indirect_buffer {
+  uvec4 tiles_indirect;
+  uvec4 sizes_data;
+
+  frustum_t frustum;
+};
+
+layout(std140, set = 2, binding = 1) buffer tiles_indices_buffer {
+  instance_data_t tiles_indices[];
+};
+
+#define WORK_GROUP 256
+
+layout(local_size_x = WORK_GROUP, local_size_y = 1, local_size_z = 1) in;
+
+void main() {
+  const uint tile_index = gl_GlobalInvocationID.x;
+  if (tile_index >= sizes_data.x) return;
+
+  const uint tile_map_width  = sizes_data.y;
+  const uint tile_map_height = sizes_data.z;
+  const uvec2 tile_coord = uvec2(tile_index / tile_map_width, tile_index % tile_map_height);
+
+  const float tile_size = 1.0f;
+  const float tile_width = sqrt(3.0f) * tile_size;
+  const float tile_height = 2.0f * tile_size;
+  const float tile_width_dist = 1.0f * tile_width;
+  const float tile_height_dist = (3.0f/4.0f) * tile_height;
+  const vec2 tile_pos = tile_coord * vec2(tile_width_dist, tile_height_dist); // + const ?
+
+  const vec3 final_tile_pos = vec3(tile_pos.x, 0.0f, tile_pos.y);
+
+  const bool ret = frustum_test(frustum, final_tile_pos, 1.0f);
+  if (!ret) return;
+
+  // нам нужно нарисовать сам тайл, элементы биома, элементы окружения, отряды
+  // нужно будет сделать видимость у отрядов
+
+  {
+    const uint offset = atomicAdd(tiles_indirect.y, 1);
+    const uint vec_index = offset / 4;
+    const uint slot_index = offset % 4;
+    tiles_indices[vec_index].index[slot_index] = tile_index;
+  }
+}

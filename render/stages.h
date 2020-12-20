@@ -360,7 +360,7 @@ namespace devils_engine {
       void proccess(context* ctx) override;
       void clear() override;
       
-      void add(const uint32_t &tile_index);
+      void add(const uint32_t &tile_index, const color_t &color);
     private:
       yavf::Device* device;
 //       tile_optimizer* opt;
@@ -369,7 +369,8 @@ namespace devils_engine {
       // кажется текстуры здесь не нужны, нужно ли здесь время, чтобы сделать мигание выделения? 
       // какой максимум? 
       yavf::Buffer* tiles_indices;
-      std::atomic<uint32_t> tiles_count;
+      std::atomic<uint32_t> hex_tiles_count;
+      std::atomic<uint32_t> pen_tiles_count;
     };
     
     class tile_structure_render : public stage {

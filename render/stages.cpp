@@ -1506,7 +1506,8 @@ namespace devils_engine {
     
     void tile_object_render::clear() {}
     
-    tile_highlights_render::tile_highlights_render(const create_info &info) : device(info.device), map_buffers(info.map_buffers), tiles_indices(nullptr), tiles_count(0) {
+#define HIGHLIGHT_DATA_COUNT 2
+    tile_highlights_render::tile_highlights_render(const create_info &info) : device(info.device), map_buffers(info.map_buffers), tiles_indices(nullptr), hex_tiles_count(0), pen_tiles_count(0) {
       yavf::DescriptorSetLayout uniform_layout = device->setLayout(UNIFORM_BUFFER_LAYOUT_NAME);
       ASSERT(uniform_layout != VK_NULL_HANDLE);
       
@@ -1531,8 +1532,9 @@ namespace devils_engine {
 
         pipe = pm.addShader(VK_SHADER_STAGE_VERTEX_BIT, vertex)
                  .addShader(VK_SHADER_STAGE_FRAGMENT_BIT, fragment)
-//                  .vertexBinding(0, sizeof(uint32_t))
-//                    .vertexAttribute(0, 0, VK_FORMAT_R32_UINT, 0)
+                 .vertexBinding(0, sizeof(uint32_t)*HIGHLIGHT_DATA_COUNT, VK_VERTEX_INPUT_RATE_INSTANCE)
+                   .vertexAttribute(0, 0, VK_FORMAT_R32_UINT, 0)
+                   .vertexAttribute(1, 0, VK_FORMAT_R32_UINT, sizeof(uint32_t))
                  .depthTest(VK_TRUE)
                  .depthWrite(VK_TRUE)
                  .frontFace(VK_FRONT_FACE_CLOCKWISE)
@@ -1548,8 +1550,8 @@ namespace devils_engine {
                  .create("tiling_highlights_rendering_pipeline", layout, global::get<render::window>()->render_pass);
       }
       
-      const size_t size = (max_indices_count * 4 + 16 - 1) / 16 * 16;
-      tiles_indices = device->create(yavf::BufferCreateInfo::buffer(size, VK_BUFFER_USAGE_INDEX_BUFFER_BIT), VMA_MEMORY_USAGE_CPU_ONLY);
+      const size_t size = (max_indices_count * 2 + 16 - 1) / 16 * 16;
+      tiles_indices = device->create(yavf::BufferCreateInfo::buffer(size, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT), VMA_MEMORY_USAGE_CPU_ONLY);
     }
     
     tile_highlights_render::~tile_highlights_render() {
@@ -1560,7 +1562,7 @@ namespace devils_engine {
     
     void tile_highlights_render::begin() {}
     void tile_highlights_render::proccess(context* ctx) {
-      if (tiles_count == 0) return;
+      if (hex_tiles_count + pen_tiles_count == 0) return;
       
       auto map_systems = global::get<systems::map_t>();
       if (!map_systems->is_init()) return;
@@ -1573,24 +1575,43 @@ namespace devils_engine {
       ASSERT(uniform->descriptorSet() != nullptr);
       ASSERT(tiles->descriptorSet() != nullptr);
       task->setDescriptor({uniform->descriptorSet()->handle(), tiles->descriptorSet()->handle()}, 0);
-      task->setIndexBuffer(tiles_indices);
-      task->drawIndexed(tiles_count, 1, 0, 0, 0);
+      //task->setIndexBuffer(tiles_indices);
+      task->setVertexBuffer(tiles_indices, 0);
+      //task->drawIndexed(tiles_count, 1, 0, 0, 0);
+      if (pen_tiles_count != 0) task->draw(5, pen_tiles_count, 0, 0);
+      if (hex_tiles_count != 0) task->draw(6, hex_tiles_count, 0, 12);
     }
     
     void tile_highlights_render::clear() {
-      tiles_count = 0;
+      hex_tiles_count = 0;
+      pen_tiles_count = 0;
     }
     
-    void tile_highlights_render::add(const uint32_t &tile_index) {
-      const uint32_t packed_tile_index = tile_index*PACKED_TILE_INDEX_COEF;
-      const uint32_t p_count = tile_index < 12 ? 5 : 6; // кажется так разделяются тайлы
-      const uint32_t offset = tiles_count.fetch_add(p_count+1);
+    void tile_highlights_render::add(const uint32_t &tile_index, const color_t &color) {
+      const bool pentagon = tile_index < 12;
       auto tiles_indices_ptr = reinterpret_cast<uint32_t*>(tiles_indices->ptr());
-      for (uint32_t i = 0; i < p_count; ++i) {
-        tiles_indices_ptr[offset+i] = packed_tile_index+i;
+      if (pentagon) {
+        const uint32_t offset = pen_tiles_count.fetch_add(1);
+        ASSERT(offset < 12);
+        const uint32_t final_offset = offset * HIGHLIGHT_DATA_COUNT;
+        tiles_indices_ptr[final_offset]   = tile_index;
+        tiles_indices_ptr[final_offset+1] = color.container;
+      } else {
+        const uint32_t offset = hex_tiles_count.fetch_add(1);
+        const uint32_t final_offset = offset * HIGHLIGHT_DATA_COUNT + 12 * HIGHLIGHT_DATA_COUNT;
+        tiles_indices_ptr[final_offset]   = tile_index;
+        tiles_indices_ptr[final_offset+1] = color.container;
       }
       
-      tiles_indices_ptr[offset+p_count] = GPU_UINT_MAX;
+//       const uint32_t packed_tile_index = tile_index*PACKED_TILE_INDEX_COEF;
+//       const uint32_t p_count = tile_index < 12 ? 5 : 6; // кажется так разделяются тайлы
+//       const uint32_t offset = tiles_count.fetch_add(p_count+1);
+//       
+//       for (uint32_t i = 0; i < p_count; ++i) {
+//         tiles_indices_ptr[offset+i] = packed_tile_index+i;
+//       }
+//       
+//       tiles_indices_ptr[offset+p_count] = GPU_UINT_MAX;
     }
     
     tile_structure_render::tile_structure_render(const create_info &info) : device(info.device), opt(info.opt), map_buffers(info.map_buffers) {

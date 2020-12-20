@@ -21,12 +21,23 @@ namespace devils_engine {
   
   namespace ai {
     struct path_container { // тут делать деструктор ни к чему
+      struct piece {
+        float cost;
+        uint32_t tile;
+        
+        piece();
+      };
+      
       static const size_t container_size = 256;
-      uint32_t tile_path[container_size]; // размер? размер нам нужен только один раз
+      // размер? размер нам нужен только один раз
+      // тут нужна стоимость пути
+      piece tile_path[container_size];
       path_container* next;
       
       path_container();
     };
+    
+    path_container* advance_container(path_container* container, const size_t &index);
     
     // где то путь нужно создавать + как организовать поиск?
     // поиск вытащить нужно в отдельный поток,

@@ -13,7 +13,19 @@
 
 namespace devils_engine {
   namespace ai {
-    path_container::path_container() : tile_path{UINT32_MAX}, next(nullptr) { memset(tile_path, INT32_MAX, sizeof(tile_path[0])*container_size); ASSERT(tile_path[1]==UINT32_MAX);ASSERT(tile_path[2]==UINT32_MAX); }
+    path_container::piece::piece() : cost(0.0f), tile(UINT32_MAX) {}
+    path_container::path_container() : next(nullptr) { ASSERT(tile_path[1].tile == UINT32_MAX); ASSERT(tile_path[2].tile == UINT32_MAX); }
+    
+    path_container* advance_container(path_container* container, const size_t &index) {
+      auto cont = container;
+      size_t counter = 0;
+      while (counter < index && cont != nullptr) {
+        cont = cont->next;
+        ++counter;
+      }
+      
+      return cont;
+    }
     
     path_managment::path_managment(const uint32_t &finder_count) : 
       tmp_path(nullptr), 
@@ -74,10 +86,13 @@ namespace devils_engine {
         PRINT("find army path")
         
         size_t path_size = 0;
-        auto path = find_path_raw(&army->path_task, start, end, local_task_id, path_size);
+        auto path = find_path_raw(&army->path_task, start, end, local_task_id, path_size); // я могу получить 
         if (army->path_task != local_task_id) return;
                        
         path = path == nullptr ? reinterpret_cast<decltype(path)>(SIZE_MAX) : path;
+        
+        // как посчитать? добавить еще переменных в путь?
+        // тут по идее нужно просто добавить в путь данные о весах
         
         army->path_size = path_size;
         army->current_path = 0;
@@ -87,6 +102,10 @@ namespace devils_engine {
 //         current_status = status::finish;
 //         army->path_state = core::path_finding_state::idle;
         //army->path_task = 0; // или не надо? может сбить код выше
+        
+        // после поиска пути мы просто должны расчитать какой путь мы можем пройти и его стоимость
+        // затем, когда игрок нажимает на кнопку, единственное что мы делаем это вычитаем стоимость 
+        // и ставим армию в верное положение, здесь только одна проблема как учесть тайл на котором кто то будет стоять?
       });
     }
     
@@ -172,7 +191,7 @@ namespace devils_engine {
       const size_t final_path_size = solution_array.size()-1;
       auto path_start = path_pool.create();
       auto tmp = path_start;
-      for (uint32_t i = 1, counter = 0; i < solution_array.size(); ++i, ++counter) {
+      for (uint32_t i = 0, counter = 0; i < solution_array.size(); ++i, ++counter) {
         if (counter >= path_container::container_size) {
           auto ptr = path_pool.create();
           tmp->next = ptr;
@@ -180,10 +199,22 @@ namespace devils_engine {
           counter = 0;
         }
         
-        tmp->tile_path[counter] = solution_array[i]->tile_index;
+        tmp->tile_path[counter].cost = solution_array[i]->g;
+        tmp->tile_path[counter].tile = solution_array[i]->tile_index;
       }
       
       searcher->free_solution();
+      
+      // кажется тайлы строго расположены дрг за другом по стоимости
+      // нужно ли тут что то считать? мне кажется что врядли
+//       auto first_container = path_start;
+//       for (size_t i = 0; i < final_path_size; ++i) {
+//         //const size_t container_index = i / ai::path_container::container_size;
+//         const size_t piece_index = i % ai::path_container::container_size;
+//         PRINT_VAR("cost: ", first_container->tile_path[piece_index].cost)
+//         
+//         if (piece_index == ai::path_container::container_size-1) first_container = first_container->next;
+//       }
       
 //       army->path_size = solution_array.size();
 //       army->path = path_start;

@@ -197,6 +197,9 @@ file(GLOB_RECURSE GLSL_SOURCE_FILES
   raw_shaders/heraldy.frag
   raw_shaders/map_objects.comp
   raw_shaders/armies.vert
+  raw_shaders/battle_map_tiles.comp
+  raw_shaders/battle_map_tiles.vert
+  raw_shaders/battle_map_tiles.frag
 )
 
 foreach(GLSL ${GLSL_SOURCE_FILES})
@@ -350,6 +353,7 @@ set(SRC_LIST
   render/image_controller.cpp
   render/persistent_resources.cpp
   render/slots.cpp
+  render/battle_render_stages.cpp
 )
 
 set(HDR_LIST
@@ -376,6 +380,8 @@ set(HDR_LIST
   render/image_controller.h
   render/persistent_resources.h
   render/slots.h
+  render/shared_battle_structures.h
+  render/battle_render_stages.h
 )
 
 add_library(render ${SRC_LIST} ${HDR_LIST})
@@ -439,6 +445,7 @@ set(SRC_LIST
   bin/logic.cpp
   utils/quest_states.cpp
   bin/tiles_funcs.cpp
+  bin/battle_map.cpp
 )
 
 set(HDR_LIST
@@ -467,6 +474,7 @@ set(HDR_LIST
   utils/quest_states.h
   utils/quest_state.h
   bin/tiles_funcs.h
+  bin/battle_map.h
 )
 add_executable(${TARGET_NAME} ${SRC_LIST} ${HDR_LIST})
 target_link_libraries(${TARGET_NAME} systems ai render utils serialization)

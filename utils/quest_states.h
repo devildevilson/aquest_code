@@ -9,7 +9,7 @@ namespace devils_engine {
     public:
       main_menu_state();
       void enter() override;
-      bool load() override;
+      bool load(quest_state* prev_state) override;
       void update(const size_t &time) override;
       void clean() override; // чистим главное меню
     };
@@ -18,7 +18,7 @@ namespace devils_engine {
     public:
       map_creation_state();
       void enter() override;
-      bool load() override;
+      bool load(quest_state* prev_state) override;
       void update(const size_t &time) override;
       void clean() override;
     };
@@ -27,7 +27,7 @@ namespace devils_engine {
     public:
       world_map_state();
       void enter() override;
-      bool load() override;
+      bool load(quest_state* prev_state) override;
       void update(const size_t &time) override;
       void clean() override;
     };
@@ -36,7 +36,7 @@ namespace devils_engine {
     public:
       battle_state();
       void enter() override;
-      bool load() override;
+      bool load(quest_state* prev_state) override;
       void update(const size_t &time) override;
       void clean() override;
     };
@@ -45,7 +45,7 @@ namespace devils_engine {
     public:
       encounter_state();
       void enter() override;
-      bool load() override;
+      bool load(quest_state* prev_state) override;
       void update(const size_t &time) override;
       void clean() override;
     };

@@ -24,10 +24,12 @@
 #include "render/slots.h"
 #include "render/image_container.h"
 #include "render/image_controller.h"
+#include "render/battle_render_stages.h"
 
 #include "ai/sub_system.h"
 #include "ai/ai_system.h"
 #include "ai/build_subsystem.h"
+#include "ai/path_container.h"
 
 #include "bin/map.h"
 #include "bin/map_generators2.h"
@@ -42,7 +44,7 @@
 #include "bin/seasons.h"
 #include "bin/game_time.h"
 #include "bin/objects_selector.h"
-#include "ai/path_container.h"
+#include "bin/battle_map.h"
 
 static const std::vector<const char*> instanceLayers = {
   "VK_LAYER_LUNARG_standard_validation",
@@ -803,17 +805,70 @@ namespace devils_engine {
     battle_t::battle_t() : 
       container(
         {
-          sizeof(systems::ai)
+          sizeof(battle::map),
+          sizeof(systems::ai),
+          sizeof(render::stage_container),
+          sizeof(render::stage_container),
         }
       ),
-      ai_systems(nullptr)
+      ai_systems(nullptr),
+      map(nullptr)
     {}
     
     battle_t::~battle_t() {
-      RELEASE_CONTAINER_DATA(ai_systems)
+      release_container();
     }
     
-    bool battle_t::is_init() const { return container.inited(); }
+    //bool battle_t::is_init() const { return container.inited(); }
+    void battle_t::create_map_container() {
+      if (!is_init()) container.init();
+      
+      auto core = global::get<systems::core_t>();
+      auto device = core->graphics_container->device;
+      map = container.create<battle::map, 0>(battle::map::create_info{device});
+      map->create_tiles(128, 128, battle::map::coordinate_system::square, battle::map::orientation::even_pointy);
+    }
+    
+    void battle_t::create_render_stages() {
+      if (!is_init()) throw std::runtime_error("Container is not inited properly");
+      
+      const size_t optimizators_size = sizeof(render::battle::tile_optimizer);
+        
+      const size_t render_size = sizeof(render::battle::tile_render);
+      
+      ASSERT(optimizators_container == nullptr);
+      ASSERT(render_container == nullptr);
+        
+      optimizators_container = container.create<render::stage_container, 2>(optimizators_size);
+      render_container = container.create<render::stage_container, 3>(render_size);
+      auto systems = global::get<core_t>();
+      auto device = systems->graphics_container->device;
+      
+      auto opt1 = optimizators_container->add_stage<render::battle::tile_optimizer>(render::battle::tile_optimizer::create_info{device});
+      systems->render_slots->set_stage(2, optimizators_container);
+      
+      render_container->add_stage<render::battle::tile_render>(render::battle::tile_render::create_info{device, opt1});
+      systems->render_slots->set_stage(7, render_container);
+      
+      global::get(opt1);
+      
+      // нужно еще продумать способы синхронизации
+      // иногда мне нужно подождать пока другой поток применит изменения 
+      // и кажется ничего более адекватного чем мьютекс еще не придумали
+    }
+    
+    void battle_t::release_container() {
+      auto systems = global::get<core_t>();
+      systems->render_slots->clear_slot(2);
+      systems->render_slots->clear_slot(7);
+      
+      global::get(reinterpret_cast<render::battle::tile_optimizer*>(SIZE_MAX));
+      
+      RELEASE_CONTAINER_DATA(ai_systems)
+      RELEASE_CONTAINER_DATA(map)
+      
+      container.clear();
+    }
     
     encouter_t::encouter_t() :
       container(
@@ -828,7 +883,7 @@ namespace devils_engine {
       RELEASE_CONTAINER_DATA(ai_systems)
     }
     
-    bool encouter_t::is_init() const { return container.inited(); }
+    //bool encouter_t::is_init() const { return container.inited(); }
   }
 }
 

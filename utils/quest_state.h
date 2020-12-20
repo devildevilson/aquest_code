@@ -21,15 +21,17 @@ namespace devils_engine {
         count
       };
       
-      inline quest_state() : m_next_state(UINT32_MAX) {}
+      inline quest_state(const uint32_t current_state) : m_current_state(current_state), m_next_state(UINT32_MAX) {}
       virtual ~quest_state() = default;
       virtual void enter() = 0;  // создаем какие то вещи в главном треде (например создаем базовые структуры)
-      virtual bool load() = 0;   // запускаем функцию загрузки (предположительно асинхронно)
+      virtual bool load(quest_state* prev_state) = 0;   // запускаем функцию загрузки (предположительно асинхронно)
       virtual void update(const size_t &time) = 0; // обновляем как нибудь состояние (наверное время пригодится)
       virtual void clean() = 0;  // прежде чем войти в другое состояние, чистим это
       // как давать понять когда переходить из состояния в состояние, в общем у нас каждое состояние может куда перейти
       inline uint32_t next_state() const { return m_next_state; }
+      inline uint32_t current_state() const { return m_current_state; }
     protected:
+      uint32_t m_current_state;
       uint32_t m_next_state;
     };
     

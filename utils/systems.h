@@ -18,6 +18,10 @@ namespace devils_engine {
     struct seasons;
   }
   
+  namespace battle {
+    struct map;
+  }
+  
   namespace utils {
     class interface;
     struct interface_container;
@@ -140,10 +144,18 @@ namespace devils_engine {
       //core::map* map; // другая карта скорее всего
       systems::ai* ai_systems;
       render::stage_container* stage_container;
+      battle::map* map;
+      render::stage_container* optimizators_container;
+      render::stage_container* render_container;
       
       battle_t();
       ~battle_t();
-      bool is_init() const;
+      inline bool is_init() const { return container.inited(); }
+      
+      void create_map_container();
+      void create_render_stages();
+      
+      void release_container();
     };
     
     struct encouter_t {
@@ -154,7 +166,7 @@ namespace devils_engine {
       
       encouter_t();
       ~encouter_t();
-      bool is_init() const;
+      inline bool is_init() const { return container.inited(); }
     };
     
     

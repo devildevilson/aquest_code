@@ -106,6 +106,7 @@ namespace devils_engine {
     
     void main_menu::clear() {
       while (exist()) menu_stack.pop();
+      container->close_layer(menu_layer);
     }
     
     bool main_menu::advance_state(game_state &current, game_state &new_state) {

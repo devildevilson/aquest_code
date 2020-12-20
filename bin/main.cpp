@@ -173,28 +173,42 @@ int main(int argc, char const *argv[]) {
   // зажимаем правую кнопку и уже должен искаться путь в отдельном потоке, причем нужно прекращать предыдущий поиск
   // и начинать следующий при смене тайла, когда мы кликаем нас перестает волновать состояние поисковика 
   // по идее мы можем это сделать через флажок
+  
+  // перейдем к генерации битв: это довольно сложная в плане кодовой базы механика,
+  // мне нужно сделать обычную битву, осаду + энкаунтер героя,
+  // все это генерируется из данных вокруг персонажей и армий (биомы, постройки, собственно сами армии)
+  // ко всему прочему мне обязательно нужно как то избавиться от ненужных данных карты,
+  // для этого мне нужно сохранить состояние глобальной карты (по идее это просто обычное сохранение игры)
+  // (можно даже спросить у игрока, нужно ли сохранить это дело на диск?) 
+  // от карты то в общем то остаются только геральдики (+ системные какие то картинки, иконки)
+  // загрузка битвы и генерация карты для этой битвы, это одно и тоже? было бы неплохо сделать сохранение и там
+  // генерация опять работает пошагово, как получить нужную инфу? в принципе генератор не особо отличается от предыдущего
+  // инфу мы можем получить на первом шаге, а дальше сохраняем и начинаем собственно генерацию
+  // короч видимо придется делать особый первый шаг
 
-  const std::vector<std::string> base_interfaces = { // как передать данные?
-    "main_menu",
-    "",
-    // должен быть указатель на персонажа, вообще наверное нет,
-    // должен быть указатель на какого то помошника (там должен быть более простой доступ ко всем функциям)
-    // например контейнер для поиска жен, и прочее, как его передать?
-    "player_interface",
-    "battle_interface",
-    "encounter_interface"
-  };
+//   const std::vector<std::string> base_interfaces = { // как передать данные?
+//     "main_menu",
+//     "",
+//     // должен быть указатель на персонажа, вообще наверное нет,
+//     // должен быть указатель на какого то помошника (там должен быть более простой доступ ко всем функциям)
+//     // например контейнер для поиска жен, и прочее, как его передать?
+//     "player_interface",
+//     "battle_interface",
+//     "encounter_interface"
+//   };
 
   const std::array<utils::quest_state*, utils::quest_state::count> game_states = {
     &main_menu_state,
     &map_creation_state,
     &world_map_state,
+    // эти стейты должны генерить карту, сохранения? в любом случае будут в этом стейте
     &battle_state,
     &encounter_state
   };
 
   uint32_t current_game_state_index = utils::quest_state::main_menu;
   utils::quest_state* current_game_state = game_states[current_game_state_index];
+  utils::quest_state* previous_game_state = nullptr;
   bool loading = true;
   current_game_state->enter();
   
@@ -210,7 +224,7 @@ int main(int argc, char const *argv[]) {
     if (global::get<render::window>()->close()) break;
 
     if (loading) {
-      if (current_game_state->load()) {
+      if (current_game_state->load(previous_game_state)) {
         loading = false;
         base_systems.interface_container->close_all();
       }
@@ -218,9 +232,15 @@ int main(int argc, char const *argv[]) {
       current_game_state->update(time);
       if (current_game_state->next_state() != UINT32_MAX) {
         const uint32_t index = current_game_state->next_state();
-        current_game_state->clean(); // ождается что здесь мы почистим все ресурсы доконца и обратно вернем next_state к UINT32_MAX
+        // ождается что здесь мы почистим все ресурсы доконца и обратно вернем next_state к UINT32_MAX
+        // это не работает для перехода от карты к битве и обратно
+        // мне либо делать так же как в героях (то есть не чистить память мира)
+        // либо нужно придумать иной способ взаимодействия между стейтами
+        // 
+        previous_game_state = current_game_state;
+//         current_game_state->clean();
         current_game_state = game_states[index];
-        current_game_state->enter(); // здесь мы должны подготовить системы к использованию
+//         current_game_state->enter(); // здесь мы должны подготовить системы к использованию
         loading = true;
         current_game_state_index = index;
       }
@@ -404,7 +424,7 @@ int main(int argc, char const *argv[]) {
     // функция каждый кадр - удобнее, но для этого придется придумать особый загрузчик для такой функции
     // в общем так или иначе мне нужно делать особую функцию
     if (tile_index != UINT32_MAX) {
-      global::get<render::tile_highlights_render>()->add(tile_index);
+      global::get<render::tile_highlights_render>()->add(tile_index, render::make_color(0.9f, 0.9f, 0.0f, 0.5f));
       if (current_game_state == &world_map_state && !loading) {
         auto nuklear_ctx = &global::get<interface::context>()->ctx;
         // нужно проверить чтобы не было пересчения с окнами
@@ -414,6 +434,8 @@ int main(int argc, char const *argv[]) {
         if (condition) tile_func(base_systems.interface_container->moonnuklear_ctx, tile_index);
       }
     }
+    
+    draw_army_path();
 
     // ошибки с отрисовкой непосредственно тайлов могут быть связаны с недостаточным буфером для индексов (исправил)
     // еще меня беспокоит то что игра занимает уже 270 мб оперативы

@@ -658,7 +658,7 @@ namespace devils_engine {
         std::swap(plate_tiles_local[i], plate_tiles_concurrent[i]);
       }
 
-      std::vector<uint32_t> tile_plates_local(tile_plate_atomic.size());
+      std::vector<uint32_t> tile_plates_local(tile_plate_atomic.size(), UINT32_MAX);
       memcpy(tile_plates_local.data(), tile_plate_atomic.data(), tile_plate_atomic.size() * sizeof(tile_plate_atomic[0]));
 //       std::vector<uint32_t> plate_new_plate(context->plate_tile_indices.size(), UINT32_MAX);
 //       for (size_t i = 0; i < context->plate_tile_indices.size(); ++i) {
@@ -811,7 +811,10 @@ namespace devils_engine {
           ++itr;
           continue;
         }
-
+        
+        PRINT_VAR("small plate index", itr - plate_tiles_local.begin())
+        PRINT_VAR("small plate tile ", (*itr)[0])
+        
         itr = plate_tiles_local.erase(itr);
       }
 

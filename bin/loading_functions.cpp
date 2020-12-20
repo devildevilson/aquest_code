@@ -27,7 +27,7 @@
 
 namespace devils_engine {
   namespace systems {
-    void advance_progress(utils::progress_container* prog, std::string str) {
+    void advance_progress(utils::progress_container* prog, const std::string &str) {
       prog->set_hint2(std::move(str));
       prog->advance();
     }
@@ -1420,8 +1420,8 @@ namespace devils_engine {
 
     void post_generation_work(systems::map_t* map_systems, systems::core_t* systems, utils::progress_container* prog) {
       UNUSED_VARIABLE(systems);
-      prog->set_hint1(std::string_view("Load map"));
-      prog->set_max_value(8);
+      //prog->set_hint1(std::string_view("Load map"));
+      //prog->set_max_value(8);
       prog->set_hint2(std::string_view("starting"));
 
       auto ctx = map_systems->core_context;
@@ -1814,18 +1814,18 @@ namespace devils_engine {
       // ну и все
       auto map_systems = global::get<systems::map_t>();
       ASSERT(map_systems != nullptr);
-      prog->set_max_value(2);
-      prog->set_hint1(std::string_view("Creating demiurge"));
-      prog->set_hint2(std::string_view("create container"));
-      prog->set_type(utils::progress_container::creating_map);
+      //prog->set_max_value(2);
+//       prog->set_hint1(std::string_view("Creating demiurge"));
+//       prog->set_hint2(std::string_view("create container"));
+//       prog->set_type(utils::progress_container::creating_map);
   //     map_systems->create_map_container(); // эти вещи нужно сделать во время загрузок
-      advance_progress(prog, "setup rendering");
+//       advance_progress(prog, "setup rendering");
       map_systems->setup_rendering_modes();
       //advance_progress(prog, "feeding up demiurge");
       //map_systems->setup_map_generator();
       //advance_progress(prog, "creating tools for demiurge");
       //setup_map_generator(map_systems);
-      advance_progress(prog, "end");
+//       advance_progress(prog, "end");
       //advance_progress(prog, "end");
       //advance_progress(prog, "end");
       //advance_progress(prog, "end");
@@ -1834,10 +1834,10 @@ namespace devils_engine {
     void from_menu_to_map(utils::progress_container* prog) {
       auto base_systems = global::get<systems::core_t>();
       auto map_systems = global::get<systems::map_t>();
-      prog->set_max_value(11);
-      prog->set_hint1(std::string_view("Load world"));
-      prog->set_hint2(std::string_view("create container"));
-      prog->set_type(utils::progress_container::loading_map);
+//       prog->set_max_value(11);
+//       prog->set_hint1(std::string_view("Load world"));
+//       prog->set_hint2(std::string_view("create container"));
+//       prog->set_type(utils::progress_container::loading_map);
       // так я могу не успеть создать ничего более прежде чем подойду к блокировке мьютекса в мейне
       // что делать в этом случае? использовать atomic_bool?
   //     map_systems->create_map_container();
@@ -1854,12 +1854,14 @@ namespace devils_engine {
       base_systems->menu->loading_path.clear();
       base_systems->menu->loading_path.shrink_to_fit();
       advance_progress(prog, "end");
+      
+      ASSERT(prog->finished());
     }
 
     void from_create_map_to_map(utils::progress_container* prog) {
       auto map_systems = global::get<systems::map_t>();
       auto base_systems = global::get<systems::core_t>();
-      prog->set_type(utils::progress_container::loading_created_map);
+      //prog->set_type(utils::progress_container::loading_created_map);
       auto t = global::get<render::tile_optimizer>();
       t->set_border_rendering(false);
       post_generation_work(map_systems, base_systems, prog);
@@ -1867,6 +1869,8 @@ namespace devils_engine {
       //advance_progress(prog, "end");
       //advance_progress(prog, "end");
       //advance_progress(prog, "end");
+      
+      ASSERT(prog->finished());
     }
   }
 }

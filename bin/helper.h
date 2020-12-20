@@ -113,6 +113,8 @@ namespace devils_engine {
   
   void check_tile(const map::container* map, const uint32_t &tile_index);
   
+  void draw_army_path();
+  
   void advance_army(core::army* army);
 
   void callback(int error, const char* description);

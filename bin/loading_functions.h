@@ -29,6 +29,7 @@ namespace devils_engine {
     
     std::array<std::pair<uint32_t, uint32_t>, MAX_BIOMES_COUNT> get_season_biomes_data(const systems::map_t* map_system);
     
+    void advance_progress(utils::progress_container* prog, const std::string &str);
     void setup_map_generator(const systems::map_t* map_data);
     
     void find_border_points(core::map* map, const core::context* ctx);

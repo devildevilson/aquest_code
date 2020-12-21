@@ -65,6 +65,7 @@ include_directories(
   include/lz4/lib/
   include/protobuf/src/
   include/cista/include/
+  include/glm/
 )
 link_directories(
   ${CMAKE_CURRENT_BINARY_DIR}
@@ -81,11 +82,11 @@ set(CMAKE_SKIP_BUILD_RPATH TRUE)
 if (WIN32 OR MINGW)
   set(CPPFS_LIB_PATH C:/libs/cppfs)
 
-  set(GLFW3_LIB_DIRS C:/libs/glfw-3.2.1.bin.WIN64/lib-mingw-w64)
-  set(GLFW3_INCLUDE_DIRS C:/libs/glfw-3.2.1.bin.WIN64/include)
+  set(GLFW3_LIB_DIRS C:/libs/glfw-3.3.2.bin.WIN64/lib-vc2019)
+  set(GLFW3_INCLUDE_DIRS C:/libs/glfw-3.3.2.bin.WIN64/include)
   set(GLFW3_LIBRARIES glfw3dll)
 
-  set(VULKAN_SDK_PATH C:/VulkanSDK/1.1.97.0)
+  set(VULKAN_SDK_PATH C:/VulkanSDK/1.2.162.0)
   set(VULKAN_LIB_PATH ${VULKAN_SDK_PATH}/Lib)
   set(VULKAN_INCLUDE_PATH ${VULKAN_SDK_PATH}/Include)
   set(GLSL_VALIDATOR "${VULKAN_SDK_PATH}/Bin/glslangValidator")

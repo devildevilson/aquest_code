@@ -188,7 +188,7 @@ namespace devils_engine {
       }
       
       auto solution_array = searcher->solution();
-      const size_t final_path_size = solution_array.size()-1;
+      const size_t final_path_size = solution_array.size();
       auto path_start = path_pool.create();
       auto tmp = path_start;
       for (uint32_t i = 0, counter = 0; i < solution_array.size(); ++i, ++counter) {

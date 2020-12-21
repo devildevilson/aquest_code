@@ -214,10 +214,10 @@ namespace devils_engine {
   bool frustum_test_123(const render::frustum_t frustum, const glm::vec4 center, const float radius) {
     PRINT("start")
     bool result = true;
-    for (uint i = 0; i < 6; ++i) {
+    for (uint32_t i = 0; i < 6; ++i) {
       const float d = glm::dot(center, frustum.planes[i]);
       const bool res = !(d <= -radius);
-      result = bool(glm::min(uint(result), uint(res)));
+      result = bool(glm::min(uint32_t(result), uint32_t(res)));
       
       PRINT_VEC4("center", center)
       PRINT_VEC4("norm  ", frustum.planes[i])
@@ -417,6 +417,7 @@ namespace devils_engine {
     // тут нужно получить тайл рейкастингом
     auto selector = global::get<systems::core_t>()->objects_selector; // селектора поди будет два
     auto ctx = global::get<systems::map_t>()->core_context;
+    auto map = global::get<systems::map_t>()->map;
     auto path_seaker = global::get<systems::core_t>()->path_managment;
     auto pool = global::get<dt::thread_pool>();
     
@@ -450,6 +451,10 @@ namespace devils_engine {
       }
       
       if (new_tile) {
+        const auto& tile_data = render::unpack_data(map->get_tile(casted_tile_index));
+        if (tile_data.height < 0.0f) return current_pressed;
+        if (tile_data.height > 0.5f) return current_pressed;
+
         for (uint32_t i = 0; i < selector->count; ++i) {
           const auto &unit = selector->units[i];
           if (unit.type == utils::objects_selector::unit::type::army) {
@@ -1132,6 +1137,9 @@ namespace devils_engine {
         const auto current_container = ai::advance_container(path, container);
         const uint32_t tile_index = current_container->tile_path[index].tile;
         const float tile_cost = current_container->tile_path[index].cost;
+
+        ASSERT(tile_index < core::map::hex_count_d(core::map::detail_level));
+
         // сравниваем
         const auto color = max_cost > tile_cost ? render::make_color(0.0f, 0.7f, 0.0f, 0.5f) : render::make_color(0.7f, 0.0f, 0.0f, 0.5f);
         highlighter->add(tile_index, color);
@@ -1181,6 +1189,8 @@ namespace devils_engine {
 //     uint32_t current_height_layer = render::compute_height_layer(tile_data.height);
     
     //ASSERT(army->current_path < army->path_size);
+
+    if (army->path_size == 0) return;
     
     if (army->current_path == army->path_size) {
       // теперь тут удобнее сделать путь со стартовым тайлом
@@ -1206,14 +1216,15 @@ namespace devils_engine {
     }
     
     //army->current_path = next_current_path;
-    const uint32_t new_container = (next_current_path) / ai::path_container::container_size;
-    const uint32_t new_index     = (next_current_path) % ai::path_container::container_size;
-    const uint32_t new_tile      = ai::advance_container(army->path, new_container)->tile_path[new_index].tile;
+    //const uint32_t new_container = (next_current_path) / ai::path_container::container_size;
+    //const uint32_t new_index     = (next_current_path) % ai::path_container::container_size;
+    //const uint32_t new_tile      = ai::advance_container(army->path, new_container)->tile_path[new_index].tile;
     
     // теперь пытаемся поставить армию в next_current_path
     uint32_t tmp = UINT32_MAX;
-    bool ret = map->tile_objects_index_comp_swap(new_tile, 4, tmp, army->army_gpu_slot);
-    
+    //bool ret = map->tile_objects_index_comp_swap(new_tile, 4, tmp, army->army_gpu_slot);
+    bool ret = false;
+
     while (!ret && next_current_path > army->current_path) {
       --next_current_path;
       

@@ -97,8 +97,10 @@ namespace devils_engine {
       m_right = glm::normalize(glm::cross(up, m_front));
       m_up = glm::normalize(glm::cross(m_front, m_right));
       
-      const float current_zoom = glm::length(current_pos) - (core::map::world_radius + minimum_camera_height);
-      ASSERT(current_zoom >= (min_zoom-1.0f) && current_zoom <= (max_zoom+1.0f));
+      float current_zoom = glm::length(current_pos) - (core::map::world_radius + minimum_camera_height);
+      //ASSERT(current_zoom >= (min_zoom-1.0f) && current_zoom <= (max_zoom+1.0f));
+      current_zoom = std::max(current_zoom, min_zoom - 1.0f);
+      current_zoom = std::min(current_zoom, max_zoom + 1.0f);
       float a;
       m_dir = compute_dir(m_front, current_zoom, a);
       const float norm_zoom = (current_zoom - min_zoom) / (max_zoom - min_zoom);

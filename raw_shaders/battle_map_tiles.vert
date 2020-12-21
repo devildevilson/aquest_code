@@ -2,6 +2,7 @@
 
 #extension GL_GOOGLE_include_directive : enable
 #include "../render/shared_structures.h"
+#include "../render/shared_battle_structures.h"
 #include "../utils/shared_mathematical_constant.h"
 
 const vec2 hexagon_uv[] = {
@@ -74,7 +75,7 @@ void main() {
   const float offset_z_4 = 0.25f * tile_height;
   const float offset_z_2 = 0.5f * tile_height;
 
-  const float final_point_pos = rendering_walls ?
+  const vec3 final_point_pos = rendering_walls ?
     vec3(tile_pos.x + walls_pos_offsets_arr[point_index].x * offset_x,      final_point_height, tile_pos.y + walls_pos_offsets_arr[point_index].y * offset_z_4) :
     vec3(tile_pos.x + hexagon_points_offsets_arr[point_index].x * offset_x, final_point_height, tile_pos.y + hexagon_points_offsets_arr[point_index].y * offset_z_4);
   gl_Position = vec4(final_point_pos, 1.0f);

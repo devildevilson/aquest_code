@@ -47,7 +47,7 @@ void main() {
   const float tile_height_dist = (3.0f/4.0f) * tile_height;
   const vec2 tile_pos = tile_coord * vec2(tile_width_dist, tile_height_dist); // + const ?
 
-  const vec3 final_tile_pos = vec3(tile_pos.x, 0.0f, tile_pos.y);
+  const vec4 final_tile_pos = vec4(tile_pos.x, 0.0f, tile_pos.y, 1.0f);
 
   const bool ret = frustum_test(frustum, final_tile_pos, 1.0f);
   if (!ret) return;

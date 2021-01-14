@@ -27,9 +27,10 @@ namespace devils_engine {
 //         }
 //       }
       
-      container::container() :
+      container::container(const uint32_t &tiles_count) :
+        tiles_count(tiles_count),
         tile_type{0, nullptr, nullptr},
-        tiles(core::map::hex_count_d(core::map::detail_level))
+        tiles(tiles_count)
       {}
       
       container::~container() {
@@ -96,7 +97,7 @@ namespace devils_engine {
       template <>
       void container::set_data(const uint32_t &type, const uint32_t &index, const uint32_t &parameter_type, const float &data) {
         if (type == 0) {
-          if (core::map::hex_count_d(core::map::detail_level) <= index) throw std::runtime_error("Bad entity index");
+          if (tiles_count <= index) throw std::runtime_error("Bad entity index");
           if (tile_type.types_count <= parameter_type) throw std::runtime_error("Bad parameter type");
           if (tile_type.types[parameter_type] != data_type::float_t) throw std::runtime_error("Bad data type");
           
@@ -116,7 +117,7 @@ namespace devils_engine {
       template <>
       void container::set_data(const uint32_t &type, const uint32_t &index, const uint32_t &parameter_type, const int32_t &data) {
         if (type == 0) {
-          if (core::map::hex_count_d(core::map::detail_level) <= index) throw std::runtime_error("Bad entity index");
+          if (tiles_count <= index) throw std::runtime_error("Bad entity index");
           if (tile_type.types_count <= parameter_type) throw std::runtime_error("Bad parameter type");
           if (tile_type.types[parameter_type] != data_type::int_t) throw std::runtime_error("Bad data type");
           
@@ -136,7 +137,7 @@ namespace devils_engine {
       template <>
       void container::set_data(const uint32_t &type, const uint32_t &index, const uint32_t &parameter_type, const uint32_t &data) {
         if (type == 0) {
-          if (core::map::hex_count_d(core::map::detail_level) <= index) throw std::runtime_error("Bad entity index");
+          if (tiles_count <= index) throw std::runtime_error("Bad entity index");
           if (tile_type.types_count <= parameter_type) throw std::runtime_error("Bad parameter type");
           if (tile_type.types[parameter_type] != data_type::uint_t) throw std::runtime_error("Bad data type");
           
@@ -156,7 +157,7 @@ namespace devils_engine {
       template <>
       void container::set_data(const uint32_t &type, const uint32_t &index, const uint32_t &parameter_type, const glm::vec3 &data) {
         if (type == 0) {
-          if (core::map::hex_count_d(core::map::detail_level) <= index) throw std::runtime_error("Bad entity index");
+          if (tiles_count <= index) throw std::runtime_error("Bad entity index");
           if (tile_type.types_count <= parameter_type) throw std::runtime_error("Bad parameter type");
           if (tile_type.types_count < parameter_type+3) throw std::runtime_error("Not enough memory for this type");
           if (tile_type.types[parameter_type+0] != data_type::float_t) throw std::runtime_error("Bad data type");
@@ -186,7 +187,7 @@ namespace devils_engine {
       template <>
       float container::get_data(const uint32_t &type, const uint32_t &index, const uint32_t &parameter_type) const {
         if (type == 0) {
-          if (core::map::hex_count_d(core::map::detail_level) <= index) throw std::runtime_error("Bad entity index");
+          if (tiles_count <= index) throw std::runtime_error("Bad entity index");
           if (tile_type.types_count <= parameter_type) throw std::runtime_error("Bad parameter type");
           if (tile_type.types[parameter_type] != data_type::float_t) throw std::runtime_error("Bad data type");
           
@@ -205,7 +206,7 @@ namespace devils_engine {
       template <>
       int32_t container::get_data(const uint32_t &type, const uint32_t &index, const uint32_t &parameter_type) const {
         if (type == 0) {
-          if (core::map::hex_count_d(core::map::detail_level) <= index) throw std::runtime_error("Bad entity index");
+          if (tiles_count <= index) throw std::runtime_error("Bad entity index");
           if (tile_type.types_count <= parameter_type) throw std::runtime_error("Bad parameter type");
           if (tile_type.types[parameter_type] != data_type::int_t) throw std::runtime_error("Bad data type");
           
@@ -224,7 +225,7 @@ namespace devils_engine {
       template <>
       uint32_t container::get_data(const uint32_t &type, const uint32_t &index, const uint32_t &parameter_type) const {
         if (type == 0) {
-          if (core::map::hex_count_d(core::map::detail_level) <= index) throw std::runtime_error("Bad entity index");
+          if (tiles_count <= index) throw std::runtime_error("Bad entity index");
           if (tile_type.types_count <= parameter_type) throw std::runtime_error("Bad parameter type");
           if (tile_type.types[parameter_type] != data_type::uint_t) throw std::runtime_error("Bad data type");
           
@@ -243,7 +244,7 @@ namespace devils_engine {
       template <>
       glm::vec3 container::get_data(const uint32_t &type, const uint32_t &index, const uint32_t &parameter_type) const {
         if (type == 0) {
-          if (core::map::hex_count_d(core::map::detail_level) <= index) throw std::runtime_error("Bad entity index");
+          if (tiles_count <= index) throw std::runtime_error("Bad entity index");
           if (tile_type.types_count <= parameter_type) throw std::runtime_error("Bad parameter type");
           if (tile_type.types_count < parameter_type+3) throw std::runtime_error("Not enough memory for this type");
           if (tile_type.types[parameter_type+0] != data_type::float_t) throw std::runtime_error("Bad data type");
@@ -274,6 +275,25 @@ namespace devils_engine {
         entities[final_type].second[index].childs.push_back(child);
       }
       
+      uint32_t container::get_child(const uint32_t &type, const uint32_t &index, const uint32_t &array_index) const {
+        if (type == 0) throw std::runtime_error("Tiles dont have childs");
+        const uint32_t final_type = type-1;
+        if (entities.size() <= final_type) throw std::runtime_error("Bad entity type");
+        if (entities[final_type].second.size() <= index) throw std::runtime_error("Bad entity index");
+        if (entities[final_type].second[index].childs.size() <= array_index) throw std::runtime_error("Bad child index");
+        
+        return entities[final_type].second[index].childs[array_index];
+      }
+      
+      uint32_t container::get_childs_count(const uint32_t &type, const uint32_t &index) const {
+        if (type == 0) throw std::runtime_error("Tiles dont have childs");
+        const uint32_t final_type = type-1;
+        if (entities.size() <= final_type) throw std::runtime_error("Bad entity type");
+        if (entities[final_type].second.size() <= index) throw std::runtime_error("Bad entity index");
+        
+        return entities[final_type].second[index].childs.size();
+      }
+      
       const std::vector<uint32_t> & container::get_childs(const uint32_t &type, const uint32_t &index) const {
         if (type == 0) throw std::runtime_error("Tiles dont have childs");
         const uint32_t final_type = type-1;
@@ -291,35 +311,6 @@ namespace devils_engine {
         
         return entities[final_type].second[index].childs;
       }
-      
-      void container::add_province_neighbour(const uint32_t &index, const uint32_t &neighbour) {
-        if (index >= province_neighbours.size()) throw std::runtime_error("Bad entity index");
-        province_neighbours[index].push_back(neighbour);
-      }
-      
-      const std::vector<uint32_t> & container::get_province_neighbours(const uint32_t &index) const {
-        if (index >= province_neighbours.size()) throw std::runtime_error("Bad entity index");
-        return province_neighbours[index];
-      }
-      
-      std::vector<uint32_t> & container::get_province_neighbours(const uint32_t &index) {
-        if (index >= province_neighbours.size()) throw std::runtime_error("Bad entity index");
-        return province_neighbours[index];
-      }
-      
-//       void container::set_name(const uint32_t &type, const uint32_t &index, const std::string &name) {
-//         if (entities.size() <= type) throw std::runtime_error("Bad entity type");
-//         if (entities[type].second.size() <= index) throw std::runtime_error("Bad entity index");
-//         
-//         entities[type].second[index].name = name;
-//       }
-//       
-//       std::string container::get_name(const uint32_t &type, const uint32_t &index) const {
-//         if (entities.size() <= type) throw std::runtime_error("Bad entity type");
-//         if (entities[type].second.size() <= index) throw std::runtime_error("Bad entity index");
-//         
-//         return entities[type].second[index].name;
-//       }
       
       size_t container::entities_count(const uint32_t &type) const {
         if (type == 0) return core::map::hex_count_d(core::map::detail_level);

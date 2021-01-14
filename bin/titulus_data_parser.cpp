@@ -5,6 +5,7 @@
 #include "utils/string_container.h"
 #include "core_context.h"
 #include "utils/serializator_helper.h"
+#include "map_creator.h"
 
 namespace devils_engine {
   namespace utils {
@@ -42,7 +43,7 @@ namespace devils_engine {
     };
     
     size_t add_title(const sol::table &table) {
-      return global::get<utils::table_container>()->add_table(core::structure::titulus, table);
+      return global::get<map::creator::table_container_t>()->add_table(static_cast<size_t>(core::structure::titulus), table);
     }
     
     bool validate_title(const size_t &index, const sol::table &table) {

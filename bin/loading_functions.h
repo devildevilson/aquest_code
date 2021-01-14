@@ -5,8 +5,11 @@
 #include <cstdint>
 #include <string>
 #include <array>
+#include "utils/sol.h"
 
 #define MAX_BIOMES_COUNT 0xff
+
+class FastNoise;
 
 namespace dt {
   class thread_pool;
@@ -18,9 +21,20 @@ namespace devils_engine {
     class context;
   }
   
+  namespace battle {
+    struct map;
+  }
+  
+  namespace map {
+    namespace generator {
+      class container;
+    }
+  }
+  
   namespace utils {
     class progress_container;
     class world_serializator;
+    struct random_engine_st;
   }
   
   namespace systems {
@@ -42,6 +56,8 @@ namespace devils_engine {
     void from_menu_to_create_map(utils::progress_container* prog);
     void from_menu_to_map(utils::progress_container* prog);
     void from_create_map_to_map(utils::progress_container* prog);
+    void from_map_to_battle_part1(sol::state_view lua, utils::progress_container* prog);
+    void from_map_to_battle_part2(sol::state_view lua, utils::progress_container* prog);
   }
 }
 

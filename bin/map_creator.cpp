@@ -11,6 +11,7 @@
 #include "utils/thread_pool.h"
 #include "utils/interface_container.h"
 #include "utils/progress_container.h"
+#include "map.h"
 
 #include <stdexcept>
 #include <random>
@@ -178,10 +179,16 @@ namespace devils_engine {
     std::string step::step_function() const {
       return m_step_function;
     }
+    
+    union convert {
+      uint64_t u;
+      double d;
+    };
 
     creator::creator(utils::interface_container* interface, core::map* map, core::seasons* seasons) :
       lua(),
       table(lua.create_table()),
+      temp_container(core::map::hex_count_d(core::map::detail_level)),
       rand_seed(1),
       noise_seed(1),
       current_step(0),
@@ -210,19 +217,30 @@ namespace devils_engine {
       interface->lua.require_file("serpent", path + "serpent.lua");
       interface_table = interface->lua.create_table();
       auto gen_table = interface->lua["generator"].get_or_create<sol::table>();
-      gen_table["setup_random_seed"] = [this] (const uint32_t &seed) {
-        this->rand_seed = seed;
-        this->random.set_seed(seed);
+      gen_table["setup_random_seed"] = [this] (const double &seed) {
+        convert c;
+        c.d = seed;
+        
+        this->rand_seed = c.u;
+        this->random.set_seed(c.u);
       };
 
-      gen_table["setup_noise_seed"] = [this] (const uint32_t &seed) {
-        this->noise_seed = seed;
-        this->noise.SetSeed(*reinterpret_cast<const int*>(&seed));
+      gen_table["setup_noise_seed"] = [this] (const double &seed) {
+        convert c;
+        c.d = seed;
+        
+        this->noise_seed = c.u;
+        this->noise.SetSeed(*reinterpret_cast<const int*>(&this->noise_seed));
       };
 
-      gen_table["get_random_int"] = [] () {
+      gen_table["get_random_number"] = [] () -> double {
         std::random_device dev;
-        return dev();
+        static_assert(sizeof(std::random_device::result_type) == sizeof(uint32_t));
+        const uint64_t tmp = (uint64_t(dev()) << 32) | uint64_t(dev());
+        
+        convert c;
+        c.u = tmp;
+        return c.d;
       };
 
       gen_table["set_world_name"] = [this] (const std::string_view &str) {
@@ -253,9 +271,9 @@ namespace devils_engine {
         steps_pool.destroy(p);
       }
 
-      global::get<utils::table_container>(reinterpret_cast<utils::table_container*>(SIZE_MAX));
+      global::get<table_container_t>(reinterpret_cast<table_container_t*>(SIZE_MAX));
       global::get<sol::state>(reinterpret_cast<sol::state*>(SIZE_MAX));
-      ASSERT(global::get<utils::table_container>() == nullptr);
+      ASSERT(global::get<table_container_t>() == nullptr);
 
       auto gen_table = interface->lua["generator"].get_or_create<sol::table>();
       gen_table["setup_random_seed"] = sol::nil;
@@ -457,14 +475,14 @@ namespace devils_engine {
       return lua;
     }
 
-    utils::table_container & creator::table_container() {
+    creator::table_container_t & creator::table_container() {
       return m_table_container;
     }
 
     std::string creator::get_world_name() const { return world_name; }
     std::string creator::get_folder_name() const { return folder_name; }
     std::string creator::get_settings() const { return world_settings; }
-    uint32_t creator::get_rand_seed() const { return rand_seed; }
+    uint64_t creator::get_rand_seed() const { return rand_seed; }
     uint32_t creator::get_noise_seed() const { return noise_seed; }
   }
 }

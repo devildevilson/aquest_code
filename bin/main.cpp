@@ -24,7 +24,6 @@ int main(int argc, char const *argv[]) {
 
   // насколько адекватно создавать луа стейт для каждого потока?
   const uint32_t thread_pool_size = std::max(std::thread::hardware_concurrency()-1, uint32_t(1));
-  //const uint32_t threads_count = thread_pool_size+1;
   dt::thread_pool pool(thread_pool_size);
   global::get(&pool);
 
@@ -70,9 +69,9 @@ int main(int argc, char const *argv[]) {
   const float dist = 550.0f;
   const glm::vec3 default_camera_pos = glm::normalize(glm::vec3(1.0f, 0.0f, 0.0f)) * dist;
 
-  components::camera camera(default_camera_pos); // будем использовать эту камеру только в ворлд мап
-  camera.zoom_add(100.0f);
-  global::get(&camera);
+  //components::camera camera(default_camera_pos); // будем использовать эту камеру только в ворлд мап
+  //camera.zoom_add(100.0f);
+  //global::get(&camera);
   // для других состояний нам нужны другие камеры
 
   // какие энтити у нас будут? провинции?
@@ -185,6 +184,8 @@ int main(int argc, char const *argv[]) {
   // генерация опять работает пошагово, как получить нужную инфу? в принципе генератор не особо отличается от предыдущего
   // инфу мы можем получить на первом шаге, а дальше сохраняем и начинаем собственно генерацию
   // короч видимо придется делать особый первый шаг
+  
+  // мне нужно придумать способ свободно отключать рендеринг какой то части пайплайна
 
 //   const std::vector<std::string> base_interfaces = { // как передать данные?
 //     "main_menu",
@@ -206,11 +207,12 @@ int main(int argc, char const *argv[]) {
     &encounter_state
   };
 
-  uint32_t current_game_state_index = utils::quest_state::main_menu;
+  //uint32_t current_game_state_index = utils::quest_state::main_menu;
+  uint32_t current_game_state_index = utils::quest_state::battle;
   utils::quest_state* current_game_state = game_states[current_game_state_index];
   utils::quest_state* previous_game_state = nullptr;
   bool loading = true;
-  current_game_state->enter();
+//   current_game_state->enter();
   
 //   std::vector<void*> map_buffer(5000, nullptr);
 
@@ -401,15 +403,17 @@ int main(int argc, char const *argv[]) {
       // либо собрать все ребра на карте (по идее их столько же сколько точек), и дополнительно вычислить еще и ребра
     }
     
+    auto camera = get_camera();
     const uint32_t tile_index = cast_mouse_ray();
-    
-    mouse_input(&camera, time, tile_index);
+    mouse_input(camera, time, tile_index);
     key_input(time, current_game_state_index, loading);
-    zoom_input(&camera);
+    zoom_input(camera);
     next_nk_frame(time);
-    camera::strategic(&camera);
+    camera::strategic(camera);
     
-    camera.update(time);
+    if (camera != nullptr) camera->update(time);
+    
+//     PRINT_VEC3("camera pos", camera->current_pos())
     
     base_systems.interface_container->draw(time);
     
@@ -441,8 +445,8 @@ int main(int argc, char const *argv[]) {
     // еще меня беспокоит то что игра занимает уже 270 мб оперативы
     // (примерно 100 мб занимает вся информация о игровой карте (размер контейнера и размер данных в кор::мап))
     // (еще мегобайт 100 занимает луа (похоже что с этим бороться будет крайне сложно))
-    // нужно каким то образом это сократить
-    map_systems.lock_map();
+    // нужно каким то образом это сократить (по итогу все это дело занимает сейчас 500 мб, и 1 гб при генерации)
+    lock_rendering();
     base_systems.render_slots->update(global::get<render::container>());
     const size_t sync_time = global::get<render::window>()->flags.vsync() ? global::get<render::window>()->refresh_rate_mcs() : 0;
     sync(frame_time, sync_time);

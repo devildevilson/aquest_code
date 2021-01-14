@@ -153,7 +153,7 @@ namespace devils_engine {
     const bool changed = !(last_xpos == xpos && last_ypos == ypos);
 
     const float zoom = camera->zoom();
-    const float zoom_k = zoom / components::camera::max_zoom;
+    const float zoom_k = zoom / camera->max_zoom();
     const float sens = settings->game.camera_movement * (1.0f + zoom_k * 0.5f);
     const float x_sens = settings->game.camera_movement_x;
     const float y_sens = settings->game.camera_movement_x;
@@ -176,32 +176,32 @@ namespace devils_engine {
     return current_pressed;
   }
   
-  void find_map_points(const render::buffers* buffers, const components::camera* camera, glm::vec4 &first_point, glm::vec4 &first_point_height) {
-    const auto camera_pos = buffers->get_pos();
-    const auto cursor_dir = buffers->get_cursor_dir();
-    const auto camera_dir = buffers->get_dir();
-    
-    // мы выделяем боксом и на выпуклой сфере есть шанс пройти ниже земли боксом
-    // соответсвенно нужно его увеличить (есть ли в этом случае шанс захватить лишние объекты? наверное)
-    
-    const float minimum_dist = 100.0f;
-    const float maximum_dist = 256.0f;
-    
-    const float raw_zoom = camera->zoom();
-    const float zoom_norm = (raw_zoom - components::camera::min_zoom) / (components::camera::max_zoom - components::camera::min_zoom);
-    
-    const float final_dist = glm::mix(minimum_dist, maximum_dist, zoom_norm);
-    
-    float hit = hit_sphere(glm::vec4(0.0f, 0.0f, 0.0f, 1.0f), core::map::world_radius, {camera_pos, cursor_dir});
-    const bool ray_hit_sphere = hit >= 0.0f;
-    if (!ray_hit_sphere) hit = final_dist;
-    
-    first_point = camera_pos + cursor_dir * hit;
-    first_point_height = ray_hit_sphere ? 
-      first_point + (-camera_dir) * (components::camera::minimum_camera_height + 1.0f) : 
-      first_point + (-camera_dir) * (final_dist * 0.75f);
-    // че делать с ситуацией когда мы можем выделить два раза области вне сферы? по идее просто умножить на какой то коэффициент
-  }
+//   void find_map_points(const render::buffers* buffers, const components::camera* camera, glm::vec4 &first_point, glm::vec4 &first_point_height) {
+//     const auto camera_pos = buffers->get_pos();
+//     const auto cursor_dir = buffers->get_cursor_dir();
+//     const auto camera_dir = buffers->get_dir();
+//     
+//     // мы выделяем боксом и на выпуклой сфере есть шанс пройти ниже земли боксом
+//     // соответсвенно нужно его увеличить (есть ли в этом случае шанс захватить лишние объекты? наверное)
+//     
+//     const float minimum_dist = 100.0f;
+//     const float maximum_dist = 256.0f;
+//     
+//     const float raw_zoom = camera->zoom();
+//     const float zoom_norm = (raw_zoom - camera->min_zoom()) / (camera->max_zoom() - camera->min_zoom());
+//     
+//     const float final_dist = glm::mix(minimum_dist, maximum_dist, zoom_norm);
+//     
+//     float hit = hit_sphere(glm::vec4(0.0f, 0.0f, 0.0f, 1.0f), core::map::world_radius, {camera_pos, cursor_dir});
+//     const bool ray_hit_sphere = hit >= 0.0f;
+//     if (!ray_hit_sphere) hit = final_dist;
+//     
+//     first_point = camera_pos + cursor_dir * hit;
+//     first_point_height = ray_hit_sphere ? 
+//       first_point + (-camera_dir) * (components::camera::minimum_camera_height + 1.0f) : 
+//       first_point + (-camera_dir) * (final_dist * 0.75f);
+//     // че делать с ситуацией когда мы можем выделить два раза области вне сферы? по идее просто умножить на какой то коэффициент
+//   }
   
   glm::vec4 find_triangle_normal(const glm::vec4 &p1, const glm::vec4 &p2, const glm::vec4 &p3) {
     const glm::vec4 u_vec = p2 - p1;
@@ -249,7 +249,7 @@ namespace devils_engine {
     
     static bool was_pressed = false;
     static double prev_xpos = -1.0, prev_ypos = -1.0;
-    static glm::vec4 first_point, first_point_height;
+//     static glm::vec4 first_point, first_point_height;
     
     static const utils::id activate_click = utils::id::get("activate_click");
     //const bool current_pressed = input::check_event(activate_click, input::state_press | input::state_double_press | input::state_long_press);
@@ -264,7 +264,7 @@ namespace devils_engine {
       if (hovered) return true;
       
       // находим первую точку
-      find_map_points(buffers, camera, first_point, first_point_height);
+//       find_map_points(buffers, camera, first_point, first_point_height);
       
       prev_xpos = xpos;
       prev_ypos = ypos;
@@ -279,33 +279,33 @@ namespace devils_engine {
     // где то еще нужно нарисовать область выделения
     // возможно прямо тут
     
-    glm::vec4 second_point;
-    glm::vec4 second_point_height;
-    find_map_points(buffers, camera, second_point, second_point_height);
-//     const glm::vec4 second_dir = buffers->get_cursor_dir();
-      
-    const std::initializer_list<glm::vec4> point_arr = {
-      first_point, first_point_height, second_point, second_point_height
-    };
-    
-    glm::vec4 min = first_point, max = first_point;
-    for (uint32_t i = 1; i < point_arr.size(); ++i) {
-      min = glm::min(min, point_arr.begin()[i]);
-      max = glm::max(max, point_arr.begin()[i]);
-    }
-    
-    // куда мы это дело спихнем?
-    // можно в принципе в камеру, только это особо нигде больше не нужно
-    // еще бы сделать минимальный бокс (хотя насколько это вообще нужно?)
-    
-//     const auto center =         (max + min) / 2.0f;
-//     const auto extent = glm::abs(max - min) / 2.0f;
-//     const auto final_extent = glm::max(extent, glm::vec4(0.2f, 0.2f, 0.2f, 0.0f));
+//     glm::vec4 second_point;
+//     glm::vec4 second_point_height;
+//     find_map_points(buffers, camera, second_point, second_point_height);
+// //     const glm::vec4 second_dir = buffers->get_cursor_dir();
+//       
+//     const std::initializer_list<glm::vec4> point_arr = {
+//       first_point, first_point_height, second_point, second_point_height
+//     };
 //     
-//     min = center - final_extent;
-//     max = center + final_extent;
-    
-    opt->set_selection_box({min, max});
+//     glm::vec4 min = first_point, max = first_point;
+//     for (uint32_t i = 1; i < point_arr.size(); ++i) {
+//       min = glm::min(min, point_arr.begin()[i]);
+//       max = glm::max(max, point_arr.begin()[i]);
+//     }
+//     
+//     // куда мы это дело спихнем?
+//     // можно в принципе в камеру, только это особо нигде больше не нужно
+//     // еще бы сделать минимальный бокс (хотя насколько это вообще нужно?)
+//     
+// //     const auto center =         (max + min) / 2.0f;
+// //     const auto extent = glm::abs(max - min) / 2.0f;
+// //     const auto final_extent = glm::max(extent, glm::vec4(0.2f, 0.2f, 0.2f, 0.0f));
+// //     
+// //     min = center - final_extent;
+// //     max = center + final_extent;
+//     
+//     opt->set_selection_box({min, max});
     
     const glm::dvec2 screen_min = glm::min(glm::dvec2(prev_xpos, prev_ypos), glm::dvec2(glm::max(xpos, 0.0), glm::max(ypos, 0.0)));
     const glm::dvec2 screen_max = glm::max(glm::dvec2(prev_xpos, prev_ypos), glm::dvec2(glm::max(xpos, 0.0), glm::max(ypos, 0.0)));
@@ -324,7 +324,7 @@ namespace devils_engine {
     const float maximum_dist = 256.0f;
     
     const float raw_zoom = camera->zoom();
-    const float zoom_norm = (raw_zoom - components::camera::min_zoom) / (components::camera::max_zoom - components::camera::min_zoom);
+    const float zoom_norm = (raw_zoom - camera->min_zoom()) / (camera->max_zoom() - camera->min_zoom());
     
     const float final_dist = glm::mix(minimum_dist, maximum_dist, zoom_norm);
     const float near = 1.0f;
@@ -539,7 +539,7 @@ namespace devils_engine {
     
     // сенсу нужно сильно увеличить, и нужно ограничить угол подъема камеры
     const float zoom = camera->zoom();
-    const float zoom_k = (zoom - components::camera::min_zoom) / (components::camera::max_zoom - components::camera::min_zoom);
+    const float zoom_k = (zoom - camera->min_zoom()) / (camera->max_zoom() - camera->min_zoom());
     const float sens = settings->game.camera_movement * (1.0f + zoom_k * 0.5f);
     const float x_sens = settings->game.camera_movement_x;
     const float y_sens = settings->game.camera_movement_x;
@@ -551,6 +551,7 @@ namespace devils_engine {
   
   // сюда нужно передать индекс тайла выделяемого сейчас мышкой
   void mouse_input(components::camera* camera, const size_t &time, const uint32_t &casted_tile_index) {
+    if (camera == nullptr) return;
     auto window = global::get<render::window>();
 //     auto ctx = global::get<interface::context>();
 //     auto buffers = global::get<render::buffers>();
@@ -688,6 +689,7 @@ namespace devils_engine {
   }
 
   void zoom_input(components::camera* camera) {
+    if (camera == nullptr) return;
     auto input_data = global::get<input::data>();
     auto ctx = global::get<interface::context>();
     const bool window_focus = nk_window_is_any_hovered(&ctx->ctx);
@@ -1075,7 +1077,8 @@ namespace devils_engine {
       global::get<render::task_start>()->wait();
       //global::get<render::stage_container>()->clear();
       global::get<systems::core_t>()->render_slots->clear();
-      global::get<systems::map_t>()->unlock_map();
+      //global::get<systems::map_t>()->unlock_map();
+      unlock_rendering();
     }
 
     size_t mcs = 0;
@@ -1332,6 +1335,22 @@ namespace devils_engine {
     // и тогда необязательно приводить к другому типу данные
     
     recompute_army_pos(army);
+  }
+  
+  void lock_rendering() {
+    global::get<systems::map_t>()->lock_map();
+    global::get<systems::battle_t>()->lock_map();
+  }
+  
+  void unlock_rendering() {
+    global::get<systems::map_t>()->unlock_map();
+    global::get<systems::battle_t>()->unlock_map();
+  }
+  
+  components::camera* get_camera() {
+    if (auto map = global::get<systems::map_t>(); map->is_init()) return map->camera;
+    if (auto battle = global::get<systems::battle_t>(); battle->is_init()) return battle->camera;
+    return nullptr;
   }
 
   void callback(int error, const char* description) {

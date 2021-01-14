@@ -386,6 +386,12 @@ namespace devils_engine {
         ASSERT(index == debug::entities::province);
         UNUSED_VARIABLE(index);
       }
+      
+      {
+        const size_t index = ctx->container->set_entity_template({});
+        ASSERT(index == debug::entities::province_neighbours);
+        UNUSED_VARIABLE(index);
+      }
 
       {
         const size_t index = ctx->container->set_entity_template({});
@@ -3385,6 +3391,7 @@ namespace devils_engine {
 //       }
 
       ctx->container->set_entity_count(debug::entities::province, count);
+      ctx->container->set_entity_count(debug::entities::province_neighbours, count);
       size_t counter = 0;
       for (size_t i = 0; i < province_tiles.size(); ++i) {
         if (province_tiles[i].size() == 0) continue;
@@ -3758,7 +3765,7 @@ namespace devils_engine {
       //context->province_neighbours.resize(context->province_tile.size());
       for (size_t i = 0; i < province_n.size(); ++i) {
         const uint32_t index = i;
-        auto &province_neighbours = ctx->container->get_province_neighbours(index);
+        auto &province_neighbours = ctx->container->get_childs(debug::entities::province_neighbours, index);
         for (const auto &n_index : province_n[index].neighbours) {
           // теряется в этом случае информация о том заморский ли это сосед
           // а это полезная информация, в с++ коде мы можем типы по приводить
@@ -3773,7 +3780,7 @@ namespace devils_engine {
         //auto province = table.create<sol::table>();
         auto province = global::get<sol::state>()->create_table(); // локальный стейт, после генерации нужно заменить
         auto province_ns = province.create("neighbours");
-        const auto &province_neighbours = ctx->container->get_province_neighbours(i);
+        auto &province_neighbours = ctx->container->get_childs(debug::entities::province_neighbours, i);
         for (size_t index = 0; index < province_neighbours.size(); ++index) {
           const auto n = province_neighbour(province_neighbours[index]);
           province_ns[index+1] = n.index();
@@ -4002,7 +4009,7 @@ namespace devils_engine {
           for (size_t j = 0; j < current_size; ++j) {
             const uint32_t province_index = country_province[country_index][j];
 
-            const auto &neighbors = ctx->container->get_province_neighbours(province_index);
+            const auto &neighbors = ctx->container->get_childs(debug::entities::province_neighbours, province_index);
             for (size_t k = 0; k < neighbors.size(); ++k) {
               const auto n_index = province_neighbour(neighbors[k]);
 
@@ -4167,7 +4174,7 @@ namespace devils_engine {
             const auto current_index = queue.front();
             queue.pop();
 
-            const auto &neighbours = ctx->container->get_province_neighbours(current_index.second);
+            const auto &neighbours = ctx->container->get_childs(debug::entities::province_neighbours, current_index.second);
             for (size_t j = 0; j < neighbours.size(); ++j) {
               const auto n_index = province_neighbour(neighbours[j]);
               //ASSERT(n_index != 2961);
@@ -4283,7 +4290,7 @@ namespace devils_engine {
             const uint32_t current_province_index = queue.front();
             queue.pop();
 
-            const auto &neighbours = ctx->container->get_province_neighbours(current_province_index);
+            const auto &neighbours = ctx->container->get_childs(debug::entities::province_neighbours, current_province_index);
             for (size_t k = 0; k < neighbours.size(); ++k) {
               const auto n_index = province_neighbour(neighbours[k]);
               if (n_index.across_water()) continue;
@@ -4354,7 +4361,7 @@ namespace devils_engine {
           const uint32_t current_province_index = queue.front();
           queue.pop();
 
-          const auto &neighbours = ctx->container->get_province_neighbours(current_province_index);
+          const auto &neighbours = ctx->container->get_childs(debug::entities::province_neighbours, current_province_index);
           for (size_t k = 0; k < neighbours.size(); ++k) {
             const auto n_index = province_neighbour(neighbours[k]);
             if (province_country[n_index.index()] != UINT32_MAX) continue;
@@ -4432,7 +4439,7 @@ namespace devils_engine {
         for (size_t j = 0; j < country_province[country_index].size(); ++j) {
           const uint32_t province_index = country_province[country_index][j];
 
-          const auto &neighbours = ctx->container->get_province_neighbours(province_index);
+          const auto &neighbours = ctx->container->get_childs(debug::entities::province_neighbours, province_index);
           for (size_t k = 0; k < neighbours.size(); ++k) {
             const auto n_index = province_neighbour(neighbours[k]);
             const uint32_t neighbour_country = province_country[n_index.index()];
@@ -4507,7 +4514,7 @@ namespace devils_engine {
           for (size_t j = 0; j < country_province[country_index].size(); ++j) {
             const uint32_t province_index = country_province[country_index][j];
             //unique_provinces.insert(province_index);
-            const auto &neighbours = ctx->container->get_province_neighbours(province_index);
+            const auto &neighbours = ctx->container->get_childs(debug::entities::province_neighbours, province_index);
             for (size_t k = 0; k < neighbours.size(); ++k) {
               const auto n_index = province_neighbour(neighbours[k]);
               province_local.push(n_index.index());
@@ -4539,7 +4546,7 @@ namespace devils_engine {
 
               country_province[country_index].push_back(province_index);
 
-              const auto &neighbours = ctx->container->get_province_neighbours(province_index);
+              const auto &neighbours = ctx->container->get_childs(debug::entities::province_neighbours, province_index);
               for (size_t j = 0; j < neighbours.size(); ++j) {
                 const auto n_index = province_neighbour(neighbours[j]);
 
@@ -4560,7 +4567,7 @@ namespace devils_engine {
               const uint32_t province_index = province_local2.front();
               province_local2.pop();
 
-              const auto &neighbours = ctx->container->get_province_neighbours(province_index);
+              const auto &neighbours = ctx->container->get_childs(debug::entities::province_neighbours, province_index);
               for (size_t j = 0; j < neighbours.size(); ++j) {
                 const auto n_index = province_neighbour(neighbours[j]);
 
@@ -4875,13 +4882,13 @@ namespace devils_engine {
       const uint32_t province_count = ctx->container->entities_count(debug::entities::province);
       // нужно посчитать тайлы соприкосновения
       const uint32_t border_size_const = 5;
-      std::vector<std::vector<std::pair<uint32_t, size_t>>> neighbours_border_size(province_count);
+      std::vector<std::vector<std::pair<province_neighbour, size_t>>> neighbours_border_size(province_count);
       {
         for (size_t i = 0; i < neighbours_border_size.size(); ++i) {
-          const auto &n = ctx->container->get_province_neighbours(i);
-          neighbours_border_size[i] = std::vector<std::pair<uint32_t, size_t>>(n.size());
+          const auto &n = ctx->container->get_childs(debug::entities::province_neighbours, i);
+          neighbours_border_size[i] = std::vector<std::pair<province_neighbour, size_t>>(n.size());
           for (size_t j = 0; j < neighbours_border_size[i].size(); ++j) {
-            neighbours_border_size[i][j] = std::make_pair(n[j], 0);
+            neighbours_border_size[i][j] = std::make_pair(province_neighbour(n[j]), 0);
           }
         }
 
@@ -4904,7 +4911,7 @@ namespace devils_engine {
 
             {
               uint32_t n_prov_index = UINT32_MAX;
-              const auto &n = ctx->container->get_province_neighbours(province_index);
+              const auto &n = ctx->container->get_childs(debug::entities::province_neighbours, province_index);
               for (size_t k = 0; k < n.size(); ++k) {
                 if (n[k] == n_province_index) {
                   n_prov_index = k;
@@ -4918,7 +4925,7 @@ namespace devils_engine {
 
             {
               uint32_t n_prov_index = UINT32_MAX;
-              const auto &n = ctx->container->get_province_neighbours(n_province_index);
+              const auto &n = ctx->container->get_childs(debug::entities::province_neighbours, n_province_index);
               for (size_t k = 0; k < n.size(); ++k) {
                 if (n[k] == province_index) {
                   n_prov_index = k;
@@ -4970,7 +4977,7 @@ namespace devils_engine {
         const auto pair = queue.front();
         queue.pop();
 
-        const auto &neighbours = ctx->container->get_province_neighbours(pair.second);
+        const auto &neighbours = ctx->container->get_childs(debug::entities::province_neighbours, pair.second);
         if (neighbours.size() == 0) continue;
         if (duchies[pair.first].size() > 5) continue;
         ASSERT(duchies[pair.first].size() > 0);
@@ -5012,7 +5019,7 @@ namespace devils_engine {
 
 
             bool found = false;
-            const auto &n_neighbours = ctx->container->get_province_neighbours(n_province_index.index());
+            const auto &n_neighbours = ctx->container->get_childs(debug::entities::province_neighbours, n_province_index.index());
             for (size_t j = 0; j < n_neighbours.size(); ++j) {
               const auto n_n_province_index = province_neighbour(n_neighbours[j]);
               if (n_n_province_index.index() == pair.second) continue;
@@ -5046,7 +5053,7 @@ namespace devils_engine {
           const uint32_t province_index = duchies[i][j];
           if (duchies[i].size() >= 6) break;
 
-          const auto &neighbours = ctx->container->get_province_neighbours(province_index);
+          const auto &neighbours = ctx->container->get_childs(debug::entities::province_neighbours, province_index);
           for (size_t k = 0; k < neighbours.size(); ++k) {
 //             const size_t border_size = neighbours_border_size[province_index][k];
 //             if (border_size < border_size_const) continue;
@@ -5091,7 +5098,7 @@ namespace devils_engine {
         ASSERT(duchies[i].size() == 1);
 
         const uint32_t province_index = duchies[i][0];
-        const auto &neighbours = ctx->container->get_province_neighbours(province_index);
+        const auto &neighbours = ctx->container->get_childs(debug::entities::province_neighbours, province_index);
         std::unordered_set<uint32_t> unique_indices;
         for (size_t k = 0; k < neighbours.size(); ++k) {
 //           const size_t border_size = neighbours_border_size[province_index][k];
@@ -5161,7 +5168,7 @@ namespace devils_engine {
         const uint32_t count = duchies[i].size();
         for (size_t j = 0; j < count; ++j) {
           const uint32_t province_index = duchies[i][j];
-          const auto &neighbours = ctx->container->get_province_neighbours(province_index);
+          const auto &neighbours = ctx->container->get_childs(debug::entities::province_neighbours, province_index);
           bool found = false;
           for (size_t k = 0; k < neighbours.size(); ++k) {
 //             const size_t border_size = neighbours_border_size[province_index][k];
@@ -5201,7 +5208,7 @@ namespace devils_engine {
         if (duchies[i].size() != 1) continue;
 
         const uint32_t province_index = duchies[i][0];
-        const auto &neighbours = ctx->container->get_province_neighbours(province_index);
+        const auto &neighbours = ctx->container->get_childs(debug::entities::province_neighbours, province_index);
         for (size_t k = 0; k < neighbours.size(); ++k) {
 //           const size_t border_size = neighbours_border_size[province_index][k];
 //           if (border_size < border_size_const) continue;
@@ -5484,7 +5491,7 @@ namespace devils_engine {
           const uint32_t province_index = duchies[i][j];
           ASSERT(province_duchy[province_index] == i);
 
-          const auto &n = ctx->container->get_province_neighbours(province_index);
+          const auto &n = ctx->container->get_childs(debug::entities::province_neighbours, province_index);
           for (size_t k = 0; k < n.size(); ++k) {
             const auto n_province_index = province_neighbour(n[k]);
             const uint32_t n_duchy_index = province_duchy[n_province_index.index()];
@@ -6478,10 +6485,10 @@ namespace devils_engine {
           uint32_t last_title = choosen_baron_index;
           while (counter < baron_titles_count) {
             const uint32_t province_index = last_title - baron_offset;
-            const auto &neighbors = ctx->container->get_province_neighbours(province_index);
+            const auto &neighbours = ctx->container->get_childs(debug::entities::province_neighbours, province_index);
             size_t index = 0;
-            while (counter < baron_titles_count && index < neighbors.size()) {
-              const auto new_index = province_neighbour(neighbors[index]);
+            while (counter < baron_titles_count && index < neighbours.size()) {
+              const auto new_index = province_neighbour(neighbours[index]);
               ++index;
               const uint32_t baron_index = new_index.index() + baron_offset;
               if (ctx->container->get_data<uint32_t>(debug::entities::title, baron_index, debug::properties::title::owner) != country_index) continue;
@@ -6588,10 +6595,10 @@ namespace devils_engine {
           uint32_t last_title = choosen_baron_index;
 //           while (counter < baron_titles_count) {
             const uint32_t province_index = last_title - baron_offset;
-            const auto &neighbors = ctx->container->get_province_neighbours(province_index);
+            const auto &neighbours = ctx->container->get_childs(debug::entities::province_neighbours, province_index);
             size_t index = 0;
-            while (counter < baron_titles_count && index < neighbors.size()) {
-              const auto new_index = province_neighbour(neighbors[index]);
+            while (counter < baron_titles_count && index < neighbours.size()) {
+              const auto new_index = province_neighbour(neighbours[index]);
               ++index;
               const uint32_t baron_index = new_index.index() + baron_offset;
               if (ctx->container->get_data<uint32_t>(debug::entities::title, baron_index, debug::properties::title::owner) != country_index) continue;
@@ -6647,10 +6654,10 @@ namespace devils_engine {
           uint32_t last_title = choosen_baron_index;
 //           while (counter < baron_titles_count) {
             const uint32_t province_index = last_title - baron_offset;
-            const auto &neighbors = ctx->container->get_province_neighbours(province_index);
+            const auto &neighbours = ctx->container->get_childs(debug::entities::province_neighbours, province_index);
             size_t index = 0;
-            while (counter < baron_titles_count && index < neighbors.size()) {
-              const auto new_index = province_neighbour(neighbors[index]);
+            while (counter < baron_titles_count && index < neighbours.size()) {
+              const auto new_index = province_neighbour(neighbours[index]);
               ++index;
               const uint32_t baron_index = new_index.index() + baron_offset;
               if (ctx->container->get_data<uint32_t>(debug::entities::title, baron_index, debug::properties::title::owner) != country_index) continue;

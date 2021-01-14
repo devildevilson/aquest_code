@@ -5,6 +5,7 @@
 #include "utils/string_container.h"
 #include "core_context.h"
 #include "utils/serializator_helper.h"
+#include "map_creator.h"
 
 // наверное чтобы не мучиться лучше какой нибудь список задать
 
@@ -136,7 +137,7 @@ namespace devils_engine {
     };
     
     size_t add_building(const sol::table &table) {
-      return global::get<utils::table_container>()->add_table(core::structure::building_type, table);
+      return global::get<map::creator::table_container_t>()->add_table(static_cast<size_t>(core::structure::building_type), table);
     }
     
 #define SAME_TYPE 1

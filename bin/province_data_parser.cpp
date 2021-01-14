@@ -6,6 +6,7 @@
 #include "core_context.h"
 #include "map.h"
 #include "utils/serializator_helper.h"
+#include "map_creator.h"
 
 namespace devils_engine {
   namespace utils {
@@ -47,19 +48,19 @@ namespace devils_engine {
     };
     
     size_t add_province(const sol::table &table) {
-      return global::get<utils::table_container>()->add_table(core::structure::province, table);
+      return global::get<map::creator::table_container_t>()->add_table(static_cast<size_t>(core::structure::province), table);
     }
     
     size_t register_province() {
-      return global::get<utils::table_container>()->register_table(core::structure::province);
+      return global::get<map::creator::table_container_t>()->register_table(static_cast<size_t>(core::structure::province));
     }
     
     size_t register_provinces(const size_t &count) {
-      return global::get<utils::table_container>()->register_tables(core::structure::province, count);
+      return global::get<map::creator::table_container_t>()->register_tables(static_cast<size_t>(core::structure::province), count);
     }
     
     void set_province(const size_t &index, const sol::table &table) {
-      global::get<utils::table_container>()->set_table(core::structure::province, index, table);
+      global::get<map::creator::table_container_t>()->set_table(static_cast<size_t>(core::structure::province), index, table);
     }
     
     bool validate_province(const size_t &index, const sol::table &table) {

@@ -4,11 +4,15 @@
 #include "render/image_controller.h"
 #include "render/image_container.h"
 #include "render/image_container_constants.h"
+#include "render/shared_structures.h"
+#include "render/shared_battle_structures.h"
 #include "utils/globals.h"
 #include "utils/table_container.h"
 #include "utils/serializator_helper.h"
 #include "utils/systems.h"
 #include "map.h"
+#include "map_creator.h"
+#include "battle_map.h"
 #include <filesystem>
 
 #ifdef _WIN32
@@ -106,8 +110,114 @@ namespace devils_engine {
       }
     };
     
+    const check_table_value battle_biome_table[] = {
+      {
+        "id",
+        check_table_value::type::string_t,
+        check_table_value::value_required, 0, {}
+      },
+      {
+        "texture1_face",
+        check_table_value::type::string_t,
+        check_table_value::value_required, 0, {}
+      },
+      {
+        "texture1_top",
+        check_table_value::type::string_t,
+        check_table_value::value_required, 0, {}
+      },
+      {
+        "texture2_face",
+        check_table_value::type::string_t,
+        0, 0, {}
+      },
+      {
+        "texture2_top",
+        check_table_value::type::string_t,
+        0, 0, {}
+      },
+      {
+        "texture3_face",
+        check_table_value::type::string_t,
+        0, 0, {}
+      },
+      {
+        "texture3_top",
+        check_table_value::type::string_t,
+        0, 0, {}
+      },
+      {
+        "dencity",
+        check_table_value::type::float_t,
+        0, 0, {}
+      },
+      {
+        "probability1",
+        check_table_value::type::float_t,
+        0, 0, {}
+      },
+      {
+        "probability2",
+        check_table_value::type::float_t,
+        0, 0, {}
+      },
+      {
+        "probability3",
+        check_table_value::type::float_t,
+        0, 0, {}
+      },
+      {
+        "min_scale1",
+        check_table_value::type::float_t,
+        0, 0, {}
+      },
+      {
+        "max_scale1",
+        check_table_value::type::float_t,
+        0, 0, {}
+      },
+      {
+        "min_scale2",
+        check_table_value::type::float_t,
+        0, 0, {}
+      },
+      {
+        "max_scale2",
+        check_table_value::type::float_t,
+        0, 0, {}
+      },
+      {
+        "min_scale3",
+        check_table_value::type::float_t,
+        0, 0, {}
+      },
+      {
+        "max_scale3",
+        check_table_value::type::float_t,
+        0, 0, {}
+      },
+      {
+        "max_zoom1",
+        check_table_value::type::float_t,
+        0, 0, {}
+      },
+      {
+        "max_zoom2",
+        check_table_value::type::float_t,
+        0, 0, {}
+      },
+      {
+        "max_zoom3",
+        check_table_value::type::float_t,
+        0, 0, {}
+      },
+      // ???
+    };
+    
     void add_image(const sol::table &table) {
-      global::get<utils::table_container>()->add_table(utils::table_container::additional_data::image, table);
+      const auto str = table["id"].get<std::string>();
+      if (!str.empty()) PRINT_VAR("image", str)
+      global::get<map::creator::table_container_t>()->add_table(static_cast<size_t>(utils::generator_table_container::additional_data::image), table);
     }
     
     bool validate_image(const uint32_t &index, const sol::table &table) {
@@ -216,6 +326,14 @@ namespace devils_engine {
           if (counter == indices.size()) return;
         }
       }
+    }
+    
+    std::mutex & get_current_mutex() {
+      auto map_data = global::get<systems::map_t>();
+      auto battle_data = global::get<systems::battle_t>();
+      if (!map_data->is_init() && !battle_data->is_init()) throw std::runtime_error("nor world map nor battle is loaded at this moment");
+      if (map_data->is_init()) return map_data->map->mutex;
+      return battle_data->map->mutex;
     }
     
     void load_images(render::image_controller* controller, const std::vector<sol::table> &image_tables, const uint32_t &current_type) {
@@ -464,8 +582,9 @@ namespace devils_engine {
         task->end();
         
         {
-          auto map = global::get<systems::map_t>()->map;
-          std::unique_lock<std::mutex> lock(map->mutex);
+          //auto map = global::get<systems::map_t>()->map;
+          //std::unique_lock<std::mutex> lock(map->mutex);
+          std::unique_lock<std::mutex> lock(get_current_mutex());
           task->start();
           task->wait();
         }
@@ -564,6 +683,94 @@ namespace devils_engine {
         seasons->create_biome(counter, b);
         ++counter;
       }
+    }
+    
+    size_t add_battle_biome(const sol::table &table) {
+      const auto str = table["id"].get<std::string>();
+      if (!str.empty()) PRINT_VAR("biome", str)
+      return global::get<map::creator::table_container_t>()->add_table(static_cast<size_t>(utils::generator_table_container::additional_data::biome), table);
+    }
+    
+    bool validate_battle_biome(const uint32_t &index, const sol::table &table) {
+      size_t counter = 0;
+      auto id = table["id"];
+      std::string check_str;
+      if (id.valid()) {
+        check_str = id;
+      } else {
+        check_str = "biome" + std::to_string(index);
+      }
+      
+      const size_t size = sizeof(battle_biome_table) / sizeof(battle_biome_table[0]);
+      recursive_check(check_str, "biome", table, nullptr, battle_biome_table, size, counter);
+      
+      return counter == 0;
+    }
+    
+    render::image_t parse_image(const std::string_view &key, const sol::table &table, render::image_controller* controller) {
+      auto t_proxy = table[key];
+      if (!t_proxy.valid() || t_proxy.get_type() != sol::type::string) return render::image_t{GPU_UINT_MAX};
+      
+      const std::string_view str = t_proxy.get<std::string_view>();
+//           PRINT(str)
+      std::string_view img_id;
+      uint32_t layer;
+      bool mirror_u;
+      bool mirror_v;
+      const bool ret = render::parse_image_id(str, img_id, layer, mirror_u, mirror_v);
+      if (!ret) throw std::runtime_error("Bad texture id " + std::string(str));
+      const auto image_id = std::string(img_id);
+      auto view = controller->get_view(image_id);
+      if (layer >= view->count) throw std::runtime_error("Image pack " + image_id + " does not have " + std::to_string(layer) + " amount of images");
+      return view->get_image(layer, mirror_u, mirror_v);
+    }
+    
+    double parse_number(const std::string_view &key, const sol::table &table, const double &default_value) {
+      const auto &proxy = table[key];
+      if (!proxy.valid() || proxy.get_type() != sol::type::number) return default_value;
+      return proxy.get<double>();
+    }
+    
+    void load_battle_biomes(render::image_controller* controller, const std::vector<sol::table> &biome_tables) {
+      std::array<render::battle_biome_data_t, BATTLE_BIOMES_MAX_COUNT> biomes;
+      ASSERT(!biome_tables.empty());
+      
+      size_t counter = 0;
+      for (const auto &table : biome_tables) {
+        auto &biome = biomes[counter];
+        biomes[counter].dummy = 12.0f;
+        
+        biome.textures[0].face = parse_image("texture1_face", table, controller);
+        biome.textures[0].top  = parse_image("texture1_top" , table, controller);
+        biome.textures[1].face = parse_image("texture2_face", table, controller);
+        biome.textures[1].top  = parse_image("texture2_top" , table, controller);
+        biome.textures[2].face = parse_image("texture3_face", table, controller);
+        biome.textures[2].top  = parse_image("texture3_top" , table, controller);
+        
+        //std::cout << "img " << table["texture1_face"].get<std::string>() << " index " << render::get_image_index(biome.textures[0].face) << " layer " << render::get_image_layer(biome.textures[0].face) << "\n";
+        //std::cout << "img " << table["texture1_top"].get<std::string>()  << " index " << render::get_image_index(biome.textures[0].top)  << " layer " << render::get_image_layer(biome.textures[0].top)  << "\n";
+        
+        biome.density = parse_number("density", table, 0.0);
+        biome.probabilities[0] = parse_number("probability1", table, 1.0);
+        biome.probabilities[1] = parse_number("probability2", table, 1.0);
+        biome.probabilities[2] = parse_number("probability3", table, 1.0);
+        
+        biome.scales[0] = glm::vec2(parse_number("min_scale1", table, 0.0), parse_number("max_scale1", table, 0.0));
+        biome.scales[1] = glm::vec2(parse_number("min_scale2", table, 0.0), parse_number("max_scale2", table, 0.0));
+        biome.scales[2] = glm::vec2(parse_number("min_scale3", table, 0.0), parse_number("max_scale3", table, 0.0));
+        
+        biome.zooms[0] = parse_number("max_zoom1", table, 0.6);
+        biome.zooms[1] = parse_number("max_zoom2", table, 0.6);
+        biome.zooms[2] = parse_number("max_zoom3", table, 0.6);
+        
+        ASSERT(biome.dummy == 12.0f);
+        biome.dummy = 13.0f;
+        ASSERT(biomes[counter].dummy == 13.0f);
+        ASSERT(biome.density != 0.0f);
+        ++counter;
+      }
+      
+      global::get<systems::battle_t>()->map->set_biomes(biomes);
     }
   }
 }

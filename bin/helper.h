@@ -116,6 +116,11 @@ namespace devils_engine {
   void draw_army_path();
   
   void advance_army(core::army* army);
+  
+  void lock_rendering();
+  void unlock_rendering();
+  
+  components::camera* get_camera();
 
   void callback(int error, const char* description);
   int lua_panic(lua_State* s);

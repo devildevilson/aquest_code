@@ -26,12 +26,18 @@ namespace devils_engine {
   namespace utils {
     class world_serializator;
     
-    void add_image(const sol::table &table);
-    bool validate_image(const uint32_t &index, const sol::table &table);
-    bool validate_image_and_save(const uint32_t &index, sol::this_state lua, const sol::table &table, utils::world_serializator* container);
+    void add_image(const sol::table &table); // в другой контейнер пойдет
+    bool validate_image(const uint32_t &index, const sol::table &table); // эта функция по идее должна остаться одинакова для всех картинок
+    bool validate_image_and_save(const uint32_t &index, sol::this_state lua, const sol::table &table, world_serializator* container);
     void load_images(render::image_controller* controller, const std::vector<sol::table> &image_tables, const uint32_t &current_type);
     
     void load_biomes(render::image_controller* controller, core::seasons* seasons, const std::vector<sol::table> &biome_tables);
+    
+    size_t add_battle_biome(const sol::table &table);
+    bool validate_battle_biome(const uint32_t &index, const sol::table &table);
+    // сохранять при генерации битвы ничего не нужно
+    //bool validate_battle_biome_and_save(const uint32_t &index, sol::this_state lua, const sol::table &table, world_serializator* container);
+    void load_battle_biomes(render::image_controller* controller, const std::vector<sol::table> &biome_tables);
   }
 }
 

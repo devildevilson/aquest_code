@@ -4,6 +4,7 @@
 #include "utils/thread_pool.h"
 #include "utils/globals.h"
 #include "map.h"
+#include "battle_map.h"
 #include "figures.h"
 #include "utils/works_utils.h"
 #include "utils/serializator_helper.h"
@@ -21,9 +22,12 @@
 #include "game_time.h"
 #include "image_parser.h"
 #include "heraldy_parser.h"
+#include "utils/lua_initialization.h"
 
 #include "render/image_container.h"
 #include "render/image_controller.h"
+#include "render/shared_battle_structures.h"
+#include "render/battle_render_stages.h"
 
 namespace devils_engine {
   namespace systems {
@@ -51,6 +55,23 @@ namespace devils_engine {
       }
       
       //opt->set_biome_tile_count(biomes_data);
+      return biomes_data;
+    }
+    
+    std::array<std::pair<uint32_t, uint32_t>, BATTLE_BIOMES_MAX_COUNT> get_battle_biomes_data(const systems::battle_t* battle_system) {
+      std::array<std::pair<uint32_t, uint32_t>, BATTLE_BIOMES_MAX_COUNT> biomes_data;
+      memset(biomes_data.data(), 0, sizeof(biomes_data[0])*biomes_data.size());
+      for (size_t i = 0; i < battle_system->map->tiles_count; ++i) {
+        const uint32_t index = battle_system->map->get_tile_biome(i);
+        ++biomes_data[index].second;
+      }
+      
+      size_t current_offset = 0;
+      for (uint32_t i = 0; i < MAX_BIOMES_COUNT; ++i) {
+        biomes_data[i].first = current_offset;
+        current_offset += biomes_data[i].second * (PACKED_INDEX_COEF + 1);
+      }
+      
       return biomes_data;
     }
 
@@ -1083,20 +1104,20 @@ namespace devils_engine {
     }
 
     template <typename T>
-    void create_entities_without_id(core::context* ctx, utils::table_container* tables) {
-      const auto &data = tables->get_tables(T::s_type);
+    void create_entities_without_id(core::context* ctx, map::creator::table_container_t* tables) {
+      const auto &data = tables->get_tables(static_cast<size_t>(T::s_type));
       ctx->create_container<T>(data.size());
 
       PRINT_VAR("cities count", data.size())
     }
 
     template <typename T>
-    void create_entities(core::context* ctx, utils::table_container* tables) {
+    void create_entities(core::context* ctx, map::creator::table_container_t* tables) {
       // это заполнить в валидации не выйдет (потому что string_view)
       // в провинции нет id
       auto to_data = global::get<utils::data_string_container>();
 
-      const auto &data = tables->get_tables(T::s_type);
+      const auto &data = tables->get_tables(static_cast<size_t>(T::s_type));
       ctx->create_container<T>(data.size());
       for (size_t i = 0; i < data.size(); ++i) {
         auto ptr = ctx->get_entity<T>(i);
@@ -1107,9 +1128,9 @@ namespace devils_engine {
       }
     }
 
-    void create_characters(core::context* ctx, utils::table_container* tables) {
+    void create_characters(core::context* ctx, map::creator::table_container_t* tables) {
 
-      const auto &data = tables->get_tables(core::structure::character);
+      const auto &data = tables->get_tables(static_cast<size_t>(core::structure::character));
       ASSERT(!data.empty());
       for (const auto &table : data) {
         bool male = true;
@@ -1141,16 +1162,16 @@ namespace devils_engine {
     }
 
     template <typename T>
-    void parse_entities(core::context* ctx, utils::table_container* tables, const std::function<void(T*, const sol::table&)> &parsing_func) {
-      const auto &data = tables->get_tables(T::s_type);
+    void parse_entities(core::context* ctx, map::creator::table_container_t* tables, const std::function<void(T*, const sol::table&)> &parsing_func) {
+      const auto &data = tables->get_tables(static_cast<size_t>(T::s_type));
       for (size_t i = 0; i < data.size(); ++i) {
         auto ptr = ctx->get_entity<T>(i);
         parsing_func(ptr, data[i]);
       }
     }
 
-    void parse_characters(core::context* ctx, utils::table_container* tables, const std::function<void(core::character*, const sol::table&)> &parsing_func) {
-      const auto &data = tables->get_tables(core::character::s_type);
+    void parse_characters(core::context* ctx, map::creator::table_container_t* tables, const std::function<void(core::character*, const sol::table&)> &parsing_func) {
+      const auto &data = tables->get_tables(static_cast<size_t>(core::character::s_type));
       for (size_t i = 0; i < data.size(); ++i) {
         auto ptr = ctx->get_character(i);
         parsing_func(ptr, data[i]);
@@ -1223,7 +1244,8 @@ namespace devils_engine {
       bool ret = true;
       for (size_t i = 0; i < count; ++i) {
         if (!validation_funcs[i]) continue;
-        const auto &data = tables->get_tables(static_cast<core::structure>(i));
+        //const auto &data = tables->get_tables(static_cast<core::structure>(i));
+        const auto &data = tables->get_tables(i);
         size_t counter = 0;
         for (const auto &table : data) {
           ret = ret && validation_funcs[i](counter, lua.lua_state(), table, &cont);
@@ -1231,14 +1253,16 @@ namespace devils_engine {
         }
       }
       
-      const auto &image_data = tables->get_tables(utils::table_container::additional_data::image);
+      //const auto &image_data = tables->get_tables(utils::table_container::additional_data::image);
+      const auto &image_data = tables->get_tables(static_cast<size_t>(utils::generator_table_container::additional_data::image));
       size_t counter = 0;
       for (const auto &table : image_data) {
         ret = ret && utils::validate_image_and_save(counter, lua.lua_state(), table, &cont);
         ++counter;
       }
       
-      const auto &heraldy_data = tables->get_tables(utils::table_container::additional_data::heraldy);
+      //const auto &heraldy_data = tables->get_tables(utils::table_container::additional_data::heraldy);
+      const auto &heraldy_data = tables->get_tables(static_cast<size_t>(utils::generator_table_container::additional_data::heraldy));
       for (size_t i = 0; i < heraldy_data.size(); ++i) {
         const auto &table = heraldy_data[i];
         ret = ret && utils::validate_heraldy_layer_and_save(i, lua.lua_state(), table, &cont);
@@ -1254,7 +1278,8 @@ namespace devils_engine {
         //utils::load_images(controller, image_data, static_cast<uint32_t>(render::image_controller::image_type::system));
         utils::load_images(controller, image_data, i);
       }
-      utils::load_biomes(controller, map_systems->seasons, tables->get_tables(utils::table_container::additional_data::biome));
+      //utils::load_biomes(controller, map_systems->seasons, tables->get_tables(utils::table_container::additional_data::biome));
+      utils::load_biomes(controller, map_systems->seasons, tables->get_tables(static_cast<size_t>(utils::generator_table_container::additional_data::biome)));
       yavf::Buffer heraldy_tmp(device, yavf::BufferCreateInfo::buffer(16, VK_BUFFER_USAGE_TRANSFER_SRC_BIT), VMA_MEMORY_USAGE_CPU_ONLY);
       utils::load_heraldy_layers(controller, heraldy_data, &heraldy_tmp);
       
@@ -1354,12 +1379,12 @@ namespace devils_engine {
       ASSERT(test.get_rand_seed() == creator->get_rand_seed());
       ASSERT(test.get_noise_seed() == creator->get_noise_seed());
 
-      ASSERT(tables->get_tables(core::structure::province).size() == cont.get_data_count(core::structure::province));
-      ASSERT(tables->get_tables(core::structure::city_type).size() == cont.get_data_count(core::structure::city_type));
-      ASSERT(tables->get_tables(core::structure::city).size() == cont.get_data_count(core::structure::city));
-      ASSERT(tables->get_tables(core::structure::building_type).size() == cont.get_data_count(core::structure::building_type));
-      ASSERT(tables->get_tables(core::structure::titulus).size() == cont.get_data_count(core::structure::titulus));
-      ASSERT(tables->get_tables(core::structure::character).size() == cont.get_data_count(core::structure::character));
+      ASSERT(tables->get_tables(static_cast<size_t>(core::structure::province)).size() == cont.get_data_count(core::structure::province));
+      ASSERT(tables->get_tables(static_cast<size_t>(core::structure::city_type)).size() == cont.get_data_count(core::structure::city_type));
+      ASSERT(tables->get_tables(static_cast<size_t>(core::structure::city)).size() == cont.get_data_count(core::structure::city));
+      ASSERT(tables->get_tables(static_cast<size_t>(core::structure::building_type)).size() == cont.get_data_count(core::structure::building_type));
+      ASSERT(tables->get_tables(static_cast<size_t>(core::structure::titulus)).size() == cont.get_data_count(core::structure::titulus));
+      ASSERT(tables->get_tables(static_cast<size_t>(core::structure::character)).size() == cont.get_data_count(core::structure::character));
 
   //     PRINT_VAR("size", tables->get_tables(core::structure::province).size())
   //     PRINT_VAR("size", tables->get_tables(core::structure::city_type).size())
@@ -1869,6 +1894,207 @@ namespace devils_engine {
       //advance_progress(prog, "end");
       //advance_progress(prog, "end");
       //advance_progress(prog, "end");
+      
+      ASSERT(prog->finished());
+    }
+    
+    void parse_func_table(sol::state_view &lua, const sol::table &data_table, sol::table &container, std::unordered_set<std::string> &loaded_scripts, std::unordered_set<std::string> &loaded_functions) {
+      const auto &root_string = global::root_directory();
+      
+      if (data_table["hint"].get_type() == sol::type::string) container["hint"] = data_table["hint"];
+      if (data_table["path"].get_type() == sol::type::string) {
+        const bool has_name = data_table["name"].get_type() == sol::type::string;
+        const std::string path = data_table["path"];
+        if (loaded_scripts.find(path) == loaded_scripts.end()) { // наверное это будет работать не идеально
+          auto func_script = lua.safe_script_file(root_string + "/scripts/" + path);
+          if (!func_script.valid()) {
+            const sol::error err = func_script;
+            PRINT(err.what())
+            throw std::runtime_error("Could not load " + path + " script");
+          }
+          
+          if (!has_name) {
+            if (func_script.get_type() != sol::type::function) throw std::runtime_error("Bad function from script " + path);
+            sol::function f = func_script;
+            container["func"] = f;
+          }
+          
+          loaded_scripts.insert(path);
+        }
+        
+        if (has_name) {
+          const std::string name = data_table["name"];
+          if (loaded_functions.find(name) != loaded_functions.end()) throw std::runtime_error("Function " + name + "is already loaded");
+          if (lua[name].get_type() != sol::type::function) throw std::runtime_error("Could not find function " + name + " in the script " + path);
+          container["func"] = lua[name];
+          lua[name] = sol::nil;
+          loaded_functions.insert(name);
+        }
+        
+        return;
+      }
+      
+      if (data_table["string"].get_type() != sol::type::string) throw std::runtime_error("Invalid config data");
+      
+      const std::string func_str = data_table["string"];
+      auto ret = lua.safe_script(func_str);
+      if (!ret.valid()) {
+        const sol::error err = ret;
+        PRINT(err.what())
+        throw std::runtime_error("Could not parse function string: " + func_str);
+      }
+      
+      if (ret.get_type() != sol::type::function) throw std::runtime_error("Bad function string return type: " + func_str);
+      
+      sol::function f = ret;
+      container["func"] = f;
+    }
+    
+    void from_map_to_battle_part1(sol::state_view lua, utils::progress_container* prog) {
+      // тут грузим конфиг, собираем данные о карте
+      lua.open_libraries(sol::lib::base, sol::lib::string, sol::lib::table, sol::lib::utf8, sol::lib::math, sol::lib::bit32);
+      utils::setup_lua_generator_container(lua);
+      utils::setup_lua_random_engine(lua);
+      utils::setup_lua_noiser(lua);
+      utils::setup_lua_battle_map(lua);
+      utils::setup_lua_utility_battle_generator_functions(lua);
+      
+      std::unordered_set<std::string> loaded_scripts;
+      std::unordered_set<std::string> loaded_functions;
+      
+      const auto &root_string = global::root_directory();
+      auto config_table = lua.safe_script_file(root_string + "/scripts/battle_generator_config.lua");
+      if (!config_table.valid()) {
+        const sol::error err = config_table;
+        PRINT(err.what())
+        throw std::runtime_error("Could not load battle_generator_config.lua script");
+      }
+      
+      if (config_table.get_type() != sol::type::table) throw std::runtime_error("Config script return error");
+      
+      sol::table t = config_table;
+      //lua["config_table"] = t;
+      sol::table parsed_config = lua.create_table();
+      // тут наверное распарсим может полученную информацию? 
+      // вообще я тут подумал что мне нужно так или иначе сделать какой то контроль над этими функциями
+      // хотя опять же никакого особо контроля не получится, функция генерации проходит и выдает новые данные какие то
+      // переместить их вперед назад скорее всего приведет к ошибкам, тут достаточно сделать порядок загрузки модов
+      // куда сохранить все функции из конфига? хороший вопрос, можно в принципе в таблицу отдельную все это спихнуть
+      // зачем нужен отдельный класс для этого? да в общем то нинужен
+      
+      for (const auto &obj : t) {
+        if (!obj.first.is<std::string>()) continue;
+        if (!obj.second.is<sol::table>()) continue;
+        
+        if (obj.first.as<std::string>() == "preparation_function") {
+//           PRINT("preparation_function")
+          const sol::table t = obj.second.as<sol::table>();
+          auto p = parsed_config["preparation"].get_or_create<sol::table>();
+          parse_func_table(lua, t, p, loaded_scripts, loaded_functions);
+        }
+        
+        if (obj.first.as<std::string>() == "battle_over_function") {
+//           PRINT("battle_over_function")
+          const sol::table t = obj.second.as<sol::table>();
+          auto p = parsed_config["end"].get_or_create<sol::table>();
+          parse_func_table(lua, t, p, loaded_scripts, loaded_functions);
+        }
+        
+        if (obj.first.as<std::string>() == "generator_functions") {
+//           PRINT("generator_functions")
+          const sol::table t = obj.second.as<sol::table>();
+          auto p = parsed_config["generator"].get_or_create<sol::table>();
+          for (const auto &obj : t) {
+            if (!obj.second.is<sol::table>()) continue;
+            const sol::table data = obj.second.as<sol::table>();
+            auto container = lua.create_table();
+            parse_func_table(lua, data, container, loaded_scripts, loaded_functions);
+            p.add(container);
+          }
+        }
+      }
+      
+      lua["config_table"] = parsed_config;
+      
+      // по идее здесь же мы запустим функцию подготовки
+      // там у нас по идее должно быть прикидка какую карту создать 
+      // то есть оттуда мы должны получить размер и тип 
+      // + запомнить армии и что происходит вокруг (биомы)
+      // 
+      
+      advance_progress(prog, "cleaning");
+    }
+    
+    void from_map_to_battle_part2(sol::state_view lua, utils::progress_container* prog) {
+      // тут собственно генерация, нужно передать контекст + луа табличку
+      
+      map::creator::table_container_t tables_container;
+      global::get(&tables_container);
+      
+      sol::table t = lua["config_table"];
+      sol::table ctx_t = lua["ctx_table"];
+      sol::table user_t = lua["usertable"];
+      sol::table gen_table = t["generator"];
+      for (const auto &func : gen_table) {
+        if (!func.second.is<sol::table>()) continue;
+        
+        const auto table = func.second.as<sol::table>();
+        const std::string hint = table["hint"];
+        advance_progress(prog, hint);
+        const sol::function gen_func = table["func"];
+        const std::function<void(sol::table &, sol::table &)> std_func = gen_func;
+        std_func(ctx_t, user_t);
+      }
+      
+      advance_progress(prog, "validate generated data");
+      
+      {
+        const auto &tables = tables_container.get_tables(static_cast<size_t>(utils::generator_table_container::additional_data::image));
+        bool ret = true;
+        for (size_t i = 0; i < tables.size(); ++i) {
+          ret = ret && utils::validate_image(i, tables[i]);
+        }
+        
+        if (!ret) throw std::runtime_error("There are tables parsing errors");
+      }
+      
+      {
+        const auto &tables = tables_container.get_tables(static_cast<size_t>(utils::generator_table_container::additional_data::biome));
+        bool ret = true;
+        for (size_t i = 0; i < tables.size(); ++i) {
+          ret = ret && utils::validate_battle_biome(i, tables[i]);
+        }
+        
+        if (!ret) throw std::runtime_error("There are tables parsing errors");
+      }
+      
+      advance_progress(prog, "loading battle");
+      
+      {
+        auto controller = global::get<systems::core_t>()->image_controller;
+        const auto &tables = tables_container.get_tables(static_cast<size_t>(utils::generator_table_container::additional_data::image));
+        for (size_t i = 0; i < static_cast<size_t>(render::image_controller::image_type::count); ++i) { // че за бред? мне нужно было гарантировать порядок
+          utils::load_images(controller, tables, i);
+        }
+      }
+      
+      {
+        auto controller = global::get<systems::core_t>()->image_controller;
+        const auto &tables = tables_container.get_tables(static_cast<size_t>(utils::generator_table_container::additional_data::biome));
+        utils::load_battle_biomes(controller, tables);
+      }
+      
+      {
+        auto system = global::get<systems::battle_t>();
+        auto controller = global::get<systems::core_t>()->image_controller;
+        const auto &data = get_battle_biomes_data(system);
+        system->lock_map();
+        global::get<render::battle::tile_optimizer>()->update_biome_data(data);
+        controller->update_set();
+        system->unlock_map();
+      }
+      
+      global::get(reinterpret_cast<map::creator::table_container_t*>(SIZE_MAX));
       
       ASSERT(prog->finished());
     }

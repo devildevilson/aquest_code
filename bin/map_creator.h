@@ -114,6 +114,8 @@ namespace devils_engine {
     
     class creator {
     public:
+      using table_container_t = utils::table_container<static_cast<size_t>(utils::generator_table_container::additional_data::count)>;
+      
       creator(utils::interface_container* interface, core::map* map, core::seasons* seasons);
       ~creator();
 //       step* create(const bool first, const size_t &container_size, const std::string &name, const std::vector<map::generator_pair> &pairs, const std::string &rendering_mode);
@@ -129,11 +131,11 @@ namespace devils_engine {
 //       void progress_interface(const std::string_view &name);
       
       sol::state & state();
-      utils::table_container & table_container();
+      table_container_t & table_container();
       std::string get_world_name() const;
       std::string get_folder_name() const;
       std::string get_settings() const;
-      uint32_t get_rand_seed() const;
+      uint64_t get_rand_seed() const;
       uint32_t get_noise_seed() const;
     private:
       sol::state lua;
@@ -142,7 +144,7 @@ namespace devils_engine {
       map::generator::context ctx;
       map::generator::container temp_container; // нужно переделать покраску карты
       //utils::typeless_container container;
-      uint32_t rand_seed;
+      uint64_t rand_seed;
       uint32_t noise_seed;
       int32_t current_step;
       int32_t old_step;
@@ -150,7 +152,7 @@ namespace devils_engine {
       std::vector<step*> steps;
       utils::random_engine_st random;
       FastNoise noise;
-      utils::table_container m_table_container;
+      table_container_t m_table_container;
       utils::interface_container* interface;
       sol::table interface_table;
 //       sol::function progress_interface_func;

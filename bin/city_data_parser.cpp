@@ -5,6 +5,7 @@
 #include "utils/string_container.h"
 #include "core_context.h"
 #include "utils/serializator_helper.h"
+#include "map_creator.h"
 #include <iostream>
 
 namespace devils_engine {
@@ -56,7 +57,7 @@ namespace devils_engine {
     }
     
     size_t add_city(const sol::table &table) {
-      return global::get<utils::table_container>()->add_table(core::structure::city, table);
+      return global::get<map::creator::table_container_t>()->add_table(static_cast<size_t>(core::structure::city), table);
     }
     
     bool validate_city(const size_t &index, const sol::table &table) {

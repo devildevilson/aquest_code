@@ -35,6 +35,7 @@ namespace devils_engine {
           plate,
           edge,
           province,
+          province_neighbours,
           culture,
           country,
           title,

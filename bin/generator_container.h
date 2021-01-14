@@ -51,7 +51,7 @@ namespace devils_engine {
       };
       
       struct entity_type {
-        utils::id id;
+//         utils::id id;
         size_t types_count;
         data_type* types;
       };
@@ -79,7 +79,7 @@ namespace devils_engine {
 //           std::vector<std::pair<utils::id, std::vector<data_type>>> entities_types;
 //         };
 //         container(const create_info &info);
-        container();
+        container(const uint32_t &tiles_count);
         ~container();
         
         uint32_t add_entity(const uint32_t &type);
@@ -91,12 +91,10 @@ namespace devils_engine {
         T get_data(const uint32_t &type, const uint32_t &index, const uint32_t &parameter_type) const;
         
         void add_child(const uint32_t &type, const uint32_t &index, const uint32_t &child);
+        uint32_t get_child(const uint32_t &type, const uint32_t &index, const uint32_t &array_index) const;
+        uint32_t get_childs_count(const uint32_t &type, const uint32_t &index) const;
         const std::vector<uint32_t> & get_childs(const uint32_t &type, const uint32_t &index) const;
         std::vector<uint32_t> & get_childs(const uint32_t &type, const uint32_t &index);
-        
-        void add_province_neighbour(const uint32_t &index, const uint32_t &neighbour);
-        const std::vector<uint32_t> & get_province_neighbours(const uint32_t &index) const;
-        std::vector<uint32_t> & get_province_neighbours(const uint32_t &index);
         
         size_t entities_count(const uint32_t &type) const;
         data_type type(const uint32_t &entity, const uint32_t &property) const;
@@ -106,6 +104,7 @@ namespace devils_engine {
         
         size_t compute_memory_size() const;
       private:
+        uint32_t tiles_count;
         struct tile_type tile_type;
         std::vector<tile_data> tiles;
         std::vector<std::pair<entity_type, std::vector<entity>>> entities;

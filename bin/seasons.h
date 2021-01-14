@@ -5,6 +5,7 @@
 #include <cstring>
 #include <stdexcept>
 #include "map.h"
+#include "map_creator.h"
 #include "render/shared_structures.h"
 #include <vector>
 #include "utils/sol.h"
@@ -54,9 +55,9 @@ namespace devils_engine {
       }
       
       inline uint32_t add_biome(const sol::table &table) {
-        auto cont = global::get<utils::table_container>();
-        if (cont->get_tables(utils::table_container::additional_data::biome).size() == maximum_biomes) throw std::runtime_error("Too many biomes");
-        return cont->add_table(utils::table_container::additional_data::biome, table);
+        auto cont = global::get<devils_engine::map::creator::table_container_t>();
+        if (cont->get_tables(static_cast<size_t>(utils::generator_table_container::additional_data::biome)).size() == maximum_biomes) throw std::runtime_error("Too many biomes");
+        return cont->add_table(static_cast<size_t>(utils::generator_table_container::additional_data::biome), table);
       }
     };
     

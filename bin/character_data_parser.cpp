@@ -5,6 +5,7 @@
 #include "utils/string_container.h"
 #include "core_context.h"
 #include "utils/serializator_helper.h"
+#include "map_creator.h"
 
 namespace devils_engine {
   namespace utils {
@@ -145,19 +146,19 @@ namespace devils_engine {
     };
     
     size_t add_character(const sol::table &table) {
-      return global::get<utils::table_container>()->add_table(core::structure::character, table);
+      return global::get<map::creator::table_container_t>()->add_table(static_cast<size_t>(core::structure::character), table);
     }
     
     size_t register_character() {
-      return global::get<utils::table_container>()->register_table(core::structure::character);
+      return global::get<map::creator::table_container_t>()->register_table(static_cast<size_t>(core::structure::character));
     }
     
     size_t register_characters(const size_t &count) {
-      return global::get<utils::table_container>()->register_tables(core::structure::character, count);
+      return global::get<map::creator::table_container_t>()->register_tables(static_cast<size_t>(core::structure::character), count);
     }
     
     void set_character(const size_t &index, const sol::table &table) {
-      global::get<utils::table_container>()->set_table(core::structure::character, index, table);
+      global::get<map::creator::table_container_t>()->set_table(static_cast<size_t>(core::structure::character), index, table);
     }
     
     bool validate_character(const size_t &index, const sol::table &table) {

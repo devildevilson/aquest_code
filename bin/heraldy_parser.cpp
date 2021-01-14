@@ -10,6 +10,7 @@
 #include "render/heraldy.h"
 #include "utils/string_container.h"
 #include "map.h"
+#include "map_creator.h"
 
 namespace devils_engine {
   namespace utils {
@@ -78,7 +79,7 @@ namespace devils_engine {
     };
     
     void add_heraldy_layer(const sol::table &table) {
-      global::get<utils::table_container>()->add_table(utils::table_container::additional_data::heraldy, table);
+      global::get<map::creator::table_container_t>()->add_table(static_cast<size_t>(utils::generator_table_container::additional_data::heraldy), table);
     }
     
     bool validate_heraldy_layer(const uint32_t &index, const sol::table &table) {

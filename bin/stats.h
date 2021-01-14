@@ -462,6 +462,7 @@ namespace devils_engine {
       };
     }
     
+    // оффсеты? они нужны чтобы правильно заполнить луа таблицы, а вот в самой игре они нужны?
     namespace offsets {
       enum values {
         character_stats = 0,
@@ -473,7 +474,7 @@ namespace devils_engine {
         troop_stats = hero_troop_stats + hero_troop_stats::count,
         hero_stats = troop_stats + troop_stats::count,
         
-        count
+        count = hero_stats + hero_stats::count
       };
     }
     

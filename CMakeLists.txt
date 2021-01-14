@@ -201,6 +201,8 @@ file(GLOB_RECURSE GLSL_SOURCE_FILES
   raw_shaders/battle_map_tiles.comp
   raw_shaders/battle_map_tiles.vert
   raw_shaders/battle_map_tiles.frag
+  raw_shaders/battle_biome_objects.vert
+  raw_shaders/battle_biome_objects.frag
 )
 
 foreach(GLSL ${GLSL_SOURCE_FILES})
@@ -269,6 +271,12 @@ set(SRC_LIST
   utils/lua_initialization_internal_faction.cpp
   utils/lua_initialization_internal_province.cpp
   utils/lua_initialization_internal_titulus.cpp
+  utils/lua_initialization_battle_map.cpp
+  utils/lua_initialization_generator_container.cpp
+  utils/lua_initialization_noiser.cpp
+  utils/lua_initialization_random_engine.cpp
+  utils/lua_initialization_progress_container.cpp
+  utils/lua_initialization_battle_generator_functions.cpp
   utils/string_container.cpp
   utils/string_bank.cpp
   utils/progress_container.cpp
@@ -504,26 +512,41 @@ if (CMAKE_BUILD_TYPE STREQUAL Release AND UNIX)
             COMMAND ${CMAKE_STRIP} -s "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${TARGET_NAME}")
 endif()
 
+# кажется работает
 make_directory(${PROJECT_DIR}/scripts)
 file(GLOB LUA_SCRIPTS
   "lua_scripts/*.lua"
 )
-file(COPY ${LUA_SCRIPTS} DESTINATION "${PROJECT_DIR}/scripts/")
+#file(COPY ${LUA_SCRIPTS} DESTINATION "${PROJECT_DIR}/scripts/")
+add_custom_target(copy_scripts ALL
+  COMMAND      ${CMAKE_COMMAND} -E copy_if_different
+               ${LUA_SCRIPTS}
+               "${PROJECT_DIR}/scripts/"
+)
+add_dependencies(${TARGET_NAME} copy_scripts)
 
-macro(configure_files srcDir destDir)
-    message(STATUS "Configuring directory ${destDir}")
-    make_directory(${destDir})
+#make_directory(${PROJECT_DIR}/textures)
+#file(GLOB_RECURSE PROJECT_TEXTURES LIST_DIRECTORIES true
+  #"textures/*"
+#)
+file(COPY textures DESTINATION ${PROJECT_DIR})
+#install(DIRECTORY textures DESTINATION ${PROJECT_DIR})
 
-    file(GLOB_RECURSE templateFiles RELATIVE ${srcDir} ${srcDir}/*)
-    foreach(templateFile ${templateFiles})
-        set(srcTemplatePath ${srcDir}/${templateFile})
-        if(NOT IS_DIRECTORY ${srcTemplatePath})
-            message(STATUS "Configuring file ${templateFile}")
-            configure_file(
-                    ${srcTemplatePath}
-                    ${destDir}/${templateFile}
-                    @ONLY)
-        endif(NOT IS_DIRECTORY ${srcTemplatePath})
-    endforeach(templateFile)
-endmacro(configure_files)
-configure_files("textures/" "${PROJECT_DIR}/textures/")
+# а это не работает
+#macro(configure_files srcDir destDir)
+    #message(STATUS "Configuring directory ${destDir}")
+    #make_directory(${destDir})
+
+    #file(GLOB_RECURSE templateFiles RELATIVE ${srcDir} ${srcDir}/*)
+    #foreach(templateFile ${templateFiles})
+        #set(srcTemplatePath ${srcDir}/${templateFile})
+        #if(NOT IS_DIRECTORY ${srcTemplatePath})
+            #message(STATUS "Configuring file ${templateFile}")
+            #configure_file(
+                    #${srcTemplatePath}
+                    #${destDir}/${templateFile}
+                    #@ONLY)
+        #endif(NOT IS_DIRECTORY ${srcTemplatePath})
+    #endforeach(templateFile)
+#endmacro(configure_files)
+#configure_files("textures/" "${PROJECT_DIR}/textures/")

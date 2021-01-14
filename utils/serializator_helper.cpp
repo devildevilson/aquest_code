@@ -126,7 +126,7 @@ namespace devils_engine {
 //       data::string world_name;
 //       data::string technical_name;
 //       data::string world_settings;
-      uint32_t rand_seed;
+      uint64_t rand_seed;
       uint32_t noise_seed;
       uint32_t current_season;
       data::array<data::array<float, 4>, 4> matrix;
@@ -147,7 +147,7 @@ namespace devils_engine {
     void world_serializator::set_technical_name(std::string &&name) { technical_name = std::move(name); }
     void world_serializator::set_settings(const std::string_view &name) { world_settings = name; }
     void world_serializator::set_settings(std::string &&name) { world_settings = std::move(name); }
-    void world_serializator::set_rand_seed(const uint32_t &seed) { ptr->rand_seed = seed; }
+    void world_serializator::set_rand_seed(const uint64_t &seed) { ptr->rand_seed = seed; }
     void world_serializator::set_noise_seed(const uint32_t &seed) { ptr->noise_seed = seed; }
     void world_serializator::add_data(const core::structure &type, const std::string &data) {
       const uint32_t index = static_cast<uint32_t>(type);

@@ -31,7 +31,7 @@ namespace devils_engine {
     }
     
     std::string progress_container::get_hint1() const {
-      std::unique_lock<std::mutex> lock(mutex);
+      std::unique_lock<std::mutex> lock(mutex); 
       return hint1;
     }
     

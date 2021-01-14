@@ -5,14 +5,22 @@
 
 namespace devils_engine {
   namespace utils {
-    void setup_lua_package_path(sol::state &lua);
-    void setup_lua_constants(sol::state &lua);
-    void setup_lua_main_menu(sol::state &lua);
-    void setup_lua_types(sol::state &lua);
-    void setup_lua_input(sol::state &lua);
-    void setup_lua_game_logic(sol::state &lua);
-    void setup_lua_settings(sol::state &lua);
-    void setup_lua_tile(sol::state &lua);
+    void setup_lua_package_path(sol::state_view lua);
+    void setup_lua_constants(sol::state_view lua);
+    void setup_lua_main_menu(sol::state_view lua);
+    void setup_lua_types(sol::state_view lua);
+    void setup_lua_input(sol::state_view lua);
+    void setup_lua_game_logic(sol::state_view lua);
+    void setup_lua_settings(sol::state_view lua);
+    void setup_lua_tile(sol::state_view lua);
+    void setup_lua_generator_container(sol::state_view lua);
+    void setup_lua_random_engine(sol::state_view lua);
+    void setup_lua_noiser(sol::state_view lua);
+    void setup_lua_battle_map(sol::state_view lua);
+    void setup_lua_progress_container(sol::state_view lua);
+    void setup_lua_utility_map_generator_functions(sol::state_view lua);
+    void setup_lua_utility_battle_generator_functions(sol::state_view lua);
+    void setup_lua_utility_encounter_generator_functions(sol::state_view lua);
   }
 }
 

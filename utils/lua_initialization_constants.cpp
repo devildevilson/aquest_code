@@ -1,18 +1,11 @@
 #include "lua_initialization.h"
 
-#include "globals.h"
-#include "bin/core_structures.h"
-// #include "bin/helper.h"
 #include "utility.h"
-#include "bin/logic.h"
-#include "input.h"
 #include "progress_container.h"
-#include "main_menu.h"
-#include "demiurge.h"
 
 namespace devils_engine {
   namespace utils {
-    void setup_lua_constants(sol::state &lua) {
+    void setup_lua_constants(sol::state_view lua) {
       //auto constants = lua["constants"].get_or_create<sol::table>();
       auto t1 = lua.create_table_with(
         "creating_map", utils::progress_container::creating_map,

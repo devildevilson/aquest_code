@@ -49,13 +49,14 @@ namespace devils_engine {
       static const size_t maximum_openned_layers = UINT32_WIDTH;
       static const size_t bit_field_32_size = size_t(ceil(double(maximum_openned_layers) / double(UINT32_WIDTH)));
       static const size_t fonts_count = 4;
+      static const size_t maximum_args_count = 16;
 
       static size_t first_layer();
       static size_t last_layer();
 
       struct layer_data {
         sol::function function;
-        std::vector<sol::object> args;
+        std::array<sol::object, maximum_args_count> args;
         sol::object ret;
       };
 
@@ -64,7 +65,7 @@ namespace devils_engine {
       std::array<layer_data, maximum_openned_layers> openned_layers;
       std::array<timer, timers_count> timers;
       bit_field_32<bit_field_32_size> close_layers;
-      std::array<std::pair<std::vector<sol::object>, sol::function>, maximum_openned_layers> open_layers;
+      std::array<std::pair<std::array<sol::object, maximum_args_count>, sol::function>, maximum_openned_layers> open_layers;
 
       sol::object moonnuklear_ctx;
       sol::object fonts[fonts_count]; // требуется их переделывать
@@ -98,6 +99,8 @@ namespace devils_engine {
       void free_fonts();
       void make_fonts();
       void collect_garbage();
+      
+      void clear_args(std::array<sol::object, maximum_args_count> &args);
     };
   }
 }

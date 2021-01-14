@@ -4,7 +4,7 @@
 
 namespace devils_engine {
   namespace utils {
-    void setup_lua_settings(sol::state &lua) {
+    void setup_lua_settings(sol::state_view lua) {
       auto utils = lua["utils"].get_or_create<sol::table>();
       
       auto graphics = utils.new_usertype<struct utils::settings::graphics>("graphics_type",

@@ -1,19 +1,9 @@
 #include "lua_initialization.h"
 #include "lua_initialization_internal.h"
 
-#include "globals.h"
-#include "bin/core_structures.h"
-// #include "bin/helper.h"
-#include "utility.h"
-#include "bin/logic.h"
-#include "input.h"
-#include "progress_container.h"
-#include "main_menu.h"
-#include "demiurge.h"
-
 namespace devils_engine {
   namespace utils {
-    void setup_lua_types(sol::state &lua) {
+    void setup_lua_types(sol::state_view lua) {
       internal::setup_lua_enums(lua);
       internal::setup_lua_province(lua);
       internal::setup_lua_building_type(lua);

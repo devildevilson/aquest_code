@@ -4,7 +4,7 @@ namespace devils_engine {
   namespace utils {
     double rng_normalize(const uint64_t &value) {
       union { uint64_t i; double d; } u;
-      u.i = UINT64_C(0x3FF) << 52 | value >> 12;
+      u.i = (UINT64_C(0x3FF) << 52) | (value >> 12);
       return u.d - 1.0;
     }
     

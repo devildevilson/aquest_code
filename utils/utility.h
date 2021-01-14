@@ -28,6 +28,10 @@
 #define STRINGIFY(a) #a
 #define CONCAT(a, b) a##b
 
+constexpr size_t align_to(const size_t &memory, const size_t &aligment) {
+  return (memory + aligment - 1) / aligment * aligment;
+}
+
 namespace devils_engine {
   namespace utils {
     // как задавать состояния игрока? поидее мы меняем эти состояния в зависимости от ситуации в игре

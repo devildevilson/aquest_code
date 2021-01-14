@@ -9,23 +9,25 @@
 #include "bin/map_creator.h"
 #include "bin/loading_functions.h"
 #include "bin/logic.h"
+#include "bin/battle_map.h"
 #include "render/image_controller.h"
+#include "render/battle_render_stages.h"
 
 namespace devils_engine {
   namespace utils {
-    void update_interface() {
+    void update_interface(const uint32_t &progress_bar_index) {
       auto base = global::get<systems::core_t>();
       auto prog = base->loading_progress;
       auto interface = base->interface_container;
       ASSERT(interface != nullptr);
       sol::table table;
-      if (interface->openned_layers[0].args.size() > 0) {
-        auto &val = interface->openned_layers[0].args[0];
+      if (interface->openned_layers[progress_bar_index].args.size() > 0) {
+        auto &val = interface->openned_layers[progress_bar_index].args[0];
         ASSERT(val.is<sol::table>());
         table = val.as<sol::table>();
       } else {
-        if (interface->open_layers[0].first.size() == 0) return;
-        auto &val = interface->open_layers[0].first[0];
+        if (interface->open_layers[progress_bar_index].first.size() == 0) return;
+        auto &val = interface->open_layers[progress_bar_index].first[0];
         ASSERT(val.is<sol::table>());
         table = val.as<sol::table>();
       }
@@ -135,7 +137,7 @@ namespace devils_engine {
         systems::advance_progress(prog, "cleaning");
       }
 
-      update_interface();
+      update_interface(0);
 
       if (prog->finished()) {
 //         auto pool = global::get<dt::thread_pool>();
@@ -178,6 +180,7 @@ namespace devils_engine {
       auto map = global::get<systems::map_t>();
       map->create_map_container();
 //       PRINT("world_map_state::enter")
+      map->start_rendering();
     }
 
     // тут нужно как то определить загружаем ли мы сохранение или грузим карту
@@ -230,7 +233,7 @@ namespace devils_engine {
         systems::advance_progress(prog, "cleaning");
       }
 
-      update_interface();
+      update_interface(0);
 
       if (prog->finished()) {
         auto pool = global::get<dt::thread_pool>();
@@ -274,6 +277,7 @@ namespace devils_engine {
         // все равно лучше бы чистить данные после создания карты
       }
       
+      map_systems->stop_rendering();
       map_systems->release_container();
       base->menu->clear();
 //       base->interface_container->close_all();
@@ -293,19 +297,50 @@ namespace devils_engine {
       
       m_next_state = UINT32_MAX;
     }
+    
+    struct battle_state::battle_generator_data {
+      sol::state lua;
+      utils::random_engine_st random;
+      FastNoise noiser;
+      
+      map::generator::container* container;
+      // где то тут же нужно добавить контейнер для таблиц
+      map::creator::table_container_t table_container;
+      
+      battle_generator_data() : container(nullptr) {
+        static_assert(sizeof(uint64_t) == sizeof(size_t));
+        const uint64_t seed = global::advance_state();
+        random.set_seed(seed);
+        noiser.SetSeed(reinterpret_cast<const int*>(&seed)[0]);
+        global::get(&table_container);
+      }
+      
+      ~battle_generator_data() { 
+        global::get<map::creator::table_container_t>(reinterpret_cast<map::creator::table_container_t*>(SIZE_MAX));
+        destroy_container();
+      }
+      
+      void create_container(const size_t &tiles_count) { container = new map::generator::container(tiles_count); }
+      void destroy_container() { delete container; container = nullptr; }
+    };
 
-    battle_state::battle_state() : quest_state(battle) {}
+    battle_state::battle_state() : quest_state(battle), ctx(nullptr) {} //lua(nullptr),
+    battle_state::~battle_state() { destroy_state(); }
     void battle_state::enter() {
-      ASSERT(false);
+      //ASSERT(false);
       // тут создадим карту битв, или не тут? мы вполне можем создать позже
       // загрузку скрыть за картинкой и тогда непосредственно контейнер мы можем создать позже
       
+      auto battle = global::get<systems::battle_t>();
+      battle->create_map_container();
+      battle->create_render_stages();
       
+      global::get<render::battle::tile_optimizer>()->update_containers();
+      
+      battle->start_rendering();
     }
 
     bool battle_state::load(quest_state* prev_state) { 
-      UNUSED_VARIABLE(prev_state); 
-      
       // что тут? во первых мы должны запустить функцию которая наберет нужные данные из карты
       // либо переделать немного систему чтобы удалять все данные кроме контекста
       // с другой стороны можно сделать какую то статичную С++ функцию в которой мы сможем указать че угодно
@@ -317,11 +352,104 @@ namespace devils_engine {
       // то есть у меня будут крупные тайлы, на тайлах какие то красивости, расставленные предварительно отряды армии,
       // ну короч надо бы наверное сначала заняться рендером
       
-      return false; 
+      // 4 стартовых (вход, сбор данных о карте, чистка ресурсов, подготовка к генерации) + 2 загрузки (валидация + загрузка)
+      const size_t additional_step_count = 4 + 2;
+      
+      // куда убрать sol::state lua ??????????????????????
+      // он нужен только при загрузке
+      
+      auto base = global::get<systems::core_t>();
+      auto battle = global::get<systems::battle_t>();
+      auto prog = base->loading_progress;
+      auto pool = global::get<dt::thread_pool>();
+      if (prog->reseted()) {
+        //base->interface_container->open_layer(0, "background", {base->interface_container->lua.create_table()}); // картинка
+        //base->interface_container->open_layer(1, "progress_bar", {base->interface_container->lua.create_table()});
+        auto obj = sol::make_object(base->interface_container->lua, prog);
+        base->interface_container->open_layer(1, "progress_bar", {obj});
+        // нам еще нужно предусмотреть загрузку из битвы (загрузка сохранения + передача данных из битвы в карту + чистка битвы)
+        prog->set_max_value(additional_step_count);
+        prog->set_hint1(std::string_view("Creating battle"));
+        prog->set_hint2(std::string_view("getting information from map"));
+        prog->set_type(utils::progress_container::loading_battle);
+        
+        create_state();
+      }
+      
+      if (prog->get_value() == 3) {
+        enter();
+        //battle->setup_generator_random();
+        sol::state &local_lua = ctx->lua;
+        local_lua["usertable"].get_or_create<sol::table>();
+        systems::advance_progress(prog, "starting");
+        
+        //battle->setup_generator_container(128*128);
+        ctx->create_container(128*128);
+        
+        const sol::table t = local_lua["config_table"];
+        const sol::table gen = t["generator"];
+        const size_t funcs_size = gen.size();
+        prog->set_max_value(funcs_size + additional_step_count);
+        
+        auto ctx_t = local_lua["ctx_table"].get_or_create<sol::table>();
+        ctx_t["map"] = battle->map;
+        ctx_t["random"] = &ctx->random;
+        ctx_t["noiser"] = &ctx->noiser;
+        ctx_t["container"] = ctx->container;
+        
+        // тут добавим задачу на загрузку
+        pool->submitbase([&local_lua, prog] () {
+          systems::from_map_to_battle_part2(local_lua, prog);
+        });
+      }
+      
+      if (prog->get_value() == 2) {
+        // прежде чем почистить предыдущий стейт, нужно сохранить ворлд мап
+        if (prev_state != nullptr) prev_state->clean();
+        systems::advance_progress(prog, "creating container");
+      }
+      
+      if (prog->get_value() == 0) {
+        //systems::advance_progress(prog, "cleaning");
+        systems::advance_progress(prog, "getting information from map");
+        sol::state &local_lua = ctx->lua;
+        pool->submitbase([&local_lua, prog] () {
+          systems::from_map_to_battle_part1(local_lua, prog); // грузим конфиг
+        });
+      }
+      
+      // тут мы должны сгенерировать высоты и биомы для боевых тайлов, я вспомнил вот что, тайлы стен в АОВ3
+      // это на самом деле два тайла: один собственно площадка где стоит отряд защиты, второй тайл это стены,
+      // на который помещается армия атакующая при штурме
+      // тут нет необходимости делать отдельный контейнер для всех функций, 
+      // нам просто нужно где то хранить положение конфига для создания карт (по идее это должно придти при генерации ворлдмапы)
+      // получается что тут мы сначало грузим конфиг, подгружаем функцию которая соберет нужные данные из карты,
+      // сохраняем и удалям карту, создаем контейнер, запускаем функции генерации битвы
+      
+//       update_interface(1);
+      
+      if (prog->finished()) {
+        pool->wait();
+        base->interface_container->close_all();
+        base->interface_container->collect_garbage();
+        prog->reset();
+        //battle->release_generator_data();
+        destroy_state();
+        return true;
+      }
+      
+      return false;
     }
     
     void battle_state::update(const size_t& time) { UNUSED_VARIABLE(time); }
-    void battle_state::clean() {}
+    void battle_state::clean() {
+      auto battle = global::get<systems::battle_t>();
+      battle->stop_rendering();
+      battle->release_container();
+    }
+    
+    void battle_state::create_state() { ctx = new battle_generator_data; }
+    void battle_state::destroy_state() { delete ctx; ctx = nullptr; }
 
     encounter_state::encounter_state() : quest_state(encounter) {}
     void encounter_state::enter() {

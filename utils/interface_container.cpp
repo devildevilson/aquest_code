@@ -38,6 +38,7 @@ namespace devils_engine {
       // нужно сделать свой собственный require видимо, который будет подгружать только нужные файлы
       setup_lua_package_path(lua);
       const std::string script_dir = global::root_directory() + "scripts/";
+      setup_lua_progress_container(lua);
       // в донт старв тогезер скрипты загружались в специальном сэндбоксе, который во первых не позволял
       // загружать бинарники, а также запрещал использование некоторых функций (например os.execute)
       // а io.open путь выходящий за пределы папки с игрой приводил к ошибке, мне нужно сделать примерно то же самое
@@ -116,7 +117,7 @@ namespace devils_engine {
         if (!close_layers.get(i)) continue;
         openned_layers[i].function = sol::nil;
         //openned_layers[i].data = sol::make_object(lua, sol::nil);
-        openned_layers[i].args.clear();
+        clear_args(openned_layers[i].args);
 //         openned_layers[i].args.shrink_to_fit();
         close_layers.set(i, false);
       }
@@ -129,12 +130,13 @@ namespace devils_engine {
         openned_layers[i].ret = sol::make_object(lua, sol::nil);
         open_layers[i].second = sol::nil;
         //open_layers[i].first = sol::make_object(lua, sol::nil);
-        open_layers[i].first.clear();
+        clear_args(open_layers[i].first);
 //         open_layers[i].first.shrink_to_fit();
       }
 
       for (size_t i = 0; i < openned_layers.size(); ++i) {
         if (openned_layers[i].function == sol::nil) continue;
+        ASSERT(openned_layers[i].args[0].valid());
         const auto ret = openned_layers[i].function(moonnuklear_ctx, sol::as_args(openned_layers[i].args));
         if (!ret.valid()) {
           sol::error err = ret;
@@ -157,7 +159,7 @@ namespace devils_engine {
     void interface_container::force_close_layer(const uint32_t &index) {
       if (index >= maximum_openned_layers) throw std::runtime_error("Bad layer index, maximum is " + std::to_string(maximum_openned_layers));
       openned_layers[index].function = sol::nil;
-      openned_layers[index].args.clear();
+      clear_args(openned_layers[index].args);
     }
 
     void interface_container::close_all() {
@@ -177,32 +179,44 @@ namespace devils_engine {
 
     bool interface_container::open_layer(const uint32_t &index, const std::string_view &name, const std::initializer_list<sol::object> &data) {
       if (index >= maximum_openned_layers) throw std::runtime_error("Bad layer index, maximum is " + std::to_string(maximum_openned_layers));
+      if (data.size() >= maximum_args_count) throw std::runtime_error("Maximum arguments count is " + std::to_string(maximum_args_count));
       if (!close_layers.get(index) && openned_layers[index].function != sol::nil) return false;
       auto proxy = layers_table[name];
       if (!proxy.valid()) throw std::runtime_error("Could not find layer " + std::string(name));
       if (proxy.get_type() != sol::type::function) throw std::runtime_error(std::string(name) + " is not a function");
       open_layers[index].second = proxy.get<sol::function>();
-      open_layers[index].first = data;
+      //open_layers[index].first = data;
+      for (size_t i = 0; i < data.size(); ++i) {
+        open_layers[index].first[i] = data.begin()[i];
+      }
 
       return true;
     }
 
     bool interface_container::force_open_layer(const uint32_t &index, const std::string_view &name, const std::initializer_list<sol::object> &data) {
       if (index >= maximum_openned_layers) throw std::runtime_error("Bad layer index, maximum is " + std::to_string(maximum_openned_layers));
+      if (data.size() >= maximum_args_count) throw std::runtime_error("Maximum arguments count is " + std::to_string(maximum_args_count));
       if (openned_layers[index].function != sol::nil) return false;
       auto proxy = layers_table[name];
       if (!proxy.valid()) throw std::runtime_error("Could not find layer " + std::string(name));
       if (proxy.get_type() != sol::type::function) throw std::runtime_error(std::string(name) + " is not a function");
       openned_layers[index].function = proxy.get<sol::function>();
-      openned_layers[index].args = data;
+      //openned_layers[index].args = data;
+      for (size_t i = 0; i < data.size(); ++i) {
+        openned_layers[index].args[i] = data.begin()[i];
+      }
 
       return true;
     }
 
     bool interface_container::update_data(const uint32_t &index, const std::initializer_list<sol::object> &data) {
       if (index >= maximum_openned_layers) throw std::runtime_error("Bad layer index, maximum is " + std::to_string(maximum_openned_layers));
+      if (data.size() >= maximum_args_count) throw std::runtime_error("Maximum arguments count is " + std::to_string(maximum_args_count));
       if (openned_layers[index].function == sol::nil) return false;
-      openned_layers[index].args = data;
+      //openned_layers[index].args = data;
+      for (size_t i = 0; i < data.size(); ++i) {
+        openned_layers[index].args[i] = data.begin()[i];
+      }
       return true;
     }
 
@@ -315,6 +329,12 @@ namespace devils_engine {
     
     void interface_container::collect_garbage() {
       lua.collect_garbage();
+    }
+    
+    void interface_container::clear_args(std::array<sol::object, maximum_args_count> &args) {
+      for (auto &arg : args) {
+        arg = sol::object(sol::nil);
+      }
     }
   }
 }

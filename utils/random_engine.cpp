@@ -110,9 +110,9 @@ namespace devils_engine {
 //       return float(num()) / float(UINT32_MAX-1);
 //       std::uniform_real_distribution<float> dis(0.0f, 1.0f);
 //       return dis(gen);
-      const uint64_t value = get_value(s);
-      s = next(s);
-      const double v = normalize(value);
+      //const uint64_t value = get_value(s);
+      //s = next(s);
+      const double v = normalize(num());
       ASSERT(v >= 0.0 && v <= 1.0);
       return v;
     }
@@ -123,8 +123,9 @@ namespace devils_engine {
       if (size == 1) return 0;
       //const uint32_t i = closed(uint64_t(0), size-1);
       // скорее всего это лучший вариант для больших чисел
-      const uint32_t i = closed(double(0), double(size)); // тут наверное нужно опустить вычитание
-      //std::cout << "i " << i << "\n";
+      //const uint32_t i = closed(double(0), double(size)); // тут наверное нужно опустить вычитание
+      // зачем я использовал closed?
+      const uint64_t i = num() % size;
       ASSERT(i < size);
       return i;
     }

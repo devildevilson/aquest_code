@@ -1,19 +1,11 @@
 #include "lua_initialization_internal.h"
 
-#include "globals.h"
 #include "bin/core_structures.h"
-// #include "bin/helper.h"
-#include "utility.h"
-#include "bin/logic.h"
-#include "input.h"
-#include "progress_container.h"
-#include "main_menu.h"
-#include "demiurge.h"
 
 namespace devils_engine {
   namespace utils {
     namespace internal {
-      void setup_lua_faction(sol::state &lua) {
+      void setup_lua_faction(sol::state_view lua) {
         auto core = lua["core"].get_or_create<sol::table>();
         auto faction_type = core.new_usertype<core::faction>("faction",
           sol::no_constructor,

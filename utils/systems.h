@@ -7,6 +7,12 @@
 #include <string>
 #include <atomic>
 
+class FastNoise;
+
+namespace sol {
+  class state;
+}
+
 namespace devils_engine {
   namespace input {
     struct data;
@@ -31,6 +37,7 @@ namespace devils_engine {
     struct calendar;
     class progress_container;
     struct objects_selector;
+    struct random_engine_st;
   }
   
   namespace interface {
@@ -48,10 +55,18 @@ namespace devils_engine {
   
   namespace map {
     class creator;
+    namespace generator {
+      class container;
+    }
   }
   
   namespace ai {
     struct path_managment;
+  }
+  
+  namespace components {
+    class world_map_camera;
+    class battle_camera;
   }
   
   namespace systems {
@@ -109,6 +124,7 @@ namespace devils_engine {
       //std::atomic_bool inited; // короче плохая идея, нужно создавать/удалять эти вещи в одном потоке
       
       render::world_map_buffers* world_buffers;
+      components::world_map_camera* camera;
       
       map_t();
       ~map_t();
@@ -123,6 +139,9 @@ namespace devils_engine {
       
       void lock_map();
       void unlock_map();
+      
+      void start_rendering();
+      void stop_rendering();
       
       void setup_map_generator(); // как передать сюда данные? по идее мы можем собрать с помощью луа
       void destroy_map_generator();
@@ -141,12 +160,17 @@ namespace devils_engine {
     
     struct battle_t {
       utils::slot_container container;
-      //core::map* map; // другая карта скорее всего
+      // нужен баттл контекст
       systems::ai* ai_systems;
-      render::stage_container* stage_container;
       battle::map* map;
       render::stage_container* optimizators_container;
       render::stage_container* render_container;
+      components::battle_camera* camera;
+      
+//       utils::random_engine_st* random;
+//       FastNoise* noiser;
+//       map::generator::container* generator_container;
+//       sol::state* generator_state;
       
       battle_t();
       ~battle_t();
@@ -155,7 +179,17 @@ namespace devils_engine {
       void create_map_container();
       void create_render_stages();
       
+//       void setup_generator_random();
+//       void setup_generator_container(const size_t &tiles_count);
+//       void release_generator_data();
+      
       void release_container();
+      
+      void lock_map();
+      void unlock_map();
+      
+      void start_rendering();
+      void stop_rendering();
     };
     
     struct encouter_t {

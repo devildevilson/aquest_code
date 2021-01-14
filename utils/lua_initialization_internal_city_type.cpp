@@ -1,19 +1,11 @@
 #include "lua_initialization_internal.h"
 
-#include "globals.h"
 #include "bin/core_structures.h"
-// #include "bin/helper.h"
-#include "utility.h"
-#include "bin/logic.h"
-#include "input.h"
-#include "progress_container.h"
-#include "main_menu.h"
-#include "demiurge.h"
 
 namespace devils_engine {
   namespace utils {
     namespace internal {
-      void setup_lua_city_type(sol::state &lua) {
+      void setup_lua_city_type(sol::state_view lua) {
         auto core = lua["core"].get_or_create<sol::table>();
         sol::usertype<core::city_type> city_type = core.new_usertype<core::city_type>("city_type",
           sol::no_constructor,

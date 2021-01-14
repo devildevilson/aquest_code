@@ -51,7 +51,7 @@ namespace devils_engine {
       void set_technical_name(std::string &&name);
       void set_settings(const std::string_view &name);
       void set_settings(std::string &&name);
-      void set_rand_seed(const uint32_t &seed);
+      void set_rand_seed(const uint64_t &seed);
       void set_noise_seed(const uint32_t &seed);
       void add_data(const core::structure &type, const std::string &data);
       void add_data(const core::structure &type, std::string &&data);

@@ -8,8 +8,7 @@
 
 namespace devils_engine {
   namespace utils {
-    class table_container {
-    public:
+    namespace generator_table_container {
       enum class additional_data {
         image = uint32_t(core::structure::count),
         biome,
@@ -17,97 +16,114 @@ namespace devils_engine {
         
         count
       };
-      
-      inline size_t register_table(const core::structure &type) {
-        ASSERT(type < core::structure::count);
+    }
+    
+    template <size_t N>
+    class table_container {
+    public:
+      size_t register_table(const size_t &type) {
+        ASSERT(type < N);
         const size_t index = static_cast<size_t>(type);
         container[index].emplace_back();
         return container[index].size()-1;
       }
       
-      inline size_t register_tables(const core::structure &type, const size_t &count) {
-        ASSERT(type < core::structure::count);
+      size_t register_tables(const size_t &type, const size_t &count) {
+        ASSERT(type < N);
         const size_t index = static_cast<size_t>(type);
         container[index].resize(container[index].size() + count);
         return container[index].size();
       }
       
-      inline size_t add_table(const core::structure &type, const sol::table &table) {
-        ASSERT(type < core::structure::count);
+      size_t add_table(const size_t &type, const sol::table &table) {
+        ASSERT(type < N);
         const size_t index = static_cast<size_t>(type);
         container[index].push_back(table);
         return container[index].size()-1;
       }
       
-      inline void set_table(const core::structure &type, const size_t &table_index, const sol::table &table) {
-        ASSERT(type < core::structure::count);
+      void set_table(const size_t &type, const size_t &table_index, const sol::table &table) {
+        ASSERT(type < N);
         const size_t index = static_cast<size_t>(type);
         assert(table_index < container[index].size());
         container[index][table_index] = table;
       }
       
-      inline const std::vector<sol::table> & get_tables(const core::structure &type) const {
-        ASSERT(type < core::structure::count);
+      const std::vector<sol::table> & get_tables(const size_t &type) const {
+        ASSERT(type < N);
         const size_t index = static_cast<size_t>(type);
         return container[index];
       }
       
-      inline size_t register_table(const additional_data &type) {
-        ASSERT(type < additional_data::count);
-        const size_t index = static_cast<size_t>(type);
-        container[index].emplace_back();
-        return container[index].size()-1;
-      }
-      
-      inline size_t register_tables(const additional_data &type, const size_t &count) {
-        ASSERT(type < additional_data::count);
-        const size_t index = static_cast<size_t>(type);
-        container[index].resize(container[index].size() + count);
-        return container[index].size();
-      }
-      
-      inline size_t add_table(const additional_data &type, const sol::table &table) {
-        ASSERT(type < additional_data::count);
-        const size_t index = static_cast<size_t>(type);
-        container[index].push_back(table);
-        return container[index].size()-1;
-      }
-      
-      inline void set_table(const additional_data &type, const size_t &table_index, const sol::table &table) {
-        ASSERT(type < additional_data::count);
-        const size_t index = static_cast<size_t>(type);
-        assert(table_index < container[index].size());
-        container[index][table_index] = table;
-      }
-      
-      inline const std::vector<sol::table> & get_tables(const additional_data &type) const {
-        ASSERT(type < additional_data::count);
-        const size_t index = static_cast<size_t>(type);
-        return container[index];
-      }
-      
-//       inline void add_image_table(const sol::table &table) {
-//         const size_t index = static_cast<size_t>(core::structure::count); // может количество типов увеличить?
-//         container[index].push_back(table);
+//       inline size_t register_table(const core::structure &type) {
+//         ASSERT(type < core::structure::count);
+//         const size_t index = static_cast<size_t>(type);
+//         container[index].emplace_back();
+//         return container[index].size()-1;
 //       }
 //       
-//       inline const std::vector<sol::table> & get_image_tables() const {
-//         const size_t index = static_cast<size_t>(core::structure::count);
-//         return container[index];
+//       inline size_t register_tables(const core::structure &type, const size_t &count) {
+//         ASSERT(type < core::structure::count);
+//         const size_t index = static_cast<size_t>(type);
+//         container[index].resize(container[index].size() + count);
+//         return container[index].size();
 //       }
 //       
-//       inline uint32_t add_biome_table(const sol::table &table) {
-//         const size_t index = static_cast<size_t>(core::structure::count)+1; // может количество типов увеличить?
+//       inline size_t add_table(const core::structure &type, const sol::table &table) {
+//         ASSERT(type < core::structure::count);
+//         const size_t index = static_cast<size_t>(type);
 //         container[index].push_back(table);
 //         return container[index].size()-1;
 //       }
 //       
-//       inline const std::vector<sol::table> & get_biome_tables() const {
-//         const size_t index = static_cast<size_t>(core::structure::count)+1;
+//       inline void set_table(const core::structure &type, const size_t &table_index, const sol::table &table) {
+//         ASSERT(type < core::structure::count);
+//         const size_t index = static_cast<size_t>(type);
+//         assert(table_index < container[index].size());
+//         container[index][table_index] = table;
+//       }
+//       
+//       inline const std::vector<sol::table> & get_tables(const core::structure &type) const {
+//         ASSERT(type < core::structure::count);
+//         const size_t index = static_cast<size_t>(type);
+//         return container[index];
+//       }
+      
+//       inline size_t register_table(const additional_data &type) {
+//         ASSERT(type < additional_data::count);
+//         const size_t index = static_cast<size_t>(type);
+//         container[index].emplace_back();
+//         return container[index].size()-1;
+//       }
+//       
+//       inline size_t register_tables(const additional_data &type, const size_t &count) {
+//         ASSERT(type < additional_data::count);
+//         const size_t index = static_cast<size_t>(type);
+//         container[index].resize(container[index].size() + count);
+//         return container[index].size();
+//       }
+//       
+//       inline size_t add_table(const additional_data &type, const sol::table &table) {
+//         ASSERT(type < additional_data::count);
+//         const size_t index = static_cast<size_t>(type);
+//         container[index].push_back(table);
+//         return container[index].size()-1;
+//       }
+//       
+//       inline void set_table(const additional_data &type, const size_t &table_index, const sol::table &table) {
+//         ASSERT(type < additional_data::count);
+//         const size_t index = static_cast<size_t>(type);
+//         assert(table_index < container[index].size());
+//         container[index][table_index] = table;
+//       }
+//       
+//       inline const std::vector<sol::table> & get_tables(const additional_data &type) const {
+//         ASSERT(type < additional_data::count);
+//         const size_t index = static_cast<size_t>(type);
 //         return container[index];
 //       }
     private:
-      std::array<std::vector<sol::table>, static_cast<size_t>(additional_data::count)> container;
+      std::array<std::vector<sol::table>, N> container;
     };
   }
 }

@@ -1,18 +1,11 @@
 #include "lua_initialization.h"
 
-#include "globals.h"
-#include "bin/core_structures.h"
-// #include "bin/helper.h"
-#include "utility.h"
-#include "bin/logic.h"
-#include "input.h"
-#include "progress_container.h"
 #include "main_menu.h"
 #include "demiurge.h"
 
 namespace devils_engine {
   namespace utils {
-    void setup_lua_main_menu(sol::state &lua) {
+    void setup_lua_main_menu(sol::state_view lua) {
       auto utils = lua["utils"].get_or_create<sol::table>();
       auto main_menu = utils.new_usertype<utils::main_menu>("main_menu",
         sol::no_constructor,

@@ -45,6 +45,7 @@
 #include "bin/game_time.h"
 #include "bin/objects_selector.h"
 #include "bin/battle_map.h"
+#include "bin/camera.h"
 
 static const std::vector<const char*> instanceLayers = {
   "VK_LAYER_LUNARG_standard_validation",
@@ -324,7 +325,8 @@ namespace devils_engine {
           sizeof(render::mode_container),
           sizeof(map::creator),
           sizeof(render::stage_container),
-          sizeof(render::stage_container)
+          sizeof(render::stage_container),
+          sizeof(components::world_map_camera)
         }
       ),
       map(nullptr),
@@ -334,7 +336,8 @@ namespace devils_engine {
       render_modes(nullptr),
       map_creator(nullptr),
       optimizators_container(nullptr),
-      render_container(nullptr)
+      render_container(nullptr),
+      camera(nullptr)
 //       inited(false)
     {
       memset(hash, 0, sizeof(hash[0]) * hash_size);
@@ -361,6 +364,10 @@ namespace devils_engine {
       ai_systems = container.create<systems::ai, 3>(container_size);
       ai_systems->add<devils_engine::ai::build_subsystem>();
       render_modes = container.create<render::mode_container, 4>();
+      
+      const float dist = 550.0f;
+      const glm::vec3 default_camera_pos = glm::normalize(glm::vec3(1.0f, 0.0f, 0.0f)) * dist;
+      camera = container.create<components::world_map_camera, 8>(default_camera_pos);
       
       create_render_stages();
       
@@ -654,9 +661,9 @@ namespace devils_engine {
 //       inited = false;
       if (!is_init()) return;
       
-      auto systems = global::get<core_t>();
-      systems->render_slots->clear_slot(2);
-      systems->render_slots->clear_slot(7);
+//       auto systems = global::get<core_t>();
+//       systems->render_slots->clear_slot(2);
+//       systems->render_slots->clear_slot(7);
       
       global::get(reinterpret_cast<render::tile_render*>(SIZE_MAX));
       global::get(reinterpret_cast<render::tile_connections_render*>(SIZE_MAX));
@@ -673,6 +680,7 @@ namespace devils_engine {
       RELEASE_CONTAINER_DATA(map_creator)
       RELEASE_CONTAINER_DATA(optimizators_container)
       RELEASE_CONTAINER_DATA(render_container)
+      RELEASE_CONTAINER_DATA(camera)
       container.clear();
     }
     
@@ -707,7 +715,6 @@ namespace devils_engine {
       auto opt1 = optimizators_container->add_stage<render::tile_optimizer>(render::tile_optimizer::create_info{device});
 //       auto opt2 = optimizators_container->add_stage<render::tile_borders_optimizer>(render::tile_borders_optimizer::create_info{device, buffers});
 //       auto opt3 = optimizators_container->add_stage<render::tile_walls_optimizer>(render::tile_walls_optimizer::create_info{device, buffers});
-      systems->render_slots->set_stage(2, optimizators_container);
       
       auto tiles   = render_container->add_stage<render::tile_render>(render::tile_render::create_info{device, opt1});
       auto borders = render_container->add_stage<render::tile_border_render>(render::tile_border_render::create_info{device, opt1, buffers});
@@ -720,7 +727,9 @@ namespace devils_engine {
                      render_container->add_stage<render::tile_structure_render>(render::tile_structure_render::create_info{device, opt1, world_buffers});
                      render_container->add_stage<render::heraldies_render>(render::heraldies_render::create_info{device, opt1, world_buffers});
                      render_container->add_stage<render::armies_render>(render::armies_render::create_info{device, opt1, world_buffers});
-      systems->render_slots->set_stage(7, render_container);
+                     
+//       systems->render_slots->set_stage(2, optimizators_container);
+//       systems->render_slots->set_stage(7, render_container);
       
       global::get(tiles);
       global::get(walls);
@@ -744,6 +753,22 @@ namespace devils_engine {
 //       auto s = map->status();
 //       if (s == core::map::status::rendering) map->set_status(core::map::status::valid);
       map->mutex.unlock();
+    }
+    
+    void map_t::start_rendering() {
+      if (!is_init()) return;
+      std::unique_lock<std::mutex> lock(map->mutex);
+      auto systems = global::get<core_t>();
+      systems->render_slots->set_stage(2, optimizators_container);
+      systems->render_slots->set_stage(7, render_container);
+    }
+    
+    void map_t::stop_rendering() {
+      if (!is_init()) return;
+      std::unique_lock<std::mutex> lock(map->mutex);
+      auto systems = global::get<core_t>();
+      systems->render_slots->clear_slot(7);
+      systems->render_slots->clear_slot(2);
     }
     
     void map_t::setup_map_generator() {
@@ -809,10 +834,21 @@ namespace devils_engine {
           sizeof(systems::ai),
           sizeof(render::stage_container),
           sizeof(render::stage_container),
+          sizeof(components::battle_camera),
+//           sizeof(utils::random_engine_st),
+//           sizeof(FastNoise),
+//           sizeof(map::generator::container),
+//           sizeof(sol::state)
         }
       ),
       ai_systems(nullptr),
-      map(nullptr)
+      map(nullptr),
+      optimizators_container(nullptr),
+      render_container(nullptr),
+      camera(nullptr)
+//       random(nullptr),
+//       noiser(nullptr),
+//       generator_container(nullptr)
     {}
     
     battle_t::~battle_t() {
@@ -827,6 +863,8 @@ namespace devils_engine {
       auto device = core->graphics_container->device;
       map = container.create<battle::map, 0>(battle::map::create_info{device});
       map->create_tiles(128, 128, battle::map::coordinate_system::square, battle::map::orientation::even_pointy);
+      
+      camera = container.create<components::battle_camera, 4>(glm::vec3(0.0f, 3.0f, 0.0f));
     }
     
     void battle_t::create_render_stages() {
@@ -834,7 +872,7 @@ namespace devils_engine {
       
       const size_t optimizators_size = sizeof(render::battle::tile_optimizer);
         
-      const size_t render_size = sizeof(render::battle::tile_render);
+      const size_t render_size = sizeof(render::battle::tile_render) + sizeof(render::battle::biome_render);
       
       ASSERT(optimizators_container == nullptr);
       ASSERT(render_container == nullptr);
@@ -845,10 +883,10 @@ namespace devils_engine {
       auto device = systems->graphics_container->device;
       
       auto opt1 = optimizators_container->add_stage<render::battle::tile_optimizer>(render::battle::tile_optimizer::create_info{device});
-      systems->render_slots->set_stage(2, optimizators_container);
-      
       render_container->add_stage<render::battle::tile_render>(render::battle::tile_render::create_info{device, opt1});
-      systems->render_slots->set_stage(7, render_container);
+      render_container->add_stage<render::battle::biome_render>(render::battle::biome_render::create_info{device, opt1});
+//       systems->render_slots->set_stage(2, optimizators_container);
+//       systems->render_slots->set_stage(7, render_container);
       
       global::get(opt1);
       
@@ -857,17 +895,65 @@ namespace devils_engine {
       // и кажется ничего более адекватного чем мьютекс еще не придумали
     }
     
+//     void battle_t::setup_generator_random() {
+//       const size_t seed = global::advance_state();
+//       random = container.create<utils::random_engine_st, 5>(seed);
+//       noiser = container.create<FastNoise, 6>(reinterpret_cast<const int*>(&seed)[0]);
+// //       generator_state = container.create<sol::state, 8>();
+//     }
+//     
+//     void battle_t::setup_generator_container(const size_t &tiles_count) {
+//       generator_container = container.create<map::generator::container, 7>(tiles_count);
+//     }
+//     
+//     void battle_t::release_generator_data() {
+//       RELEASE_CONTAINER_DATA(random)
+//       RELEASE_CONTAINER_DATA(noiser)
+//       RELEASE_CONTAINER_DATA(generator_container)
+// //       RELEASE_CONTAINER_DATA(generator_state)
+//     }
+    
     void battle_t::release_container() {
-      auto systems = global::get<core_t>();
-      systems->render_slots->clear_slot(2);
-      systems->render_slots->clear_slot(7);
+      if (!is_init()) return;
+//       auto systems = global::get<core_t>();
+//       systems->render_slots->clear_slot(2);
+//       systems->render_slots->clear_slot(7);
       
       global::get(reinterpret_cast<render::battle::tile_optimizer*>(SIZE_MAX));
       
       RELEASE_CONTAINER_DATA(ai_systems)
       RELEASE_CONTAINER_DATA(map)
+      RELEASE_CONTAINER_DATA(optimizators_container)
+      RELEASE_CONTAINER_DATA(render_container)
+      RELEASE_CONTAINER_DATA(camera)
       
       container.clear();
+    }
+    
+    void battle_t::lock_map() {
+      if (!is_init()) return;
+      while (map->mutex.try_lock()) { std::this_thread::sleep_for(std::chrono::microseconds(1)); }
+    }
+    
+    void battle_t::unlock_map() {
+      if (!is_init()) return;
+      map->mutex.unlock();
+    }
+    
+    void battle_t::start_rendering() {
+      if (!is_init()) return;
+      std::unique_lock<std::mutex> lock(map->mutex);
+      auto systems = global::get<core_t>();
+      systems->render_slots->set_stage(2, optimizators_container);
+      systems->render_slots->set_stage(7, render_container);
+    }
+    
+    void battle_t::stop_rendering() {
+      if (!is_init()) return;
+      std::unique_lock<std::mutex> lock(map->mutex);
+      auto systems = global::get<core_t>();
+      systems->render_slots->clear_slot(7);
+      systems->render_slots->clear_slot(2);
     }
     
     encouter_t::encouter_t() :

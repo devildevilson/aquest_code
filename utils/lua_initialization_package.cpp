@@ -1,18 +1,10 @@
 #include "lua_initialization.h"
 
 #include "globals.h"
-#include "bin/core_structures.h"
-// #include "bin/helper.h"
-#include "utility.h"
-#include "bin/logic.h"
-#include "input.h"
-#include "progress_container.h"
-#include "main_menu.h"
-#include "demiurge.h"
 
 namespace devils_engine {
   namespace utils {
-    void setup_lua_package_path(sol::state &lua) {
+    void setup_lua_package_path(sol::state_view lua) {
       {
         const std::string default_path = lua["package"]["path"];
         const std::string new_path =

@@ -241,7 +241,7 @@ namespace yavf {
 //     virtual void setDescriptor(const std::vector<Descriptor> &descriptors, const uint32_t &firstSet) = 0;
     virtual void setDescriptor(DescriptorSet* descriptor, const uint32_t &firstSet, const uint32_t &offset = UINT32_MAX) = 0;
     virtual void setDescriptor(const VkDescriptorSet &descriptor, const uint32_t &firstSet, const uint32_t &offset = UINT32_MAX) = 0;
-    virtual void setDescriptor(const std::vector<VkDescriptorSet> &descriptors, const uint32_t &firstSet, const std::vector<uint32_t> &offses = {}) = 0;
+    virtual void setDescriptor(const std::initializer_list<VkDescriptorSet> &descriptors, const uint32_t &firstSet, const std::initializer_list<uint32_t> &offses = {}) = 0;
     virtual void setConsts(const uint32_t &offset, const uint32_t &size, void* value, const VkShaderStageFlags &flags = VK_SHADER_STAGE_VERTEX_BIT) = 0;
 
     // нужно переделать descriptor
@@ -302,7 +302,7 @@ namespace yavf {
 //     void setDescriptor(const std::vector<Descriptor> &descriptors, const uint32_t &firstSet) override;
     void setDescriptor(DescriptorSet* descriptor, const uint32_t &firstSet, const uint32_t &offset = UINT32_MAX) override;
     void setDescriptor(const VkDescriptorSet &descriptor, const uint32_t &firstSet, const uint32_t &offset = UINT32_MAX) override;
-    void setDescriptor(const std::vector<VkDescriptorSet> &descriptors, const uint32_t &firstSet, const std::vector<uint32_t> &offsets = {}) override;
+    void setDescriptor(const std::initializer_list<VkDescriptorSet> &descriptors, const uint32_t &firstSet, const std::initializer_list<uint32_t> &offsets = {}) override;
     void setConsts(const uint32_t &offset, const uint32_t &size, void* value, const VkShaderStageFlags &flags = VK_SHADER_STAGE_VERTEX_BIT) override;
 
     void setIndexBuffer(Buffer* buffer, const VkIndexType &type = VK_INDEX_TYPE_UINT32, const VkDeviceSize &offset = 0);
@@ -397,7 +397,7 @@ namespace yavf {
 //     void setDescriptor(const std::vector<Descriptor> &descriptors, const uint32_t &firstSet) override;
     void setDescriptor(DescriptorSet* descriptor, const uint32_t &firstSet, const uint32_t &offset = UINT32_MAX) override;
     void setDescriptor(const VkDescriptorSet &descriptor, const uint32_t &firstSet, const uint32_t &offset = UINT32_MAX) override;
-    void setDescriptor(const std::vector<VkDescriptorSet> &descriptors, const uint32_t &firstSet, const std::vector<uint32_t> &offsets = {}) override;
+    void setDescriptor(const std::initializer_list<VkDescriptorSet> &descriptors, const uint32_t &firstSet, const std::initializer_list<uint32_t> &offsets = {}) override;
     void setConsts(const uint32_t &offset, const uint32_t &size, void* value, const VkShaderStageFlags &flags = VK_SHADER_STAGE_VERTEX_BIT) override;
 
     void dispatch(const uint32_t &countX, const uint32_t &countY, const uint32_t &countZ);
@@ -426,7 +426,7 @@ namespace yavf {
 //     void setDescriptor(const std::vector<Descriptor> &descriptors, const uint32_t &firstSet) override;
     void setDescriptor(DescriptorSet* descriptor, const uint32_t &firstSet, const uint32_t &offset = UINT32_MAX) override;
     void setDescriptor(const VkDescriptorSet &descriptor, const uint32_t &firstSet, const uint32_t &offset = UINT32_MAX) override;
-    void setDescriptor(const std::vector<VkDescriptorSet> &descriptors, const uint32_t &firstSet, const std::vector<uint32_t> &offsets = {}) override;
+    void setDescriptor(const std::initializer_list<VkDescriptorSet> &descriptors, const uint32_t &firstSet, const std::initializer_list<uint32_t> &offsets = {}) override;
     void setConsts(const uint32_t &offset, const uint32_t &size, void* value, const VkShaderStageFlags &flags = VK_SHADER_STAGE_VERTEX_BIT) override;
 
     void setComputePipeline(const Pipeline &pipe);

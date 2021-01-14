@@ -26,6 +26,7 @@ namespace devils_engine {
     struct container : public context {
       enum physical_device_properties {
         physical_device_sampler_anisotropy,
+        physical_device_multidraw_indirect,
         physical_device_properties_count
       };
       

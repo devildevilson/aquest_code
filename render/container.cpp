@@ -128,11 +128,13 @@ namespace devils_engine {
       std::cout << "Using device: " << deviceProperties.deviceName << '\n';
       VkPhysicalDeviceFeatures f_test;
       choosen.getFeatures(&f_test);
-      if (f_test.samplerAnisotropy == VK_TRUE) device_properties.set(physical_device_sampler_anisotropy, true);
+      device_properties.set(physical_device_sampler_anisotropy, f_test.samplerAnisotropy == VK_TRUE);
+      device_properties.set(physical_device_multidraw_indirect, f_test.multiDrawIndirect == VK_TRUE);
 
       yavf::DeviceMaker dm(instance);
       VkPhysicalDeviceFeatures f = {};
       f.samplerAnisotropy = is_properties_presented(physical_device_sampler_anisotropy);
+      f.multiDrawIndirect = is_properties_presented(physical_device_multidraw_indirect);
       //f.geometryShader = VK_TRUE;
     //   f.multiDrawIndirect = VK_TRUE;
     //   f.drawIndirectFirstInstance = VK_TRUE;

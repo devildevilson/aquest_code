@@ -576,34 +576,28 @@ INLINE uint compute_height_layer(const float height) {
   return height < 0.0f ? 0 : uint(height / layer_height);
 }
 
-// const uint modulus = uint(1) << 31;
-// const uint multiplier = 1103515245;
-// const uint increment = 12345;
-// 
-// INLINE uint lcg(const uint prev) {
-//   return (prev * multiplier + increment) % modulus;
-// }
-// 
-// INLINE float lcg_normalize(const uint val) {
-//   return float(val) / float(modulus);
-// }
-
-INLINE uint prng(const uint prev) {
-//   prev ^= prev << 13;
-//   prev ^= prev >> 17;
-//   prev ^= prev << 5;
-//   return prev;
-  
+INLINE uint prng(const uint prev) {  
   uint z = prev + 0x6D2B79F5;
   z = (z ^ z >> 15) * (1 | z);
   z ^= z + (z ^ z >> 7) * (61 | z);
   return z ^ z >> 14;
 }
 
+INLINE uint rotl(const uint x, int k) {
+  return (x << k) | (x >> (32 - k));
+}
+
+INLINE uint prng2(const uint s0, const uint s1) { // по идее должно давать хорошие результаты для чисел не 0
+  const uint s1_tmp = s1 ^ s0;
+  const uint new_s0 = rotl(s0, 26) ^ s1_tmp ^ (s1_tmp << 9);
+  //const uint new_s1 = rotl(s1_tmp, 13);
+  return rotl(new_s0 * 0x9E3779BB, 5) * 5;
+}
+
 INLINE float prng_normalize(const uint state) {
-  // float32 - 8 бит экспонента и 23 мантисса
+  // float32 - 1 бит знак, 8 бит экспонента и 23 мантисса
   const uint float_mask = 0x7f << 23;
-  const uint float_val = float_mask | state >> 9;
+  const uint float_val = float_mask | (state >> 9); // зачем двигать?
   return uintBitsToFloat(float_val) - 1.0f;
 }
 

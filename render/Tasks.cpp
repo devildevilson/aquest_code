@@ -1189,10 +1189,10 @@ namespace yavf {
                             (offset == UINT32_MAX ? 0 : 1), (offset == UINT32_MAX ? nullptr : &offset));
   }
   
-  void GraphicTask::setDescriptor(const std::vector<VkDescriptorSet> &descriptors, const uint32_t &firstSet, const std::vector<uint32_t> &offsets) {
+  void GraphicTask::setDescriptor(const std::initializer_list<VkDescriptorSet> &descriptors, const uint32_t &firstSet, const std::initializer_list<uint32_t> &offsets) {
     vkCmdBindDescriptorSets(current, VK_PIPELINE_BIND_POINT_GRAPHICS, currentPipeline.layout(),
-                            firstSet, descriptors.size(), descriptors.data(),
-                            offsets.size(), offsets.data());
+                            firstSet, descriptors.size(), descriptors.begin(),
+                            offsets.size(), offsets.begin());
   }
 
   void GraphicTask::setConsts(const uint32_t &offset, const uint32_t &size, void* value, const VkShaderStageFlags &flags) {
@@ -1635,10 +1635,10 @@ namespace yavf {
                             (offset == UINT32_MAX ? 0 : 1), (offset == UINT32_MAX ? nullptr : &offset));
   }
   
-  void ComputeTask::setDescriptor(const std::vector<VkDescriptorSet> &descriptors, const uint32_t &firstSet, const std::vector<uint32_t> &offsets) {
+  void ComputeTask::setDescriptor(const std::initializer_list<VkDescriptorSet> &descriptors, const uint32_t &firstSet, const std::initializer_list<uint32_t> &offsets) {
     vkCmdBindDescriptorSets(current, VK_PIPELINE_BIND_POINT_COMPUTE, currentPipeline.layout(),
-                            firstSet, static_cast<uint32_t>(descriptors.size()), descriptors.data(),
-                            static_cast<uint32_t>(offsets.size()), offsets.data());
+                            firstSet, static_cast<uint32_t>(descriptors.size()), descriptors.begin(),
+                            static_cast<uint32_t>(offsets.size()), offsets.begin());
 //                             (offsets.empty() ? 0 : offsets.size()), (offsets.empty() ? nullptr : offsets.data()));
   }
 
@@ -1936,13 +1936,13 @@ namespace yavf {
     ASSERT(family < 4);
   }
   
-  void CombinedTask::setDescriptor(const std::vector<VkDescriptorSet> &descriptors, const uint32_t &firstSet, const std::vector<uint32_t> &offsets) {
+  void CombinedTask::setDescriptor(const std::initializer_list<VkDescriptorSet> &descriptors, const uint32_t &firstSet, const std::initializer_list<uint32_t> &offsets) {
     VkPipelineBindPoint point = lastBindPoint == VK_PIPELINE_BIND_POINT_MAX_ENUM &&  renderpassStart ? VK_PIPELINE_BIND_POINT_GRAPHICS :
                                 lastBindPoint == VK_PIPELINE_BIND_POINT_MAX_ENUM && !renderpassStart ? VK_PIPELINE_BIND_POINT_COMPUTE : lastBindPoint;
                                 
     vkCmdBindDescriptorSets(current, point, currentPipeline.layout(),
-                            firstSet, descriptors.size(), descriptors.data(),
-                            offsets.size(), offsets.data());
+                            firstSet, descriptors.size(), descriptors.begin(),
+                            offsets.size(), offsets.begin());
     
     ASSERT(family < 4);
   }

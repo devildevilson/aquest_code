@@ -5,6 +5,13 @@
 #include "../render/shared_battle_structures.h"
 #include "../utils/shared_mathematical_constant.h"
 
+const vec2 hex_map_row_const_offset[] = {
+  vec2(-0.5f, 0.0f),
+  vec2( 0.5f, 0.0f),
+  vec2( 0.0f,-0.5f),
+  vec2( 0.0f, 0.5f)
+};
+
 layout(set = 0, binding = 0) uniform Camera {
   mat4 viewproj;
   mat4 view;
@@ -13,8 +20,16 @@ layout(set = 0, binding = 0) uniform Camera {
   uvec4 dim;
 } camera;
 
-layout(std140, set = 1, binding = 0) readonly buffer tiles_buffer {
-  battle_map_tile_data_t tiles[];
+layout(set = 1, binding = 0) uniform tiles_uniform_buffer {
+  uvec4 map_properties;
+} tiles_uniform;
+
+layout(std140, set = 1, binding = 1) readonly buffer tiles_buffer {
+  packed_battle_map_tile_data_t tiles[];
+};
+
+layout(std140, set = 1, binding = 3) readonly buffer biomes_buffer {
+  packed_battle_biome_data_t biomes[];
 };
 
 layout(std140, set = 2, binding = 0) buffer tile_indirect_buffer {
@@ -22,38 +37,75 @@ layout(std140, set = 2, binding = 0) buffer tile_indirect_buffer {
   uvec4 sizes_data;
 
   frustum_t frustum;
+  frustum_t selection_frustum;
+  vec4 ray_pos;
+  vec4 ray_dir;
+
+  biome_objects_data_t biome_objects_data[BATTLE_BIOMES_MAX_COUNT];
 };
 
 layout(std140, set = 2, binding = 1) buffer tiles_indices_buffer {
   instance_data_t tiles_indices[];
 };
 
+layout(std140, set = 2, binding = 2) buffer biomes_indices_buffer {
+  instance_data_t biomes_indices[];
+};
+
 #define WORK_GROUP 256
 
 layout(local_size_x = WORK_GROUP, local_size_y = 1, local_size_z = 1) in;
 
+// для того чтобы проверить пересечение с цилиндром можно проверить пересение луча с окружностью
+// мы получаем 2 переменных т1 и т2, затем вычисляем точки, проверяем чтобы эти точки не были выше/ниже цилиндра
+bool ray_cylinder_test(const vec4 ray_pos, const vec4 ray_dir, const vec4 cyl_pos, const float radius, const float height, inout float dist);
+
 void main() {
+  const uvec4 uniform_property_data = tiles_uniform.map_properties;
+  const uint tiles_count = uniform_property_data.x;
+  const uint map_width   = uniform_property_data.y;
+  const uint map_height  = uniform_property_data.z;
+  const uint map_type    = uniform_property_data.w;
+
   const uint tile_index = gl_GlobalInvocationID.x;
-  if (tile_index >= sizes_data.x) return;
+  if (tile_index >= tiles_count) return;
 
-  const uint tile_map_width  = sizes_data.y;
-  const uint tile_map_height = sizes_data.z;
-  const uvec2 tile_coord = uvec2(tile_index / tile_map_width, tile_index % tile_map_height);
+  const bool is_square_map       = bool(map_type & (1 << 0));
+  const bool is_flat_orientation = bool(map_type & (1 << 1));
+  const bool is_odd_offset       = bool(map_type & (1 << 2));
 
-  const float tile_size = 1.0f;
-  const float tile_width = sqrt(3.0f) * tile_size;
-  const float tile_height = 2.0f * tile_size;
-  const float tile_width_dist = 1.0f * tile_width;
-  const float tile_height_dist = (3.0f/4.0f) * tile_height;
-  const vec2 tile_pos = tile_coord * vec2(tile_width_dist, tile_height_dist); // + const ?
+  const uint tile_map_width  = map_width;
+  const uint tile_map_height = map_height;
+  const uint row_index    = tile_index / tile_map_height;
+  const uint column_index = tile_index % tile_map_height;
+  const uvec2 tile_coord = uvec2(column_index, row_index);
+  //const uvec2 tile_coord = uvec2(0, 0);
 
-  const vec4 final_tile_pos = vec4(tile_pos.x, 0.0f, tile_pos.y, 1.0f);
+  const float hex_size = 1.0f;
+  const float hex_width = mix(sqrt(3.0f) * hex_size, 2.0f * hex_size, float(is_flat_orientation));
+  const float hex_height = mix(2.0f * hex_size, sqrt(3.0f) * hex_size, float(is_flat_orientation));
+  const float hex_width_dist = mix(1.0f * hex_width, (3.0f/4.0f) * hex_width, float(is_flat_orientation));
+  const float hex_height_dist = mix((3.0f/4.0f) * hex_height, 1.0f * hex_height, float(is_flat_orientation));
+
+  const uint offset_type_index = uint(is_odd_offset) + 2 * uint(is_flat_orientation);
+
+  // 4 константы зависят от того как мы представляем координатные системы
+  // квадратная карта может быть представлена: четный оффсет по строкам, нечетный оффсет по строкам, четный оффсет по столбцам, нечетный оффсет по столбцам
+  const uint row_column = uint(is_flat_orientation) * column_index + uint(!is_flat_orientation) * row_index;
+  const vec2 const_pos_k = float(row_column % 2 == 1) * hex_map_row_const_offset[offset_type_index] * vec2(hex_width_dist, hex_height_dist);
+
+  const battle_map_tile_data_t current_tile = unpack_data(tiles[tile_index]);
+  const float tile_height = current_tile.height;
+
+  const vec2 tile_pos = vec2(tile_coord) * vec2(hex_width_dist, hex_height_dist) + const_pos_k;
+  const vec4 final_tile_pos = vec4(tile_pos.x, tile_height, tile_pos.y, 1.0f);
 
   const bool ret = frustum_test(frustum, final_tile_pos, 1.0f);
   if (!ret) return;
 
   // нам нужно нарисовать сам тайл, элементы биома, элементы окружения, отряды
-  // нужно будет сделать видимость у отрядов
+  // нужно будет сделать видимость у отрядов, мне еще нужно сделать аккуратно биомы и переходы между ними
+  // было бы неплохо уметь спавнить переходящие объекты от биома к биому
 
   {
     const uint offset = atomicAdd(tiles_indirect.y, 1);
@@ -61,4 +113,88 @@ void main() {
     const uint slot_index = offset % 4;
     tiles_indices[vec_index].index[slot_index] = tile_index;
   }
+
+  const uint biome_index = current_tile.biome_index; // биом всегда должен быть валидным
+  // неплохо было бы еще переменную сохранить на каждую уникальную генерацию карты
+  // для того чтобы с одинаковыми входными данными, получать визуально чуть чуть другие карты
+  // хотя может и не надо, это будет влиять только на визуал поэтому почему бы и нет все же
+
+  const battle_biome_data_t biome_data = unpack_data(biomes[biome_index]);
+
+  const uint state_tile_index = prng(tile_index);
+  //const uint state_map_generation_id = prng(map_generation_id);
+  //const uint final_state = prng2(state_tile_index, state_map_generation_id);
+  const uint final_state = state_tile_index;
+  const float norm_state = 1.0f - prng_normalize(final_state);
+  const bool render_biome_on_this_tile = norm_state <= biome_data.density;
+  //const bool render_biome = render_biome_on_this_tile;
+  const bool render_biome = true;
+  const uint instances = uint(max(biome_data.density, 1.0f));
+
+  {
+    const uint offset = biome_objects_data[biome_index].objects_data[1];
+    const uint place = atomicAdd(biome_objects_data[biome_index].objects_indirect[0], uint(render_biome)*(PACKED_INDEX_COEF+1));
+    biome_objects_data[biome_index].objects_indirect[1] = instances;
+    biome_objects_data[biome_index].objects_indirect[2] = offset;
+
+    if (render_biome) {
+      const uint packed_tile_index = tile_index * PACKED_INDEX_COEF;
+      const uint index = offset + place;
+      for (uint j = 0; j < PACKED_INDEX_COEF; ++j) {
+        const uint final_index = index + j;
+        const uint vec_index = final_index / 4;
+        const uint slot_index = final_index % 4;
+        biomes_indices[vec_index].index[slot_index] = packed_tile_index + j;
+      }
+
+      const uint final_index = index + PACKED_INDEX_COEF;
+      const uint vec_index = final_index / 4;
+      const uint slot_index = final_index % 4;
+      biomes_indices[vec_index].index[slot_index] = GPU_UINT_MAX;
+    }
+  }
+}
+
+vec4 project_vector_on_plane(const vec4 normal, const vec4 origin, const vec4 vector) {
+  const float dist = dot(vector, normal);
+  const vec4 point2 = origin + vector - normal*dist;
+  return point2 - origin;
+}
+
+bool ray_cylinder_test(const vec4 ray_pos, const vec4 ray_dir, const vec4 cyl_pos, const float radius, const float height, inout float dist) {
+  // приводим направление луча к плоскости
+  const vec4 ray_pos_on_plane = vec4(ray_pos.x, 0.0f, ray_pos.z, 1.0f);
+  const vec4 ray_dir_on_plane = normalize(project_vector_on_plane(vec4(0.0f, 1.0f, 0.0f, 0.0f), vec4(0.0f, 0.0f, 0.0f, 1.0f), ray_dir));
+  // проверяем пересечение приведенного луча с окружностью на плоскости
+  const vec4 f = ray_pos_on_plane - cyl_pos;
+  const float a = dot(ray_dir_on_plane, ray_dir_on_plane);
+  const float b = 2*dot(f, ray_dir_on_plane);
+  const float c = dot(f, f) - radius*radius;
+
+  float discriminant = b*b-4*a*c;
+  if (discriminant < 0) return false;
+
+  // решения уравнения
+  discriminant = sqrt(discriminant);
+  const float t1 = (-b - discriminant)/(2*a);
+  const float t2 = (-b + discriminant)/(2*a);
+
+  const bool t1_sol = t1 >= 0.0f; //  && t1 <= 1.0f;
+  const bool t2_sol = t2 >= 0.0f; //  && t2 <= 1.0f;
+
+  // поправка на приведение направления луча
+  const float ray_angle = acos(dot(ray_dir_on_plane, ray_dir));
+  const float next_angle = radians(90.0f) - ray_angle;
+  const float coef = 1.0f / sin(next_angle);
+
+  const float final_t1 = t1 * coef;
+  const float final_t2 = t2 * coef;
+  const vec4 t1_point = mix(vec4(-1.0f, -1.0f, -1.0f, 1.0f), ray_pos + ray_dir * final_t1, float(t1_sol));
+  const vec4 t2_point = mix(vec4(-1.0f, -1.0f, -1.0f, 1.0f), ray_pos + ray_dir * final_t2, float(t2_sol));
+
+  const bool t1_cyl_sol = t1_point.y >= 0.0f && t1_point.y <= height;
+  const bool t2_cyl_sol = t2_point.y >= 0.0f && t2_point.y <= height;
+
+  dist = t1_cyl_sol ? final_t1 : final_t2; // если t1 больше нуля то это число является меньшим ответом
+  return t1_cyl_sol || t2_cyl_sol;
 }

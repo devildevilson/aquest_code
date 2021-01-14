@@ -2026,7 +2026,7 @@ namespace devils_engine {
       task->setIndexBuffer(&index_gui, VK_INDEX_TYPE_UINT16);
       
       yavf::ImageView* tex = data->view;
-      const std::vector<VkDescriptorSet> sets = {matrix.descriptorSet()->handle(), tex->descriptorSet()->handle()}; // , image_set->handle()
+      const std::initializer_list<VkDescriptorSet> sets = {matrix.descriptorSet()->handle(), tex->descriptorSet()->handle()}; // , image_set->handle()
       task->setDescriptor(sets, 0);
       
       uint32_t index_offset = 0;

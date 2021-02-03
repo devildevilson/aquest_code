@@ -55,7 +55,7 @@ include_directories(
   include/lanes/src/
   include/VulkanMemoryAllocator/src/
   include/FastNoise/
-  include/
+  #include/
   include/json/single_include/
   include/stb/
   include/whereami/src/
@@ -66,6 +66,7 @@ include_directories(
   include/protobuf/src/
   include/cista/include/
   include/glm/
+  include/parallel-hashmap/
 )
 link_directories(
   ${CMAKE_CURRENT_BINARY_DIR}
@@ -277,6 +278,7 @@ set(SRC_LIST
   utils/lua_initialization_random_engine.cpp
   utils/lua_initialization_progress_container.cpp
   utils/lua_initialization_battle_generator_functions.cpp
+  utils/lua_initialization_battle_unit.cpp
   utils/string_container.cpp
   utils/string_bank.cpp
   utils/progress_container.cpp
@@ -288,6 +290,9 @@ set(SRC_LIST
   utils/frustum.cpp
   bin/objects_selector.cpp
   utils/astar_search.cpp
+  utils/battle_lua_states.cpp
+  bin/battle_context.cpp
+  bin/battle_structures.cpp
   include/FastNoise/FastNoise.cpp
   include/whereami/src/whereami.c
   include/fmt/src/format.cc
@@ -331,6 +336,9 @@ set(HDR_LIST
   utils/frustum.h
   bin/objects_selector.h
   utils/astar_search.h
+  utils/battle_lua_states.h
+  bin/battle_context.h
+  bin/battle_structures.h
   include/FastNoise/FastNoise.h
   include/whereami/src/whereami.h
 )
@@ -455,6 +463,9 @@ set(SRC_LIST
   utils/quest_states.cpp
   bin/tiles_funcs.cpp
   bin/battle_map.cpp
+  bin/battle_troop_parser.cpp
+  bin/battle_troop_type_parser.cpp
+  bin/battle_unit_state_parser.cpp
 )
 
 set(HDR_LIST
@@ -484,6 +495,9 @@ set(HDR_LIST
   utils/quest_state.h
   bin/tiles_funcs.h
   bin/battle_map.h
+  bin/battle_troop_parser.h
+  bin/battle_troop_type_parser.h
+  bin/battle_unit_state_parser.h
 )
 add_executable(${TARGET_NAME} ${SRC_LIST} ${HDR_LIST})
 target_link_libraries(${TARGET_NAME} systems ai render utils serialization)

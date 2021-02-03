@@ -26,6 +26,9 @@ namespace devils_engine {
   
   namespace battle {
     struct map;
+    struct lua_container;
+    class unit_states_container;
+    class context;
   }
   
   namespace utils {
@@ -142,6 +145,7 @@ namespace devils_engine {
       
       void start_rendering();
       void stop_rendering();
+      bool is_rendering() const;
       
       void setup_map_generator(); // как передать сюда данные? по идее мы можем собрать с помощью луа
       void destroy_map_generator();
@@ -166,6 +170,10 @@ namespace devils_engine {
       render::stage_container* optimizators_container;
       render::stage_container* render_container;
       components::battle_camera* camera;
+      battle::lua_container* lua_states;
+      //battle::unit_states_container* unit_states_container;
+      battle::context* context;
+      utils::data_string_container* unit_states_map;
       
 //       utils::random_engine_st* random;
 //       FastNoise* noiser;
@@ -192,14 +200,14 @@ namespace devils_engine {
       void stop_rendering();
     };
     
-    struct encouter_t {
+    struct encounter_t {
       utils::slot_container container;
       //core::map* map; // другая карта скорее всего
       systems::ai* ai_systems;
       render::stage_container* stage_container;
       
-      encouter_t();
-      ~encouter_t();
+      encounter_t();
+      ~encounter_t();
       inline bool is_init() const { return container.inited(); }
     };
     

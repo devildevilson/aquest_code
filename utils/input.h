@@ -8,6 +8,7 @@
 #include <unordered_map>
 #include <tuple>
 #include "utility.h"
+#include "parallel_hashmap/phmap.h"
 
 namespace devils_engine {
   namespace input {
@@ -69,7 +70,8 @@ namespace devils_engine {
       // а что если у одной кнопки двойное нажатие, а другой длинное? скорее всего двойное нажатие или его отсутствие я спрячу
       //std::unordered_map<utils::id, event_keys_container> event_keys;
       std::vector<std::pair<utils::id, event_keys_container>> event_keys;
-      std::unordered_map<utils::id, size_t> events_map;
+      //std::unordered_map<utils::id, size_t> events_map;
+      phmap::flat_hash_map<utils::id, size_t> events_map;
     };
 
     struct data {

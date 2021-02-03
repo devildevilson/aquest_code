@@ -13,6 +13,7 @@
 #include "lua_initialization.h"
 #include "settings.h"
 #include "astar_search.h"
+#include "battle_lua_states.h"
 
 #include "render/window.h"
 #include "render/render.h"
@@ -46,6 +47,11 @@
 #include "bin/objects_selector.h"
 #include "bin/battle_map.h"
 #include "bin/camera.h"
+#include "bin/battle_unit_states_container.h"
+#include "bin/battle_context.h"
+
+#define OPTIMIZATOR_STAGE_SLOT 2
+#define RENDER_STAGE_SLOT 7
 
 static const std::vector<const char*> instanceLayers = {
   "VK_LAYER_LUNARG_standard_validation",
@@ -208,14 +214,14 @@ namespace devils_engine {
 //       global::get(render);
       global::get(graphics_container);
       //global::get(systems.decals_system);
-
-      context = container.create<interface::context>(graphics_container->device, window);
-      global::get(context);
-      
-//       render::create_persistent_resources(graphics_container->device);
       
       image_container = container.create<render::image_container>(render::image_container::create_info{graphics_container->device});
       image_controller = container.create<render::image_controller>(graphics_container->device, image_container);
+      
+      context = container.create<interface::context>(graphics_container->device, window, image_container);
+      global::get(context);
+      
+//       render::create_persistent_resources(graphics_container->device);
     }
     
     void core_t::create_render_stages() {
@@ -743,6 +749,7 @@ namespace devils_engine {
     
     void map_t::lock_map() {
       if (!is_init()) return;
+      //if (!is_rendering()) return;
 //       auto s = map->status();
 //       if (s == core::map::status::valid) map->set_status(core::map::status::rendering);
       while (!map->mutex.try_lock()) { std::this_thread::sleep_for(std::chrono::microseconds(1)); }
@@ -759,16 +766,24 @@ namespace devils_engine {
       if (!is_init()) return;
       std::unique_lock<std::mutex> lock(map->mutex);
       auto systems = global::get<core_t>();
-      systems->render_slots->set_stage(2, optimizators_container);
-      systems->render_slots->set_stage(7, render_container);
+      systems->render_slots->set_stage(OPTIMIZATOR_STAGE_SLOT, optimizators_container);
+      systems->render_slots->set_stage(RENDER_STAGE_SLOT, render_container);
     }
     
     void map_t::stop_rendering() {
       if (!is_init()) return;
       std::unique_lock<std::mutex> lock(map->mutex);
       auto systems = global::get<core_t>();
-      systems->render_slots->clear_slot(7);
-      systems->render_slots->clear_slot(2);
+      systems->render_slots->clear_slot(RENDER_STAGE_SLOT);
+      systems->render_slots->clear_slot(OPTIMIZATOR_STAGE_SLOT);
+    }
+    
+    bool map_t::is_rendering() const {
+      if (!is_init()) return false;
+      std::unique_lock<std::mutex> lock(map->mutex); // 
+      const auto systems = global::get<core_t>();
+      return systems->render_slots->get_stage(RENDER_STAGE_SLOT) == render_container || 
+             systems->render_slots->get_stage(OPTIMIZATOR_STAGE_SLOT) == optimizators_container;
     }
     
     void map_t::setup_map_generator() {
@@ -835,6 +850,10 @@ namespace devils_engine {
           sizeof(render::stage_container),
           sizeof(render::stage_container),
           sizeof(components::battle_camera),
+          sizeof(battle::lua_container),
+//           sizeof(battle::unit_states_container),
+          sizeof(battle::context),
+          sizeof(utils::data_string_container)
 //           sizeof(utils::random_engine_st),
 //           sizeof(FastNoise),
 //           sizeof(map::generator::container),
@@ -845,7 +864,11 @@ namespace devils_engine {
       map(nullptr),
       optimizators_container(nullptr),
       render_container(nullptr),
-      camera(nullptr)
+      camera(nullptr),
+      lua_states(nullptr),
+//       unit_states_container(nullptr),
+      context(nullptr),
+      unit_states_map(nullptr)
 //       random(nullptr),
 //       noiser(nullptr),
 //       generator_container(nullptr)
@@ -865,6 +888,10 @@ namespace devils_engine {
       map->create_tiles(128, 128, battle::map::coordinate_system::square, battle::map::orientation::even_pointy);
       
       camera = container.create<components::battle_camera, 4>(glm::vec3(0.0f, 3.0f, 0.0f));
+      lua_states = container.create<battle::lua_container, 5>();
+//       unit_states_container = container.create<battle::unit_states_container, 6>();
+      context = container.create<battle::context, 6>();
+      unit_states_map = container.create<utils::data_string_container, 7>();
     }
     
     void battle_t::create_render_stages() {
@@ -926,6 +953,10 @@ namespace devils_engine {
       RELEASE_CONTAINER_DATA(optimizators_container)
       RELEASE_CONTAINER_DATA(render_container)
       RELEASE_CONTAINER_DATA(camera)
+      RELEASE_CONTAINER_DATA(lua_states)
+//       RELEASE_CONTAINER_DATA(unit_states_container)
+      RELEASE_CONTAINER_DATA(context)
+      RELEASE_CONTAINER_DATA(unit_states_map)
       
       container.clear();
     }
@@ -956,7 +987,7 @@ namespace devils_engine {
       systems->render_slots->clear_slot(2);
     }
     
-    encouter_t::encouter_t() :
+    encounter_t::encounter_t() :
       container(
         {
           sizeof(systems::ai)
@@ -965,7 +996,7 @@ namespace devils_engine {
       ai_systems(nullptr)
     {}
     
-    encouter_t::~encouter_t() {
+    encounter_t::~encounter_t() {
       RELEASE_CONTAINER_DATA(ai_systems)
     }
     

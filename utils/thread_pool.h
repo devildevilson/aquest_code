@@ -37,7 +37,7 @@ namespace dt {
       {
         std::unique_lock<std::mutex> lock(mutex);
         if (stop) throw std::runtime_error("Could not submit new task");
-        tasks.emplace([task] () { (*task)(); });
+        tasks.emplace([local_task = std::move(task)] () { (*local_task)(); });
 
         condition.notify_one();
       }
@@ -64,7 +64,7 @@ namespace dt {
       {
         std::unique_lock<std::mutex> lock(mutex);
         if (stop) throw std::runtime_error("Could not submit new task");
-        tasks.emplace(task);
+        tasks.emplace(std::move(task));
 
         condition.notify_one();
       }

@@ -153,6 +153,9 @@ void main() {
       biomes_indices[vec_index].index[slot_index] = GPU_UINT_MAX;
     }
   }
+
+  // из тайла мы можем получить отряд иногда их может и не быть
+  // где то еще должны храниться убитые противники
 }
 
 vec4 project_vector_on_plane(const vec4 normal, const vec4 origin, const vec4 vector) {

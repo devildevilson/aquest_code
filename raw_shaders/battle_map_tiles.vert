@@ -6,12 +6,19 @@
 #include "../utils/shared_mathematical_constant.h"
 
 const vec2 hexagon_uv[] = {
-  vec2(0.75f, 0.932932f),
-  vec2(1.0f, 0.5f),
-  vec2(0.75f, 0.067068f),
-  vec2(0.25f, 0.067068f),
-  vec2(0.0f, 0.5f),
-  vec2(0.25f, 0.932932f)
+  vec2(0.5f, 1.0f),
+  vec2(0.932932f, 0.749954f),
+  vec2(0.067068f, 0.749953f),
+  vec2(0.932932f, 0.250047f),
+  vec2(0.067068f, 0.250047f),
+  vec2(0.5f, 0.0f)
+};
+
+const vec2 box_uv[] = {
+  vec2(0.0f, 0.0f),
+  vec2(0.0f, 1.0f),
+  vec2(1.0f, 0.0f),
+  vec2(1.0f, 1.0f)
 };
 
 const vec2 walls_pos_offsets_arr[] = {
@@ -31,10 +38,6 @@ const vec2 hexagon_points_offsets_arr[] = {
   vec2( 1.0f, 1.0f), // 4
   vec2( 0.0f, 2.0f)  // 5
 };
-
-// const vec2 hexagon_uv[] = {
-//
-// };
 
 const vec2 hex_map_row_const_offset[] = {
   vec2(-0.5f, 0.0f),
@@ -65,6 +68,9 @@ out gl_PerVertex {
 
 layout(location = 0) in uint tile_index;  // инстансный буфер
 layout(location = 0) out flat color_t out_color;
+layout(location = 1) out flat image_t out_image;
+layout(location = 2) out vec2 out_uv;
+//layout(location = 3) out flat color_t out_color;
 
 mat4 translate(const mat4 mat, const vec4 vec);
 void swap(inout float a, inout float b);
@@ -73,6 +79,8 @@ void main() {
   const uint point_index = gl_VertexIndex;
   const bool rendering_walls = point_index < 12;
   const bool basement_point = point_index % 2 == 0;
+  const uint side_index = point_index / 2;
+  const uint hex_point_index = point_index - 12;
 
   const uvec4 uniform_property_data = tiles_uniform.map_properties;
   const uint map_width   = uniform_property_data.y;
@@ -107,8 +115,8 @@ void main() {
   const vec2 tile_pos = vec2(tile_coord) * vec2(hex_width_dist, hex_height_dist) + const_pos_k;
   //const vec2 tile_pos = tile_coord * vec2(0.0f, 0.0f);
 
-  const packed_battle_map_tile_data_t current_tile = tiles[tile_index];
-  const float tile_height = uintBitsToFloat(current_tile.data1.x);
+  const battle_map_tile_data_t current_tile = unpack_data(tiles[tile_index]);
+  const float tile_height = current_tile.height;
 
   const uint final_point_index   = uint(rendering_walls) * (point_index / 2) + uint(!rendering_walls) * (point_index - 12);
   //const float final_point_height = rendering_walls ? (height * float(point_index % 2 == 0)) : height;
@@ -121,6 +129,7 @@ void main() {
   //const vec2 wall_point = tile_pos + walls_pos_offsets_arr[final_point_index] * vec2(offset_x, offset_z_4);
   //const vec2 hex_point  = tile_pos + hexagon_points_offsets_arr[final_point_index] * vec2(offset_x, offset_z_4);
   vec2 walls_pos_offset = walls_pos_offsets_arr[final_point_index];
+  //vec2 walls_pos_offset = hexagon_points_offsets_arr[final_point_index];
   walls_pos_offset = mix(walls_pos_offset, walls_pos_offset.yx, float(is_flat_orientation)) * vec2(offset_x, offset_z);
   vec2 hexagon_point_offset = hexagon_points_offsets_arr[final_point_index];
   hexagon_point_offset = mix(hexagon_point_offset, hexagon_point_offset.yx, float(is_flat_orientation)) * vec2(offset_x, offset_z);
@@ -139,6 +148,9 @@ void main() {
   //g_Position = camera.viewproj * vec4(tmp.x, 0.0f, tmp.y, 1.0f);
 
   out_color.container = prng(tile_index);
+  out_image = rendering_walls ? current_tile.walls : current_tile.ground;
+  const vec2 walls_uv = mix(vec2(0.0f, float(side_index)), vec2(1.0f, float(side_index)), float(basement_point));
+  out_uv = mix(hexagon_uv[hex_point_index], walls_uv, float(rendering_walls));
 }
 
 mat4 translate(const mat4 mat, const vec4 vec) {

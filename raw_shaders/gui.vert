@@ -1,11 +1,7 @@
 #version 450 core
 
-struct Texture {
-  uint imageIndex;
-  uint layerIndex;
-  uint samplerIndex;
-  uint dummy;
-};
+#extension GL_GOOGLE_include_directive : enable
+#include "../render/shared_structures.h"
 
 const vec2 default_uv[] = {
   vec2(0.0f, 0.0f),
@@ -19,7 +15,7 @@ layout(set = 0, binding = 0) uniform UniformBufferObject {
 } ubo;
 
 layout(push_constant) uniform uPushConstant {
-  Texture texture;
+  image_t texture;
 } pc;
 
 layout(location = 0) in vec2 in_pos;
@@ -29,7 +25,7 @@ layout(location = 2) in uvec4 in_color;
 layout(location = 0) out flat uvec4 out_color;
 layout(location = 1) out vec2 out_uv;
 layout(location = 2) out vec2 out_square_uv;
-layout(location = 3) out flat uint out_texture_index;
+layout(location = 3) out flat image_t out_texture;
 
 out gl_PerVertex {
   vec4 gl_Position;
@@ -40,7 +36,7 @@ void main() {
   out_uv = in_uv;
   out_square_uv = default_uv[gl_VertexIndex % 4];
   //out_texture_indices = uvec2(pc.texture.imageIndex, pc.texture.layerIndex);
-  out_texture_index = pc.texture.imageIndex;
+  out_texture = pc.texture;
   gl_Position = ubo.proj * vec4(in_pos, 0.0f, 1.0f);
 }
 

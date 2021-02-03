@@ -1195,7 +1195,7 @@ namespace yavf {
                             offsets.size(), offsets.begin());
   }
 
-  void GraphicTask::setConsts(const uint32_t &offset, const uint32_t &size, void* value, const VkShaderStageFlags &flags) {
+  void GraphicTask::setConsts(const uint32_t &offset, const uint32_t &size, const void* value, const VkShaderStageFlags &flags) {
     vkCmdPushConstants(current, currentPipeline.layout(), flags, offset, size, value);
   }
 
@@ -1642,7 +1642,7 @@ namespace yavf {
 //                             (offsets.empty() ? 0 : offsets.size()), (offsets.empty() ? nullptr : offsets.data()));
   }
 
-  void ComputeTask::setConsts(const uint32_t &offset, const uint32_t &size, void* value, const VkShaderStageFlags &flags) {
+  void ComputeTask::setConsts(const uint32_t &offset, const uint32_t &size, const void* value, const VkShaderStageFlags &flags) {
     vkCmdPushConstants(current, currentPipeline.layout(), flags, offset, size, value);
   }
 
@@ -1947,7 +1947,7 @@ namespace yavf {
     ASSERT(family < 4);
   }
 
-  void CombinedTask::setConsts(const uint32_t &offset, const uint32_t &size, void* value, const VkShaderStageFlags &flags) {
+  void CombinedTask::setConsts(const uint32_t &offset, const uint32_t &size, const void* value, const VkShaderStageFlags &flags) {
     vkCmdPushConstants(current, currentPipeline.layout(), flags, offset, size, value);
   }
 

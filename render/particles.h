@@ -5,12 +5,13 @@
 #include <mutex>
 #include <atomic>
 #include "shared_structures.h"
-#include "GPUArray.h"
 #include "target.h"
 
-// namespace yavf {
-//   class Device;
-// }
+namespace yavf {
+  class Device;
+  class Buffer;
+  class DescriptorSet;
+}
 
 namespace devils_engine {
   namespace render {
@@ -26,18 +27,18 @@ namespace devils_engine {
         SCALE_INC_OVER_TIME = (1 << 7)
       };
       
-      struct color {
-        union {
-          uint32_t container;
-          struct {
-            uint8_t r, g, b, a;
-          };
-        };
-        
-        color();
-        color(uint32_t color);
-        color(const uint8_t r, const uint8_t g, const uint8_t b, const uint8_t a);
-      };
+//       struct color {
+//         union {
+//           uint32_t container;
+//           struct {
+//             uint8_t r, g, b, a;
+//           };
+//         };
+//         
+//         color();
+//         color(uint32_t color);
+//         color(const uint8_t r, const uint8_t g, const uint8_t b, const uint8_t a);
+//       };
       
       struct flags {
         uint32_t container;
@@ -54,12 +55,12 @@ namespace devils_engine {
         bool scale_inc_over_time() const;
       };
       
-      basic_vec4 pos;
+      render::vec4 pos;
       
-      basic_vec4 vel;
+      render::vec4 vel;
       
       struct flags flags;
-      struct image image;
+      render::image_t image;
       uint32_t life_time; // если life_time == 0 то это свободный слот
       uint32_t current_time;
       
@@ -70,12 +71,12 @@ namespace devils_engine {
       
       float max_speed;
       float min_speed;
-      struct color color;
+      render::color_t color;
       float friction;
       
       particle();
-      particle(const simd::vec4 &pos, const simd::vec4 &vel, const struct image &image, const uint32_t &life_time);
-      particle(const simd::vec4 &pos, const simd::vec4 &vel, const struct color &color, const uint32_t &life_time);
+      particle(const render::vec4 &pos, const render::vec4 &vel, const render::image_t &image, const uint32_t &life_time);
+      particle(const render::vec4 &pos, const render::vec4 &vel, const render::color_t &color, const uint32_t &life_time);
     };
     
     struct particles_data {
@@ -88,19 +89,19 @@ namespace devils_engine {
       uint32_t indices_count;
       uint32_t dummy[2];
       
-      basic_vec4 gravity;
-      basic_vec4 frustum[6];
+      render::vec4 gravity; // неплохо было бы сделать гравитацию для каждого тайла
+      render::vec4 frustum[6];
     };
     
     struct particles : public target {
-      static const size_t max_new_particles = 10000;
+      static const size_t max_new_particles = 100000;
       
       std::atomic<uint32_t> next_index;
-      GPUArray<particle> array; // старые частицы можно расположить в памяти гпу
-      yavf::Buffer new_particles;
-      yavf::Buffer data_buffer;
-      yavf::Buffer indices;
-      yavf::DescriptorSetLayout layout;
+      yavf::Buffer* particles_array; // старые частицы можно расположить в памяти гпу
+      yavf::Buffer* new_particles;
+      yavf::Buffer* data_buffer;
+      yavf::Buffer* indices;
+      yavf::DescriptorSet* set;
       // если разделить старые частицы и новые, 
       // то становится легко контролировать
       // добавление/удаление 
@@ -108,7 +109,7 @@ namespace devils_engine {
       particles(yavf::Device* device);
       bool add(const struct particle &particle);
       void reset();
-      void update(const simd::mat4 &view_proj, const simd::vec4 &gravity, const size_t &time);
+      void update(const glm::mat4 &view_proj, const render::vec4 &gravity, const size_t &time);
       void recreate(const uint32_t &width, const uint32_t &height) override;
     };
   }

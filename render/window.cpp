@@ -322,11 +322,13 @@ namespace devils_engine {
     }
 
     void window::recreate(const uint32_t &width, const uint32_t &height) {
-      if (surface.extent.width == width && surface.extent.height == height) return;
+      //if (surface.extent.width == width && surface.extent.height == height) return;
       device->wait();
-
+      
       vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device->physicalHandle(), surface.handle, &surface.capabilities);
+      //std::cout << "1 w " << surface.extent.width << " h " << surface.extent.height << "\n";
       surface.extent = yavf::chooseSwapchainExtent(width, height, surface.capabilities);
+      //std::cout << "2 w " << surface.extent.width << " h " << surface.extent.height << "\n";
 
       createSwapChain(surface, device, swapchain);
 
@@ -502,21 +504,21 @@ namespace devils_engine {
     void window::create_render_pass() {
       yavf::RenderPassMaker rpm(device);
       
-      const VkAccessFlags debug = VK_ACCESS_INDIRECT_COMMAND_READ_BIT |
-                                  VK_ACCESS_INDEX_READ_BIT |
-                                  VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT |
-                                  VK_ACCESS_UNIFORM_READ_BIT |
-                                  VK_ACCESS_INPUT_ATTACHMENT_READ_BIT |
-                                  VK_ACCESS_SHADER_READ_BIT |
-                                  VK_ACCESS_SHADER_WRITE_BIT |
-                                  VK_ACCESS_COLOR_ATTACHMENT_READ_BIT |
-                                  VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT |
-                                  VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT |
-                                  VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-//                                   VK_ACCESS_TRANSFER_READ_BIT |
-//                                   VK_ACCESS_TRANSFER_WRITE_BIT |
-//                                   VK_ACCESS_HOST_READ_BIT |
-//                                   VK_ACCESS_HOST_WRITE_BIT;
+//       const VkAccessFlags debug = VK_ACCESS_INDIRECT_COMMAND_READ_BIT |
+//                                   VK_ACCESS_INDEX_READ_BIT |
+//                                   VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT |
+//                                   VK_ACCESS_UNIFORM_READ_BIT |
+//                                   VK_ACCESS_INPUT_ATTACHMENT_READ_BIT |
+//                                   VK_ACCESS_SHADER_READ_BIT |
+//                                   VK_ACCESS_SHADER_WRITE_BIT |
+//                                   VK_ACCESS_COLOR_ATTACHMENT_READ_BIT |
+//                                   VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT |
+//                                   VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT |
+//                                   VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+// //                                   VK_ACCESS_TRANSFER_READ_BIT |
+// //                                   VK_ACCESS_TRANSFER_WRITE_BIT |
+// //                                   VK_ACCESS_HOST_READ_BIT |
+// //                                   VK_ACCESS_HOST_WRITE_BIT;
 
       render_pass = rpm.attachmentBegin(surface.format.format)
                          //.attachmentLoadOp(VK_ATTACHMENT_LOAD_OP_LOAD)

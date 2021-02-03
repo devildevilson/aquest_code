@@ -3,6 +3,8 @@
 #include "yavf.h"
 #include "image_container.h"
 #include "image_container_constants.h"
+#include "utils/globals.h"
+#include "container.h"
 
 #include <cctype>
 
@@ -123,25 +125,44 @@ namespace devils_engine {
         set = dm.layout(layout).create(pool)[0];
       }
       
+      auto render_container = global::get<render::container>();
+      int enable = VK_FALSE;
+      float level = 1.0f;
+      if (render_container->is_properties_presented(render::container::physical_device_sampler_anisotropy)) {
+        enable = VK_TRUE;
+        level = 16.0f;
+      }
+      
       {
         yavf::SamplerMaker sm(device);
         yavf::Sampler s1 = sm.addressMode(VK_SAMPLER_ADDRESS_MODE_REPEAT, VK_SAMPLER_ADDRESS_MODE_REPEAT).
-                              anisotropy(VK_TRUE, 16.0f).
+                              anisotropy(enable, level).
                               filter(VK_FILTER_LINEAR, VK_FILTER_LINEAR).
                               mipmapMode(VK_SAMPLER_MIPMAP_MODE_LINEAR).
                               lod(0.0f, 1000.0f).
                               create(IMAGE_SAMPLER_LINEAR_NAME);
                               
         yavf::Sampler s2 = sm.addressMode(VK_SAMPLER_ADDRESS_MODE_REPEAT, VK_SAMPLER_ADDRESS_MODE_REPEAT).
-                              anisotropy(VK_TRUE, 16.0f).
+                              anisotropy(enable, level).
                               filter(VK_FILTER_NEAREST, VK_FILTER_NEAREST).
                               mipmapMode(VK_SAMPLER_MIPMAP_MODE_NEAREST). // возможно можно скомбинировать с другим типом
                               lod(0.0f, 1000.0f).
                               create(IMAGE_SAMPLER_NEAREST_NAME);
                               
+        yavf::Sampler s3 = sm.addressMode(VK_SAMPLER_ADDRESS_MODE_REPEAT, VK_SAMPLER_ADDRESS_MODE_REPEAT).
+                              anisotropy(enable, level).
+                              borderColor(VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK).
+                              compareOp(VK_FALSE, VK_COMPARE_OP_GREATER).
+                              filter(VK_FILTER_NEAREST, VK_FILTER_NEAREST).
+                              mipmapMode(VK_SAMPLER_MIPMAP_MODE_NEAREST). // возможно можно скомбинировать с другим типом
+                              lod(0.0f, 1.0f).
+                              unnormalizedCoordinates(VK_FALSE).
+                              create("default_nuklear_sampler");
+                              
         set->resize(IMAGE_CONTAINER_SLOT_SIZE + IMAGE_SAMPLERS_COUNT);
         set->at(IMAGE_CONTAINER_SLOT_SIZE + 0) = {s1.handle(), VK_NULL_HANDLE, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 0, 1, VK_DESCRIPTOR_TYPE_SAMPLER};
         set->at(IMAGE_CONTAINER_SLOT_SIZE + 1) = {s2.handle(), VK_NULL_HANDLE, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 1, 1, VK_DESCRIPTOR_TYPE_SAMPLER};
+        set->at(IMAGE_CONTAINER_SLOT_SIZE + 2) = {s3.handle(), VK_NULL_HANDLE, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 2, 1, VK_DESCRIPTOR_TYPE_SAMPLER};
       }
       
       container->update_descriptor_data(set);

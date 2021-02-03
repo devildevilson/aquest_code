@@ -11,6 +11,7 @@
 #include "utils/systems.h"
 #include "image_controller.h"
 #include "utils/frustum.h"
+#include "image_container.h"
 #include <array>
 
 #define TILE_RENDER_PIPELINE_LAYOUT_NAME "tile_render_pipeline_layout"
@@ -1892,9 +1893,11 @@ namespace devils_engine {
       matrix(device, yavf::BufferCreateInfo::buffer(sizeof(glm::mat4), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT), VMA_MEMORY_USAGE_CPU_ONLY)
     {
       auto w = global::get<render::window>();
+      images_set = global::get<systems::core_t>()->image_controller->set;
       
       yavf::DescriptorSetLayout sampled_image_layout = device->setLayout(SAMPLED_IMAGE_LAYOUT_NAME);
       yavf::DescriptorSetLayout uniform_layout       = device->setLayout(UNIFORM_BUFFER_LAYOUT_NAME);
+      auto images_layout = device->setLayout(IMAGE_CONTAINER_DESCRIPTOR_LAYOUT_NAME);
       {
         yavf::DescriptorLayoutMaker dlm(device);
         
@@ -1921,9 +1924,8 @@ namespace devils_engine {
         
         yavf::PipelineLayoutMaker plm(device);
         gui_layout = plm.addDescriptorLayout(uniform_layout)
-                        .addDescriptorLayout(sampled_image_layout)
-//                         .addDescriptorLayout(resource->layout)
-                        .addPushConstRange(0, sizeof(glm::vec2) + sizeof(glm::vec2))
+                        .addDescriptorLayout(images_layout)
+                        .addPushConstRange(0, sizeof(render::image_t))
                         .create("gui_layout");
       }
       
@@ -2025,8 +2027,7 @@ namespace devils_engine {
       task->setVertexBuffer(&vertex_gui, 0);
       task->setIndexBuffer(&index_gui, VK_INDEX_TYPE_UINT16);
       
-      yavf::ImageView* tex = data->view;
-      const std::initializer_list<VkDescriptorSet> sets = {matrix.descriptorSet()->handle(), tex->descriptorSet()->handle()}; // , image_set->handle()
+      const std::initializer_list<VkDescriptorSet> sets = {matrix.descriptorSet()->handle(), images_set->handle()}; // , image_set->handle()
       task->setDescriptor(sets, 0);
       
       uint32_t index_offset = 0;
@@ -2036,9 +2037,9 @@ namespace devils_engine {
         
         const render::image_t i = image_nk_handle(cmd->texture);
         //ASSERT(i.index == UINT32_MAX && i.layer == UINT32_MAX);
-        auto data = glm::uvec4(i.container, 0, 0, 0);
+        //auto data = glm::uvec4(i.container, 0, 0, 0);
     //     PRINT_VEC2("image id", data)
-        task->setConsts(0, sizeof(data), &data);
+        task->setConsts(0, sizeof(i), &i);
 
         const glm::vec2 fb_scale = global::get<input::data>()->fb_scale;
         const VkRect2D scissor{
@@ -2082,11 +2083,20 @@ namespace devils_engine {
     }
 
     void task_start::clear() {}
+    // если мы wait передадим в другой поток, то тут мы можем разблокировать ресурсы (карту)
+    // и так это будет выглядеть наиболее нормально, другое дело что нам нужно ждать этот поток
+    // иначе мы не отловим ошибку + мы можем попытаться подождать всю загрузку используя обычное ожидание
     void task_start::wait() {
       const VkResult res = vkWaitForFences(device->handle(), 1, &wait_fence.fence, VK_TRUE, 1000000000);
       if (res != VK_SUCCESS) {
         throw std::runtime_error("drawing takes too long");
       }
+    }
+    
+    bool task_start::status() const {
+      const VkResult res = vkGetFenceStatus(device->handle(), wait_fence.fence);
+      ASSERT(res != VK_ERROR_DEVICE_LOST);
+      return res == VK_SUCCESS;
     }
 
     window_present::window_present(const create_info &info) : w(info.w) {}

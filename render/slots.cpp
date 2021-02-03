@@ -36,5 +36,9 @@ namespace devils_engine {
         p->clear();
       }
     }
+    
+    const stage* slots::get_stage(const uint32_t &slot) const {
+      return slot < stages.size() ? stages[slot] : nullptr;
+    }
   }
 }

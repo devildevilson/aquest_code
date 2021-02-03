@@ -19,6 +19,7 @@ namespace devils_engine {
       void clear_slot(const uint32_t &slot);
       void update(context* ctx);
       void clear();
+      const stage* get_stage(const uint32_t &slot) const;
     private:
       std::array<stage*, slots_count> stages;
     };

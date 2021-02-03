@@ -473,6 +473,7 @@ namespace devils_engine {
       yavf::Buffer vertex_gui;
       yavf::Buffer index_gui;
       yavf::Buffer matrix;
+      yavf::DescriptorSet* images_set;
     };
 
     class task_start : public stage {
@@ -482,6 +483,7 @@ namespace devils_engine {
       void proccess(context* ctx) override;
       void clear() override;
       void wait();
+      bool status() const; // быстро ли будет работать?
     private:
       yavf::Device* device;
       yavf::Internal::Queue wait_fence;

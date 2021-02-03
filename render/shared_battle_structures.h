@@ -55,15 +55,18 @@ namespace devils_engine {
 // мне бы еще оставлять трупы на тайле среди прочего
 struct battle_map_tile_data_t {
   float height;
-  image_t texture1; // "пол"
-  image_t texture2; // стенки
+  image_t ground; // "пол"
+  image_t walls; // стенки
   uint biome_index;
   
   //uint architecture[6];
+  // тут видимо будут какие то данные об отрядах на тайле
+  uint troop_data;
+  uint dummy[3];
 };
 
 struct packed_battle_map_tile_data_t {
-  uvec4 data1;
+  uvec4 data[2];
   
   //uint architecture[6];
 };
@@ -101,12 +104,31 @@ struct packed_battle_biome_data_t {
   vec4 data[5]; // sizeof(battle_biome_data_t)/sizeof(vec4)
 };
 
+struct unit_t {
+  vec4 pos;
+  vec4 dir;
+};
+
+const uint troop_unit_offset_mask = 0x00ffffff;
+
+INLINE uint get_troop_unit_count(const uint troop_data) {
+  return troop_data >> 24;
+}
+
+INLINE uint get_troop_unit_offset(const uint troop_data) {
+  return troop_data & troop_unit_offset_mask;
+}
+
 INLINE battle_map_tile_data_t unpack_data(const packed_battle_map_tile_data_t packed_data) {
   battle_map_tile_data_t data;
-  data.height = uintBitsToFloat(packed_data.data1.x);
-  data.texture1.container = packed_data.data1.y;
-  data.texture2.container = packed_data.data1.z;
-  data.biome_index = packed_data.data1.w;
+  data.height = uintBitsToFloat(packed_data.data[0].x);
+  data.ground.container = packed_data.data[0].y;
+  data.walls.container = packed_data.data[0].z;
+  data.biome_index = packed_data.data[0].w;
+  data.troop_data = packed_data.data[1].x;
+  data.dummy[0] = packed_data.data[1].y;
+  data.dummy[1] = packed_data.data[1].z;
+  data.dummy[2] = packed_data.data[1].w;
   return data;
 }
 
@@ -136,6 +158,8 @@ INLINE battle_biome_data_t unpack_data(const packed_battle_biome_data_t packed_d
 
     static_assert(sizeof(battle_map_tile_data_t) == sizeof(packed_battle_map_tile_data_t));
     static_assert(sizeof(battle_biome_data_t) == sizeof(packed_battle_biome_data_t));
+    static_assert(sizeof(battle_map_tile_data_t) % 16 == 0);
+    static_assert(sizeof(battle_biome_data_t) % 16 == 0);
     //static_assert(BATTLE_BIOMES_MAX_COUNT == BATTLE_BIOME_INVALID);
     static_assert((UINT8_MAX+1) > BATTLE_BIOME_INVALID);
     static_assert((UINT8_MAX+1) > BATTLE_BIOMES_MAX_COUNT);

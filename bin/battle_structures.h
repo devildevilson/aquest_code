@@ -6,6 +6,9 @@
 #include <cstddef>
 #include <functional>
 #include "utils/linear_rng.h"
+#include "stats.h"
+#include "state.h"
+#include "battle_structures_enum.h"
 
 namespace devils_engine {
   namespace render {
@@ -13,32 +16,31 @@ namespace devils_engine {
   }
   
   namespace battle {
-    struct unit;
+    // нужно завести массив тайлов с какими то данными для битвы
+    struct tile {
+      uint32_t troop_index;
+    };
     
     struct biome {
+      static const structure_type type_id = structure_type::biome;
+      
       std::string id;
       //render::battle_biome_data_t* render_data;
       uint32_t index; // индекс данных биома в буфере
     };
     
-    struct state {
-      std::string id;
-      uint32_t* textures; // оффсет + количество
-      size_t time;
-      state* next;
-      // тут скорее указатель на контейнер с функцией (название или индекс)
-      // так как функция будет запускаться параллельно, и нам нужно 
-      // функцию распарсить во всех стейтах
-      std::function<void(unit*)> func;
-    };
+//     struct unit_type {
+//       static const structure_type type_id = structure_type::unit_type;
+//       
+//       std::string id;
+//       const core::state* default_state;
+//       // статы (или не будет у юнита статов?)
+//       // нам определенно потребуется задать какие юниты скорее всего умрут
+//     };
     
-    struct unit_type {
-      std::string id;
-      const state* default_state;
-      // статы (или не будет у юнита статов?)
-      // нам определенно потребуется задать какие юниты скорее всего умрут
-    };
+    #define MAX_STATE_CHANGES 20
     
+    // было бы неплохо оставлять трупы на тайлах где они умирали, для этого нужно сохранять какие то индексы или координаты
     struct unit {
       enum class status {
         idle,
@@ -53,14 +55,17 @@ namespace devils_engine {
         count
       };
       
+      using rng_state = utils::splitmix64::state;
+      constexpr static const auto init_func = utils::splitmix64::init;
+      constexpr static const auto rng_func = utils::splitmix64::rng;
+      constexpr static const auto get_value_func = utils::splitmix64::get_value;
       
-      using rng_state = utils::xorshift64::state;
-      constexpr static const auto rng_func = utils::xorshift64::rng;
-      constexpr static const auto get_value_func = utils::xorshift64::get_value;
+      static const structure_type type_id = structure_type::unit;
       
-      const unit_type* type;
+//       const unit_type* type;
       enum status status;
-      const state* current_state;
+      uint32_t unit_gpu_index;
+      const core::state* current_state;
       size_t state_time;
       size_t user_time;
       // состояние псевдогенератора (достаточно небольшого, но нам нужно будет использовать его в мультипотоке + в луа)
@@ -68,24 +73,51 @@ namespace devils_engine {
       // где то тут еще положение и направление
       // данные для гпу (собств поз, дир, текстурки и все?)
       
-      void set_state(const std::string_view &name);
+      uint32_t change_counter;
+      
+      unit();
+      ~unit();
+      void set_state(const std::string_view &name); // откуда брать состояния?
       void reset_timer();
-      void update(const size_t &time);
       double random(); // тут возвращается число от 0 до 1? да
       double random(const double &upper);
       double random(const double &lower, const double &upper);
+      std::string_view state() const;
+
+      void update(const size_t &time);
+      void seed_random(const uint64_t &seed);
+      void set_state(const struct core::state* state);
+      glm::vec4 get_pos() const;
+      void set_pos(const glm::vec4 &pos);
+      glm::vec4 get_dir() const;
+      void set_dir(const glm::vec4 &dir);
     };
     
     struct troop_type {
+      static const structure_type type_id = structure_type::troop_type;
+      
       std::string id;
-      // количество юнитов
+      //const unit_type* units_type;
+//       uint32_t units_count;
+      core::state* default_unit_state;
+      core::stat_container stats[core::troop_stats::count];
     };
     
     struct troop {
+      static const structure_type type_id = structure_type::troop;
+      
       const troop_type* type;
       uint32_t tile_index;
+      core::stat_container stats[core::troop_stats::count];
       // конкретные юниты + статы отряда
       // + данные для гпу (какие? количество и оффсет?)
+      // количество - явно не очень большое число (я бы дал до 256)
+      // скорее количеств будет сильно меньше чем 200 (20-30 иначе слишком мелкие челики будут)
+      // поэтому поместим в одну переменную 8 бит + 24 бит оффсет
+      // как быть с мертвыми? их по идее тоже нужно рисовать, но уже относительно тайла
+      // было бы неплохо сделать для них рендер вроде частиц
+      
+      
     };
   }
 }

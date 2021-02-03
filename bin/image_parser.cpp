@@ -707,22 +707,26 @@ namespace devils_engine {
       return counter == 0;
     }
     
+    render::image_t parse_image(const std::string_view &str_id, render::image_controller* controller) {
+      std::string_view img_id;
+      uint32_t layer;
+      bool mirror_u;
+      bool mirror_v;
+      const bool ret = render::parse_image_id(str_id, img_id, layer, mirror_u, mirror_v);
+      if (!ret) throw std::runtime_error("Bad texture id " + std::string(str_id));
+      const auto image_id = std::string(img_id);
+      auto view = controller->get_view(image_id);
+      if (layer >= view->count) throw std::runtime_error("Image pack " + image_id + " does not have " + std::to_string(layer) + " amount of images");
+      return view->get_image(layer, mirror_u, mirror_v);
+    }
+    
     render::image_t parse_image(const std::string_view &key, const sol::table &table, render::image_controller* controller) {
       auto t_proxy = table[key];
       if (!t_proxy.valid() || t_proxy.get_type() != sol::type::string) return render::image_t{GPU_UINT_MAX};
       
       const std::string_view str = t_proxy.get<std::string_view>();
 //           PRINT(str)
-      std::string_view img_id;
-      uint32_t layer;
-      bool mirror_u;
-      bool mirror_v;
-      const bool ret = render::parse_image_id(str, img_id, layer, mirror_u, mirror_v);
-      if (!ret) throw std::runtime_error("Bad texture id " + std::string(str));
-      const auto image_id = std::string(img_id);
-      auto view = controller->get_view(image_id);
-      if (layer >= view->count) throw std::runtime_error("Image pack " + image_id + " does not have " + std::to_string(layer) + " amount of images");
-      return view->get_image(layer, mirror_u, mirror_v);
+      return parse_image(str, controller);
     }
     
     double parse_number(const std::string_view &key, const sol::table &table, const double &default_value) {

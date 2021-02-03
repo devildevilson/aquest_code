@@ -5,13 +5,27 @@
 
 namespace devils_engine {
   namespace battle {
-    map::map(const create_info &info) : width(0), height(0), tiles_count(0), device(info.device), tiles_buffer(nullptr), offsets_buffer(nullptr), biomes_buffer(nullptr), set(nullptr) {
-      
-    }
+    map::map(const create_info &info) : 
+      width(0), 
+      height(0), 
+      tiles_count(0), 
+      units_count(0),
+      textures_count(0),
+      device(info.device), 
+      tiles_buffer(nullptr), 
+      offsets_buffer(nullptr), 
+      biomes_buffer(nullptr), 
+      units_buffer(nullptr), 
+      textures_buffer(nullptr),
+      set(nullptr) 
+    {}
     
     map::~map() {
+      device->destroy(tiles_uniform);
       device->destroy(tiles_buffer);
       device->destroy(offsets_buffer);
+      device->destroy(biomes_buffer);
+      if (units_buffer != nullptr) device->destroy(units_buffer);
       
       device->destroySetLayout(BATTLE_MAP_DESCRIPTOR_SET_LAYOUT_NAME);
       device->destroyDescriptorPool(BATTLE_MAP_DESCRIPTOR_POOL_NAME);
@@ -47,6 +61,8 @@ namespace devils_engine {
         data->map_properties.z = height;
         data->map_properties.w = type.container[0];
         
+        std::unique_lock<std::mutex> lock(mutex);
+        
         auto task = device->allocateTransferTask();
         task->begin();
         task->copy(&staging, tiles_uniform);
@@ -70,13 +86,14 @@ namespace devils_engine {
                     .binding(1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_ALL)
                     .binding(2, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_ALL)
                     .binding(3, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_ALL)
+                    .binding(4, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_ALL)
                     .create(BATTLE_MAP_DESCRIPTOR_SET_LAYOUT_NAME);
       }
       
       yavf::DescriptorPool pool = VK_NULL_HANDLE;
       {
         yavf::DescriptorPoolMaker dpm(device);
-        pool = dpm.poolSize(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 3).poolSize(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1).create(BATTLE_MAP_DESCRIPTOR_POOL_NAME);
+        pool = dpm.poolSize(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 5).poolSize(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1).create(BATTLE_MAP_DESCRIPTOR_POOL_NAME);
       }
       
       {
@@ -121,6 +138,24 @@ namespace devils_engine {
       return array[tile_index].biome_index;
     }
     
+    void map::set_units_count(const uint32_t &count) {
+      units_count = count;
+      units_buffer = device->create(yavf::BufferCreateInfo::buffer(count*sizeof(render::unit_t), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT), VMA_MEMORY_USAGE_CPU_ONLY);
+    }
+    
+    render::unit_t map::get_unit_data(const uint32_t &index) const {
+      // мьютекс?
+      ASSERT(index < units_count);
+      auto units = reinterpret_cast<render::unit_t*>(units_buffer->ptr());
+      return units[index];
+    }
+    
+    void map::set_unit_data(const uint32_t &index, const render::unit_t &data) {
+      ASSERT(index < units_count);
+      auto units = reinterpret_cast<render::unit_t*>(units_buffer->ptr());
+      units[index] = data;
+    }
+    
     void map::set_biomes(const std::array<render::battle_biome_data_t, BATTLE_BIOMES_MAX_COUNT> &data) {
       const size_t data_size = BATTLE_BIOMES_MAX_COUNT*sizeof(render::battle_biome_data_t);
       ASSERT(data_size == sizeof(data[0])*data.size());
@@ -141,6 +176,28 @@ namespace devils_engine {
       device->deallocate(task);
       
       //biomes_buffer->flush();
+    }
+    
+    void map::add_unit_textures(const std::vector<render::image_t> &array) {
+      const size_t size = align_to(array.size() * sizeof(render::image_t), 16);
+      yavf::Buffer staging(device, yavf::BufferCreateInfo::buffer(size, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT), VMA_MEMORY_USAGE_CPU_ONLY);
+      memcpy(staging.ptr(), array.data(), array.size() * sizeof(render::image_t));
+      
+      std::unique_lock<std::mutex> lock(mutex);
+      textures_buffer = device->create(yavf::BufferCreateInfo::buffer(size, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT), VMA_MEMORY_USAGE_CPU_ONLY);
+      
+      auto task = device->allocateTransferTask();
+      task->begin();
+      task->copy(&staging, textures_buffer);
+      task->end();
+      task->start();
+      task->wait();
+      device->deallocate(task);
+      
+      set->add({textures_buffer, 0, textures_buffer->info().size, 0, 4, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER});
+      set->update();
+      
+      // что еще?
     }
   }
 }

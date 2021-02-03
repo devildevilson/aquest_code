@@ -30,7 +30,12 @@ int main(int argc, char const *argv[]) {
   systems::core_t base_systems;
   systems::map_t map_systems;
   systems::battle_t battle_systems;
-  systems::encouter_t encounter_systems;
+  systems::encounter_t encounter_systems;
+  
+  global::get(&base_systems);
+  global::get(&map_systems);
+  global::get(&battle_systems);
+  global::get(&encounter_systems);
 
   base_systems.create_utility_systems();
   utils::settings settings;
@@ -45,11 +50,6 @@ int main(int argc, char const *argv[]) {
   const auto tile_func = basic_interface_functions(base_systems);
   
   settings.graphics.find_video_mode();
-
-  global::get(&base_systems);
-  global::get(&map_systems);
-  global::get(&battle_systems);
-  global::get(&encounter_systems);
 
   utils::main_menu_state main_menu_state;
   utils::map_creation_state map_creation_state;
@@ -185,7 +185,28 @@ int main(int argc, char const *argv[]) {
   // инфу мы можем получить на первом шаге, а дальше сохраняем и начинаем собственно генерацию
   // короч видимо придется делать особый первый шаг
   
+  // частично сделал генерацию, нужно сделать текстурки + базовые отряды + инпут
+  // битвы должны быть в несколько фаз: фаза подготовки (расставляем отряды),
+  // фаза битвы (собственно делаем боевые действия)
+  // еще нужно сделать геройскую битву, ее можно оформить примерно как даркест данжеон
+  // то есть прямой пол с текстуркой земли + стенка с текстуркой удаленного ландшафта
+  // на полу гексагональные тайлы, выглядит очень похоже на героев, осталось понять какое количество тайлов сделать, но это потом
+  // в битвах я остановился на варианте задавать приказы на этапе хода преказы выполняются, 
+  // значит нужно как то особенно рендерить этот промежуток между ходами, в это время должны меняться состояния 
+  // юнитов в отрядах, отряды должны вступать в битву, самое главное стараться исполнить приказ в любом случае
+  // в таком случае очень важна очередность хода + нужно что то придумать с отрядами с разной скоростью, 
+  // скорее всего мне либо нужно по ктрл задавать конкретный путь, либо как то так забалансить чтобы они не слишком дальше ходили в отличие от основных отрядов
+  // но поиск пути по ктрл довольно полезная хрень, если не весь доступный ход был использован то можно пометить остаток хода куда может сходить юнит
+  // 
+  
+  // нужно сделать что? ... отряд (какой то базовый рендер отряда) + управление отрядом
+  // управление меняется в зависимости от текущего quest_state, а значит наверное 
+  // логику нужно перенести туда, 
+  
   // мне нужно придумать способ свободно отключать рендеринг какой то части пайплайна
+  
+  // рандом в генераторе нужно огрганизовать как строку из 16 символов
+  // тип: deadbeafdeadbeaf
 
 //   const std::vector<std::string> base_interfaces = { // как передать данные?
 //     "main_menu",
@@ -212,10 +233,8 @@ int main(int argc, char const *argv[]) {
   utils::quest_state* current_game_state = game_states[current_game_state_index];
   utils::quest_state* previous_game_state = nullptr;
   bool loading = true;
-//   current_game_state->enter();
-  
-//   std::vector<void*> map_buffer(5000, nullptr);
 
+  std::future<void> rendering_future;
   global::get<render::window>()->show();
   utils::frame_time frame_time;
   while (!global::get<render::window>()->close() && !base_systems.menu->m_quit_game) {
@@ -224,6 +243,9 @@ int main(int argc, char const *argv[]) {
     input::update_time(time);
     poll_events();
     if (global::get<render::window>()->close()) break;
+    
+    //if (rendering_future.valid()) rendering_future.get();
+    //if (rendering_future.valid()) rendering_future.wait();
 
     if (loading) {
       if (current_game_state->load(previous_game_state)) {
@@ -238,7 +260,7 @@ int main(int argc, char const *argv[]) {
         // это не работает для перехода от карты к битве и обратно
         // мне либо делать так же как в героях (то есть не чистить память мира)
         // либо нужно придумать иной способ взаимодействия между стейтами
-        // 
+        // переделал немного
         previous_game_state = current_game_state;
 //         current_game_state->clean();
         current_game_state = game_states[index];
@@ -434,22 +456,31 @@ int main(int argc, char const *argv[]) {
         // нужно проверить чтобы не было пересчения с окнами
         // перечение с тултипом, как его избежать? нужно проверить пересечение со всеми окнами ДО ЭТОГО
         // нужно тогда самостоятельно задать название окна
-        const bool condition = !nk_window_is_any_hovered(nuklear_ctx) || nk_window_is_active(nuklear_ctx, "tile_window");
+        //const bool condition = !nk_window_is_any_hovered(nuklear_ctx) || nk_window_is_active(nuklear_ctx, "tile_window");
+        const bool condition = !is_interface_hovered(nuklear_ctx, "tile_window");
         if (condition) tile_func(base_systems.interface_container->moonnuklear_ctx, tile_index);
       }
     }
     
     draw_army_path();
+     
+    // к сожалению интерфейс можно рисовать только после вызова nk_clear 
+    // + почему то рендер вызывается 2 раза между созданием задачи и вызовом фьючера
+    // хотя я походу знаю почему: в потоке загрузки вызывается копирование буферов
+    // а в потоке отрисовщика вызывается собственно отрисовка, и получается коллизия
+    // 
+    //rendering_future = pool.submit(lambda);
+    //if (thread_pool_size < 2) pool.compute();
 
     // ошибки с отрисовкой непосредственно тайлов могут быть связаны с недостаточным буфером для индексов (исправил)
     // еще меня беспокоит то что игра занимает уже 270 мб оперативы
     // (примерно 100 мб занимает вся информация о игровой карте (размер контейнера и размер данных в кор::мап))
     // (еще мегобайт 100 занимает луа (похоже что с этим бороться будет крайне сложно))
     // нужно каким то образом это сократить (по итогу все это дело занимает сейчас 500 мб, и 1 гб при генерации)
-    lock_rendering();
-    base_systems.render_slots->update(global::get<render::container>());
+    //lock_rendering();
+    //base_systems.render_slots->update(global::get<render::container>());
     const size_t sync_time = global::get<render::window>()->flags.vsync() ? global::get<render::window>()->refresh_rate_mcs() : 0;
-    sync(frame_time, sync_time);
+    sync(frame_time, sync_time, rendering_future);
   }
   
   pool.compute();

@@ -1067,19 +1067,38 @@ namespace devils_engine {
     //
 //     }
   }
-
-  void sync(utils::frame_time &frame_time, const size_t &time) {
+  
+  void sync(utils::frame_time &frame_time, const size_t &time, std::future<void> &rendering_future) {
     //auto start = std::chrono::steady_clock::now();
     frame_time.end();
+    
+    static const auto lambda = [] () {
+      auto base_systems = global::get<systems::core_t>();
+      auto m = get_map_mutex();
+      if (m != nullptr) {
+        std::unique_lock<std::mutex> lock(*m);
+        base_systems->render_slots->update(global::get<render::container>());
+        global::get<render::task_start>()->wait();
+        global::get<systems::core_t>()->render_slots->clear();
+      } else {
+        base_systems->render_slots->update(global::get<render::container>());
+        global::get<render::task_start>()->wait();
+        global::get<systems::core_t>()->render_slots->clear();
+      }
+    };
+    
+    lambda();
 
-    {
-//       utils::time_log log("task waiting");
-      global::get<render::task_start>()->wait();
-      //global::get<render::stage_container>()->clear();
-      global::get<systems::core_t>()->render_slots->clear();
-      //global::get<systems::map_t>()->unlock_map();
-      unlock_rendering();
-    }
+//     {
+// //       utils::time_log log("task waiting");
+//       global::get<render::task_start>()->wait();
+//       //global::get<render::stage_container>()->clear();
+//       global::get<systems::core_t>()->render_slots->clear();
+//       //global::get<systems::map_t>()->unlock_map();
+//       unlock_rendering();
+//     }
+    
+    //if (rendering_future.valid()) rendering_future.wait();
 
     size_t mcs = 0;
     while (mcs < time) {
@@ -1337,6 +1356,17 @@ namespace devils_engine {
     recompute_army_pos(army);
   }
   
+  std::mutex* get_map_mutex() {
+    auto map = global::get<systems::map_t>();
+    auto battle = global::get<systems::battle_t>();
+    //auto encounter = global::get<systems::encounter_t>();
+    
+    if (map->is_init()) return &map->map->mutex;
+    if (battle->is_init()) return &battle->map->mutex;
+    
+    return nullptr;
+  }
+  
   void lock_rendering() {
     global::get<systems::map_t>()->lock_map();
     global::get<systems::battle_t>()->lock_map();
@@ -1345,6 +1375,32 @@ namespace devils_engine {
   void unlock_rendering() {
     global::get<systems::map_t>()->unlock_map();
     global::get<systems::battle_t>()->unlock_map();
+  }
+  
+  bool is_interface_hovered(nk_context* ctx, const std::string_view &except) {
+    struct nk_window* iter;
+    assert(ctx);
+    if (!ctx) return 0;
+    
+    iter = ctx->begin;
+    while (iter) {
+      struct nk_window* local_iter = iter;
+      iter = iter->next;
+      /* check if window is being hovered */
+      if(!(local_iter->flags & NK_WINDOW_HIDDEN)) continue;
+      if (except == std::string_view(local_iter->name_string)) continue;
+      
+      /* check if window popup is being hovered */
+      if (local_iter->popup.active && local_iter->popup.win && nk_input_is_mouse_hovering_rect(&ctx->input, local_iter->popup.win->bounds)) return true;
+
+      if (local_iter->flags & NK_WINDOW_MINIMIZED) {
+        struct nk_rect header = local_iter->bounds;
+        header.h = ctx->style.font->height + 2 * ctx->style.window.header.padding.y;
+        if (nk_input_is_mouse_hovering_rect(&ctx->input, header)) return true;
+      } else if (nk_input_is_mouse_hovering_rect(&ctx->input, local_iter->bounds)) return true;
+    }
+    
+    return false;
   }
   
   components::camera* get_camera() {

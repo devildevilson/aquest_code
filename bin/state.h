@@ -2,10 +2,11 @@
 #define ANIMATION_STATE_H
 
 #include "utils/sol.h"
-#include "render/shared_structures.h"
+#include <string>
 #include <functional>
 #include <cstdint>
 #include <cstddef>
+#include "battle_structures_enum.h"
 
 namespace devils_engine {
   namespace core {
@@ -13,10 +14,19 @@ namespace devils_engine {
     
     // это какая то картинка + функция перехода + время
     struct state { // не должно ли это вообще быть все в луа? неплохо было бы использовать мультитрединг, в принципе в функцию должен передаваться юнит
-      std::function<void(unit*, size_t)> func;
-      render::image_t img; // картинок может быть несколько (например по стронам как думе)
+      static const battle::structure_type type_id = battle::structure_type::unit_state;
+      
+      std::string id;
+      
+      uint32_t texture_offset;
+      uint32_t texture_count;
+      
       size_t time;
       state* next;
+      
+      uint32_t func_index;
+      
+      inline state() : texture_offset(UINT32_MAX), texture_count(0), time(SIZE_MAX), next(nullptr), func_index(UINT32_MAX) {}
     };
   }
 }

@@ -37,6 +37,7 @@ namespace devils_engine {
     bool validate_battle_biome(const uint32_t &index, const sol::table &table);
     // сохранять при генерации битвы ничего не нужно
     //bool validate_battle_biome_and_save(const uint32_t &index, sol::this_state lua, const sol::table &table, world_serializator* container);
+    render::image_t parse_image(const std::string_view &str_id, render::image_controller* controller);
     void load_battle_biomes(render::image_controller* controller, const std::vector<sol::table> &biome_tables);
   }
 }

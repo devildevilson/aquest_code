@@ -63,6 +63,7 @@
 #include "seasons.h"
 #include "tiles_funcs.h"
 #include "objects_selector.h"
+#include "battle_map.h"
 
 #include <set>
 #include <vector>
@@ -109,7 +110,8 @@ namespace devils_engine {
 
   void update(const size_t &time);
 
-  void sync(utils::frame_time &frame_time, const size_t &time);
+  //void sync(utils::frame_time &frame_time, const size_t &time);
+  void sync(utils::frame_time &frame_time, const size_t &time, std::future<void> &rendering_future);
   
   void check_tile(const map::container* map, const uint32_t &tile_index);
   
@@ -117,8 +119,11 @@ namespace devils_engine {
   
   void advance_army(core::army* army);
   
+  std::mutex* get_map_mutex();
   void lock_rendering();
   void unlock_rendering();
+  
+  bool is_interface_hovered(nk_context* ctx, const std::string_view &except);
   
   components::camera* get_camera();
 

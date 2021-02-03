@@ -21,8 +21,14 @@
 #include "render/yavf.h"
 #include "game_time.h"
 #include "image_parser.h"
+#include "battle_structures_enum.h"
+#include "battle_troop_parser.h"
+#include "battle_troop_type_parser.h"
+#include "battle_unit_state_parser.h"
 #include "heraldy_parser.h"
+#include "battle_context.h"
 #include "utils/lua_initialization.h"
+#include "utils/battle_map_enum.h"
 
 #include "render/image_container.h"
 #include "render/image_controller.h"
@@ -1963,6 +1969,7 @@ namespace devils_engine {
       std::unordered_set<std::string> loaded_functions;
       
       const auto &root_string = global::root_directory();
+      // по идее путь до скрипта подготовки нужно задать при генерации
       auto config_table = lua.safe_script_file(root_string + "/scripts/battle_generator_config.lua");
       if (!config_table.valid()) {
         const sol::error err = config_table;
@@ -2022,7 +2029,35 @@ namespace devils_engine {
       // + запомнить армии и что происходит вокруг (биомы)
       // 
       
+      // при загрузке нужно будет перенести еще какие то данные из карты
+      // например данные о персонажах и титулах, кажется данные для рендера знамен остаются в памяти 
+      // вообще рендер лиц то поди тоже примерно так выглядит: есть некоторое количество слоев,
+      // нужно по данным из буфера наложить их друг на друга
+      
       advance_progress(prog, "cleaning");
+    }
+    
+    void set_map_textures(battle::map* map, const std::vector<std::pair<render::image_t, render::image_t>> &textures) {
+      ASSERT(textures.size() == map->tiles_count);
+      
+      auto buffer = reinterpret_cast<render::battle_map_tile_data_t*>(map->tiles_buffer->ptr());
+      ASSERT(buffer != nullptr);
+      for (size_t i = 0; i < map->tiles_count; ++i) {
+        if (!render::is_image_valid(textures[i].first)) throw std::runtime_error("Tile " + std::to_string(i) + " has invalid texture");
+        if (!render::is_image_valid(textures[i].second)) throw std::runtime_error("Tile " + std::to_string(i) + " has invalid texture");
+        buffer[i].ground = textures[i].first;
+        buffer[i].walls = textures[i].second;
+      }
+    }
+    
+    bool validate_tables(const std::function<bool(const uint32_t&, const sol::table&)> &func, map::creator::table_container_t* tables_container, const size_t &index) {
+      const auto &tables = tables_container->get_tables(index);
+      bool ret = true;
+      for (size_t i = 0; i < tables.size(); ++i) {
+        ret = ret && func(i, tables[i]);
+      }
+      
+      if (!ret) throw std::runtime_error("There are tables parsing errors");
     }
     
     void from_map_to_battle_part2(sol::state_view lua, utils::progress_container* prog) {
@@ -2030,6 +2065,13 @@ namespace devils_engine {
       
       map::creator::table_container_t tables_container;
       global::get(&tables_container);
+      // по аналогии с tables_container нужно сделать какой то держатель строк
+      utils::battle_map_string_container strings;
+      global::get(&strings);
+      utils::data_string_container cont;
+      global::get(&cont);
+      
+      std::unordered_set<std::string> unique_scripts;
       
       sol::table t = lua["config_table"];
       sol::table ctx_t = lua["ctx_table"];
@@ -2042,31 +2084,24 @@ namespace devils_engine {
         const std::string hint = table["hint"];
         advance_progress(prog, hint);
         const sol::function gen_func = table["func"];
-        const std::function<void(sol::table &, sol::table &)> std_func = gen_func;
-        std_func(ctx_t, user_t);
+        //const std::function<void(sol::table &, sol::table &)> std_func = gen_func;
+        //std_func(ctx_t, user_t);
+        const auto res = gen_func(ctx_t, user_t);
+        if (!res.valid()) {
+          sol::error err = res;
+          PRINT(err.what())
+          throw std::runtime_error("There is lua errors");
+        }
       }
       
       advance_progress(prog, "validate generated data");
       
-      {
-        const auto &tables = tables_container.get_tables(static_cast<size_t>(utils::generator_table_container::additional_data::image));
-        bool ret = true;
-        for (size_t i = 0; i < tables.size(); ++i) {
-          ret = ret && utils::validate_image(i, tables[i]);
-        }
-        
-        if (!ret) throw std::runtime_error("There are tables parsing errors");
-      }
+      validate_tables(utils::validate_image, &tables_container, static_cast<size_t>(utils::generator_table_container::additional_data::image));
+      validate_tables(utils::validate_battle_biome, &tables_container, static_cast<size_t>(utils::generator_table_container::additional_data::biome));
       
-      {
-        const auto &tables = tables_container.get_tables(static_cast<size_t>(utils::generator_table_container::additional_data::biome));
-        bool ret = true;
-        for (size_t i = 0; i < tables.size(); ++i) {
-          ret = ret && utils::validate_battle_biome(i, tables[i]);
-        }
-        
-        if (!ret) throw std::runtime_error("There are tables parsing errors");
-      }
+      validate_tables(utils::validate_battle_unit_state, &tables_container, static_cast<size_t>(battle::structure_type::unit_state));
+      validate_tables(utils::validate_battle_troop_type, &tables_container, static_cast<size_t>(battle::structure_type::troop_type));
+      validate_tables(utils::validate_battle_troop, &tables_container, static_cast<size_t>(battle::structure_type::troop));
       
       advance_progress(prog, "loading battle");
       
@@ -2084,17 +2119,74 @@ namespace devils_engine {
         utils::load_battle_biomes(controller, tables);
       }
       
+      // + unit_state + troop + troop_type
+      
+      auto map = global::get<systems::battle_t>()->map;
+      std::vector<std::pair<render::image_t, render::image_t>> tiles_textures(map->tiles_count, std::make_pair(render::image_t{GPU_UINT_MAX}, render::image_t{GPU_UINT_MAX}));
+      {
+        auto controller = global::get<systems::core_t>()->image_controller;
+        const auto &strings_array = strings.get_strings(static_cast<size_t>(utils::battle_strings::tile_texture_id));
+        ASSERT(strings_array.size() != 0);
+        for (size_t i = 0; i < strings_array.size(); ++i) {
+          if (strings_array[i].empty()) throw std::runtime_error("Texture id is missed for " + std::to_string(i) + " tile");
+          auto img = utils::parse_image(strings_array[i], controller);
+          tiles_textures[i].first = img;
+        }
+      }
+      
+      {
+        auto controller = global::get<systems::core_t>()->image_controller;
+        const auto &strings_array = strings.get_strings(static_cast<size_t>(utils::battle_strings::tile_walls_texture_id));
+        ASSERT(strings_array.size() != 0);
+        for (size_t i = 0; i < strings_array.size(); ++i) {
+          if (strings_array[i].empty()) throw std::runtime_error("Texture id is missed for " + std::to_string(i) + " tile walls");
+          auto img = utils::parse_image(strings_array[i], controller);
+          tiles_textures[i].second = img;
+        }
+      }
+      
+      {
+        auto ctx = global::get<systems::battle_t>()->context;
+        auto cont = global::get<systems::battle_t>()->unit_states_map;
+        const auto &tables = tables_container.get_tables(static_cast<size_t>(static_cast<size_t>(battle::structure_type::unit_state)));
+        ctx->create_container<core::state>(tables.size());
+        for (size_t i = 0; i < tables.size(); ++i) {
+          const std::string id = tables[i]["id"];
+          auto ptr = ctx->get_entity<core::state>(i);
+          ptr->id = id;
+          cont->insert(ptr->id, i);
+        }
+        
+        utils::load_battle_unit_states(ctx, tables, unique_scripts);
+      }
+      
+      {
+        auto ctx = global::get<systems::battle_t>()->context;
+        const auto &tables = tables_container.get_tables(static_cast<size_t>(static_cast<size_t>(battle::structure_type::troop_type)));
+        ctx->create_container<battle::troop_type>(tables.size());
+        utils::load_battle_troop_types(ctx, tables);
+      }
+      
+      {
+        auto ctx = global::get<systems::battle_t>()->context;
+        const auto &tables = tables_container.get_tables(static_cast<size_t>(static_cast<size_t>(battle::structure_type::troop)));
+        ctx->create_container<battle::troop>(tables.size());
+        utils::load_battle_troops(ctx, tables);
+      }
+      
       {
         auto system = global::get<systems::battle_t>();
         auto controller = global::get<systems::core_t>()->image_controller;
         const auto &data = get_battle_biomes_data(system);
         system->lock_map();
         global::get<render::battle::tile_optimizer>()->update_biome_data(data);
+        set_map_textures(map, tiles_textures);
         controller->update_set();
         system->unlock_map();
       }
       
       global::get(reinterpret_cast<map::creator::table_container_t*>(SIZE_MAX));
+      global::get(reinterpret_cast<utils::data_string_container*>(SIZE_MAX));
       
       ASSERT(prog->finished());
     }

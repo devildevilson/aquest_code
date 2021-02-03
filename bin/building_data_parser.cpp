@@ -169,6 +169,7 @@ namespace devils_engine {
       const bool is_id_array = array_check[0].key == ID_ARRAY;
       const bool is_stats_array = array_check[0].key == STATS_ARRAY;
       const bool is_numeric_array = array_check[0].key == NUM_ARRAY;
+      const bool is_stats_v2_array = array_check[0].key == STATS_V2_ARRAY;
       const bool basic_check = !is_id_array && !is_stats_array && !is_numeric_array;
       
       if (!basic_check) {
@@ -180,6 +181,7 @@ namespace devils_engine {
         if (is_stats_array) { key_type = sol::type::number; value_type = sol::type::number; }
         if (is_id_array) { value_type = sol::type::string; }
         if (is_numeric_array) { value_type = sol::type::number; }
+        if (is_stats_v2_array) { key_type = sol::type::string; value_type = sol::type::number; }
         
         size_t data_counter = 0;
         for (auto itr = table.begin(); itr != table.end(); ++itr) {

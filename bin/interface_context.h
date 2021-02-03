@@ -20,6 +20,7 @@ namespace devils_engine {
   
   namespace render {
     struct window;
+    class image_container;
   }
   
   namespace fonts {
@@ -74,13 +75,15 @@ namespace devils_engine {
     
     struct context {
       yavf::Device* device;
+      render::image_container* container;
       nk_context ctx;
       nk_font* fonts[fonts::count];
       // текстурки шрифтов сложно положить в пул как я раньше это делал
       // но при этом нужно сочетать такие текстурки со всеми остальными
       // нужно создавать пулы из одной картинки
       nk_font_atlas atlas; // атлас единственный?
-      yavf::ImageView* view;
+      render::image_t font_atlas_image;
+//       yavf::ImageView* view;
       yavf::DescriptorSet* atlas_descriptor;
       size_t descriptor_index;
       nk_draw_null_texture null;
@@ -88,7 +91,7 @@ namespace devils_engine {
 //       sol::object moonnuklear_ctx;
 //       sol::object moonnuklear_font;
       
-      context(yavf::Device* device, render::window* window);
+      context(yavf::Device* device, render::window* window, render::image_container* container);
       ~context();
       void remake_font_atlas(const uint32_t &window_width, const uint32_t &window_height);
     };

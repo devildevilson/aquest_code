@@ -104,6 +104,7 @@ struct nk_context;
 
 #define ID_ARRAY "id_array"
 #define STATS_ARRAY "stats_array"
+#define STATS_V2_ARRAY "stats_v2_array"
 #define MODIFIERS_ARRAY "modifiers_array"
 #define STAT_ID "stat"
 #define INDEX_ARRAY "index_array"

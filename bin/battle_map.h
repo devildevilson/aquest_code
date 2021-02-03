@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <mutex>
 #include <array>
+#include <vector>
 #include "utils/utility.h"
 #include "utils/bit_field.h"
 #include "render/shared_battle_structures.h"
@@ -38,6 +39,12 @@ namespace yavf {
 // улицы городов - 1 тайл, самая сложная постройка это ворота: если я хочу визуально высокие стены, то мне возможно потребуется сделать 
 // что то вроде уровней высот, либо сделать как в age of wonders (просто тайл с воротами), еще вариант сделать как в героях:
 // целый тайл под стены, без возможности на них забираться (но это будет выглядеть тупо в варгейме)
+
+// нужно сейчас сделать камеру, и получше управление ей, например передвижение и установление камеры на определенном тайле
+// ну и в целом переделать управление, управление интерфейсом у меня сделано по слоям
+// вообще все больше склоняюсь к тому что придется сделать свои функции интерфейса
+// интерфейс бы сделать по возможности таким же функциональным как и в цк3, по крайней мере
+// нужно учесть нажатие клавиш чтобы происходило только на определенном слое
 
 namespace devils_engine {
   namespace battle {
@@ -114,6 +121,8 @@ namespace devils_engine {
       uint32_t height;
       utils::bit_field_32<1> type;
       uint32_t tiles_count;
+      uint32_t units_count;
+      uint32_t textures_count;
       
       yavf::Device* device;
       
@@ -128,6 +137,10 @@ namespace devils_engine {
       yavf::Buffer* tiles_buffer;
       yavf::Buffer* offsets_buffer;
       yavf::Buffer* biomes_buffer;
+      // сколько выделять для юнитов
+      yavf::Buffer* units_buffer;
+      // тип нужно последовательно добавить все текстурки
+      yavf::Buffer* textures_buffer;
       yavf::DescriptorSet* set;
       
       // как при отрисовке определить положение тайла? у нас есть базовый тайл в (0,0)
@@ -161,7 +174,13 @@ namespace devils_engine {
       void set_tile_biome(const uint32_t &tile_index, const uint32_t &biome_index);
       uint32_t get_tile_biome(const uint32_t &tile_index) const;
       
+      void set_units_count(const uint32_t &count);
+      render::unit_t get_unit_data(const uint32_t &index) const;
+      void set_unit_data(const uint32_t &index, const render::unit_t &data);
+      
       void set_biomes(const std::array<render::battle_biome_data_t, BATTLE_BIOMES_MAX_COUNT> &data);
+      
+      void add_unit_textures(const std::vector<render::image_t> &array);
     };
   }
 }

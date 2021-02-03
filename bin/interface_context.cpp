@@ -4,6 +4,7 @@
 // #include "Helper.h"
 #include "utils/globals.h"
 #include "render/container.h"
+#include "render/image_container.h"
 
 #include <fstream>
 #include "nlohmann/json.hpp"
@@ -132,7 +133,7 @@ namespace devils_engine {
       file.read(mem.data(), length);
     }
     
-    context::context(yavf::Device* device, render::window* window) : device(device) {
+    context::context(yavf::Device* device, render::window* window, render::image_container* container) : device(device), container(container) {
       nlohmann::json j;
       {
         std::fstream file(global::root_directory()+"fonts/fonts.json");
@@ -149,6 +150,8 @@ namespace devils_engine {
       
       std::vector<fonts_settings2> fonts_data(fonts::count);
       load_font_settings(j, fonts_data);
+      
+      null.texture = nk_handle_image(render::image_t{GPU_UINT_MAX});
 
       nk_buffer_init_default(&cmds);
 
@@ -190,10 +193,17 @@ namespace devils_engine {
 
           const size_t imageSize = w * h * 4;
           memcpy(staging->ptr(), image, imageSize);
+          
+          container->create_pool(0, {static_cast<uint32_t>(w), static_cast<uint32_t>(h)}, 1, 1);
+          const auto cont_img = container->get_image(0);
+          font_atlas_image = render::create_image(render::get_image_index(cont_img), render::get_image_layer(cont_img), 2);
+          auto pool = container->get_pool(0);
+          //pool->image
 
-          img = device->create(yavf::ImageCreateInfo::texture2D({static_cast<uint32_t>(w), static_cast<uint32_t>(h)},
-                                                                VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT),
-                              VMA_MEMORY_USAGE_GPU_ONLY);
+//           img = device->create(yavf::ImageCreateInfo::texture2D({static_cast<uint32_t>(w), static_cast<uint32_t>(h)},
+//                                                                 VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT),
+//                               VMA_MEMORY_USAGE_GPU_ONLY);
+          img = pool->image;
 
           yavf::TransferTask* task = device->allocateTransferTask();
 
@@ -210,58 +220,58 @@ namespace devils_engine {
           device->deallocate(task);
           device->destroy(staging);
 
-          view = img->createView(VK_IMAGE_VIEW_TYPE_2D, {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1});
+          //view = img->createView(VK_IMAGE_VIEW_TYPE_2D, {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1});
 
           // тут нужен еще сэмплер и дескриптор
-          yavf::Sampler sampler;
-          {
-            auto container = global::get<render::container>();
-            int enable = VK_FALSE;
-            float level = 1.0f;
-            if (container->is_properties_presented(render::container::physical_device_sampler_anisotropy)) {
-              enable = VK_TRUE;
-              level = 16.0f;
-            }
-            
-            yavf::SamplerMaker sm(device);
+//           yavf::Sampler sampler;
+//           {
+//             auto container = global::get<render::container>();
+//             int enable = VK_FALSE;
+//             float level = 1.0f;
+//             if (container->is_properties_presented(render::container::physical_device_sampler_anisotropy)) {
+//               enable = VK_TRUE;
+//               level = 16.0f;
+//             }
+//             
+//             yavf::SamplerMaker sm(device);
+// 
+//             sampler = sm.addressMode(VK_SAMPLER_ADDRESS_MODE_REPEAT, VK_SAMPLER_ADDRESS_MODE_REPEAT)
+//                         .anisotropy(enable, level)
+//                         .borderColor(VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK)
+//                         .compareOp(VK_FALSE, VK_COMPARE_OP_GREATER)
+//                         .filter(VK_FILTER_NEAREST, VK_FILTER_NEAREST)
+//                         .lod(0.0f, 1.0f)
+//                         .mipmapMode(VK_SAMPLER_MIPMAP_MODE_NEAREST)
+//                         .unnormalizedCoordinates(VK_FALSE)
+//                         .create("default_nuklear_sampler");
+// 
+//     //         img->setSampler(sampler);
+//           }
 
-            sampler = sm.addressMode(VK_SAMPLER_ADDRESS_MODE_REPEAT, VK_SAMPLER_ADDRESS_MODE_REPEAT)
-                        .anisotropy(enable, level)
-                        .borderColor(VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK)
-                        .compareOp(VK_FALSE, VK_COMPARE_OP_GREATER)
-                        .filter(VK_FILTER_NEAREST, VK_FILTER_NEAREST)
-                        .lod(0.0f, 1.0f)
-                        .mipmapMode(VK_SAMPLER_MIPMAP_MODE_NEAREST)
-                        .unnormalizedCoordinates(VK_FALSE)
-                        .create("default_nuklear_sampler");
-
-    //         img->setSampler(sampler);
-          }
-
-          {
-            yavf::DescriptorPool pool = device->descriptorPool(DEFAULT_DESCRIPTOR_POOL_NAME);
-            yavf::DescriptorSetLayout sampled_image_layout = device->setLayout(SAMPLED_IMAGE_LAYOUT_NAME);
-            {
-              yavf::DescriptorLayoutMaker dlm(device);
-
-              if (sampled_image_layout == VK_NULL_HANDLE) {
-                sampled_image_layout = dlm.binding(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT).create(SAMPLED_IMAGE_LAYOUT_NAME);
-              }
-            }
-
-            yavf::DescriptorMaker dm(device);
-
-            auto d = dm.layout(sampled_image_layout).create(pool)[0];
-
-            const size_t i = d->add({sampler, view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 0, 0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER});
-            view->setDescriptor(d, i);
-            atlas_descriptor = d;
-            descriptor_index = i;
-          }
+//           {
+//             yavf::DescriptorPool pool = device->descriptorPool(DEFAULT_DESCRIPTOR_POOL_NAME);
+//             yavf::DescriptorSetLayout sampled_image_layout = device->setLayout(SAMPLED_IMAGE_LAYOUT_NAME);
+//             {
+//               yavf::DescriptorLayoutMaker dlm(device);
+// 
+//               if (sampled_image_layout == VK_NULL_HANDLE) {
+//                 sampled_image_layout = dlm.binding(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT).create(SAMPLED_IMAGE_LAYOUT_NAME);
+//               }
+//             }
+// 
+//             yavf::DescriptorMaker dm(device);
+// 
+//             auto d = dm.layout(sampled_image_layout).create(pool)[0];
+// 
+//             const size_t i = d->add({sampler, view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 0, 0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER});
+//             view->setDescriptor(d, i);
+//             atlas_descriptor = d;
+//             descriptor_index = i;
+//           }
         }
 
         //nk_font_atlas_end(&atlas, nk_handle_ptr(view), &null);
-        nk_font_atlas_end(&atlas, nk_handle_image(render::image_t{UINT32_MAX}), &null);
+        nk_font_atlas_end(&atlas, nk_handle_image(font_atlas_image), &null);
       }
 
       nk_init_default(&ctx, &fonts[fonts::technical]->handle);
@@ -279,8 +289,10 @@ namespace devils_engine {
     
     void context::remake_font_atlas(const uint32_t &window_width, const uint32_t &window_height) {
       nk_font_atlas_clear(&atlas);
-      device->destroy(view->image());
+      //device->destroy(view->image());
+      container->destroy_pool(0);
       memset(fonts, 0, sizeof(fonts[0]) * fonts::count);
+      null.texture = nk_handle_image(render::image_t{GPU_UINT_MAX});
       
       // нужно определиться к каким размерам экрана подгонять размер шрифта
       static const float data_window_height = 720.0f;
@@ -333,10 +345,16 @@ namespace devils_engine {
 
           const size_t imageSize = w * h * 4;
           memcpy(staging->ptr(), image, imageSize);
+          
+          container->create_pool(0, {static_cast<uint32_t>(w), static_cast<uint32_t>(h)}, 1, 1);
+          const auto cont_img = container->get_image(0);
+          font_atlas_image = render::create_image(render::get_image_index(cont_img), render::get_image_layer(cont_img), 2);
+          auto pool = container->get_pool(0);
 
-          img = device->create(yavf::ImageCreateInfo::texture2D({static_cast<uint32_t>(w), static_cast<uint32_t>(h)},
-                                                                VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT),
-                              VMA_MEMORY_USAGE_GPU_ONLY);
+//           img = device->create(yavf::ImageCreateInfo::texture2D({static_cast<uint32_t>(w), static_cast<uint32_t>(h)},
+//                                                                 VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT),
+//                               VMA_MEMORY_USAGE_GPU_ONLY);
+          img = pool->image;
 
           yavf::TransferTask* task = device->allocateTransferTask();
 
@@ -353,20 +371,20 @@ namespace devils_engine {
           device->deallocate(task);
           device->destroy(staging);
 
-          view = img->createView(VK_IMAGE_VIEW_TYPE_2D, {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1});
+          //view = img->createView(VK_IMAGE_VIEW_TYPE_2D, {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1});
 
           // тут нужен еще сэмплер и дескриптор
-          yavf::Sampler sampler = device->sampler("default_nuklear_sampler");
+//           yavf::Sampler sampler = device->sampler("default_nuklear_sampler");
 
-          { 
-            atlas_descriptor->at(descriptor_index) = {sampler, view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 0, 0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER};
-            view->setDescriptor(atlas_descriptor, descriptor_index);
-            atlas_descriptor->update(descriptor_index);
-          }
+//           { 
+//             atlas_descriptor->at(descriptor_index) = {sampler, view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 0, 0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER};
+//             view->setDescriptor(atlas_descriptor, descriptor_index);
+//             atlas_descriptor->update(descriptor_index);
+//           }
         }
 
         //nk_font_atlas_end(&atlas, nk_handle_ptr(view), &null);
-        nk_font_atlas_end(&atlas, nk_handle_image(render::image_t{UINT32_MAX}), &null);
+        nk_font_atlas_end(&atlas, nk_handle_image(font_atlas_image), &null);
       }
       
       nk_style_set_font(&ctx, &fonts[fonts::technical]->handle);

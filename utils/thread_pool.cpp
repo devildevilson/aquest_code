@@ -115,6 +115,18 @@ namespace dt {
       return tasks.empty() && (busyWorkersCount == 0);
     });
   }
+  
+//   void thread_pool::stop_works() {
+//     {
+//       std::unique_lock<std::mutex> lock(this->mutex);
+//       stop = true;
+//       condition.notify_all();
+//     }
+// 
+//     for(auto &worker : workers) {
+//       if (worker.joinable()) worker.join();
+//     }
+//   }
 
   bool thread_pool::is_dependent(const std::thread::id &id) const {
     for (size_t i = 0; i < workers.size(); ++i) {

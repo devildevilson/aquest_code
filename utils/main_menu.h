@@ -4,9 +4,15 @@
 #include <string>
 #include <stack>
 #include <unordered_map>
-#include "utility.h"
+#include "parallel_hashmap/phmap.h"
+//#include "utility.h"
+#include "game_enums.h"
 
 namespace devils_engine {
+  namespace input {
+    struct keys;
+  }
+  
   namespace utils {
     struct interface_container;
     
@@ -21,8 +27,10 @@ namespace devils_engine {
       };
       
       std::stack<entry> menu_stack;
-      std::unordered_map<std::string, uint32_t> menu_types;
+      //std::unordered_map<std::string, uint32_t> menu_types;
+      phmap::flat_hash_map<std::string, uint32_t> menu_types;
       interface_container* container;
+      input::keys* prev_key_map;
       
       bool m_quit_game;
       std::string loading_path; 
@@ -37,7 +45,7 @@ namespace devils_engine {
       void quit_game();
       std::string_view current_entry() const;
       void clear();
-      bool advance_state(game_state &current, game_state &new_state);
+      bool advance_state(game::values &current, game::values &new_state);
     };
   }
 }

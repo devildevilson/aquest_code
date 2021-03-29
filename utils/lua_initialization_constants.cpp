@@ -2,9 +2,18 @@
 
 #include "utility.h"
 #include "progress_container.h"
+#include "magic_enum.hpp"
+
+#define MAX_SAFE_INTEGER uint64_t(9007199254740991)
 
 namespace devils_engine {
   namespace utils {
+    constexpr uint64_t get_power_of_2(const uint32_t &p) {
+      return 1 << p;
+    }
+    
+    static_assert(std::is_same_v<double, LUA_NUMBER>);
+    
     void setup_lua_constants(sol::state_view lua) {
       //auto constants = lua["constants"].get_or_create<sol::table>();
       auto t1 = lua.create_table_with(
@@ -40,6 +49,9 @@ namespace devils_engine {
         "epsilon", EPSILON,
         "size_max", -1,
         "uint32_max", UINT32_MAX,
+        "int32_max", INT32_MAX,
+        "int32_min", INT32_MIN,
+        "max_safe_integer", MAX_SAFE_INTEGER,
         "loading_type", t1
       );
 
@@ -47,7 +59,7 @@ namespace devils_engine {
       target.set_function("rad_to_deg", [] (const double &rad) { return RAD_TO_DEG(rad); });
 
       sol::table x = lua.create_table_with(sol::meta_function::new_index, sol::detail::fail_on_newindex, sol::meta_function::index, target);
-      lua["constants"] = lua.create_table(0, 0, sol::metatable_key, x);
+      lua[magic_enum::enum_name<reserved_lua::values>(reserved_lua::constants)] = lua.create_table(0, 0, sol::metatable_key, x);
 
 //       auto progress = lua.new_usertype<utils::progress_container>("progress_container",
 //         "current_progress", &utils::progress_container::current_progress,

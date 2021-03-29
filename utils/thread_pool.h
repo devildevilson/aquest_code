@@ -74,6 +74,7 @@ namespace dt {
     void compute();
     void compute(const size_t &count);
     void wait(); // просто ждет всех
+//     void stop_works();
 
     bool is_dependent(const std::thread::id &id) const;
     uint32_t thread_index(const std::thread::id &id) const;

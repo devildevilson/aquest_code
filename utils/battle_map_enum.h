@@ -13,6 +13,14 @@ namespace devils_engine {
     };
     
     using battle_map_string_container = container_strings<static_cast<size_t>(battle_strings::count)>;
+    
+    enum class world_map_strings {
+      tile_biome_id,
+      
+      count
+    };
+    
+    using world_map_string_container = container_strings<static_cast<size_t>(world_map_strings::count)>;
   }
 }
 

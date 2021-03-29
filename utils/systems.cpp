@@ -14,6 +14,7 @@
 #include "settings.h"
 #include "astar_search.h"
 #include "battle_lua_states.h"
+#include "string_bank.h"
 
 #include "render/window.h"
 #include "render/render.h"
@@ -65,7 +66,8 @@ namespace devils_engine {
     
     core_t::core_t() :
       container(
-        sizeof(input::data) +
+        //sizeof(input::data) +
+        sizeof(input::keys) * player::states_count +
         sizeof(devils_engine::render::container) +
         sizeof(render::slots) +
         sizeof(render::image_container) +
@@ -79,9 +81,11 @@ namespace devils_engine {
         sizeof(utils::calendar) +
         sizeof(utils::progress_container) +
         sizeof(utils::objects_selector) +
-        sizeof(struct path_managment)
+        sizeof(struct path_managment) +
+        sizeof(utils::localization)
       ),
-      input_data(nullptr),
+      //input_data(nullptr),
+      keys_mapping{nullptr},
       graphics_container(nullptr),
       render_slots(nullptr),
       image_container(nullptr),
@@ -95,15 +99,21 @@ namespace devils_engine {
       game_calendar(nullptr),
       loading_progress(nullptr),
       objects_selector(nullptr),
-      path_managment(nullptr)
-    {}
+      path_managment(nullptr),
+      loc(nullptr)
+    {
+      ASSERT(keys_mapping[1] == nullptr);
+    }
     
     core_t::~core_t() {
       RELEASE_CONTAINER_DATA(render_slots)
       RELEASE_CONTAINER_DATA(image_container)
       RELEASE_CONTAINER_DATA(image_controller)
       RELEASE_CONTAINER_DATA(context)
-      RELEASE_CONTAINER_DATA(input_data)
+      //RELEASE_CONTAINER_DATA(input_data)
+      for (size_t i = 0; i < player::states_count; ++i) {
+        RELEASE_CONTAINER_DATA(keys_mapping[i])
+      }
       RELEASE_CONTAINER_DATA(graphics_container)
       RELEASE_CONTAINER_DATA(interface)
       RELEASE_CONTAINER_DATA(menu)
@@ -114,6 +124,7 @@ namespace devils_engine {
       RELEASE_CONTAINER_DATA(loading_progress)
       RELEASE_CONTAINER_DATA(objects_selector)
       RELEASE_CONTAINER_DATA(path_managment)
+      RELEASE_CONTAINER_DATA(loc)
     }
     
     void core_t::create_utility_systems() {
@@ -128,8 +139,11 @@ namespace devils_engine {
       const size_t seed = (size_t(v2) << 32) | size_t(v1);
       global g;
       g.initialize_state(seed);
-      input_data = container.create<input::data>();
-      global::get(input_data);
+      //input_data = container.create<input::data>();
+      //global::get(input_data);
+      for (size_t i = 0; i < player::states_count; ++i) {
+        keys_mapping[i] = container.create<input::keys>();
+      }
 //       global g;
 //       g.initialize_state(1);
       
@@ -137,6 +151,7 @@ namespace devils_engine {
       
       objects_selector = container.create<utils::objects_selector>();
       path_managment = container.create<struct path_managment>(std::thread::hardware_concurrency());
+      loc = container.create<utils::localization>();
       
       global::get(objects_selector);
       global::get(path_managment);
@@ -220,6 +235,8 @@ namespace devils_engine {
       
       context = container.create<interface::context>(graphics_container->device, window, image_container);
       global::get(context);
+      
+      image_controller->update_set();
       
 //       render::create_persistent_resources(graphics_container->device);
     }
@@ -791,7 +808,7 @@ namespace devils_engine {
       //ASSERT(map_creator == nullptr);
       if (map_creator != nullptr) return;
       auto systems = global::get<core_t>();
-      map_creator = container.create<map::creator, 5>(systems->interface_container, map, seasons); // map::creator занимает 5 кб
+      map_creator = container.create<map::creator, 5>(systems->interface_container, map, seasons, systems->loc); // map::creator занимает 5 кб
       //map_creator = new map::creator(systems->interface);
     }
     
@@ -899,7 +916,7 @@ namespace devils_engine {
       
       const size_t optimizators_size = sizeof(render::battle::tile_optimizer);
         
-      const size_t render_size = sizeof(render::battle::tile_render) + sizeof(render::battle::biome_render);
+      const size_t render_size = sizeof(render::battle::tile_render) + sizeof(render::battle::biome_render) + sizeof(render::battle::units_render);
       
       ASSERT(optimizators_container == nullptr);
       ASSERT(render_container == nullptr);
@@ -912,6 +929,7 @@ namespace devils_engine {
       auto opt1 = optimizators_container->add_stage<render::battle::tile_optimizer>(render::battle::tile_optimizer::create_info{device});
       render_container->add_stage<render::battle::tile_render>(render::battle::tile_render::create_info{device, opt1});
       render_container->add_stage<render::battle::biome_render>(render::battle::biome_render::create_info{device, opt1});
+      render_container->add_stage<render::battle::units_render>(render::battle::units_render::create_info{device, opt1});
 //       systems->render_slots->set_stage(2, optimizators_container);
 //       systems->render_slots->set_stage(7, render_container);
       

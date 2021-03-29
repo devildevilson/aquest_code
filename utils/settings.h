@@ -5,6 +5,7 @@
 #include <string>
 #include <unordered_map>
 #include "id.h"
+#include "input.h"
 
 namespace devils_engine {
   namespace utils {
@@ -44,22 +45,27 @@ namespace devils_engine {
       };
       
       struct keys {
+        using itr_type = phmap::flat_hash_map<utils::id, input::keys::event_keys_container>::iterator;
+        
         // эвенты и две кнопки? нужно наверное еще описание какое и название не техническое
         //std::unordered_map<id, std::pair<int, int>> mapping;
         utils::id awaiting_key;
+        uint32_t container_for_event;
         //void* key_iterator;
-        size_t key_iterator;
+        //size_t key_iterator;
+        uint32_t container_for_iteration;
+        itr_type current_iterator;
         
         keys();
         void setup_default_mapping();
-        // тут я так понимаю должен быть скорее интерфейс к мапе в инпуте
+        // как указать что мы сейчас заполняем?
         // 
         bool is_awaits_key() const;
-        utils::id event_awaiting_key() const;
-        bool sey_key_to(const utils::id &event_id);
+        utils::id event_awaits_key() const;
+        bool sey_key_to(const uint32_t &container_for_event, const utils::id &event_id);
         void update(const int key);
-        size_t events_count() const;
-        std::tuple<utils::id, int, int> get_next_event(const uint32_t &type);
+        size_t events_count(const uint32_t &container_for_iteration) const;
+        std::tuple<utils::id, int, int> get_next_event(const uint32_t &container);
       };
       
       // звуки, и все видимо

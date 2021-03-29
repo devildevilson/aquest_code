@@ -16,6 +16,8 @@ namespace devils_engine {
       bool load(quest_state* prev_state) override;
       void update(const size_t &time) override;
       void clean() override; // чистим главное меню
+//       void mouse_input(const size_t &time, const uint32_t &tile_index) override;
+//       void key_input(const size_t &time, const bool loading) override;
     };
     
     class map_creation_state : public quest_state {
@@ -25,6 +27,8 @@ namespace devils_engine {
       bool load(quest_state* prev_state) override;
       void update(const size_t &time) override;
       void clean() override;
+//       void mouse_input(const size_t &time, const uint32_t &tile_index) override;
+//       void key_input(const size_t &time, const bool loading) override;
     };
     
     class world_map_state : public quest_state {
@@ -34,6 +38,8 @@ namespace devils_engine {
       bool load(quest_state* prev_state) override;
       void update(const size_t &time) override;
       void clean() override;
+//       void mouse_input(const size_t &time, const uint32_t &tile_index) override;
+//       void key_input(const size_t &time, const bool loading) override;
     };
     
     class battle_state : public quest_state {
@@ -46,6 +52,8 @@ namespace devils_engine {
       bool load(quest_state* prev_state) override;
       void update(const size_t &time) override;
       void clean() override;
+//       void mouse_input(const size_t &time, const uint32_t &tile_index) override;
+//       void key_input(const size_t &time, const bool loading) override;
       
       void create_state();
       void destroy_state();
@@ -61,6 +69,8 @@ namespace devils_engine {
       bool load(quest_state* prev_state) override;
       void update(const size_t &time) override;
       void clean() override;
+//       void mouse_input(const size_t &time, const uint32_t &tile_index) override;
+//       void key_input(const size_t &time, const bool loading) override;
     };
   }
 }

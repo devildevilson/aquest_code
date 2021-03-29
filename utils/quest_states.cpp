@@ -12,6 +12,8 @@
 #include "bin/battle_map.h"
 #include "render/image_controller.h"
 #include "render/battle_render_stages.h"
+#include "utils/input.h"
+#include "utils/game_enums.h"
 
 namespace devils_engine {
   namespace utils {
@@ -38,10 +40,20 @@ namespace devils_engine {
       table["hint3"] = prog->get_hint3();
       table["type"] = prog->get_type();
     }
+    
+    void set_up_input_keys(const uint32_t &state) {
+      auto core = global::get<systems::core_t>();
+      ASSERT(state < player::states_count);
+      auto key_map_ptr = core->keys_mapping[state];
+      input::block();
+      input::set_key_map(key_map_ptr);
+      input::unblock();
+    }
 
     main_menu_state::main_menu_state() : quest_state(main_menu) {}
     void main_menu_state::enter() {
       // эта функция будет запускаться перед загрузкой
+      set_up_input_keys(player::in_menu);
     }
 
     bool main_menu_state::load(quest_state* prev_state) {
@@ -61,17 +73,18 @@ namespace devils_engine {
     void main_menu_state::update(const size_t &time) {
       (void)time;
       auto base = global::get<systems::core_t>();
-      game_state current_state = game_state::menu;
-      game_state new_state = game_state::menu;
+      auto current_state = game::menu;
+      auto new_state = game::menu;
       if (base->menu->advance_state(current_state, new_state)) {
         switch (new_state) {
-          case game_state::map: m_next_state = quest_state::world_map; break;
-          case game_state::create_map: m_next_state = quest_state::map_creation; break;
-          case game_state::menu: break;
-          case game_state::battle: m_next_state = quest_state::battle; break;
-          case game_state::encounter: m_next_state = quest_state::encounter; break;
-          case game_state::loading:
-          case game_state::count: throw std::runtime_error("What should I do?");
+          case game::map: m_next_state = quest_state::world_map; break;
+          case game::create_map: m_next_state = quest_state::map_creation; break;
+          case game::menu: break;
+          case game::battle: m_next_state = quest_state::battle; break;
+          case game::encounter: m_next_state = quest_state::encounter; break;
+          case game::loading:
+          case game::count: 
+          default: throw std::runtime_error("What should I do?");
         }
       }
     }
@@ -82,7 +95,35 @@ namespace devils_engine {
       //base->interface_container->close_all();
       //base->interface_container->collect_garbage();
       m_next_state = UINT32_MAX;
+      set_up_input_keys(player::in_menu);
     }
+    
+//     void main_menu_state::mouse_input(const size_t &time, const uint32_t &tile_index) {
+//       // тут че? по умолчанию мы прост выходим
+//       UNUSED_VARIABLE(time);
+//       UNUSED_VARIABLE(tile_index);
+//     }
+//     
+//     void main_menu_state::key_input(const size_t &time, const bool loading) {
+//       // тут по идее просто проверка на выход из меню
+//       // в общем я чет подумал что это плохая идея
+//       // но при этом было бы неплохо разделить все же поведение
+//       // у разных состояний игры, чтобы не захламлять функцию
+//       
+//       auto s = global::get<systems::core_t>();
+//       const bool get_menu = current_state != utils::quest_state::map_creation &&
+//                             //current_state != game_state::loading &&
+//                             input::check_key(GLFW_KEY_ESCAPE, input::state::state_click | input::state::state_double_click | input::state::state_long_click);
+//       const bool last_menu = current_state == utils::quest_state::main_menu && s->menu->menu_stack.size() == 1;
+//       if (!loading && get_menu) {
+//         if (s->interface->escape()) return;
+//         if (!s->menu->exist()) {
+//           if (current_state == utils::quest_state::main_menu) s->menu->push("main_menu");
+//           else s->menu->push("main_menu_map");
+//         } else if (!last_menu) s->menu->escape();
+//         return;
+//       }
+//     }
 
 //     uint32_t main_menu_state::next_state() const {
 //       return m_next_state;
@@ -119,6 +160,8 @@ namespace devils_engine {
       
       if (prog->get_value() == 3) {
         systems::from_menu_to_create_map(prog);
+        auto map = global::get<systems::map_t>();
+        map->start_rendering();
         systems::advance_progress(prog, "end");
         ASSERT(prog->finished());
       }
@@ -145,6 +188,7 @@ namespace devils_engine {
         base->interface_container->close_all();
         base->interface_container->collect_garbage();
         prog->reset();
+        set_up_input_keys(player::on_global_map);
         return true;
       }
 
@@ -173,6 +217,7 @@ namespace devils_engine {
       }
 
       m_next_state = UINT32_MAX;
+      set_up_input_keys(player::in_menu);
     }
 
     world_map_state::world_map_state() : quest_state(world_map) {}
@@ -241,6 +286,7 @@ namespace devils_engine {
         base->interface_container->close_all();
         base->interface_container->collect_garbage();
         prog->reset();
+        set_up_input_keys(player::on_global_map);
         return true;
       }
 
@@ -252,16 +298,18 @@ namespace devils_engine {
       game::advance_state();
 
       auto base = global::get<systems::core_t>();
-      game_state current_state = game_state::map;
-      game_state new_state = game_state::map;
+      auto current_state = game::map;
+      auto new_state = game::map;
+      // переход от карты к битве или столновению происходит не из меню
+      // хотя там можно это дело запомнить
       if (base->menu->advance_state(current_state, new_state)) {
         switch (new_state) {
-          case game_state::map: break;
-          case game_state::menu: m_next_state = quest_state::main_menu; break;
-          case game_state::battle: m_next_state = quest_state::battle; break;
-          case game_state::encounter: m_next_state = quest_state::encounter; break;
-          case game_state::create_map:
-          case game_state::loading:
+          case game::map: break;
+          case game::menu: m_next_state = quest_state::main_menu; break;
+          case game::battle: m_next_state = quest_state::battle; break;
+          case game::encounter: m_next_state = quest_state::encounter; break;
+          case game::create_map:
+          case game::loading:
           default: throw std::runtime_error("What should I do?");
         }
       }
@@ -296,6 +344,7 @@ namespace devils_engine {
       }
       
       m_next_state = UINT32_MAX;
+      set_up_input_keys(player::in_menu);
     }
     
     struct battle_state::battle_generator_data {
@@ -330,11 +379,13 @@ namespace devils_engine {
       //ASSERT(false);
       // тут создадим карту битв, или не тут? мы вполне можем создать позже
       // загрузку скрыть за картинкой и тогда непосредственно контейнер мы можем создать позже
+      // нет, контейнер нам нужен для заполнения некоторых значений при генерации
       
       auto battle = global::get<systems::battle_t>();
       battle->create_map_container();
       battle->create_render_stages();
       
+      // тут у нас создалась карта, но вот количество юнитов еще недоступно
       global::get<render::battle::tile_optimizer>()->update_containers();
       
       battle->start_rendering();
@@ -435,6 +486,7 @@ namespace devils_engine {
         prog->reset();
         //battle->release_generator_data();
         destroy_state();
+        set_up_input_keys(player::on_battle_map);
         return true;
       }
       
@@ -446,6 +498,7 @@ namespace devils_engine {
       auto battle = global::get<systems::battle_t>();
       battle->stop_rendering();
       battle->release_container();
+      set_up_input_keys(player::in_menu);
     }
     
     void battle_state::create_state() { ctx = new battle_generator_data; }
@@ -456,8 +509,8 @@ namespace devils_engine {
       ASSERT(false);
     }
 
-    bool encounter_state::load(quest_state* prev_state) { UNUSED_VARIABLE(prev_state); return false; }
+    bool encounter_state::load(quest_state* prev_state) { UNUSED_VARIABLE(prev_state); set_up_input_keys(player::on_hero_battle_map); return false; }
     void encounter_state::update(const size_t &time) { UNUSED_VARIABLE(time); }
-    void encounter_state::clean() {}
+    void encounter_state::clean() { set_up_input_keys(player::in_menu); }
   }
 }

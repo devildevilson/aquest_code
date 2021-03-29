@@ -1,12 +1,14 @@
 #include "lua_initialization_internal.h"
 
 #include "bin/core_structures.h"
+#include "lua_initialization.h"
+#include "magic_enum.hpp"
 
 namespace devils_engine {
   namespace utils {
     namespace internal {
       void setup_lua_province(sol::state_view lua) {
-        auto core = lua["core"].get_or_create<sol::table>();
+        auto core = lua[magic_enum::enum_name<reserved_lua::core>()].get_or_create<sol::table>();
         sol::usertype<core::province> province_type = core.new_usertype<core::province>("province",
           sol::no_constructor,
           "title", sol::readonly(&core::province::title),

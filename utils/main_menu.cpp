@@ -4,6 +4,7 @@
 #include "demiurge.h"
 #include "settings.h"
 #include "globals.h"
+#include "systems.h"
 #include <iostream>
 
 namespace devils_engine {
@@ -60,7 +61,7 @@ namespace devils_engine {
       return sol::make_object(lua, sol::nil);
     }
     
-    main_menu::main_menu(interface_container* container) : container(container), m_quit_game(false) {
+    main_menu::main_menu(interface_container* container) : container(container), prev_key_map(nullptr), m_quit_game(false) {
       menu_types.insert(std::make_pair("main_menu", invalid));            // я так понимаю создание даже меню будет не здесь
       menu_types.insert(std::make_pair("main_menu_map", invalid));
       menu_types.insert(std::make_pair("worlds_window", worlds_manager));
@@ -74,6 +75,13 @@ namespace devils_engine {
       if (!exist() && (menu != "main_menu" && menu != "main_menu_map")) throw std::runtime_error("Trying to open main_menu from unknown source");
       auto itr = menu_types.find(menu);
       if (itr == menu_types.end()) throw std::runtime_error("Could not find menu " + menu);
+      
+      if (!exist()) {
+        prev_key_map = input::get_key_map();
+        auto map = global::get<systems::core_t>()->keys_mapping[player::in_menu];
+        input::set_key_map(map);
+      }
+      
       //std::cout << "main_menu::push " << menu << "\n";
       menu_stack.emplace(itr->first, itr->second, container);
       // нужен тип
@@ -91,7 +99,12 @@ namespace devils_engine {
       if (!exist()) return;
       container->close_layer(menu_layer);
       menu_stack.pop();
-      if (!exist()) return;
+      if (!exist()) {
+        ASSERT(prev_key_map != nullptr);
+        input::set_key_map(prev_key_map);
+        prev_key_map = nullptr;
+        return;
+      }
       container->open_layer(menu_layer, menu_stack.top().window_name, {sol::make_object(container->lua, this), make_object(container->lua, menu_stack.top().type, menu_stack.top().pointer)});
     }
     
@@ -109,7 +122,7 @@ namespace devils_engine {
       container->close_layer(menu_layer);
     }
     
-    bool main_menu::advance_state(game_state &current, game_state &new_state) {
+    bool main_menu::advance_state(game::values &current, game::values &new_state) {
       if (menu_stack.empty()) return false;
       const auto type = menu_stack.top().type;
       bool ret = false;
@@ -119,16 +132,16 @@ namespace devils_engine {
         case worlds_manager: {
           auto ptr = reinterpret_cast<demiurge*>(menu_stack.top().pointer);
           if (ptr->status() == demiurge::status::create_new_world) {
-            current = game_state::loading;
-            new_state = game_state::create_map;
+            current = game::loading;
+            new_state = game::create_map;
             ret = true;
             break;
           }
           
           if (ptr->status() == demiurge::status::load_existing_world) {
             // а здесь нужно получить путь откуда грузить
-            current = game_state::loading;
-            new_state = game_state::map;
+            current = game::loading;
+            new_state = game::map;
             auto proxy = ptr->world(ptr->choosed())["path"];
             if (!proxy.valid()) throw std::runtime_error("Broken world table");
             if (proxy.get_type() != sol::type::string) throw std::runtime_error("Broken world table");
@@ -140,8 +153,8 @@ namespace devils_engine {
         case settings: break;
         case multiplayer_manager: break;
         case back_to_menu: {
-          current = game_state::menu;
-          new_state = game_state::menu;
+          current = game::menu;
+          new_state = game::menu;
           ret = true;
           break;
         }

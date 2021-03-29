@@ -3,12 +3,13 @@
 #include "bin/battle_map.h"
 #include "utils/battle_map_enum.h"
 #include "utils/globals.h"
+#include "magic_enum.hpp"
 
 namespace devils_engine {
   namespace utils {
     void setup_lua_battle_map(sol::state_view lua) {
-      auto battle = lua["battle"].get_or_create<sol::table>();
-      battle.new_usertype<battle::map>("map",
+      auto battle = lua[magic_enum::enum_name<reserved_lua::values>(reserved_lua::battle)].get_or_create<sol::table>();
+      battle.new_usertype<battle::map>("map", sol::no_constructor,
         "is_square", &battle::map::is_square,
         "is_flat", &battle::map::is_flat,
         "is_odd", &battle::map::is_odd,

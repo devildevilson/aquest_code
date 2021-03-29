@@ -107,7 +107,7 @@ namespace devils_engine {
       uint64_t get_value(const state &s);
     }
     
-    namespace xoshiro1024star {
+    namespace xoroshiro1024star {
       const size_t state_size = 16;
       struct state { int32_t p; uint64_t s[state_size]; };
       state init(const uint64_t &seed);
@@ -115,7 +115,7 @@ namespace devils_engine {
       uint64_t get_value(const state &s);
     }
     
-    namespace xoshiro1024plusplus {
+    namespace xoroshiro1024plusplus {
       const size_t state_size = 16;
       struct state { int32_t p; uint64_t s[state_size]; };
       state init(const uint64_t &seed);
@@ -123,7 +123,7 @@ namespace devils_engine {
       uint64_t get_value(const state &s);
     }
     
-    namespace xoshiro1024starstar {
+    namespace xoroshiro1024starstar {
       const size_t state_size = 16;
       struct state { int32_t p; uint64_t s[state_size]; };
       state init(const uint64_t &seed);
@@ -240,14 +240,14 @@ namespace devils_engine {
     }
     
     // дефолтный
-    namespace rng {
-      const size_t state_size = xoroshiro128starstar::state_size;
-      using state = xoroshiro128starstar::state;
-      constexpr const auto init = xoroshiro128starstar::init;
-      constexpr const auto next = xoroshiro128starstar::rng;
-      constexpr const auto value = xoroshiro128starstar::get_value;
-      constexpr const auto normalize = rng_normalize;
-    }
+//     namespace rng {
+//       const size_t state_size = xoroshiro128starstar::state_size;
+//       using state = xoroshiro128starstar::state;
+//       constexpr const auto init = xoroshiro128starstar::init;
+//       constexpr const auto next = xoroshiro128starstar::rng;
+//       constexpr const auto value = xoroshiro128starstar::get_value;
+//       constexpr const auto normalize = rng_normalize;
+//     }
   }
 }
 

@@ -315,7 +315,7 @@ namespace devils_engine {
       }
     }
     
-    namespace xoshiro1024star {
+    namespace xoroshiro1024star {
       state init(const uint64_t &seed) {
         state new_state;
         splitmix64::state splitmix_states[state_size];
@@ -345,7 +345,7 @@ namespace devils_engine {
       }
     }
     
-    namespace xoshiro1024plusplus {
+    namespace xoroshiro1024plusplus {
       state init(const uint64_t &seed) {
         state new_state;
         splitmix64::state splitmix_states[state_size];
@@ -378,7 +378,7 @@ namespace devils_engine {
       }
     }
     
-    namespace xoshiro1024starstar {
+    namespace xoroshiro1024starstar {
       state init(const uint64_t &seed) {
         state new_state;
         splitmix64::state splitmix_states[state_size];

@@ -78,54 +78,48 @@ namespace devils_engine {
       return ret;
     }
     
-    const size_t state_size = xoshiro256starstar::state_size;
+    //const size_t state_size = xoshiro256starstar::state_size;
     using state = xoshiro256starstar::state;
-    constexpr const auto next = xoshiro256starstar::rng;
-    constexpr const auto value = xoshiro256starstar::get_value;
-    constexpr const auto normalize = rng_normalize;
-    static inline state seed_state(const uint64_t seed) {
-      state new_state;
-      splitmix64::state splitmix_states[state_size];
-      splitmix_states[0] = splitmix64::rng({seed});
-      for (uint32_t i = 1; i < state_size; ++i) splitmix_states[i] = splitmix64::rng(splitmix_states[i-1]);
-      for (uint32_t i = 0; i < state_size; ++i) new_state.s[i] = splitmix64::get_value(splitmix_states[i]);
-      return new_state;
-    }
+    using namespace xoshiro256starstar;
+//     static inline state seed_state(const uint64_t seed) {
+//       state new_state;
+//       splitmix64::state splitmix_states[state_size];
+//       splitmix_states[0] = splitmix64::rng({seed});
+//       for (uint32_t i = 1; i < state_size; ++i) splitmix_states[i] = splitmix64::rng(splitmix_states[i-1]);
+//       for (uint32_t i = 0; i < state_size; ++i) new_state.s[i] = splitmix64::get_value(splitmix_states[i]);
+//       return new_state;
+//     }
     
-    random_engine_st::random_engine_st() : s(seed_state(1)) {}
-    random_engine_st::random_engine_st(const uint64_t &seed) : s(seed_state(seed)) {}
+    random_engine_st::random_engine_st() : s(init(1)) {}
+    random_engine_st::random_engine_st(const uint64_t &seed) : s(init(seed)) {}
     void random_engine_st::set_seed(const uint64_t &seed) {
-      s = seed_state(seed);
+      s = init(seed);
     }
     
     uint64_t random_engine_st::num() {
-//       std::uniform_int_distribution<uint32_t> dis(0, UINT32_MAX-1);
-//       return dis(gen);
-      const uint64_t value = get_value(s);
-      s = next(s);
-      return value;
+      s = rng(s);
+      return get_value(s);
     }
     
     double random_engine_st::norm() {
-//       return float(num()) / float(UINT32_MAX-1);
-//       std::uniform_real_distribution<float> dis(0.0f, 1.0f);
-//       return dis(gen);
-      //const uint64_t value = get_value(s);
-      //s = next(s);
-      const double v = normalize(num());
+      const double v = utils::rng_normalize(num());
       ASSERT(v >= 0.0 && v <= 1.0);
       return v;
     }
     
     uint64_t random_engine_st::index(const uint64_t &size) {
       ASSERT(size != 0);
-      ASSERT(size != SIZE_MAX);
+      ASSERT(size != UINT64_MAX);
       if (size == 1) return 0;
-      //const uint32_t i = closed(uint64_t(0), size-1);
-      // скорее всего это лучший вариант для больших чисел
-      //const uint32_t i = closed(double(0), double(size)); // тут наверное нужно опустить вычитание
-      // зачем я использовал closed?
-      const uint64_t i = num() % size;
+      
+      //const uint64_t i = num() % size;
+      //const uint64_t i = random_at_most(size);
+      //const uint64_t i = norm() * double(size);
+      uint64_t i = UINT64_MAX;
+      while (i >= size) {
+        i = norm() * double(size);
+      }
+      
       ASSERT(i < size);
       return i;
     }
@@ -134,6 +128,7 @@ namespace devils_engine {
       return glm::normalize(glm::vec3(gaussian_distribution(0, 1), gaussian_distribution(0, 1), gaussian_distribution(0, 1)));
     }
     
+    // проверил в другом месте, кажется не работает
     uint64_t random_engine_st::random_at_most(const uint64_t &max) {
       ASSERT(max < UINT64_MAX-1);
       // max <= RAND_MAX < ULONG_MAX, so this is okay.
@@ -154,22 +149,42 @@ namespace devils_engine {
     // вообще еще говорят хороший способ, это умножение на число с плавающей точкой (понятное дело могут быть проблемы с точностью)
     // в double максимальное число 1.8*10^308 (против 1.8*10^19), может быть ошибка не столь значительна, посмотрим
     uint64_t random_engine_st::closed(const uint64_t &min, const uint64_t &max) {
+//       if (min == max) return 0;
+//       const uint64_t final_max = std::max(min, max);
+//       const uint64_t final_min = std::min(min, max);
+//       const uint64_t interval = final_max - final_min + 1;
+//       return random_at_most(interval) + final_min; // говорят что это гораздо лучшее распределение, чем формула ниже
+      //return (num() % (final_max - final_min + 1)) + final_min;
       if (min == max) return 0;
       const uint64_t final_max = std::max(min, max);
       const uint64_t final_min = std::min(min, max);
       const uint64_t interval = final_max - final_min + 1;
-      return random_at_most(interval) + final_min; // говорят что это гораздо лучшее распределение, чем формула ниже
-      //return (num() % (final_max - final_min + 1)) + final_min;
+      uint64_t val = UINT64_MAX;
+      while (val >= interval) {
+        val = norm() * double(interval);
+      }
+      
+      return val + final_min;
     }
     
     int64_t random_engine_st::closed(const int64_t &min, const int64_t &max) {
+//       if (min == max) return 0;
+//       const int64_t final_max = std::max(min, max);
+//       const int64_t final_min = std::min(min, max);
+//       const int64_t interval = final_max - final_min + 1;
+//       ASSERT(interval > 0);
+//       return random_at_most(interval) + final_min; // говорят что это гораздо лучшее распределение, чем формула ниже
+      //return (num() % (final_max - final_min + 1)) + final_min;
       if (min == max) return 0;
       const int64_t final_max = std::max(min, max);
       const int64_t final_min = std::min(min, max);
       const int64_t interval = final_max - final_min + 1;
-      ASSERT(interval > 0);
-      return random_at_most(interval) + final_min; // говорят что это гораздо лучшее распределение, чем формула ниже
-      //return (num() % (final_max - final_min + 1)) + final_min;
+      int64_t val = INT64_MAX;
+      while (val >= interval) {
+        val = norm() * double(interval);
+      }
+      
+      return val + final_min;
     }
     
     double random_engine_st::closed(const double &min, const double &max) {

@@ -55,3 +55,6 @@
 [submodule "include/parallel-hashmap"]
 	path = include/parallel-hashmap
 	url = https://github.com/greg7mdp/parallel-hashmap.git
+[submodule "include/lua-fmt"]
+	path = include/lua-fmt
+	url = https://github.com/starwing/lua-fmt.git

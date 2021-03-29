@@ -2,11 +2,12 @@
 
 #include "main_menu.h"
 #include "demiurge.h"
+#include "magic_enum.hpp"
 
 namespace devils_engine {
   namespace utils {
     void setup_lua_main_menu(sol::state_view lua) {
-      auto utils = lua["utils"].get_or_create<sol::table>();
+      auto utils = lua[magic_enum::enum_name<reserved_lua::values>(reserved_lua::utils)].get_or_create<sol::table>();
       auto main_menu = utils.new_usertype<utils::main_menu>("main_menu",
         sol::no_constructor,
         "push", &utils::main_menu::push,

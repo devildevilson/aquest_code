@@ -1,11 +1,12 @@
 #include "lua_initialization.h"
 
 #include "progress_container.h"
+#include "magic_enum.hpp"
 
 namespace devils_engine {
   namespace utils {
     void setup_lua_progress_container(sol::state_view lua) {
-      auto utils = lua["utils"].get_or_create<sol::table>();
+      auto utils = lua[magic_enum::enum_name<reserved_lua::values>(reserved_lua::utils)].get_or_create<sol::table>();
       utils.new_usertype<utils::progress_container>("progress_container", sol::no_constructor,
         "current_step", &utils::progress_container::get_value,
         "step_count", &utils::progress_container::get_max_value,

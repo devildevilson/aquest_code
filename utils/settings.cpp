@@ -8,6 +8,8 @@
 #include <iostream>
 #include <fstream>
 #include <filesystem>
+#include "game_enums.h"
+#include "systems.h"
 
 namespace devils_engine {
   namespace utils {
@@ -19,6 +21,13 @@ namespace devils_engine {
 //       
 //       s->game.camera_movement = 5.0f;
 //     }
+    
+    const std::vector<std::string_view> tables_keys = {
+      "menu", // по идее не жeлательно здесь что то менять
+      "world_map",
+      "battle",
+      "encounter"
+    };
     
     settings::graphics::graphics() : width(1280), height(720), video_mode(UINT32_MAX), fullscreen(false), projection(false) {}
     
@@ -106,69 +115,106 @@ namespace devils_engine {
     }
     
     settings::game::game() : camera_movement(5.0f), camera_movement_x(1.0f), camera_movement_y(1.0f), sens(1.0f), sens_x(1.0f), sens_y(1.0f), target_fps(500.0f), game_cursor(false) {}
-    settings::keys::keys() : //key_iterator(nullptr), 
-      key_iterator(0) {} // проблема в том что у нас может и не готов utils::id к этом моменту
+    settings::keys::keys() : container_for_event(0), container_for_iteration(0) {}
     
     void settings::keys::setup_default_mapping() {
-      const utils::id map_move = utils::id::get("map_move");
-      input::set_key(GLFW_MOUSE_BUTTON_MIDDLE, map_move);
-      const utils::id control_click  = utils::id::get("control_click");
-      input::set_key(GLFW_MOUSE_BUTTON_RIGHT, control_click);
-      const utils::id activate_click = utils::id::get("activate_click");
-      input::set_key(GLFW_MOUSE_BUTTON_LEFT, activate_click);
-
-      const auto biome_render_mode = utils::id::get("biome_render_mode");
-      const auto cultures_render_mode = utils::id::get("cultures_render_mode");
-      const auto culture_groups_render_mode = utils::id::get("culture_groups_render_mode");
-      const auto religions_render_mode = utils::id::get("religions_render_mode");
-      const auto religion_groups_render_mode = utils::id::get("religion_groups_render_mode");
-      const auto provinces_render_mode = utils::id::get("provinces_render_mode");
-      const auto countries_render_mode = utils::id::get("countries_render_mode");
-      const auto duchies_render_mode = utils::id::get("duchies_render_mode");
-      const auto kingdoms_render_mode = utils::id::get("kingdoms_render_mode");
-      const auto empires_render_mode = utils::id::get("empires_render_mode");
-      input::set_key(GLFW_KEY_F1, biome_render_mode);
-      input::set_key(GLFW_KEY_F2, cultures_render_mode);
-      input::set_key(GLFW_KEY_F3, culture_groups_render_mode);
-      input::set_key(GLFW_KEY_F4, religions_render_mode);
-      input::set_key(GLFW_KEY_F5, religion_groups_render_mode);
-      input::set_key(GLFW_KEY_F6, provinces_render_mode);
-      input::set_key(GLFW_KEY_F7, countries_render_mode);
-      input::set_key(GLFW_KEY_F8, duchies_render_mode);
-      input::set_key(GLFW_KEY_F9, kingdoms_render_mode);
-      input::set_key(GLFW_KEY_F10, empires_render_mode);
-
-      const utils::id menu_next = utils::id::get("menu_next");
-      const utils::id menu_prev = utils::id::get("menu_prev");
-      const utils::id menu_increase = utils::id::get("menu_increase");
-      const utils::id menu_decrease = utils::id::get("menu_decrease");
-      const utils::id menu_choose = utils::id::get("menu_choose");
-      const utils::id escape = utils::id::get("escape");
-      input::set_key(GLFW_KEY_DOWN, menu_next);
-      input::set_key(GLFW_KEY_UP, menu_prev);
-      input::set_key(GLFW_KEY_RIGHT, menu_increase);
-      input::set_key(GLFW_KEY_LEFT, menu_decrease);
-      input::set_key(GLFW_KEY_ENTER, menu_choose);
-      input::set_key(GLFW_KEY_ESCAPE, escape);
+      auto core = global::get<systems::core_t>();
       
-      const utils::id border_render = utils::id::get("border_render");
-      input::set_key(GLFW_KEY_B, border_render);
+      {
+        auto local_mapping = core->keys_mapping[player::in_menu];
+        input::set_key_map(local_mapping);
+        
+        const utils::id menu_next = utils::id::get("menu_next");
+        const utils::id menu_prev = utils::id::get("menu_prev");
+        const utils::id menu_increase = utils::id::get("menu_increase");
+        const utils::id menu_decrease = utils::id::get("menu_decrease");
+        const utils::id menu_choose = utils::id::get("menu_choose");
+        const utils::id escape = utils::id::get("escape");
+        input::set_key(GLFW_KEY_DOWN, menu_next);
+        input::set_key(GLFW_KEY_UP, menu_prev);
+        input::set_key(GLFW_KEY_RIGHT, menu_increase);
+        input::set_key(GLFW_KEY_LEFT, menu_decrease);
+        input::set_key(GLFW_KEY_ENTER, menu_choose);
+        input::set_key(GLFW_KEY_ESCAPE, escape);
+      }
       
-      const utils::id go_to_capital = utils::id::get("home");
-      input::set_key(GLFW_KEY_HOME, go_to_capital);
+      {
+        auto local_mapping = core->keys_mapping[player::on_global_map];
+        input::set_key_map(local_mapping);
+        
+        const utils::id map_move = utils::id::get("map_move");
+        input::set_key(GLFW_MOUSE_BUTTON_MIDDLE, map_move);
+        const utils::id control_click  = utils::id::get("control_click");
+        input::set_key(GLFW_MOUSE_BUTTON_RIGHT, control_click);
+        const utils::id activate_click = utils::id::get("activate_click");
+        input::set_key(GLFW_MOUSE_BUTTON_LEFT, activate_click);
+
+        const auto biome_render_mode = utils::id::get("biome_render_mode");
+        const auto cultures_render_mode = utils::id::get("cultures_render_mode");
+        const auto culture_groups_render_mode = utils::id::get("culture_groups_render_mode");
+        const auto religions_render_mode = utils::id::get("religions_render_mode");
+        const auto religion_groups_render_mode = utils::id::get("religion_groups_render_mode");
+        const auto provinces_render_mode = utils::id::get("provinces_render_mode");
+        const auto countries_render_mode = utils::id::get("countries_render_mode");
+        const auto duchies_render_mode = utils::id::get("duchies_render_mode");
+        const auto kingdoms_render_mode = utils::id::get("kingdoms_render_mode");
+        const auto empires_render_mode = utils::id::get("empires_render_mode");
+        input::set_key(GLFW_KEY_F1, biome_render_mode);
+        input::set_key(GLFW_KEY_F2, cultures_render_mode);
+        input::set_key(GLFW_KEY_F3, culture_groups_render_mode);
+        input::set_key(GLFW_KEY_F4, religions_render_mode);
+        input::set_key(GLFW_KEY_F5, religion_groups_render_mode);
+        input::set_key(GLFW_KEY_F6, provinces_render_mode);
+        input::set_key(GLFW_KEY_F7, countries_render_mode);
+        input::set_key(GLFW_KEY_F8, duchies_render_mode);
+        input::set_key(GLFW_KEY_F9, kingdoms_render_mode);
+        input::set_key(GLFW_KEY_F10, empires_render_mode);
+        
+        const utils::id border_render = utils::id::get("border_render");
+        input::set_key(GLFW_KEY_B, border_render);
+        
+        const utils::id go_to_capital = utils::id::get("home");
+        input::set_key(GLFW_KEY_HOME, go_to_capital);
+      }
+      
+      {
+        auto local_mapping = core->keys_mapping[player::on_battle_map];
+        input::set_key_map(local_mapping);
+        
+        const utils::id map_move = utils::id::get("map_move");
+        input::set_key(GLFW_MOUSE_BUTTON_MIDDLE, map_move);
+        const utils::id control_click  = utils::id::get("control_click");
+        input::set_key(GLFW_MOUSE_BUTTON_RIGHT, control_click);
+        const utils::id activate_click = utils::id::get("activate_click");
+        input::set_key(GLFW_MOUSE_BUTTON_LEFT, activate_click);
+        
+        const utils::id go_to_capital = utils::id::get("home");
+        input::set_key(GLFW_KEY_HOME, go_to_capital);
+      }
+      
+      {
+        auto local_mapping = core->keys_mapping[player::on_hero_battle_map];
+        input::set_key_map(local_mapping);
+        
+        // тут пока ничего
+      }
     }
     
     bool settings::keys::is_awaits_key() const {
       return awaiting_key.valid();
     }
     
-    utils::id settings::keys::event_awaiting_key() const {
+    utils::id settings::keys::event_awaits_key() const {
       return awaiting_key;
     }
     
-    bool settings::keys::sey_key_to(const utils::id &event_id) {
+    bool settings::keys::sey_key_to(const uint32_t &container_for_event, const utils::id &event_id) {
       if (is_awaits_key()) return false;
+      
+      if (container_for_event >= player::states_count || container_for_event == 0) throw std::runtime_error("Bad key mapping container");
+      
       awaiting_key = event_id;
+      this->container_for_event = container_for_event;
       return true;
     }
     
@@ -176,43 +222,35 @@ namespace devils_engine {
     void settings::keys::update(const int key) {
       if (!is_awaits_key()) return;
       
+      auto core = global::get<systems::core_t>();
+      auto keys = core->keys_mapping[container_for_event];
+      input::set_key_map(keys);
       input::set_key(key, awaiting_key);
       awaiting_key = utils::id();
     }
     
-    size_t settings::keys::events_count() const {
-      return global::get<input::data>()->key_events.event_keys.size();
+    size_t settings::keys::events_count(const uint32_t &container_for_iteration) const {
+      auto core = global::get<systems::core_t>();
+      if (container_for_iteration >= player::states_count || container_for_iteration == 0) throw std::runtime_error("Bad key mapping container");
+      auto keys = core->keys_mapping[container_for_iteration];
+      return keys->events_map.size();
     }
     
     // нужно сделать нормальную итерацию по клавишам, причем мы еще должны учитывать эвенты которые не используем
     // видимо придется завести еще один массив
-    std::tuple<utils::id, int, int> settings::keys::get_next_event(const uint32_t &type) {
-      //auto itr = global::get<input::data>()->key_events.event_keys.begin();
-      //static_assert(sizeof(itr) == sizeof(void*));
-      //if (key_iterator == nullptr) {
-      //  memcpy(&key_iterator, &itr, sizeof(itr));
-      //}
+    std::tuple<utils::id, int, int> settings::keys::get_next_event(const uint32_t &container) {
+      auto core = global::get<systems::core_t>();
+      if (container >= player::states_count || container == 0) throw std::runtime_error("Bad key mapping container");
+      auto keys = core->keys_mapping[container];
       
-      //memcpy(reinterpret_cast<void*>(&itr), &key_iterator, sizeof(itr));
-
-      if (key_iterator >= global::get<input::data>()->key_events.event_keys.size()) {
-        key_iterator = 0;
-        return std::make_tuple(utils::id(), INT32_MAX, INT32_MAX);
+      if (container_for_iteration != container || current_iterator == keys->events_map.end()) {
+        container_for_iteration = container;
+        current_iterator = keys->events_map.begin();
       }
       
-      //if (itr == global::get<input::data>()->key_events.event_keys.end()) {
-      //  key_iterator = nullptr;
-      //  return std::make_tuple(utils::id(), INT32_MAX, INT32_MAX);
-      //}
-      
-      (void)type;
-      
-      const auto itr = &global::get<input::data>()->key_events.event_keys[key_iterator];
-      const auto ret = std::make_tuple(itr->first, itr->second.keys[0], itr->second.keys[1]);
-      //++itr;
-      //memcpy(&key_iterator, &itr, sizeof(itr));
-      ++key_iterator;
-      return ret;
+      const auto data = std::make_tuple(current_iterator->first, current_iterator->second.keys[0], current_iterator->second.keys[1]);
+      ++current_iterator;
+      return data;
     }
     
     settings::settings() : dumped(false) {}
@@ -279,26 +317,37 @@ namespace devils_engine {
         this->game.game_cursor = game_cursor.valid() && game_cursor.get_type() == sol::type::number ? game_cursor.get<float>() : this->game.game_cursor;
       }
       
+      ASSERT(tables_keys.size() == player::states_count);
+      auto core = global::get<systems::core_t>();
+      
       if (const auto proxy = raw_setting["keys"]; proxy.valid() && proxy.get_type() == sol::type::table) {
         const sol::table keys = proxy.get<sol::table>();
-        for (auto itr = keys.begin(); itr != keys.end(); ++itr) {
-          if (!(*itr).second.is<sol::table>()) continue;
+        // тут у нас будет несколько таблиц, будем пропускать таблицу menu
+        for (size_t i = 1; i < tables_keys.size(); ++i) {
+          auto proxy = keys[tables_keys[i]];
+          if (!proxy.valid() || proxy.get_type() != sol::type::table) continue;
           
-          const sol::table table = (*itr).second.as<sol::table>();
-          ASSERT(table[0] == sol::nil);
-          ASSERT(table[1].get_type() == sol::type::string);
-          ASSERT(table[2].get_type() == sol::type::number);
-          ASSERT(table[3].get_type() == sol::type::number);
-          
-          const std::string id = table[1];
-          const int key_1 = table[2];
-          const int key_2 = table[3];
-          
-          ASSERT(!id.empty());
-          
-          const utils::id final_id = utils::id::get(id);
-          input::set_key(key_1, final_id, 0); // if (key_1 != INT32_MAX) 
-          input::set_key(key_2, final_id, 1); // if (key_2 != INT32_MAX) 
+          input::set_key_map(core->keys_mapping[i]);
+          const sol::table key_table = proxy;
+          for (const auto &obj : key_table) {
+            if (!obj.second.is<sol::table>()) continue;
+            
+            const sol::table table = obj.second.as<sol::table>();
+            ASSERT(table[0] == sol::nil);
+            ASSERT(table[1].get_type() == sol::type::string);
+            ASSERT(table[2].get_type() == sol::type::number);
+            ASSERT(table[3].get_type() == sol::type::number);
+            
+            const std::string id = table[1];
+            const int key_1 = table[2];
+            const int key_2 = table[3];
+            
+            ASSERT(!id.empty());
+            
+            const utils::id final_id = utils::id::get(id);
+            input::set_key(key_1, final_id, 0); // if (key_1 != INT32_MAX) 
+            input::set_key(key_2, final_id, 1); // if (key_2 != INT32_MAX) 
+          }
         }
       }
     }
@@ -306,7 +355,7 @@ namespace devils_engine {
     void settings::dump_settings(const std::string &path) {
       sol::state s;
       s.open_libraries(sol::lib::base, sol::lib::math, sol::lib::string, sol::lib::table);
-      const std::string root_path = global::root_directory();
+      const std::string &root_path = global::root_directory();
       const std::string script_path = root_path + "scripts/";
       auto serializator = s.require_file("serpent", script_path + "serpent.lua", false);
       
@@ -338,14 +387,20 @@ namespace devils_engine {
       game["sens_y"] = this->game.sens_y;
       game["target_fps"] = this->game.target_fps;
       game["game_cursor"] = this->game.game_cursor;
+      
+      auto core = global::get<systems::core_t>();
       auto keys = target["keys"].get_or_create<sol::table>();
-      const auto &event_keys = global::get<input::data>()->key_events.event_keys;
-      for (const auto &key_data : event_keys) {
-        sol::table key_data_table = s.create_table();
-        key_data_table.add(key_data.first.name());
-        key_data_table.add(key_data.second.keys[0]);
-        key_data_table.add(key_data.second.keys[1]);
-        keys.add(key_data_table);
+      for (size_t i = 1; i < tables_keys.size(); ++i) {
+        auto current_mapping = keys[tables_keys[i]].get_or_create<sol::table>();
+        auto local_mapping = core->keys_mapping[i];
+        const auto &event_keys = local_mapping->events_map;
+        for (const auto &key_data : event_keys) {
+          sol::table key_data_table = s.create_table();
+          key_data_table.add(key_data.first.name());
+          key_data_table.add(key_data.second.keys[0]);
+          key_data_table.add(key_data.second.keys[1]);
+          current_mapping.add(key_data_table);
+        }
       }
       
       const auto func_ret = block_func(target, opts);

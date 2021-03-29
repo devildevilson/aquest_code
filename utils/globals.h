@@ -8,12 +8,7 @@
 namespace devils_engine {
   class global {
   public:
-    struct state {
-      utils::rng::state global_state;
-      
-      void initialize_state(const size_t seed);
-      size_t advance_state();
-    };
+    using state = utils::xoshiro256starstar::state;
     
     template <typename T>
     static T* get(T* ptr = nullptr) {
@@ -25,10 +20,10 @@ namespace devils_engine {
 
     static std::string root_directory();
     void set_root_directory(const std::string &path);
-    void initialize_state(const size_t &seed);
-    static size_t advance_state();
-    static utils::rng::state get_state();
-    void set_state(const utils::rng::state &state); // наверное пригодится когда я буду делать сохранение загрузку
+    void initialize_state(const uint64_t &seed);
+    static uint64_t advance_state();
+    static state get_state();
+    void set_state(const state &state); // наверное пригодится когда я буду делать сохранение загрузку
   private:
     static std::string m_root_directory;
     static state game_state;

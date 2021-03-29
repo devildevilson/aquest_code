@@ -6,6 +6,7 @@
 #include <string>
 #include <functional>
 #include <random>
+#include "linear_rng.h"
 
 // вдохновитель https://github.com/skeeto/fantasyname
 
@@ -36,14 +37,19 @@ namespace devils_engine {
 
       class random : public wrapper {
       public:
-        random(std::mt19937_64 &gen);
+        using random_state = xoshiro256starstar::state;
+        constexpr static const auto init_func = xoshiro256starstar::init;
+        constexpr static const auto rng_func = xoshiro256starstar::rng;
+        constexpr static const auto get_value_func = xoshiro256starstar::get_value;
+        
+        random(random_state &gen);
         ~random();
         void add(wrapper* w) override;
         std::string get() override;
         enum type type() override;
         void print(const std::string &indent) override;
       private:
-        std::mt19937_64 &gen;
+        random_state &gen;
         std::vector<wrapper*> wrappers;
       };
 
@@ -82,7 +88,12 @@ namespace devils_engine {
 
       class table_literal : public wrapper {
       public:
-        table_literal(const char c, std::mt19937_64 &gen, table_type &table);
+        using random_state = xoshiro256starstar::state;
+        constexpr static const auto init_func = xoshiro256starstar::init;
+        constexpr static const auto rng_func = xoshiro256starstar::rng;
+        constexpr static const auto get_value_func = xoshiro256starstar::get_value;
+        
+        table_literal(const char c, random_state &gen, table_type &table);
         ~table_literal();
         void add(wrapper* w) override;
         std::string get() override;
@@ -90,7 +101,7 @@ namespace devils_engine {
         void print(const std::string &indent) override;
       private:
         char c;
-        std::mt19937_64 &gen;
+        random_state &gen;
         table_type &table;
       };
 
@@ -114,9 +125,14 @@ namespace devils_engine {
         enum type type() override;
         void print(const std::string &indent) override;
       };
+      
+      using random_state = xoshiro256starstar::state;
+      constexpr static const auto init_func = xoshiro256starstar::init;
+      constexpr static const auto rng_func = xoshiro256starstar::rng;
+      constexpr static const auto get_value_func = xoshiro256starstar::get_value;
 
       template_strings();
-      template_strings(const uint32_t &seed);
+      template_strings(const uint64_t &seed);
       ~template_strings();
 
       void set_table(const char c, const std::vector<std::string> &strings);
@@ -126,7 +142,8 @@ namespace devils_engine {
       
       void clear();
     private:
-      std::mt19937_64 gen;
+      //std::mt19937_64 gen;
+      random_state state;
       table_type table;
       size_t pattern_size;
       char* pattern_memory;

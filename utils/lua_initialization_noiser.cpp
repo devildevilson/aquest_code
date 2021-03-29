@@ -1,6 +1,7 @@
 #include "lua_initialization.h"
 
 #include "FastNoise.h"
+#include "magic_enum.hpp"
 
 #define SET_NOISE_FUNCTION(arg_type, func_name) [] (const FastNoise* self, sol::variadic_args va) -> FN_DECIMAL { \
   const size_t arg_size = va.size();                                                                              \
@@ -20,7 +21,7 @@
 namespace devils_engine {
   namespace utils {
     void setup_lua_noiser(sol::state_view lua) {
-      auto utils = lua["utils"].get_or_create<sol::table>();
+      auto utils = lua[magic_enum::enum_name<reserved_lua::values>(reserved_lua::utils)].get_or_create<sol::table>();
       utils.new_usertype<FastNoise>("noiser", 
         sol::no_constructor,
         "set_seed", &FastNoise::SetSeed,

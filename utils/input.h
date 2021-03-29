@@ -7,8 +7,15 @@
 #include <chrono>
 #include <unordered_map>
 #include <tuple>
+#include <array>
+#include <atomic>
 #include "utility.h"
 #include "parallel_hashmap/phmap.h"
+
+// мне нужно тут сделать несколько разных таблиц кнопок
+// и вот я думаю как... по идее нужен какой то глобальный указатель
+// который я буду менять когда меняется состояние игрока или игры
+// теперь нужно все эти вещи где то хранить
 
 namespace devils_engine {
   namespace input {
@@ -49,7 +56,8 @@ namespace devils_engine {
       // эвентов на кнопке может быть несколько в зависимости от количества состояний игрока 
       // (ну то есть эвенты персонажа, персонажа в машине, персонажа в самолете и прочее)
       // (в моем случае возможно игрок на глобальной карте, игрок в бою, игрок в геройском бою, и еще что то)
-      event_data data[utils::player_states_count];
+      //event_data data[utils::player_states_count];
+//       utils::id event_id; // нажатие вызывает этот эвент
       type event;
       enum state state;
       // нам нужно убедится что эвент с кнопок мы получаем один раз на окно, нужно ввести понятие event layer 
@@ -62,22 +70,26 @@ namespace devils_engine {
 
     struct keys {
       struct event_keys_container { int keys[event_key_slots]; };
-//       utils::memory_pool<event_data, sizeof(event_data)*50> events_pool;
-      key_data container[container_size]; // тут должен быть контейнер с указателями
+      
+      // этот контейнер должен быть в data и работать всегда,
+      // но остальные вещи должны быть по своим кеймапам
+      std::array<utils::id, container_size> container; // тут контейнер нужен был чтобы находить эвенты по кнопкам
       uint32_t current_event_layer;
       uint32_t blocked;
       // если одна из этих кнопок нажата то эвент срабатывает
       // а что если у одной кнопки двойное нажатие, а другой длинное? скорее всего двойное нажатие или его отсутствие я спрячу
       //std::unordered_map<utils::id, event_keys_container> event_keys;
-      std::vector<std::pair<utils::id, event_keys_container>> event_keys;
+      //std::vector<std::pair<utils::id, event_keys_container>> event_keys; // зачем это?
       //std::unordered_map<utils::id, size_t> events_map;
-      phmap::flat_hash_map<utils::id, size_t> events_map;
+      //phmap::flat_hash_map<utils::id, size_t> events_map;
+      phmap::flat_hash_map<utils::id, event_keys_container> events_map;
     };
 
     struct data {
-      bool interface_focus;
-
-      keys key_events;
+      std::atomic_bool interface_focus;
+      std::atomic_bool input_blocked;
+//       keys key_events;
+      std::array<key_data, container_size> container;
 
       float mouse_wheel;
 
@@ -91,6 +103,10 @@ namespace devils_engine {
 
       data();
     };
+    
+    void set_key_map(keys* k);
+    keys* get_key_map();
+    data* get_input_data();
 
     struct input_event {
       utils::id id;
@@ -119,7 +135,7 @@ namespace devils_engine {
     const char* get_key_name(const uint32_t &key);
     const char* get_event_key_name(const utils::id &id, const uint8_t &slot);
     void set_key(const int &key, const utils::id &id, const uint8_t &slot = 0);
-    event_data get_event_data(const int &key);
+    utils::id get_event_data(const int &key);
     bool check_key(const int &key, const uint32_t &states);
     bool timed_check_key(const int &key, const uint32_t &states, const size_t &wait, const size_t &period);
     bool check_event(const utils::id &event, const uint32_t &states);

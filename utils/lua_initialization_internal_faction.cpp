@@ -1,12 +1,14 @@
 #include "lua_initialization_internal.h"
 
 #include "bin/core_structures.h"
+#include "lua_initialization.h"
+#include "magic_enum.hpp"
 
 namespace devils_engine {
   namespace utils {
     namespace internal {
       void setup_lua_faction(sol::state_view lua) {
-        auto core = lua["core"].get_or_create<sol::table>();
+        auto core = lua[magic_enum::enum_name<reserved_lua::core>()].get_or_create<sol::table>();
         auto faction_type = core.new_usertype<core::faction>("faction",
           sol::no_constructor,
           "leader", sol::readonly(&core::faction::leader),

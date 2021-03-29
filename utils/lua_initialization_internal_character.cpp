@@ -1,12 +1,14 @@
 #include "lua_initialization_internal.h"
 
 #include "bin/core_structures.h"
+#include "lua_initialization.h"
+#include "magic_enum.hpp"
 
 namespace devils_engine {
   namespace utils {
     namespace internal {
       void setup_lua_character(sol::state_view lua) {
-        auto core = lua["core"].get_or_create<sol::table>();
+        auto core = lua[magic_enum::enum_name<reserved_lua::core>()].get_or_create<sol::table>();
         auto character_type = core.new_usertype<core::character>("character",
           sol::no_constructor,
           "base_stats", sol::readonly_property([] (const core::character* self) { return std::ref(self->stats); }),

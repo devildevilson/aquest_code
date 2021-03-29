@@ -1,3 +1,4 @@
+#include "lua_initialization.h"
 #include "lua_initialization_internal.h"
 
 #include "bin/stats.h"
@@ -22,7 +23,7 @@ namespace devils_engine {
         //lua["ctx"] = &global::get<interface::context>()->ctx;
 
         // тут видимо тоже нужно задать энумы
-        auto core = lua["core"].get_or_create<sol::table>();
+        auto core = lua[magic_enum::enum_name<reserved_lua::core>()].get_or_create<sol::table>();
         core["opinion_stats"] = create_enum<core::opinion_stats::values>(core, "opinion_stats", 0);
         // оффсеты нужны чтобы заполнить таблицы статов при создании карты, но нужны ли они в самой игре
         core["character_stats"] = create_enum<core::character_stats::values>(core, "character_stats", core::offsets::character_stats);

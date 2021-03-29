@@ -4,6 +4,7 @@
 #include "typeless_container.h"
 #include "slot_container.h"
 #include "render/render_mode_container.h"
+#include "game_enums.h"
 #include <string>
 #include <atomic>
 
@@ -16,6 +17,7 @@ namespace sol {
 namespace devils_engine {
   namespace input {
     struct data;
+    struct keys;
   }
   
   namespace core {
@@ -41,6 +43,7 @@ namespace devils_engine {
     class progress_container;
     struct objects_selector;
     struct random_engine_st;
+    class localization;
   }
   
   namespace interface {
@@ -79,7 +82,10 @@ namespace devils_engine {
     struct core_t {
       utils::typeless_container container;
       
-      input::data* input_data;
+      // нужно сделать несколько контейнеров с клавишами, где?
+      // вообще нам нужно сделать просто 4 указателя?
+      //input::data* input_data;
+      input::keys* keys_mapping[player::states_count];
       render::container* graphics_container;
       render::slots* render_slots;
       render::image_container* image_container;
@@ -94,6 +100,7 @@ namespace devils_engine {
       utils::progress_container* loading_progress;
       utils::objects_selector* objects_selector;
       struct path_managment* path_managment;
+      utils::localization* loc;
       
       core_t();
       ~core_t();

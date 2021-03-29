@@ -1,12 +1,13 @@
 #include "lua_initialization.h"
 
 #include "input.h"
+#include "magic_enum.hpp"
 
 namespace devils_engine {
   namespace utils {
     void setup_lua_input(sol::state_view lua) {
       {
-        auto utils = lua["utils"].get_or_create<sol::table>();
+        auto utils = lua[magic_enum::enum_name<reserved_lua::values>(reserved_lua::utils)].get_or_create<sol::table>();
         auto id = utils.new_usertype<utils::id>("id",
           "valid", &utils::id::valid,
           "name", &utils::id::name,
@@ -51,7 +52,7 @@ namespace devils_engine {
 
         // тут добавятся несколько функций для того чтобы задать клавишу в настройках
         sol::table x = lua.create_table_with(sol::meta_function::new_index, sol::detail::fail_on_newindex, sol::meta_function::index, target);
-        lua["input"] = lua.create_table(0, 0, sol::metatable_key, x);
+        lua[magic_enum::enum_name<reserved_lua::values>(reserved_lua::input)] = lua.create_table(0, 0, sol::metatable_key, x);
       }
     }
   }

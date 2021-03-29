@@ -5,7 +5,24 @@
 
 namespace devils_engine {
   namespace utils {
-    template_strings::random::random(std::mt19937_64 &gen) : gen(gen) {}
+    template <typename STATE, typename RNG_F, typename GET_VALUE_F>
+    uint64_t random_at_most(const uint64_t &max, STATE &state, const RNG_F &rng_f, const GET_VALUE_F &get_value_f) {
+      ASSERT(max < UINT64_MAX-1);
+      // max <= RAND_MAX < ULONG_MAX, so this is okay.
+      const uint64_t num_bins = max+1;
+      const uint64_t num_rand = UINT64_MAX;
+      const uint64_t bin_size = num_rand / num_bins;
+      const uint64_t defect   = num_rand % num_bins;
+      
+      uint64_t x;
+      do {
+        state = rng_f(state);
+        x = get_value_f(state);
+      } while (num_rand - defect <= x); // This is carefully written not to overflow
+      return x/bin_size;
+    }
+    
+    template_strings::random::random(random_state &gen) : gen(gen) {}
     template_strings::random::~random() {
       for (auto w : wrappers) {
         w->~wrapper();
@@ -18,10 +35,15 @@ namespace devils_engine {
     std::string template_strings::random::get() {
       ASSERT(!wrappers.empty());
       if (wrappers.size() == 1) return wrappers[0]->get();
+      
+//       gen = rng_func(gen);
+//       const double val = utils::rng_normalize(get_value_func(gen));
 
-      std::uniform_int_distribution<size_t> dis(0, wrappers.size()-1);
+      //std::uniform_int_distribution<size_t> dis(0, wrappers.size()-1);
       // в оригинале автор добавлял к результату dis 0.5, зачем?
-      const size_t rand_index = dis(gen);
+      //const size_t rand_index = dis(gen);
+      //const size_t rand_index = size_t(val * double(wrappers.size()-1));
+      const size_t rand_index = random_at_most(wrappers.size()-1, gen, rng_func, get_value_func);
       return wrappers[rand_index]->get();
     }
 
@@ -109,14 +131,15 @@ namespace devils_engine {
       w->print(next_indent);
     }
 
-    template_strings::table_literal::table_literal(const char c, std::mt19937_64 &gen, table_type &table) : c(c), gen(gen), table(table) {}
+    template_strings::table_literal::table_literal(const char c, random_state &gen, table_type &table) : c(c), gen(gen), table(table) {}
     template_strings::table_literal::~table_literal() {}
     void template_strings::table_literal::add(wrapper*) {}
     std::string template_strings::table_literal::get() {
       auto itr = table.find(c);
       if (itr == table.end()) return "";
-      std::uniform_int_distribution<size_t> dis(0, itr->second.size()-1);
-      const size_t rand_index = dis(gen);
+      //std::uniform_int_distribution<size_t> dis(0, itr->second.size()-1);
+      //const size_t rand_index = dis(gen);
+      const size_t rand_index = random_at_most(itr->second.size()-1, gen, rng_func, get_value_func);
       return itr->second[rand_index];
     }
 
@@ -142,8 +165,8 @@ namespace devils_engine {
       std::cout << indent << "empty_literal" << '\n';
     }
 
-    template_strings::template_strings() : gen(1), pattern_size(0), pattern_memory(nullptr), generator(nullptr) {}
-    template_strings::template_strings(const uint32_t &seed) : gen(seed), pattern_size(0), pattern_memory(nullptr), generator(nullptr) {}
+    template_strings::template_strings() : state(init_func(1)), pattern_size(0), pattern_memory(nullptr), generator(nullptr) {}
+    template_strings::template_strings(const uint64_t &seed) : state(init_func(seed)), pattern_size(0), pattern_memory(nullptr), generator(nullptr) {}
     template_strings::~template_strings() {
       clear();
     }
@@ -186,7 +209,7 @@ namespace devils_engine {
       };
 
       const auto table_add_func = [this, &stack] (const char c, size_t &current_size) {
-        wrapper* w = create_wrapper<table_literal>(pattern_size, current_size, pattern_memory, c, gen, table);
+        wrapper* w = create_wrapper<table_literal>(pattern_size, current_size, pattern_memory, c, state, table);
 
         while (stack.back()->type() == wrapper::type::reverser || stack.back()->type() == wrapper::type::capitalizer) {
           auto tmp = stack.back();
@@ -263,7 +286,7 @@ namespace devils_engine {
           case '(': {
             word_add_func(word, current_memory);
 
-            stack.push_back(create_wrapper<random>(pattern_size, current_memory, pattern_memory, std::ref(gen)));
+            stack.push_back(create_wrapper<random>(pattern_size, current_memory, pattern_memory, std::ref(state)));
             auto s = create_wrapper<sequence>(pattern_size, current_memory, pattern_memory);
             stack.back()->add(s);
             stack.push_back(s);

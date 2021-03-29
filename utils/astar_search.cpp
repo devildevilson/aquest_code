@@ -287,7 +287,7 @@ namespace devils_engine {
       const auto &tile_data = render::unpack_data(map->get_tile(tile_index));
       const uint32_t n_count = render::is_pentagon(tile_data) ? 5 : 6;
       for (uint32_t i = 0; i < n_count; ++i) {
-        const uint32_t n_index = tile_data.neighbours[i];
+        const uint32_t n_index = tile_data.neighbors[i];
         if (!predicate(tile_index, n_index)) continue;
         
         auto node = node_pool.create(n_index);

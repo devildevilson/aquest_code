@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <array>
 #include "assert.h"
 
 #ifdef _WIN32
@@ -15,12 +16,12 @@ namespace devils_engine {
   namespace utils {
     template <size_t N>
     struct bit_field {
-      size_t copy_N;
-      size_t container[N]; // атомарность? вряд ли
+//       size_t copy_N;
+      std::array<size_t, N> container; // атомарность? вряд ли
 
-      inline bit_field() : copy_N(N) { reset(); }
+      inline bit_field() { reset(); }
       inline bool set(const size_t &index, const bool value) {
-        ASSERT(index < SIZE_WIDTH * copy_N);
+        ASSERT(index < SIZE_WIDTH * N);
         const size_t container_index = index / SIZE_WIDTH;
         const size_t index_container = index % SIZE_WIDTH;
         const size_t mask = size_t(1) << index_container;
@@ -30,7 +31,7 @@ namespace devils_engine {
       }
 
       inline bool get(const size_t &index) const {
-        ASSERT(index < SIZE_WIDTH * copy_N);
+        ASSERT(index < SIZE_WIDTH * N);
         const size_t container_index = index / SIZE_WIDTH;
         const size_t index_container = index % SIZE_WIDTH;
         const size_t mask = size_t(1) << index_container;
@@ -38,22 +39,22 @@ namespace devils_engine {
       }
 
       constexpr size_t capacity() const {
-        return SIZE_WIDTH * copy_N;
+        return SIZE_WIDTH * N;
       }
 
       inline void reset() {
-        memset(container, 0, sizeof(size_t) * copy_N);
+        memset(container.data(), 0, sizeof(size_t) * N);
       }
     };
 
     template <uint32_t N>
     struct bit_field_32 {
-      uint32_t copy_N;
-      uint32_t container[N];
+//       uint32_t copy_N;
+      std::array<uint32_t, N> container;
 
-      inline bit_field_32() : copy_N(N) { reset(); }
+      inline bit_field_32() { reset(); }
       inline bool set(const size_t &index, const bool value) {
-        ASSERT(index < UINT32_WIDTH * copy_N);
+        ASSERT(index < UINT32_WIDTH * N);
         const size_t container_index = index / UINT32_WIDTH;
         const uint32_t index_container = index % UINT32_WIDTH;
         const uint32_t mask = uint32_t(1) << index_container;
@@ -63,7 +64,7 @@ namespace devils_engine {
       }
 
       inline bool get(const size_t &index) const {
-        ASSERT(index < UINT32_WIDTH * copy_N);
+        ASSERT(index < UINT32_WIDTH * N);
         const size_t container_index = index / UINT32_WIDTH;
         const uint32_t index_container = index % UINT32_WIDTH;
         const uint32_t mask = uint32_t(1) << index_container;
@@ -71,11 +72,11 @@ namespace devils_engine {
       }
 
       constexpr size_t capacity() const {
-        return UINT32_WIDTH * copy_N;
+        return UINT32_WIDTH * N;
       }
 
       inline void reset() {
-        memset(container, 0, sizeof(uint32_t) * copy_N);
+        memset(container.data(), 0, sizeof(uint32_t) * N);
       }
     };
   }

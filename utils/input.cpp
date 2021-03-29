@@ -9,15 +9,15 @@
 
 namespace devils_engine {
   namespace utils {
-    static player_states current_player_state_value = player_in_menu;
-    player_states current_player_state() {
-      return current_player_state_value;
-    }
-    
-    void set_player_state(const player_states &state) {
-      // имеет смысл резетнуть состояния кнопок в этот момент
-      current_player_state_value = state;
-    }
+//     static player_states current_player_state_value = player_in_menu;
+//     player_states current_player_state() {
+//       return current_player_state_value;
+//     }
+//     
+//     void set_player_state(const player_states &state) {
+//       // имеет смысл резетнуть состояния кнопок в этот момент
+//       current_player_state_value = state;
+//     }
   }
   
   namespace input {
@@ -379,13 +379,32 @@ namespace devils_engine {
     data::data() : interface_focus(false), mouse_wheel(0.0f), current_text(0), last_frame_time(0) {
       memset(text, 0, sizeof(uint32_t)*text_memory_size);
     }
+    
+    static std::atomic<keys*> current_keys_map(nullptr);
+    static data input_data;
+    
+    void set_key_map(keys* k) {
+      current_keys_map = k;
+    }
+    
+    keys* get_key_map() {
+      return current_keys_map;
+    }
+    
+    data* get_input_data() {
+      return &input_data;
+    }
 
     input_event next_input_event(size_t &mem) {
-      const auto &container = global::get<data>()->key_events;
+      const auto data = get_input_data();
+      if (data->input_blocked) return {utils::id(), release};
+      
+      const auto &key_container = data->container;
+      const auto &key_event_map = get_key_map()->container;
       for (size_t i = mem; i < container_size; ++i) {
-        if (container.container[i].data[utils::current_player_state()].id.valid() && container.container[i].event_time <= 5) { // первый кадр нажатия это 0
+        if (key_event_map[i].valid() && key_container[i].event_time <= 5) { // первый кадр нажатия это 0
           mem = i+1;
-          return {container.container[i].data[utils::current_player_state()].id, container.container[i].event};
+          return {key_event_map[i], key_container[i].event};
         }
       }
 
@@ -393,109 +412,104 @@ namespace devils_engine {
     }
 
     input_event next_input_event(size_t &mem, const size_t &tolerancy) {
-//       static const auto home = utils::id::get("home");
-      const auto &container = global::get<data>()->key_events;
+      const auto data = get_input_data();
+      if (data->input_blocked) return {utils::id(), release};
+      
+      const auto &key_container = data->container;
+      const auto &key_event_map = get_key_map()->container;
       for (size_t i = mem; i < container_size; ++i) {
-        const auto id = container.container[i].data[utils::current_player_state()].id;
-//         if (id == home) {
-//           PRINT_VAR("id  ", id.name())
-//           PRINT_VAR("time", container.container[i].event_time)
-//           PRINT_VAR("type", container.container[i].event)
-//         }
-        //if (i == 290 && container.container[i].event_time <= tolerancy) { ASSERT(container.container[i].data[utils::current_player_state()].id.valid()); }
-        if (id.valid() && container.container[i].event_time <= tolerancy) {
+        const auto id = key_event_map[i];
+
+        if (id.valid() && key_container[i].event_time <= tolerancy) {
           mem = i+1;
-          return {id, container.container[i].event};
+          return {id, key_container[i].event};
         }
       }
 
       return {utils::id(), release};
     }
-
-//     struct input_event_state input_event_state(const utils::id &id) {
-//       const auto &container = global::get<data>()->key_events;
-//       auto itr = container.event_keys.find(id);
-//       if (itr == container.event_keys.end()) return {utils::id(), release, SIZE_MAX};
-//       if (itr->second.keys[1] == INT32_MAX) {
-//         const int index = itr->second.keys[0];
-//         return {id, container.container[index].event, container.container[index].event_time};
-//       }
-//       
-//       if (container.container[itr->second.keys[0]].event_time < container.container[itr->second.keys[1]].event_time) {
-//         const int index = itr->second.keys[0];
-//         return {id, container.container[index].event, container.container[index].event_time};
-//       }
-//       
-//       const int index = itr->second.keys[1];
-//       return {id, container.container[index].event, container.container[index].event_time};
-//     }
     
     std::tuple<type, size_t> input_event_state(const utils::id &id) {
-      const auto &container = global::get<data>()->key_events;
-      //auto itr = container.event_keys.find(id);
-      //if (itr == container.event_keys.end()) return {release, SIZE_MAX};
-      auto itr = container.events_map.find(id);
-      if (itr == container.events_map.end()) return { release, SIZE_MAX };
+      const auto data = get_input_data();
+      if (data->input_blocked) return { release, SIZE_MAX };
       
-      const size_t event_index = itr->second;
+      const auto container = get_key_map();
+      auto itr = container->events_map.find(id);
+      if (itr == container->events_map.end()) return { release, SIZE_MAX };
+      
+      const auto &key_container = data->container;
+      const auto &found_event = itr->second;
       int index = INT32_MAX;
-      const auto& found_event = container.event_keys[event_index].second;
-      if (found_event.keys[1] == INT32_MAX) index = found_event.keys[0];
-      else if (container.container[found_event.keys[0]].event_time < container.container[found_event.keys[1]].event_time) index = found_event.keys[0]; // стейт тайм?
-      else index = found_event.keys[1];
+      {
+        const int index1 = found_event.keys[0];
+        const int index2 = found_event.keys[1];
+        const bool keys_set = index1 != INT32_MAX && index2 != INT32_MAX;
+        index = index1 == INT32_MAX ? index2 : index1;
+        index = keys_set ? (key_container[index1].state_time < key_container[index2].state_time ? index1 : index2) : index;
+      }
       ASSERT(index != INT32_MAX);
       
-      return {container.container[index].event, container.container[index].event_time};
+      return {key_container[index].event, key_container[index].event_time};
     }
 
     bool is_event_pressed(const utils::id &id) {
-      const auto &container = global::get<data>()->key_events;
-      //auto itr = container.event_keys.find(id);
-      //if (itr == container.event_keys.end()) return false;
-      auto itr = container.events_map.find(id);
-      if (itr == container.events_map.end()) return false;
-      const size_t event_index = itr->second;
-      const auto& found_event = container.event_keys[event_index].second;
+      const auto data = get_input_data();
+      if (data->input_blocked) return false;
+      
+      const auto container = get_key_map();
+      
+      auto itr = container->events_map.find(id);
+      if (itr == container->events_map.end()) return false;
+      
+      const auto &key_container = data->container;
+      const auto &found_event = itr->second;
       if (found_event.keys[1] == INT32_MAX) {
         const int index = found_event.keys[0];
-        return container.container[index].event != release;
+        return key_container[index].event != release;
       }
       
-      if (container.container[found_event.keys[0]].event_time < container.container[found_event.keys[1]].event_time) {
+      if (key_container[found_event.keys[0]].event_time < key_container[found_event.keys[1]].event_time) {
         const int index = found_event.keys[0];
-        return container.container[index].event != release;
+        return key_container[index].event != release;
       }
       
       const int index = found_event.keys[1];
-      return container.container[index].event != release;
+      return key_container[index].event != release;
     }
 
     bool is_event_released(const utils::id &id) {
-      const auto &container = global::get<data>()->key_events;
-      //auto itr = container.event_keys.find(id);
-      //if (itr == container.event_keys.end()) return false;
-      auto itr = container.events_map.find(id);
-      if (itr == container.events_map.end()) return false;
-      const size_t event_index = itr->second;
-      const auto& found_event = container.event_keys[event_index].second;
+      const auto data = get_input_data();
+      if (data->input_blocked) return true;
+      
+      const auto container = get_key_map();
+      
+      auto itr = container->events_map.find(id);
+      if (itr == container->events_map.end()) return false;
+      
+      const auto &key_container = data->container;
+      const auto& found_event = itr->second;
       if (found_event.keys[1] == INT32_MAX) {
         const int index = found_event.keys[0];
-        return container.container[index].event == release;
+        return key_container[index].event == release;
       }
       
-      if (container.container[found_event.keys[0]].event_time < container.container[found_event.keys[1]].event_time) {
+      if (key_container[found_event.keys[0]].event_time < key_container[found_event.keys[1]].event_time) {
         const int index = found_event.keys[0];
-        return container.container[index].event == release;
+        return key_container[index].event == release;
       }
       
       const int index = found_event.keys[1];
-      return container.container[index].event == release;
+      return key_container[index].event == release;
     }
 
     void update_time(const size_t &time) {
-      global::get<data>()->key_events.current_event_layer = 0;
-      auto container = global::get<data>()->key_events.container;
-      global::get<data>()->last_frame_time = time;
+      auto data = get_input_data();
+      const auto key_event_container = get_key_map();
+      auto &container = data->container;
+      
+      key_event_container->current_event_layer = 0;
+      data->last_frame_time = time;
+      
       for (size_t i = 0; i < key_count; ++i) {
         container[i].state_time += time;
         container[i].event_time += time;
@@ -584,23 +598,30 @@ namespace devils_engine {
     }
     
     const char* get_event_key_name(const utils::id &id, const uint8_t &slot) {
+      auto data = get_input_data();
+      if (data->input_blocked) return nullptr;
+      
+      const auto container = get_key_map();
+      
       assert(slot < event_key_slots);
-      const auto &container = global::get<data>()->key_events;
-      auto itr = container.events_map.find(id);
-      if (itr == container.events_map.end()) return nullptr;
+      auto itr = container->events_map.find(id);
+      if (itr == container->events_map.end()) return nullptr;
 
-      const size_t event_index = itr->second;
-      const auto& found_event = container.event_keys[event_index].second;
+      const auto& found_event = itr->second;
       const int key = found_event.keys[slot];
       return get_key_name(key);
     }
 
     std::pair<utils::id, size_t> pressed_event(size_t &mem) {
-      const auto &container = global::get<data>()->key_events;
+      auto data = get_input_data();
+      if (data->input_blocked) return std::make_pair(utils::id(), SIZE_MAX);
+      
+      const auto &key_container = data->container;
+      const auto &key_event_map = get_key_map()->container;
       for (size_t i = mem; i < container_size; ++i) {
-        if (container.container[i].data[utils::current_player_state()].id.valid() && container.container[i].event != release) {
+        if (key_event_map[i].valid() && key_container[i].event != release) {
           mem = i+1;
-          return std::make_pair(container.container[i].data[utils::current_player_state()].id, container.container[i].event_time);
+          return std::make_pair(key_event_map[i], key_container[i].event_time);
         }
       }
 
@@ -608,126 +629,155 @@ namespace devils_engine {
     }
     
     utils::id get_event(const std::string_view &str) {
-//       PRINT(str)
       return utils::id::get(str);
     }
     
-    void block() { global::get<data>()->key_events.blocked = 1; }
-    void unblock() { global::get<data>()->key_events.blocked = 0; }
-    void increase_layer() { ++global::get<data>()->key_events.current_event_layer; }
+    void block() { get_input_data()->input_blocked = true; }
+    void unblock() { get_input_data()->input_blocked = false; }
+    void increase_layer() { ++get_key_map()->current_event_layer; }
 
     void set_key(const int &key, const utils::id &id, const uint8_t &slot) {
       assert(slot < event_key_slots);
       ASSERT(id.valid());
-      auto &container = global::get<data>()->key_events;
-      auto itr = container.events_map.find(id);
-      if (itr == container.events_map.end()) {
-        const size_t index = container.event_keys.size();
-        container.event_keys.emplace_back(id, keys::event_keys_container{INT32_MAX, INT32_MAX});
-        itr = container.events_map.insert(std::make_pair(id, index)).first;
+      
+      // хотя эта функция изменится
+      auto data = get_input_data();
+      if (data->input_blocked) throw std::runtime_error("Set keys to blocked input");
+      
+      auto container = get_key_map();
+      auto itr = container->events_map.find(id);
+      if (itr == container->events_map.end()) {
+        itr = container->events_map.emplace(id, keys::event_keys_container{INT32_MAX, INT32_MAX}).first;
       }
       
-      const size_t event_index = itr->second;
-      container.event_keys[event_index].second.keys[slot] = key;
+      auto &event_cont = itr->second;
+      const int prev_key = event_cont.keys[slot];
+      event_cont.keys[slot] = key;
+      ASSERT(itr->second.keys[slot] == key);
       
-//       PRINT_VAR("setting id ", id.name())
-//       static const auto home = utils::id::get("home");
-//       if (id == home) {
-//         PRINT_VAR("set home key to ", home.name())
-//         PRINT_VAR("home key is ", get_key_name(key))
-//       }
+      if (prev_key != INT32_MAX) {
+        ASSERT(size_t(prev_key) < container_size);
+        ASSERT(container->container[prev_key] == id);
+        container->container[prev_key] = utils::id();
+      }
       
-      //itr->second.keys[slot] = key;
       // нужно ли запоминать в кнопке что к ней обращается? 
       // по идее мне это нужно только для того чтобы подтвердить что пользователь не прилепил на одну кнопку несколько эвентов
       // думаю что это можно сделать отдельно
       if (key == INT32_MAX) return; // так мы по идее должны отвязать кнопку от эвента
       if (size_t(key) >= container_size) throw std::runtime_error("Bad key index");
-      auto &cont = global::get<data>()->key_events.container;
-      if (cont[key].data[0].id == id) return;
-      auto old_id = cont[key].data[0].id;
-      cont[key].data[0].id = id;
+      
+      auto &cont = container->container;
+      if (cont[key] == id) return;
+      auto old_id = cont[key];
+      cont[key] = id;
       if (!old_id.valid()) return;
       
       ASSERT(false);
-      auto event_keys_container = container.events_map.find(old_id);
-      ASSERT(event_keys_container != container.events_map.end());
-      const size_t old_event_index = event_keys_container->second;
-      if (container.event_keys[old_event_index].second.keys[0] == key) container.event_keys[old_event_index].second.keys[0] = INT32_MAX;
-      if (container.event_keys[old_event_index].second.keys[1] == key) container.event_keys[old_event_index].second.keys[1] = INT32_MAX;
+      auto event_keys_container = container->events_map.find(old_id);
+      ASSERT(event_keys_container != container->events_map.end());
+      //const size_t old_event_index = event_keys_container->second;
+      auto &event_key_cont = event_keys_container->second;
+      if (event_key_cont.keys[0] == key) event_key_cont.keys[0] = INT32_MAX;
+      if (event_key_cont.keys[1] == key) event_key_cont.keys[1] = INT32_MAX;
+      
+      // надо бы здесь вернуть что то по чему можено сделать вывод что перезаписалось
     }
 
-    event_data get_event_data(const int &key) {
-      if (uint32_t(key) >= container_size) return event_data();
-      const auto &container = global::get<data>()->key_events;
-      return container.container[key].data[utils::current_player_state()];
+    utils::id get_event_data(const int &key) {
+      auto data = get_input_data();
+      if (data->input_blocked) return utils::id();
+      
+      if (uint32_t(key) >= container_size) return utils::id();
+      const auto container = get_key_map();
+      return container->container[key];
     }
     
     bool check_key(const int &key, const uint32_t &states) {
+      auto data = get_input_data();
+      if (data->input_blocked) return false;
+      
       if (uint32_t(key) >= container_size) return false;
-      if (global::get<data>()->key_events.blocked == 1) return false;
-      const auto &container = global::get<data>()->key_events.container;
-      const uint32_t final_state = container[key].state == state_click && container[key].state_time != 0 ? state_initial : container[key].state;
+      const auto &key_container = data->container;
+      const uint32_t final_state = key_container[key].state == state_click && key_container[key].state_time != 0 ? state_initial : key_container[key].state;
       return (final_state & states) != 0;
     }
     
     bool timed_check_key(const int &key, const uint32_t &states, const size_t &wait, const size_t &period) {
+      auto data = get_input_data();
+      if (data->input_blocked) return false;
+      
       if (uint32_t(key) >= container_size) return false;
-      if (global::get<data>()->key_events.blocked == 1) return false;
-      const auto &container = global::get<data>()->key_events.container;
-      const size_t last_frame_time = global::get<data>()->last_frame_time;
-//       if (container[key].state_time < wait) return false;
-//       if (container[key].state_time % period >= frame_time) return false;
-      if (container[key].event_time < wait) return false;
-      if (container[key].event_time % period >= last_frame_time) return false;
-      const uint32_t final_state = container[key].state == state_click && container[key].state_time != 0 ? state_initial : container[key].state;
+      const auto &key_container = data->container;
+      const size_t last_frame_time = data->last_frame_time;
+
+      if (key_container[key].event_time < wait) return false;
+      if (key_container[key].event_time % period >= last_frame_time) return false;
+      const uint32_t final_state = key_container[key].state == state_click && key_container[key].state_time != 0 ? state_initial : key_container[key].state;
       return (final_state & states) != 0;
     }
     
     bool check_event(const utils::id &event, const uint32_t &states) {
-      auto &container = global::get<data>()->key_events;
-      if (container.blocked == 1) return false;
-      //auto itr = container.event_keys.find(event);
-      //if (itr == container.event_keys.end()) return false;
-      auto itr = container.events_map.find(event);
-      if (itr == container.events_map.end()) return false;
-      const size_t event_index = itr->second;
-      const auto& found_event = container.event_keys[event_index].second;
+      auto data = get_input_data();
+      if (data->input_blocked) return false;
       
+      // ищем эвент
+      auto container = get_key_map();
+      auto itr = container->events_map.find(event);
+      if (itr == container->events_map.end()) return false;
+      const auto& found_event = itr->second;
+      
+      auto &key_container = data->container;
       int index = INT32_MAX;
-      if (found_event.keys[1] == INT32_MAX) index = found_event.keys[0];
-      else if (container.container[found_event.keys[0]].state_time < container.container[found_event.keys[1]].state_time) index = found_event.keys[0]; // стейт тайм?
-      else index = found_event.keys[1];
+      {
+        const int index1 = found_event.keys[0];
+        const int index2 = found_event.keys[1];
+        const bool keys_set = index1 != INT32_MAX && index2 != INT32_MAX;
+        index = index1 == INT32_MAX ? index2 : index1;
+        index = keys_set ? (key_container[index1].state_time < key_container[index2].state_time ? index1 : index2) : index;
+      }
+      if (index == INT32_MAX) return false;
       
-      if (container.container[index].event_layer == UINT32_MAX) container.container[index].event_layer = container.current_event_layer;
-      if (container.container[index].event_layer != container.current_event_layer) return false;
+      // задаем слой
+      if (key_container[index].event_layer == UINT32_MAX) key_container[index].event_layer = container->current_event_layer;
+      if (key_container[index].event_layer != container->current_event_layer) return false;
       
-      const uint32_t final_state = container.container[index].state == state_click && container.container[index].state_time != 0 ? state_initial : container.container[index].state;
+      // проверяем условие
+      const uint32_t final_state = key_container[index].state == state_click && key_container[index].state_time != 0 ? state_initial : key_container[index].state;
       return (final_state & states) != 0;
     }
     
     bool timed_check_event(const utils::id &event, const uint32_t &states, const size_t &wait, const size_t &period) {
-      auto &container = global::get<data>()->key_events;
-      if (container.blocked == 1) return false;
-      auto itr = container.events_map.find(event);
-      if (itr == container.events_map.end()) return false;
-      const size_t event_index = itr->second;
-      const auto& found_event = container.event_keys[event_index].second;
+      auto data = get_input_data();
+      if (data->input_blocked) return false;
       
-      const size_t last_frame_time = global::get<data>()->last_frame_time;
+      // ищем эвент
+      auto container = get_key_map();
+      auto itr = container->events_map.find(event);
+      if (itr == container->events_map.end()) return false;
+      const auto& found_event = itr->second;
       
+      const size_t last_frame_time = data->last_frame_time;
+      
+      auto &key_container = data->container;
       int index = INT32_MAX;
-      if (found_event.keys[1] == INT32_MAX) index = found_event.keys[0];
-      else if (container.container[found_event.keys[0]].state_time < container.container[found_event.keys[1]].state_time) index = found_event.keys[0]; // стейт тайм?
-      else index = found_event.keys[1];
+      {
+        const int index1 = found_event.keys[0];
+        const int index2 = found_event.keys[1];
+        const bool keys_set = index1 != INT32_MAX && index2 != INT32_MAX;
+        index = index1 == INT32_MAX ? index2 : index1;
+        index = keys_set ? (key_container[index1].state_time < key_container[index2].state_time ? index1 : index2) : index;
+      }
+      if (index == INT32_MAX) return false;
       
-      if (container.container[index].event_layer == UINT32_MAX) container.container[index].event_layer = container.current_event_layer;
-      if (container.container[index].event_layer != container.current_event_layer) return false;
+      // задаем слой
+      if (key_container[index].event_layer == UINT32_MAX) key_container[index].event_layer = container->current_event_layer;
+      if (key_container[index].event_layer != container->current_event_layer) return false;
       
-//       if (index == 264 && container.container[index].event_time < 10000) PRINT(container.container[index].event_time)
-      if (container.container[index].event_time < wait) return false;
-      if (container.container[index].event_time % period >= last_frame_time) return false;
-      const uint32_t final_state = container.container[index].state == state_click && container.container[index].state_time != 0 ? state_initial : container.container[index].state;
+      // проверяем условие
+      if (key_container[index].event_time < wait) return false;
+      if (key_container[index].event_time % period >= last_frame_time) return false;
+      const uint32_t final_state = key_container[index].state == state_click && key_container[index].state_time != 0 ? state_initial : key_container[index].state;
       return (final_state & states) != 0;
     }
     

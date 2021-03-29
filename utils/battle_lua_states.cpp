@@ -1,11 +1,17 @@
 #include "battle_lua_states.h"
 
+#include "utils/lua_initialization.h"
 #include <thread>
+#include <iostream>
 
 namespace devils_engine {
   namespace battle {
     lua_container::lua_container() : states(new sol::state[std::thread::hardware_concurrency()]) { // registered_functions(std::thread::hardware_concurrency())
-      
+      for (size_t i = 0; i < std::thread::hardware_concurrency(); ++i) {
+        states[i].open_libraries(sol::lib::base, sol::lib::math, sol::lib::bit32, sol::lib::table, sol::lib::string);
+        utils::setup_lua_battle_unit(states[i]);
+        utils::setup_lua_constants(states[i]);
+      }
     }
     
     lua_container::~lua_container() {

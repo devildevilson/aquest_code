@@ -34,8 +34,8 @@ local ocean_percentage_prop = {
   var_name = "Ocean ratio"
 }
 
-local current_seed_buf = "1"
-local current_seed = 1
+local default_seed = "abadbabe8badf00d"
+local current_seed_buf = default_seed
 
 local function gen_property(ctx, table, var_name, prop_table, window_width)
   local pixel_step = (prop_table.max - prop_table.min) / window_width
@@ -83,12 +83,9 @@ function gen_part1_fun(ctx, table)
 
     nk.layout_row(ctx, nk.DYNAMIC, 30.0, {0.6, 0.4})
     --current_seed_buf, states_flag = nk.edit_string(ctx, nk.EDIT_FIELD, current_seed_buf, 11, decimal_filter)
-    current_seed_buf, states_flag = nk.edit_string(ctx, nk.EDIT_FIELD, current_seed_buf, 11, nk.filter_decimal)
-    if nk.button(ctx, nil, "Randomize") then
-      local val = generator.get_random_int()
-      current_seed = val
-      current_seed_buf = tostring(current_seed)
-    end
+    --current_seed_buf, states_flag = nk.edit_string(ctx, nk.EDIT_FIELD, current_seed_buf, 11, nk.filter_decimal)
+    current_seed_buf, states_flag = nk.edit_string(ctx, nk.EDIT_FIELD, current_seed_buf, 17, nk.filter_hex)
+    if nk.button(ctx, nil, "Randomize") then current_seed_buf = generator.get_random_number() end
 
     nk.layout_row(ctx, nk.DYNAMIC, 30.0, {0.9, 0.1})
     world_name_str_prev, states_flag = nk.edit_string(ctx, nk.EDIT_FIELD, world_name_str_prev, 50)
@@ -149,19 +146,12 @@ function gen_part1_fun(ctx, table)
   end
   nk.window_end(ctx)
 
-  current_seed = tonumber(current_seed_buf)
-  if current_seed ~= nil and current_seed > 4294967296 then
-    current_seed = 4294967296 -- maximum seed is UINT32_MAX (2^32)
-    current_seed_buf = tostring(current_seed)
-  end
-
   if ret_value < 0 then return -1 end
   if ret_value == 0 or not valid_name or not valid_folder then return 0 end
-  generator.setup_random_seed(current_seed == nil and 1 or current_seed)
-  generator.setup_noise_seed(current_seed == nil and 1 or current_seed)
+  generator.setup_random_seed(isempty(current_seed_buf) and default_seed or current_seed_buf)
+  generator.setup_noise_seed(isempty(current_seed_buf) and default_seed or current_seed_buf)
   generator.set_world_name(world_name_str)    -- пустая строка == вылет
   generator.set_folder_name(world_folder_str)
-  current_seed_buf = "1"
-  current_seed = 1
+  current_seed_buf = default_seed
   return ret_value
 end

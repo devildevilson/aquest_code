@@ -9,10 +9,10 @@ function progress_bar(ctx, info)
   local sizex, sizey = 400, ctx:font():height() * 2 + progress_bar_size + 20
   --local wx, wy = fbw/2.0-sizex/2.0, fbh/2.0-sizey/2.0
   local wx, wy = fbw-sizex-10, fbh-sizey-10
-  local current_step = info:current_step()
-  local current_progress_name = info:hint1()
-  local hint = info:hint2()
-  local step_count = info:step_count()
+  local current_step = info.current_step
+  local current_progress_name = info.hint1
+  local hint = info.hint2
+  local step_count = info.step_count
   local progress_hint = tostring(current_step) .. "/" .. tostring(step_count)
 
   --assert(hint ~= nil and hint ~= "")

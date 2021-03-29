@@ -20,6 +20,7 @@ function begin(ctx, table)
 
   for i = 0, tiles_count-1 do
     local h = ctx.random:closed(0.8, 1.2)
+    --if i == 0 then h = 3.0 end
     ctx.map:set_tile_height(i, h) -- не так много вещей напрямую с картой взамодействуют
     local b = ctx.random:closed(0, 1)
     ctx.map:set_tile_biome(i, b) -- делать по индексу или как?
@@ -79,9 +80,10 @@ function make_biomes(ctx, table)
       --texture3_face = "image_lua_test", texture3_top = "image_lua_test",
       -- нужно ли нам учитывать возможность нарисовать ничего? наверное, мы можем это сделать с помощью скейла
       density = 52, probability1 = 12, probability2 = 0, probability3 = 0,
-      min_scale1 = 0.1, max_scale1 = 0.3,
-      min_scale2 = 0.1, max_scale2 = 0.3,
-      min_scale3 = 0.1, max_scale3 = 0.3,
+      -- сильно уменьшил размер
+      min_scale1 = 0.05, max_scale1 = 0.15,
+      min_scale2 = 0.05, max_scale2 = 0.15,
+      min_scale3 = 0.05, max_scale3 = 0.15,
       -- может зум только один? а может это вообще константа? не уверен, нет, кажется что
       -- разные зумы - это верное решение
       max_zoom1 = 0.1, max_zoom2 = 0.1, max_zoom3 = 0.1
@@ -104,9 +106,10 @@ function make_biomes(ctx, table)
       --texture3_face = "image_lua_test", texture3_top = "image_lua_test",
       -- нужно ли нам учитывать возможность нарисовать ничего? наверное, мы можем это сделать с помощью скейла
       density = 34, probability1 = 12, probability2 = 0, probability3 = 0,
-      min_scale1 = 0.1, max_scale1 = 0.3,
-      min_scale2 = 0.1, max_scale2 = 0.3,
-      min_scale3 = 0.1, max_scale3 = 0.3,
+      -- сильно уменьшил размер
+      min_scale1 = 0.05, max_scale1 = 0.15,
+      min_scale2 = 0.05, max_scale2 = 0.15,
+      min_scale3 = 0.05, max_scale3 = 0.15,
       -- может зум только один? а может это вообще константа? не уверен, нет, кажется что
       -- разные зумы - это верное решение
       max_zoom1 = 0.1, max_zoom2 = 0.1, max_zoom3 = 0.1
@@ -213,6 +216,9 @@ function make_biomes(ctx, table)
       id = "test_troop_type",
       --unit_type = "test_unit_type",
       default_unit_state = "basic_state",
+      units_count = 20,
+      -- по идее мы здесь же можем указать скейл
+      unit_scale = 0.5,
       stats = {
         troop_size = 10,
         max_hp = 1000,
@@ -248,42 +254,97 @@ function make_biomes(ctx, table)
     utils.add_troop_type(troop_type_table)
   end
 
+  local stats_table = {
+    troop_size = 10,
+    max_hp = 500,
+    morale = 76,
+    armor = 10,
+    siege_armor = 100,
+    speed = 5,
+    initiative = 10,
+    melee_attack = 10,
+    melee_defence = 10,
+    range_attack = 10,
+    range_defence = 10,
+    charge = 30,
+    morale_damage = 10,
+    melee_damage = 30,
+    melee_armor_piercing = 30,
+    melee_magic = 0,
+    melee_fire = 0,
+    melee_siege = 0,
+    range_damage = 0,
+    range_armor_piercing = 0,
+    range_magic = 0,
+    range_fire = 0,
+    range_siege = 0,
+    accuracy = 10,
+    reloading = 2,
+    ammo = 10,
+    maintenance = 4,
+    provision = 3,
+    recovery = 2
+  }
+
   do
     local troop_table = {
       type = "test_troop_type",
-      -- надо как то задать координату, вообще можно использовать (x,y), но пока что наверное просто индексом
-      tile_index = 0,
-      current_stats = {
-        troop_size = 10,
-        max_hp = 500,
-        morale = 76,
-        armor = 10,
-        siege_armor = 100,
-        speed = 5,
-        initiative = 10,
-        melee_attack = 10,
-        melee_defence = 10,
-        range_attack = 10,
-        range_defence = 10,
-        charge = 30,
-        morale_damage = 10,
-        melee_damage = 30,
-        melee_armor_piercing = 30,
-        melee_magic = 0,
-        melee_fire = 0,
-        melee_siege = 0,
-        range_damage = 0,
-        range_armor_piercing = 0,
-        range_magic = 0,
-        range_fire = 0,
-        range_siege = 0,
-        accuracy = 10,
-        reloading = 2,
-        ammo = 10,
-        maintenance = 4,
-        provision = 3,
-        recovery = 2
-      }
+      tile_index = 128*64+64, -- центр
+      current_stats = stats_table
+    }
+    utils.add_troop(troop_table)
+  end
+
+  do
+    local troop_table = {
+      type = "test_troop_type",
+      tile_index = 128*63+64,
+      current_stats = stats_table
+    }
+    utils.add_troop(troop_table)
+  end
+
+  do
+    local troop_table = {
+      type = "test_troop_type",
+      tile_index = 128*65+66,
+      current_stats = stats_table
+    }
+    utils.add_troop(troop_table)
+  end
+
+  do
+    local troop_table = {
+      type = "test_troop_type",
+      tile_index = 128*63+65,
+      current_stats = stats_table
+    }
+    utils.add_troop(troop_table)
+  end
+
+  do
+    local troop_table = {
+      type = "test_troop_type",
+      tile_index = 128*62+67,
+      current_stats = stats_table
+    }
+    utils.add_troop(troop_table)
+  end
+
+  do
+    local troop_table = {
+      type = "test_troop_type",
+      tile_index = 128*68+62,
+      current_stats = stats_table
+    }
+    utils.add_troop(troop_table)
+  end
+
+  do
+    local troop_table = {
+      type = "test_troop_type",
+      tile_index = 128*67+64,
+      current_stats = stats_table
     }
     utils.add_troop(troop_table)
   end
@@ -305,7 +366,8 @@ function make_biomes(ctx, table)
   do
     -- нужны текстурки для состояний
     local image_table1 = {
-      id = "unit_test_texture1",
+      id = "test_unit01_idle01",
+      --path = "apates_quest/textures/armies_and_heroes/test_unit01_idle01.png",
       path = "apates_quest/textures/armies_and_heroes/glad1_256.png",
       type = 0,
       sampler = 1
@@ -313,8 +375,25 @@ function make_biomes(ctx, table)
     utils.add_image(image_table1)
 
     local image_table2 = {
-      id = "unit_test_texture2",
+      id = "test_unit01_idle02",
+      --path = "apates_quest/textures/armies_and_heroes/test_unit01_idle02.png",
       path = "apates_quest/textures/armies_and_heroes/glad2_256.png",
+      type = 0,
+      sampler = 1
+    }
+    utils.add_image(image_table2)
+
+    local image_table1 = {
+      id = "test_unit02_idle01",
+      path = "apates_quest/textures/armies_and_heroes/test_unit02_idle01.png",
+      type = 0,
+      sampler = 1
+    }
+    utils.add_image(image_table1)
+
+    local image_table2 = {
+      id = "test_unit02_idle02",
+      path = "apates_quest/textures/armies_and_heroes/test_unit02_idle02.png",
       type = 0,
       sampler = 1
     }
@@ -325,13 +404,19 @@ function make_biomes(ctx, table)
     local state_table = {
       id = "basic_state",
       -- вообще можно произвольное количество текстурок сделать, все что нужно - это правильно посчитать сторону по количеству текстурок
-      textures = {"unit_test_texture1"},
+      -- я вот че подумал, для меня лучше использовать одну текстурку и просто флипать ее в зависимости от того где находится враг
+      textures = {"test_unit01_idle01"},
       -- если укажем 0 - то выполним в том же кадре, если укажем 1 то выполним в следующим кадре, если укажем < 0 то состояние никогда не закончится (например смерть)
       --time = constants.one_second / 3,
-      time = -1,
-      --next = "next_state", -- проходит время и мы переключаемся автоматически в следующий стейт, функция необязательна
+      -- так мы можем сделать цикличность состояний
+      time = constants.one_second / 10,
+      next = "basic_state", -- проходит время и мы переключаемся автоматически в следующий стейт, функция необязательна
       -- функция запускается ВНАЧАЛЕ стейта, то бишь нужно создать специальные стейты только с функциями
+      -- тут связано одна неприятная особенность в том что функция не заканчивает работу когда вызывается set_state
+      -- изза чего вполне может быть ситуация довольно длинного и дорогого вызова функций
+      -- исправил, теперь сет стейт не на прямую рабьотает с функцие переключения стейта
       func = [[
+        --local variable = 0 -- по идее мы тут еще можем всякие интересные штуки делать с глобальными переменными
         return function(unit)
           --unit.user_time
           --unit.state
@@ -339,9 +424,14 @@ function make_biomes(ctx, table)
           --if status == core.unit_status.idle then
           --end
 
+          --print(unit)
           local rand_val = unit:random()
-          local time_k = unit.state_time * (1 / (constants.one_second / 3))
-          if time_k > rand_val then unit:set_state("basic_state2") end
+          local time_k = unit.user_time * (1 / (constants.one_second / 3))
+          if time_k > rand_val then
+            --print("unit " .. tostring(unit) .. " is changing state to basic_state2")
+            unit:reset_timer() -- выглядит неплохо
+            unit:set_state("basic_state2")
+          end
         end
       ]],
       --func = {path = "function_container.lua", name = "func1"} -- либо строкой, либо из файла
@@ -353,11 +443,11 @@ function make_biomes(ctx, table)
     local state_table = {
       id = "basic_state2",
       -- вообще можно произвольное количество текстурок сделать, все что нужно - это правильно посчитать сторону по количеству текстурок
-      textures = {"unit_test_texture2"},
+      textures = {"test_unit01_idle02"},
       -- если укажем 0 - то выполним в том же кадре, если укажем 1 то выполним в следующим кадре, если укажем < 0 то состояние никогда не закончится (например смерть)
       --time = constants.one_second / 3,
-      time = -1,
-      --next = "next_state", -- проходит время и мы переключаемся автоматически в следующий стейт, функция необязательна
+      time = constants.one_second / 10,
+      next = "basic_state2", -- проходит время и мы переключаемся автоматически в следующий стейт, функция необязательна
       -- функция запускается ВНАЧАЛЕ стейта, то бишь нужно создать специальные стейты только с функциями
       func = [[
         return function(unit)
@@ -367,9 +457,14 @@ function make_biomes(ctx, table)
           --if status == core.unit_status.idle then
           --end
 
+          --print("function working")
           local rand_val = unit:random()
-          local time_k = unit.state_time * (1 / (constants.one_second / 3))
-          if time_k > rand_val then unit:set_state("basic_state") end
+          local time_k = unit.user_time * (1 / (constants.one_second / 3))
+          if time_k > rand_val then
+            --print("unit " .. tostring(unit) .. " is changing state to basic_state")
+            unit:reset_timer()
+            unit:set_state("basic_state")
+          end
         end
       ]],
       --func = {path = "function_container.lua", name = "func1"} -- либо строкой, либо из файла

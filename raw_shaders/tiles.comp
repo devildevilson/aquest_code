@@ -2,6 +2,7 @@
 
 #extension GL_GOOGLE_include_directive : enable
 #include "../render/shared_structures.h"
+#include "../render/shared_render_utility.h"
 #include "../utils/shared_mathematical_constant.h"
 
 layout(constant_id = 0) const float triangle_size = 23.8457f;
@@ -40,8 +41,10 @@ layout(std140, set = 1, binding = 5) readonly buffer world_structure_buffer {
 };
 
 layout(std140, set = 2, binding = 0) buffer tile_indirect_buffer {
-  uvec4 tiles_indirect;
-  uvec4 tiles_data;
+  uvec4 pen_tiles_indirect;
+  uvec4 pen_tiles_data;
+  uvec4 hex_tiles_indirect;
+  uvec4 hex_tiles_data;
   uvec4 borders_indirect;
   uvec4 borders_data;
   uvec4 walls_indirect;
@@ -99,8 +102,8 @@ world_structure_t unpack(const uvec4 data);
 layout(local_size_x = WORK_GROUP, local_size_y = 1, local_size_z = 1) in;
 
 void main() {
-  const uint triangle_count = tiles_data[1];
-  const uint max_indices_count = tiles_data[2];
+  const uint triangle_count = hex_tiles_data[1];
+  const uint max_indices_count = hex_tiles_data[2];
   const uint triangle_index = gl_GlobalInvocationID.x;
   if (triangle_index >= triangle_count) return;
 
@@ -137,8 +140,11 @@ void main() {
   // пентагон должен быть всегда последним
   const uint multiplier = PACKED_TILE_INDEX_COEF+1;
   const uint new_tiles_count = triangle.data[1] - triangle.data[2];
-  const uint new_indices_count = (new_tiles_count * multiplier) + (triangle.data[2] * multiplier); // 6 индексов + 1 рестарт
-  const uint new_indices_offset = atomicAdd(tiles_indirect.x, new_indices_count);
+  //const uint new_indices_count = (new_tiles_count * multiplier) + (triangle.data[2] * multiplier); // 6 индексов + 1 рестарт
+  //const uint new_indices_offset = atomicAdd(hex_tiles_indirect.x, new_indices_count); // y
+  const uint new_indices_count = new_tiles_count;
+  const uint new_indices_offset = atomicAdd(hex_tiles_indirect.y, new_indices_count);
+  const uint hexagon_offset = 12;
 
   if (new_indices_offset + new_indices_count >= max_indices_count) return;
 
@@ -149,45 +155,54 @@ void main() {
 
   for (uint i = 0; i < new_tiles_count; ++i) {
     const uint tile_index = get_accel_triangle_tile_index(triangle.data[0] + i);
-    const uint pack_tile = tile_index * PACKED_TILE_INDEX_COEF;
-    const uint offset = new_indices_offset + i*(PACKED_TILE_INDEX_COEF+1);
-    for (uint j = 0; j < PACKED_TILE_INDEX_COEF; ++j) {
-      const uint index = offset + j;
-      const uint vec_index = index / 4;
-      const uint slot_index = index % 4;
-      tiles_indices[vec_index].index[slot_index] = pack_tile + j;
-    }
-
-    const uint index = offset + PACKED_TILE_INDEX_COEF;
-    const uint vec_index = index / 4;
-    const uint slot_index = index % 4;
-    tiles_indices[vec_index].index[slot_index] = GPU_UINT_MAX;
+    const uint offset = hexagon_offset + new_indices_offset + i;
+    const uint vec_index = offset / 4;
+    const uint slot_index = offset % 4;
+    tiles_indices[vec_index].index[slot_index] = tile_index;
+    // const uint pack_tile = tile_index * PACKED_TILE_INDEX_COEF;
+    // const uint offset = new_indices_offset + i*(PACKED_TILE_INDEX_COEF+1);
+    // for (uint j = 0; j < PACKED_TILE_INDEX_COEF; ++j) {
+    //   const uint index = offset + j;
+    //   const uint vec_index = index / 4;
+    //   const uint slot_index = index % 4;
+    //   tiles_indices[vec_index].index[slot_index] = pack_tile + j;
+    // }
+    //
+    // const uint index = offset + PACKED_TILE_INDEX_COEF;
+    // const uint vec_index = index / 4;
+    // const uint slot_index = index % 4;
+    // tiles_indices[vec_index].index[slot_index] = GPU_UINT_MAX;
   }
 
   if (bool(triangle.data[2])) {
     const uint tile_index = get_accel_triangle_tile_index(triangle.data[0] + triangle.data[1] - 1);
-    const uint pack_tile = tile_index * PACKED_TILE_INDEX_COEF;
-    const uint offset = new_indices_offset + new_tiles_count * (PACKED_TILE_INDEX_COEF+1);
-    for (uint j = 0; j < 5; ++j) {
-      const uint index = offset + j;
-      const uint vec_index = index / 4;
-      const uint slot_index = index % 4;
-      tiles_indices[vec_index].index[slot_index] = pack_tile + j;
-    }
+    const uint pentagon_offset = atomicAdd(pen_tiles_indirect.y, 1);
+    const uint vec_index = pentagon_offset / 4;
+    const uint slot_index = pentagon_offset % 4;
+    tiles_indices[vec_index].index[slot_index] = tile_index;
 
-    {
-      const uint index = offset + 5;
-      const uint vec_index = index / 4;
-      const uint slot_index = index % 4;
-      tiles_indices[vec_index].index[slot_index] = GPU_UINT_MAX;
-    }
-
-    {
-      const uint index = offset + 6;
-      const uint vec_index = index / 4;
-      const uint slot_index = index % 4;
-      tiles_indices[vec_index].index[slot_index] = GPU_UINT_MAX;
-    }
+    // const uint pack_tile = tile_index * PACKED_TILE_INDEX_COEF;
+    // const uint offset = new_indices_offset + new_tiles_count * (PACKED_TILE_INDEX_COEF+1);
+    // for (uint j = 0; j < 5; ++j) {
+    //   const uint index = offset + j;
+    //   const uint vec_index = index / 4;
+    //   const uint slot_index = index % 4;
+    //   tiles_indices[vec_index].index[slot_index] = pack_tile + j;
+    // }
+    //
+    // {
+    //   const uint index = offset + 5;
+    //   const uint vec_index = index / 4;
+    //   const uint slot_index = index % 4;
+    //   tiles_indices[vec_index].index[slot_index] = GPU_UINT_MAX;
+    // }
+    //
+    // {
+    //   const uint index = offset + 6;
+    //   const uint vec_index = index / 4;
+    //   const uint slot_index = index % 4;
+    //   tiles_indices[vec_index].index[slot_index] = GPU_UINT_MAX;
+    // }
   }
 
   // теперь мы можем проверить и добавить границы и соединения

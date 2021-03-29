@@ -15,6 +15,8 @@ namespace devils_engine {
       class tile_optimizer : public stage {
       public:
         static const size_t work_group_size = 256;
+        static const size_t selection_slots = 512;
+        static const size_t selection_buffer_size = align_to(selection_slots*2*sizeof(uint32_t), 16);
         
         // наверное в принципе все данные лучше хранить в гпу буфере, другое дело как обновлять? копировать перед началом... в будущем можно так сделать
         struct indirect_buffer_data {
@@ -25,6 +27,8 @@ namespace devils_engine {
           
           VkDrawIndexedIndirectCommand tiles_indirect;
           glm::uvec3 sizes_data;
+          
+          VkDrawIndirectCommand units_indirect;
           
           utils::frustum frustum;
           
@@ -54,10 +58,14 @@ namespace devils_engine {
         yavf::Buffer* get_indirect_buffer() const;
         yavf::Buffer* get_tiles_indices() const;
         yavf::Buffer* get_biomes_indices() const;
+        yavf::Buffer* get_units_indices() const;
+        yavf::Buffer* get_selection_indices() const;
         
         void update_containers();
+        void update_unit_container();
         void update_selection_frustum(const utils::frustum &fru);
         void update_biome_data(const std::array<std::pair<uint32_t, uint32_t>, BATTLE_BIOMES_MAX_COUNT> &data);
+        void update_mouse_dir_data(const glm::vec4 &pos, const glm::vec4 &dir);
       private:
         yavf::Device* device;
         yavf::Pipeline pipe;
@@ -66,6 +74,8 @@ namespace devils_engine {
         yavf::Buffer* indirect_buffer;
         yavf::Buffer* tiles_indices;
         yavf::Buffer* biomes_indices;
+        yavf::Buffer* units_indices;
+        yavf::Buffer* selection_indices;
       };
       
       class tile_render : public stage {
@@ -111,6 +121,27 @@ namespace devils_engine {
         yavf::DescriptorSet* images_set;
         
         const bool multidraw;
+      };
+      
+      class units_render : public stage {
+      public:
+        struct create_info {
+          yavf::Device* device;
+          tile_optimizer* opt;
+        };
+        
+        units_render(const create_info &info);
+        ~units_render();
+        
+        void begin() override;
+        void proccess(context * ctx) override;
+        void clear() override;
+      private:
+        yavf::Device* device;
+        tile_optimizer* opt;
+        yavf::Pipeline pipe;
+        
+        yavf::DescriptorSet* images_set;
       };
     }
   }

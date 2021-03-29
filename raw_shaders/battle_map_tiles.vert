@@ -4,6 +4,7 @@
 #include "../render/shared_structures.h"
 #include "../render/shared_battle_structures.h"
 #include "../utils/shared_mathematical_constant.h"
+#include "../render/shared_render_utility.h"
 
 const vec2 hexagon_uv[] = {
   vec2(0.5f, 1.0f),
@@ -52,6 +53,7 @@ layout(set = 0, binding = 0) uniform Camera {
   vec4 pos;
   vec4 dir;
   uvec4 dim;
+  vec4 cursor_dir;
 } camera;
 
 layout(set = 2, binding = 0) uniform tiles_uniform_buffer {

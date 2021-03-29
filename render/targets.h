@@ -36,6 +36,7 @@ namespace devils_engine {
       void update_dir(const glm::vec3 &dir);
       void update_zoom(const float &zoom);
       void update_cursor_dir(const glm::vec4 &cursor_dir);
+      void update_dimensions(const uint32_t &width, const uint32_t &height);
 //       void set_tile_data(const map::tile &tile, const uint32_t &index);
 //       void set_point_data(const glm::vec3 &point, const uint32_t &index);
 //       void set_tile_indices(const uint32_t &triangle_index, const std::vector<uint32_t> &indices, const uint32_t &offset, const uint32_t &count, const bool has_pentagon);

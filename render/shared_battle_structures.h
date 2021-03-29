@@ -10,7 +10,7 @@
 #define BATTLE_MAP_DESCRIPTOR_SET_LAYOUT_NAME "battle_map_descriptor_set_layout"
 
 #define INLINE inline
-#define INOUT
+#define INOUT(type) type&
 
 namespace devils_engine {
   namespace render {
@@ -33,7 +33,7 @@ namespace devils_engine {
 #else
 
 #define INLINE 
-#define INOUT inout   
+#define INOUT(type) inout type
 
 #endif
     
@@ -117,6 +117,10 @@ INLINE uint get_troop_unit_count(const uint troop_data) {
 
 INLINE uint get_troop_unit_offset(const uint troop_data) {
   return troop_data & troop_unit_offset_mask;
+}
+
+INLINE uint make_troop_data(const uint unit_count, const uint unit_offset) {
+  return unit_count << 24 | (unit_offset & troop_unit_offset_mask);
 }
 
 INLINE battle_map_tile_data_t unpack_data(const packed_battle_map_tile_data_t packed_data) {

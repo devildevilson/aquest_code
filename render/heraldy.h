@@ -8,7 +8,7 @@
 #include "utils/utility.h"
 
 #define INLINE inline
-#define INOUT
+#define INOUT(type) type&
 
 // для геральдики нужно указать трафарет, описание слоев + слои
 // геральдика рисуется по столичным городам (обязательно по городам?) (кажется в цк всегда рисовалась по городам)
@@ -35,7 +35,7 @@ namespace devils_engine {
 #else
     
 #define INLINE
-#define INOUT inout
+#define INOUT(type) inout type
     
 #endif
     

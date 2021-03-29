@@ -20,7 +20,7 @@
 #define IMAGE_SAMPLER_NEAREST_NAME "image_sampler_nearest"
 
 #define INLINE inline
-#define INOUT
+#define INOUT(type) type&
 
 namespace devils_engine {
   namespace render {
@@ -60,7 +60,7 @@ namespace devils_engine {
 #else
 
 #define INLINE
-#define INOUT inout
+#define INOUT(type) inout type
 
 #endif
 
@@ -69,9 +69,6 @@ namespace devils_engine {
 #define PACKED_TILE_INDEX_COEF 6
 #define MAX_BIOMES_COUNT 0xff
 #define WORLD_RADIUS_CONSTANT 500.0f
-#define OUTSIDE_FRUSTUM   0
-#define INTERSECT_FRUSTUM 1
-#define INSIDE_FRUSTUM    2
     
 const uint biome_ocean            = 0;
 const uint biome_ocean_glacier    = 1;
@@ -150,10 +147,6 @@ struct matrices {
   camera_data camera;
 };
 
-struct frustum_t {
-  vec4 planes[6];
-};
-
 struct instance_data_t {
   uvec4 index;
 };
@@ -192,10 +185,11 @@ struct map_tile_t {
   color_t color;
   float height; // мне бы еще подъем какой
   uint points[6];
-  uint neighbours[6];
+  uint neighbors[6];
   uint borders_data;
   uint connections_data;
   uint biome_index; 
+  uint dummy; 
   // все таки вернулся сюда биом индекс
   // рядом с ним мы можем поставить индекс структуры
   // нам еще потребуется решить вопрос с дорогами
@@ -258,11 +252,6 @@ struct biome_objects_data_t {
   uvec4 objects_data;
 };
 
-struct aabb_t {
-  vec4 min;
-  vec4 max;
-};
-
 struct additional_data_t {
   uvec4 data[2];
 };
@@ -298,6 +287,12 @@ INLINE bool flip_u(const image_t img) {
 INLINE bool flip_v(const image_t img) {
   const uint mask = 0x1;
   return bool((img.container >> 6) & mask);
+}
+
+INLINE image_t make_image(const uint index, const uint layer, const uint sampler_id, const bool flip_u, const bool flip_v) {
+  image_t img;
+  img.container = (uint(index) << 16) | (uint(layer) << 8) | uint(sampler_id) | (uint(flip_u) << 7) | (uint(flip_v) << 6);
+  return img;
 }
 
 INLINE float get_color_r(const color_t col) {
@@ -352,15 +347,16 @@ INLINE map_tile_t unpack_data(const light_map_tile_t data) {
   tile.points[3] = data.packed_data1[3];
   tile.points[4] = data.packed_data2[0];
   tile.points[5] = data.packed_data2[1];
-  tile.neighbours[0] = data.packed_data2[2];
-  tile.neighbours[1] = data.packed_data2[3];
-  tile.neighbours[2] = data.packed_data3[0];
-  tile.neighbours[3] = data.packed_data3[1];
-  tile.neighbours[4] = data.packed_data3[2];
-  tile.neighbours[5] = data.packed_data3[3];
+  tile.neighbors[0] = data.packed_data2[2];
+  tile.neighbors[1] = data.packed_data2[3];
+  tile.neighbors[2] = data.packed_data3[0];
+  tile.neighbors[3] = data.packed_data3[1];
+  tile.neighbors[4] = data.packed_data3[2];
+  tile.neighbors[5] = data.packed_data3[3];
   tile.borders_data = data.packed_data4[0];
   tile.connections_data = data.packed_data4[1];
   tile.biome_index = data.packed_data4[2];
+  tile.dummy = data.packed_data4[3];
   return tile;
 }
 
@@ -397,15 +393,16 @@ INLINE light_map_tile_t pack_data(const map_tile_t tile) {
   packed_data.packed_data1[3] = tile.points[3];
   packed_data.packed_data2[0] = tile.points[4];
   packed_data.packed_data2[1] = tile.points[5];
-  packed_data.packed_data2[2] = tile.neighbours[0];
-  packed_data.packed_data2[3] = tile.neighbours[1];
-  packed_data.packed_data3[0] = tile.neighbours[2];
-  packed_data.packed_data3[1] = tile.neighbours[3];
-  packed_data.packed_data3[2] = tile.neighbours[4];
-  packed_data.packed_data3[3] = tile.neighbours[5];
+  packed_data.packed_data2[2] = tile.neighbors[0];
+  packed_data.packed_data2[3] = tile.neighbors[1];
+  packed_data.packed_data3[0] = tile.neighbors[2];
+  packed_data.packed_data3[1] = tile.neighbors[3];
+  packed_data.packed_data3[2] = tile.neighbors[4];
+  packed_data.packed_data3[3] = tile.neighbors[5];
   packed_data.packed_data4[0] = tile.borders_data;
   packed_data.packed_data4[1] = tile.connections_data;
   packed_data.packed_data4[2] = tile.biome_index;
+  packed_data.packed_data4[3] = tile.dummy;
   return packed_data;
 }
 
@@ -431,79 +428,12 @@ INLINE bool is_pentagon(const light_map_tile_t tile) {
 }
 
 INLINE bool is_pentagon(const map_tile_t tile) {
-  return tile.neighbours[5] == GPU_UINT_MAX;
+  return tile.neighbors[5] == GPU_UINT_MAX;
 }
 
 INLINE uint compute_height_layer(const float height) {
   return height < 0.0f ? 0 : uint(height / layer_height);
 }
-
-INLINE uint prng(const uint prev) {  
-  uint z = prev + 0x6D2B79F5;
-  z = (z ^ z >> 15) * (1 | z);
-  z ^= z + (z ^ z >> 7) * (61 | z);
-  return z ^ z >> 14;
-}
-
-INLINE uint rotl(const uint x, int k) {
-  return (x << k) | (x >> (32 - k));
-}
-
-INLINE uint prng2(const uint s0, const uint s1) { // по идее должно давать хорошие результаты для чисел не 0
-  const uint s1_tmp = s1 ^ s0;
-  const uint new_s0 = rotl(s0, 26) ^ s1_tmp ^ (s1_tmp << 9);
-  //const uint new_s1 = rotl(s1_tmp, 13);
-  return rotl(new_s0 * 0x9E3779BB, 5) * 5;
-}
-
-INLINE float prng_normalize(const uint state) {
-  // float32 - 1 бит знак, 8 бит экспонента и 23 мантисса
-  const uint float_mask = 0x7f << 23;
-  const uint float_val = float_mask | (state >> 9); // зачем двигать?
-  return uintBitsToFloat(float_val) - 1.0f;
-}
-
-INLINE int frustum_test(const frustum_t frustum, const vec4 center, const vec4 extent) {
-  int result = INSIDE_FRUSTUM;
-  for (uint i = 0; i < 6; ++i) {
-    const vec4 plane = vec4(frustum.planes[i][0], frustum.planes[i][1], frustum.planes[i][2], 0.0f);
-    const float p3 = frustum.planes[i][3];
-    
-    const float d = dot(center,     plane);
-    const float r = dot(extent, abs(plane));
-    const float d_p_r = d + r;
-    const float d_m_r = d - r;
-    
-    result = min(result, d_p_r < -p3 ? OUTSIDE_FRUSTUM   : result);
-    result = min(result, d_m_r < -p3 ? INTERSECT_FRUSTUM : result);
-  }
-  
-  return result;
-}
-
-INLINE bool frustum_test(const frustum_t frustum, const vec4 center, const float radius) {
-  bool result = true;
-  for (uint i = 0; i < 6; ++i) {
-    const float d = dot(center, frustum.planes[i]);
-    const bool res = !(d <= -radius);
-    result = bool(min(uint(result), uint(res)));
-  }
-  
-  return result;
-}
-
-INLINE bool intersect(const aabb_t box1, const aabb_t box2) {
-  return 
-    (box1.min.x <= box2.max.x && box1.max.x >= box2.min.x) && 
-    (box1.min.y <= box2.max.y && box1.max.y >= box2.min.y) && 
-    (box1.min.z <= box2.max.z && box1.max.z >= box2.min.z);
-}
-
-// bool lcg_probability(const float val) {
-//   const uint generated = lcg(floatBitsToUint(val));
-//   const float prob = lcg_normalize(generated);
-//   return val <= prob;
-// }
 
 #ifdef __cplusplus
     INLINE image_t create_image(const uint16_t &index, const uint8_t &layer, const uint8_t &sampler, const bool flip_u, const bool flip_v) {
@@ -544,6 +474,8 @@ INLINE bool intersect(const aabb_t box1, const aabb_t box2) {
     }
     
     static_assert(sizeof(light_map_tile_t) % 16 == 0);
+    static_assert(sizeof(light_map_tile_t) == sizeof(map_tile_t));
+    static_assert(alignof(light_map_tile_t) == alignof(map_tile_t));
     static_assert(sizeof(packed_biome_data_t) % 16 == 0);
     static_assert(sizeof(camera_data) % 16 == 0);
   }

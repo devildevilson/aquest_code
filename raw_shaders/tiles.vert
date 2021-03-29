@@ -26,6 +26,9 @@ const vec2 pentagon_uv[] = {
   vec2(0.0f, 0.5f)
 };
 
+const uint hex_tile_points_indices[] = { 0, 1, 5, 2, 4, 3 };
+const uint pen_tile_points_indices[] = { 0, 1, 4, 2, 3 };
+
 layout(set = 0, binding = 0) uniform Camera {
   mat4 viewproj;
   mat4 view;
@@ -51,9 +54,7 @@ out gl_PerVertex {
 };
 
 // теперь у нас нет никаких выходных вершинных буферов
-//layout(location = 0) in uint tile_index;  // инстансный буфер
-//layout(location = 1) in uint point_index; // буфер вида [0,...,4,0,...,5], указываем оффсет
-//layout(location = 0) out flat uint out_biom_index;
+layout(location = 0) in uint tile_index;  // инстансный буфер
 layout(location = 0) out flat image_t out_biom_texture;
 layout(location = 1) out flat color_t out_biom_color;
 layout(location = 2) out vec2 out_uv;
@@ -65,22 +66,23 @@ vec2 convert_xyz_to_cube_uv(const vec3 point);
 // либо мы uv координаты можем посчитать в скрин спейсе
 // нет лучше здесь
 void main() {
-  const uint tile_index  = gl_VertexIndex / PACKED_TILE_INDEX_COEF;
-  const uint point_index = gl_VertexIndex % PACKED_TILE_INDEX_COEF;
+  const uint point_index = gl_VertexIndex;
+  //const uint tile_index  = gl_VertexIndex / PACKED_TILE_INDEX_COEF;
+  //const uint point_index = gl_VertexIndex % PACKED_TILE_INDEX_COEF;
   const map_tile_t tile = unpack_data(tiles[tile_index]);
-  //const uint tile_center = tile.center;
-  const uint point_id = tile.points[point_index];
-  //const uint point_id = tile.neighbours[point_index].points[0];
-  const vec4 point = tile_points[point_id];
-  //const vec4 tile_norm = vec4(normalize(tile_points[tile_center].xyz), 0.0f);
-  // if (point_index == 0) point = tile_points[tile.index]; // мне не обязательно брать здесь центральную точку
-  // else {
-  //   const uint final_point_index = point_index - 1;
-  //   const uint id = tile.points[final_point_index];
-  //   point = tile_points[id];
-  // }
 
   const bool is_pentagon = tile_index < 12;
+  const uint index_offset = is_pentagon ? 10 : 12;
+  const bool rendering_walls = point_index < index_offset;
+  const bool basement_point = point_index % 2 == 1;
+  const uint side_index = point_index / 2;
+  const uint tile_point_index = point_index - index_offset;
+
+  //const uint final_point_index = uint(rendering_walls) * side_index + uint(!rendering_walls) * tile_point_index;
+
+  const uint final_point_index = is_pentagon ? pen_tile_points_indices[tile_point_index] : hex_tile_points_indices[tile_point_index];
+  const uint point_id = rendering_walls ? tile.points[side_index] : tile.points[final_point_index];
+  const vec4 point = tile_points[point_id];
 
   // если мы используем сферические текстурные координаты, то к краям сферы текстурка сильно деформируется
   // чтобы избежать этого мы можем сделать несколько вещей: не использовать текстурки вообще,
@@ -93,26 +95,34 @@ void main() {
   // на границах куба получаются полоски плохой текстуры с неправильными координатами
   // наверное можно исправить случайно раскидав эти тайлы по соседним кубам
   //const vec2 uv = convert_xyz_to_cube_uv(n);
-  const vec2 uv = is_pentagon ? pentagon_uv[point_index] : hexagon_uv[point_index];
+  const vec2 walls_uv = mix(vec2(0.0f, float(side_index)), vec2(1.0f, float(side_index)), float(basement_point));
+  const vec2 tile_uv = is_pentagon ? pentagon_uv[tile_point_index] : hexagon_uv[tile_point_index];
   // const float layer_height = mountain_height / float(layers_count);
   // const uint height_layer = tile.height < 0.0f ? 0 : (tile.height >= mountain_height ? layers_count : uint(tile.height / layer_height));
   //const float layer_height = 1.0f / float(layers_count);
   const uint height_layer = compute_height_layer(tile.height);
-  const float final_height = layer_height * height_layer;
+  const float final_height = rendering_walls && basement_point ? 0.0f : layer_height * height_layer;
 
   //const float final_height = tile.height < 0.0f ? 0.0f : tile.height;
   gl_Position = camera.viewproj * (point + vec4(n, 0.0f) * final_height * render_tile_height); // возможно не 10, а еще чуть чуть поменьше
   //gl_Position = camera.viewproj * point;
   //out_uv = uv * 100.0f; // наверное на что нибудь нужно умножить
-  out_uv = uv;
+  out_uv = rendering_walls ? walls_uv : tile_uv;
   //out_image = biomes[tile.biom_index].img;
   // image_t img;
   // img.container = 0;
   // out_image = img;
   //out_biom_index = tile.biom_index;
   //out_biom_index = tile.unique_object_index;
+  const float wall_color_coef = 0.85f;
+  const color_t wall_color = make_color1(
+    get_color_r(tile.color)*wall_color_coef,
+    get_color_g(tile.color)*wall_color_coef,
+    get_color_b(tile.color)*wall_color_coef,
+    1.0f
+  );
   out_biom_texture = tile.texture;
-  out_biom_color = tile.color;
+  out_biom_color = rendering_walls ? wall_color : tile.color;
   out_tile_height = tile.height;
 }
 

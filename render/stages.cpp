@@ -2,7 +2,6 @@
 
 #include "window.h"
 #include "context.h"
-#include "shared_structures.h"
 #include "utils/globals.h"
 #include "utils/utility.h"
 #include "targets.h"
@@ -93,8 +92,9 @@ namespace devils_engine {
       tiles_indices = device->create(
         yavf::BufferCreateInfo::buffer(
           //(sizeof(instance_data_t)*max_tiles_count)/4+1, 
-          (max_indices_count*4+16-1)/16*16,
-          VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT), 
+          //(max_indices_count*4+16-1)/16*16,
+          align_to(half_tiles_count*sizeof(uint32_t), 16),
+          VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT), 
         VMA_MEMORY_USAGE_GPU_ONLY // возможно нужно сделать буффер в памяти хоста
       );
       
@@ -138,8 +138,8 @@ namespace devils_engine {
       
       auto buffer = reinterpret_cast<struct indirect_buffer*>(indirect->ptr());
       memset(indirect->ptr(), 0, sizeof(struct indirect_buffer));
-      buffer->padding1[0] = core::map::tri_count_d(core::map::accel_struct_detail_level);
-      buffer->padding1[1] = max_indices_count;
+      buffer->padding_hex[0] = core::map::tri_count_d(core::map::accel_struct_detail_level);
+      buffer->padding_hex[1] = max_indices_count;
       
 //       PRINT_VAR("triangle_count", buffer->padding1[0])
 //       PRINT_VAR("max_indices_count", buffer->padding1[1])
@@ -230,13 +230,19 @@ namespace devils_engine {
       auto camera_data = reinterpret_cast<render::camera_data*>(uniform->ptr());
       const auto fru = utils::compute_frustum(camera_data->viewproj);
       
-      buffer->tiles_command.indexCount    = 0;
-      buffer->tiles_command.instanceCount = 1;
-      buffer->tiles_command.firstIndex    = 0;
-      buffer->tiles_command.vertexOffset  = 0;
-      buffer->tiles_command.firstInstance = 0;
+      buffer->pen_tiles_command.indexCount    = 18; // 0
+      buffer->pen_tiles_command.instanceCount = 0;  // 1
+      buffer->pen_tiles_command.firstIndex    = 0;
+      buffer->pen_tiles_command.vertexOffset  = 0;
+      buffer->pen_tiles_command.firstInstance = 0;
       
-      buffer->padding1[2] = glm::floatBitsToUint(10000.0f);
+      buffer->hex_tiles_command.indexCount    = 21; // 0
+      buffer->hex_tiles_command.instanceCount = 0;  // 1
+      buffer->hex_tiles_command.firstIndex    = 0;
+      buffer->hex_tiles_command.vertexOffset  = 0;
+      buffer->hex_tiles_command.firstInstance = 0;
+      
+      buffer->padding_hex[2] = glm::floatBitsToUint(10000.0f);
       
       buffer->borders_command.indexCount    = 0;
       buffer->borders_command.instanceCount = 1;
@@ -860,6 +866,14 @@ namespace devils_engine {
     }
     
     void barriers::clear() {}
+    
+    const uint16_t pen_index_array[] = {
+      0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, UINT16_MAX, 10, 11, 12, 13, 14
+    };
+    
+    const uint16_t hex_index_array[] = {
+      0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 0, 1, UINT16_MAX, 12, 13, 14, 15, 16, 17
+    };
 
 //     const uint32_t max_tiles = 500000;
     tile_render::tile_render(const create_info &info) : 
@@ -869,18 +883,27 @@ namespace devils_engine {
 //       hexagons_count(0), 
 //       pentagons_count(0) 
     {
+      static_assert(sizeof(pen_index_array) == 18 * sizeof(uint16_t));
+      static_assert(sizeof(hex_index_array) == 21 * sizeof(uint16_t));
+      const size_t pen_buffer_size = sizeof(pen_index_array);
+      const size_t hex_buffer_size = sizeof(hex_index_array);
+      const size_t final_size = align_to(pen_buffer_size+hex_buffer_size, 4);
       //indices = device->create(yavf::BufferCreateInfo::buffer(sizeof(uint32_t)*max_tiles, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT), VMA_MEMORY_USAGE_CPU_ONLY);
-      points_indices = device->create(yavf::BufferCreateInfo::buffer(sizeof(uint32_t)*(5+6), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT), VMA_MEMORY_USAGE_CPU_ONLY);
+      points_indices = device->create(yavf::BufferCreateInfo::buffer(final_size, VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT), VMA_MEMORY_USAGE_GPU_ONLY);
       
       {
-        auto points_ptr = reinterpret_cast<uint32_t*>(points_indices->ptr());
-        for (uint32_t i = 0; i < 5; ++i) {
-          points_ptr[i] = i;
-        }
+        yavf::Buffer staging(device, yavf::BufferCreateInfo::buffer(final_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT), VMA_MEMORY_USAGE_CPU_ONLY);
+        auto points_ptr = reinterpret_cast<char*>(staging.ptr());
+        memcpy(&points_ptr[0],               pen_index_array, pen_buffer_size);
+        memcpy(&points_ptr[pen_buffer_size], hex_index_array, hex_buffer_size);
         
-        for (uint32_t i = 0; i < 6; ++i) {
-          points_ptr[i+5] = i;
-        }
+        auto task = device->allocateTransferTask();
+        task->begin();
+        task->copy(&staging, points_indices);
+        task->end();
+        task->start();
+        task->wait();
+        device->deallocate(task);
       }
 
       //yavf::DescriptorPool pool = device->descriptorPool(DEFAULT_DESCRIPTOR_POOL_NAME);
@@ -931,15 +954,13 @@ namespace devils_engine {
 
         pipe = pm.addShader(VK_SHADER_STAGE_VERTEX_BIT, vertex)
                  .addShader(VK_SHADER_STAGE_FRAGMENT_BIT, fragment)
-//                  .vertexBinding(0, sizeof(uint32_t), VK_VERTEX_INPUT_RATE_INSTANCE) //sizeof(instance_data_t)
-//                    .vertexAttribute(0, 0, VK_FORMAT_R32_UINT, 0)
-//                  .vertexBinding(1, sizeof(uint32_t))
-//                    .vertexAttribute(1, 1, VK_FORMAT_R32_UINT, 0)
+                 .vertexBinding(0, sizeof(uint32_t), VK_VERTEX_INPUT_RATE_INSTANCE) //sizeof(instance_data_t)
+                   .vertexAttribute(0, 0, VK_FORMAT_R32_UINT, 0)
                  .depthTest(VK_TRUE)
                  .depthWrite(VK_TRUE)
                  .frontFace(VK_FRONT_FACE_COUNTER_CLOCKWISE)
-                 .cullMode(VK_CULL_MODE_FRONT_BIT)
-                 .assembly(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN, VK_TRUE)
+                 .cullMode(VK_CULL_MODE_BACK_BIT)
+                 .assembly(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP, VK_TRUE) // VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN
                  .viewport()
                  .scissor()
                  .dynamicState(VK_DYNAMIC_STATE_VIEWPORT)
@@ -988,13 +1009,6 @@ namespace devils_engine {
       auto map_systems = global::get<systems::map_t>();
       if (!map_systems->is_init()) return;
       auto map = map_systems->map;
-//       if (hexagons_count + pentagons_count == 0) return;
-      
-      // все таки мне лучше рисовать треугольниками из центра
-      // так как мне нужно нарисовать границы с другими биомами
-      // у самого тайла должно быть как можно меньше данных
-      // скорее всего только индекс биома
-      // не только, нужно крайне аккуратно работать с 2кк тайлами
       
       auto uniform = global::get<render::buffers>()->uniform;
       auto tiles = map->tiles;
@@ -1011,13 +1025,13 @@ namespace devils_engine {
       ASSERT(tiles->descriptorSet() != nullptr);
       task->setDescriptor({uniform->descriptorSet()->handle(), images_set->handle(), tiles->descriptorSet()->handle()}, 0);
       
-//       task->setVertexBuffer(indices, 0);
-//       task->setVertexBuffer(points_indices, 1);
-//       task->draw(5, pentagons_count, 0, 0); // пентагоны отдельно посчитаем
-//       
-//       task->setVertexBuffer(indices, 0, sizeof(uint32_t)*12);
-//       task->setVertexBuffer(points_indices, 1, sizeof(uint32_t)*5);
-//       task->draw(6, hexagons_count, 0, 0);
+      task->setVertexBuffer(indices_buffer, 0, 0);
+      task->setIndexBuffer(points_indices, VK_INDEX_TYPE_UINT16, 0);
+      task->drawIndexedIndirect(indirect_buffer, 1, offsetof123(struct render::tile_optimizer::indirect_buffer, pen_tiles_command)); // пентагоны отдельно посчитаем
+      
+      task->setVertexBuffer(indices_buffer, 0, sizeof(uint32_t)*12);
+      task->setIndexBuffer(points_indices, VK_INDEX_TYPE_UINT16, sizeof(pen_index_array));
+      task->drawIndexedIndirect(indirect_buffer, 1, offsetof123(struct render::tile_optimizer::indirect_buffer, hex_tiles_command));
       
 //       task->setVertexBuffer(instances_buffer, 0);
 //       task->setVertexBuffer(points_indices, 1);
@@ -1044,8 +1058,8 @@ namespace devils_engine {
 //         task->draw(1, 1, start, 0);
 //       }
       
-      task->setIndexBuffer(indices_buffer);
-      task->drawIndexedIndirect(indirect_buffer, 1, offsetof123(struct render::tile_optimizer::indirect_buffer, tiles_command));
+      //task->setIndexBuffer(indices_buffer);
+      //task->drawIndexedIndirect(indirect_buffer, 1, offsetof123(struct render::tile_optimizer::indirect_buffer, hex_tiles_command));
     }
 
     void tile_render::clear() {
@@ -2041,7 +2055,7 @@ namespace devils_engine {
     //     PRINT_VEC2("image id", data)
         task->setConsts(0, sizeof(i), &i);
 
-        const glm::vec2 fb_scale = global::get<input::data>()->fb_scale;
+        const glm::vec2 fb_scale = input::get_input_data()->fb_scale;
         const VkRect2D scissor{
           {
             static_cast<int32_t>(std::max(cmd->clip_rect.x * fb_scale.x, 0.0f)),

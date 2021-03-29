@@ -8,6 +8,8 @@
 #include "bin/map.h"
 #include "render.h"
 // #include "targets.h"
+//#include "shared_structures.h"
+#include "shared_render_utility.h"
 #include <atomic>
 #include <mutex>
 #include <unordered_set>
@@ -71,8 +73,10 @@ namespace devils_engine {
       struct indirect_buffer {
 //         VkDrawIndirectCommand pentagon_command;
 //         VkDrawIndirectCommand hexagon_command;
-        VkDrawIndexedIndirectCommand tiles_command;
+        VkDrawIndexedIndirectCommand pen_tiles_command;
         uint32_t padding1[3];
+        VkDrawIndexedIndirectCommand hex_tiles_command;
+        uint32_t padding_hex[3];
         VkDrawIndexedIndirectCommand borders_command;
         uint32_t padding2[3];
         VkDrawIndexedIndirectCommand walls_command;

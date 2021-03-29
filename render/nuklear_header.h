@@ -6,7 +6,7 @@
 #define NK_INCLUDE_DEFAULT_ALLOCATOR
 #define NK_INCLUDE_COMMAND_USERDATA
 #define NK_INCLUDE_VERTEX_BUFFER_OUTPUT
-#include <Nuklear/nuklear.h>
+#include <nuklear.h>
 
 // #ifndef NUKLEAR_HEADER_H
 // #define NUKLEAR_HEADER_H

@@ -179,6 +179,12 @@ namespace devils_engine {
       camera->cursor_dir = cursor_dir;
     }
     
+    void buffers::update_dimensions(const uint32_t &width, const uint32_t &height) {
+      auto camera = reinterpret_cast<camera_data*>(uniform->ptr());
+      camera->dim.x = width;
+      camera->dim.y = height;
+    }
+    
 //     void buffers::set_tile_data(const map::tile &tile, const uint32_t &index) {
 //       auto tiles_arr = reinterpret_cast<light_map_tile_t*>(tiles->ptr());
 //       const map_tile_t map_tile{

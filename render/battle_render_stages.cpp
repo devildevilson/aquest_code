@@ -18,6 +18,8 @@ namespace devils_engine {
         indirect_buffer = device->create(yavf::BufferCreateInfo::buffer(sizeof(indirect_buffer_data), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT), VMA_MEMORY_USAGE_CPU_ONLY);
         tiles_indices = device->create(yavf::BufferCreateInfo::buffer(16, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT), VMA_MEMORY_USAGE_GPU_ONLY);
         biomes_indices = device->create(yavf::BufferCreateInfo::buffer(16, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT), VMA_MEMORY_USAGE_GPU_ONLY);
+        units_indices = device->create(yavf::BufferCreateInfo::buffer(16, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT), VMA_MEMORY_USAGE_GPU_ONLY);
+        selection_indices = device->create(yavf::BufferCreateInfo::buffer(selection_buffer_size, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT), VMA_MEMORY_USAGE_CPU_ONLY);
         
         yavf::DescriptorSetLayout buffer_layout = VK_NULL_HANDLE;
         {
@@ -25,13 +27,15 @@ namespace devils_engine {
           buffer_layout = dlm.binding(0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT)
                              .binding(1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT)
                              .binding(2, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT)
+                             .binding(3, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT)
+                             .binding(4, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT)
                              .create("battle_tile_buffer_layout");
         }
         
         yavf::DescriptorPool pool = VK_NULL_HANDLE;
         {
           yavf::DescriptorPoolMaker dpm(device);
-          pool = dpm.poolSize(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 3).create("battle_tile_buffer_pool");
+          pool = dpm.poolSize(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 5).create("battle_tile_buffer_pool");
         }
         
         {
@@ -42,6 +46,8 @@ namespace devils_engine {
         set->add({indirect_buffer, 0, indirect_buffer->info().size, 0, 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER});
         set->add({tiles_indices, 0, tiles_indices->info().size, 0, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER});
         set->add({biomes_indices, 0, biomes_indices->info().size, 0, 2, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER});
+        set->add({units_indices, 0, units_indices->info().size, 0, 3, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER});
+        set->add({selection_indices, 0, selection_indices->info().size, 0, 4, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER});
         
         set->update();
         
@@ -93,10 +99,19 @@ namespace devils_engine {
         indirect_data->tiles_indirect.vertexOffset = 0;
         indirect_data->tiles_indirect.firstInstance = 0;
         
-        auto battle = global::get<systems::battle_t>();
-        indirect_data->sizes_data.x = battle->is_init() ? battle->map->tiles_count : 0;
-        indirect_data->sizes_data.y = battle->is_init() ? battle->map->width : 0;
-        indirect_data->sizes_data.z = battle->is_init() ? battle->map->height : 0;
+        indirect_data->sizes_data.x = 0;
+        indirect_data->sizes_data.y = 0;
+        indirect_data->sizes_data.z = 0;
+        
+        indirect_data->units_indirect.vertexCount = 4;
+        indirect_data->units_indirect.instanceCount = 0;
+        indirect_data->units_indirect.firstVertex = 0;
+        indirect_data->units_indirect.firstInstance = 0;
+        
+//         auto battle = global::get<systems::battle_t>();
+//         indirect_data->sizes_data.x = battle->is_init() ? battle->map->tiles_count : 0;
+//         indirect_data->sizes_data.y = battle->is_init() ? battle->map->width : 0;
+//         indirect_data->sizes_data.z = battle->is_init() ? battle->map->height : 0;
         
         indirect_data->ray_pos = buffers->get_pos();
         indirect_data->ray_dir = buffers->get_cursor_dir();
@@ -109,6 +124,9 @@ namespace devils_engine {
           indirect_data->biomes_indirect[i].objects_data[0] = 0;
           indirect_data->biomes_indirect[i].objects_data[3] = 0;
         }
+        
+        auto ptr = selection_indices->ptr();
+        memset(ptr, 0, selection_buffer_size);
       }
       
       void tile_optimizer::proccess(context * ctx) {
@@ -134,6 +152,8 @@ namespace devils_engine {
       yavf::Buffer* tile_optimizer::get_indirect_buffer() const { return indirect_buffer; }
       yavf::Buffer* tile_optimizer::get_tiles_indices() const { return tiles_indices; }
       yavf::Buffer* tile_optimizer::get_biomes_indices() const { return biomes_indices; }
+      yavf::Buffer* tile_optimizer::get_units_indices() const { return units_indices; }
+      yavf::Buffer* tile_optimizer::get_selection_indices() const { return selection_indices; }
       
       void tile_optimizer::update_containers() {
         auto battle = global::get<systems::battle_t>();
@@ -144,9 +164,25 @@ namespace devils_engine {
         const size_t biomes_indices_size = align_to(battle->map->tiles_count * 5 * sizeof(uint32_t), 16);
         biomes_indices->resize(biomes_indices_size);
         
+//         const size_t units_size = align_to(battle->map->units_count * sizeof(uint32_t), 16);
+//         units_indices->resize(units_size);
+        
         set->at(1) = {tiles_indices, 0, tiles_indices->info().size, 0, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER};
         set->at(2) = {biomes_indices, 0, biomes_indices->info().size, 0, 2, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER};
+//         set->at(3) = {units_indices, 0, units_indices->info().size, 0, 3, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER};
         set->update();
+      }
+      
+      void tile_optimizer::update_unit_container() {
+        auto battle = global::get<systems::battle_t>();
+        ASSERT(battle->is_init());
+        
+        std::unique_lock<std::mutex> lock(battle->map->mutex);
+        const size_t units_size = align_to(battle->map->units_count * sizeof(uint32_t), 16);
+        units_indices->resize(units_size);
+        
+        set->at(3) = {units_indices, 0, units_indices->info().size, 0, 3, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER};
+        set->update(3);
       }
       
       void tile_optimizer::update_selection_frustum(const utils::frustum &fru) {
@@ -162,6 +198,16 @@ namespace devils_engine {
           buffer->biomes_indirect[i].objects_data[3] = 0;
         }
       }
+      
+      void tile_optimizer::update_mouse_dir_data(const glm::vec4 &pos, const glm::vec4 &dir) {
+        auto buffer = reinterpret_cast<struct indirect_buffer_data*>(indirect_buffer->ptr());
+        buffer->ray_pos = pos;
+        buffer->ray_dir = dir;
+      }
+      
+      const size_t tile_optimizer::work_group_size;
+      const size_t tile_optimizer::selection_slots;
+      const size_t tile_optimizer::selection_buffer_size;
       
       // это при условии что у нас одна текстурка на стенки
       const uint16_t tile_indices[] = {
@@ -346,6 +392,80 @@ namespace devils_engine {
       }
       
       void biome_render::clear() {}
+      
+      units_render::units_render(const create_info &info) : device(info.device), opt(info.opt) {
+        yavf::DescriptorSetLayout uniform_layout = device->setLayout(UNIFORM_BUFFER_LAYOUT_NAME);
+        ASSERT(uniform_layout != VK_NULL_HANDLE);
+        
+        auto map_layout = device->setLayout(BATTLE_MAP_DESCRIPTOR_SET_LAYOUT_NAME);
+        auto images_layout = device->setLayout(IMAGE_CONTAINER_DESCRIPTOR_LAYOUT_NAME);
+        ASSERT(images_layout != VK_NULL_HANDLE);
+        images_set = global::get<systems::core_t>()->image_controller->set;
+
+        yavf::PipelineLayout layout = VK_NULL_HANDLE;
+        {
+          yavf::PipelineLayoutMaker plm(device);
+          layout = plm.addDescriptorLayout(uniform_layout)
+                      .addDescriptorLayout(images_layout)
+                      //.addDescriptorLayout(storage_layout)
+                      .addDescriptorLayout(map_layout)
+                      .create("map_unit_rendering_pipeline_layout");
+        }
+        
+        {
+          yavf::raii::ShaderModule vertex  (device, global::root_directory() + "shaders/battle_map_unit.vert.spv");
+          yavf::raii::ShaderModule fragment(device, global::root_directory() + "shaders/battle_map_unit.frag.spv");
+
+          yavf::PipelineMaker pm(device);
+          pm.clearBlending();
+
+          pipe = pm.addShader(VK_SHADER_STAGE_VERTEX_BIT, vertex)
+                   .addShader(VK_SHADER_STAGE_FRAGMENT_BIT, fragment)
+                   .vertexBinding(0, sizeof(uint32_t), VK_VERTEX_INPUT_RATE_INSTANCE)
+                     .vertexAttribute(0, 0, VK_FORMAT_R32_UINT, 0)
+                   .depthTest(VK_TRUE)
+                   .depthWrite(VK_TRUE)
+                   .frontFace(VK_FRONT_FACE_CLOCKWISE)
+                   .cullMode(VK_CULL_MODE_NONE)
+                   .assembly(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP)
+                   .viewport()
+                   .scissor()
+                   .dynamicState(VK_DYNAMIC_STATE_VIEWPORT)
+                   .dynamicState(VK_DYNAMIC_STATE_SCISSOR)
+                   .addDefaultBlending()
+                   .create("map_unit_rendering_pipeline", layout, global::get<render::window>()->render_pass);
+        }
+      }
+      
+      units_render::~units_render() {
+        device->destroy(pipe.layout());
+        device->destroy(pipe);
+      }
+      
+      void units_render::begin() {}
+      void units_render::proccess(context * ctx) {
+        auto battle = global::get<systems::battle_t>();
+        if (!battle->is_init()) return;
+        auto uniform = global::get<render::buffers>()->uniform;
+        auto map = battle->map;
+        
+        // алгоритм похож на ворлд мап биом рендер
+        
+        auto indirect_buffer = opt->get_indirect_buffer();
+        auto units_indices = opt->get_units_indices();
+        
+        auto task = ctx->graphics();
+        
+        task->setPipeline(pipe);
+        ASSERT(uniform->descriptorSet() != nullptr);
+        ASSERT(map->set != nullptr);
+        // имеет смысл сделать один лайоут на несколько пайплайнов
+        task->setDescriptor({uniform->descriptorSet()->handle(), images_set->handle(), map->set->handle()}, 0);
+        task->setVertexBuffer(units_indices, 0);
+        task->drawIndirect(indirect_buffer, 1, offsetof123(tile_optimizer::indirect_buffer_data, units_indirect));
+      }
+      
+      void units_render::clear() {}
     }
   }
 }

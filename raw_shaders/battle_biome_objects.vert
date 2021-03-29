@@ -4,6 +4,7 @@
 #include "../render/shared_structures.h"
 #include "../render/shared_battle_structures.h"
 #include "../utils/shared_mathematical_constant.h"
+#include "../render/shared_render_utility.h"
 
 const vec2 hex_map_row_const_offset[] = {
   vec2(-0.5f, 0.0f),

@@ -238,7 +238,8 @@ namespace devils_engine {
 
       for (uint32_t i = 0; i < swapchain.images.size(); ++i) {
         swapchain.images[i]->createView(VK_IMAGE_VIEW_TYPE_2D, {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1}, surface.format.format);
-
+        
+        // VMA_MEMORY_USAGE_GPU_LAZILY_ALLOCATED - ВМА говорит что этот флаг существует только на мобилках, и с него никакого толку на компах
         swapchain.depths[i] = device->create(yavf::ImageCreateInfo::texture2D(surface.extent,
                                                                               VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
                                                                               depth),

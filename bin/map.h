@@ -165,6 +165,9 @@ namespace devils_engine {
       int32_t frustum_culling(const utils::frustum &frustum, std::vector<void*> &objects) const;
       
       const render::light_map_tile_t get_tile(const uint32_t &index) const;
+      const render::map_tile_t* get_tile_ptr(const uint32_t &index) const;
+      render::map_tile_t* get_tile_ptr(const uint32_t &index);
+      const render::map_tile_t* get_tile_ptr_lua(const uint32_t &index) const;
       const glm::vec4 get_point(const uint32_t &index) const;
       
       uint32_t points_count() const;
@@ -183,6 +186,7 @@ namespace devils_engine {
       void set_tile_texture(const uint32_t &tile_index, const render::image_t &texture);
       //void set_tile_tectonic_plate(const uint32_t &tile_index, const uint32_t &tectonic_plate_index);
       void set_tile_height(const uint32_t &tile_index, const float &tile_hight);
+      void set_tile_height_lua(const uint32_t &tile_index, const float &tile_hight);
       void set_tile_border_data(const uint32_t &tile_index, const uint32_t &offset, const uint32_t &size);
       void set_tile_connections_data(const uint32_t &tile_index, const uint32_t &offset, const uint32_t &size);
       
@@ -198,6 +202,7 @@ namespace devils_engine {
       render::image_t get_army_image(const uint32_t &index) const;
       
       float get_tile_height(const uint32_t &tile_index) const;
+      float get_tile_height_lua(const uint32_t &tile_index) const;
       
       void copy_biomes(const seasons* s);
       void set_tile_biome(const seasons* s);

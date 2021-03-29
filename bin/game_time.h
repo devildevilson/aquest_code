@@ -33,12 +33,12 @@ namespace devils_engine {
       
       struct date {
         int32_t m_year;
-        int16_t m_month;
-        int16_t m_day;
+        uint16_t m_month;
+        uint16_t m_day;
         
         date();
-        date(const int32_t &m_year, const int16_t &m_month, const uint16_t &m_day, const bool before_zero);
-        uint32_t year() const;
+        date(const int32_t &m_year, const uint16_t &m_month, const uint16_t &m_day);
+        int32_t year() const;
         uint32_t month() const;
         uint32_t day() const;
         bool before_zero() const;
@@ -53,8 +53,8 @@ namespace devils_engine {
       std::vector<month_data> m_months;
       
       calendar();
-      void set_start_date(const bool before_zero, const uint32_t &year, const uint32_t &month, const uint32_t &day);
-      void set_current_date(const bool before_zero, const uint32_t &year, const uint32_t &month, const uint32_t &day);
+      void set_start_date(const int32_t &year, const uint32_t &month, const uint32_t &day);
+      void set_current_date(const int32_t &year, const uint32_t &month, const uint32_t &day);
       void set_week_days_count(const uint32_t &count);
       void add_month_data(const month_data &data);
       
@@ -75,6 +75,7 @@ namespace devils_engine {
     };
     
     bool operator==(const calendar::date &date1, const calendar::date &date2);
+    bool operator!=(const calendar::date &date1, const calendar::date &date2);
     bool operator>=(const calendar::date &date1, const calendar::date &date2);
     bool operator<=(const calendar::date &date1, const calendar::date &date2);
     bool operator>(const calendar::date &date1, const calendar::date &date2);

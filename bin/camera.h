@@ -113,6 +113,7 @@ namespace devils_engine {
       // нужно еще сделать направление камеры, камера должна менять направление от высоты над картой
       // тут мы должны по идее просто считать от положения
       glm::vec3 compute_dir(const glm::vec3 &normal, const float zoom, float &current_angle);
+      void compute_orientation(const glm::vec3 &pos);
     };
     
     class battle_camera : public camera {

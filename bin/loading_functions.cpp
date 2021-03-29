@@ -66,14 +66,14 @@ namespace devils_engine {
     
     std::array<std::pair<uint32_t, uint32_t>, BATTLE_BIOMES_MAX_COUNT> get_battle_biomes_data(const systems::battle_t* battle_system) {
       std::array<std::pair<uint32_t, uint32_t>, BATTLE_BIOMES_MAX_COUNT> biomes_data;
-      memset(biomes_data.data(), 0, sizeof(biomes_data[0])*biomes_data.size());
+      std::fill(biomes_data.begin(), biomes_data.end(), std::make_pair(0, 0));
       for (size_t i = 0; i < battle_system->map->tiles_count; ++i) {
         const uint32_t index = battle_system->map->get_tile_biome(i);
         ++biomes_data[index].second;
       }
       
       size_t current_offset = 0;
-      for (uint32_t i = 0; i < MAX_BIOMES_COUNT; ++i) {
+      for (uint32_t i = 0; i < BATTLE_BIOMES_MAX_COUNT; ++i) {
         biomes_data[i].first = current_offset;
         current_offset += biomes_data[i].second * (PACKED_INDEX_COEF + 1);
       }
@@ -92,50 +92,117 @@ namespace devils_engine {
     ptr->run_interface_script(global::root_directory() + "scripts/gen_part1.lua");
     ptr->run_interface_script(global::root_directory() + "scripts/gen_part2.lua");
     ptr->run_interface_script(global::root_directory() + "scripts/gen_part3.lua");
+    ptr->run_script(global::root_directory() + "scripts/gen_part1_functions.lua");
+    ptr->run_script(global::root_directory() + "scripts/gen_part2_functions.lua");
+    ptr->run_script(global::root_directory() + "scripts/gen_part3_functions.lua");
 //     ptr->run_interface_script(global::root_directory() + "scripts/generator_progress.lua");
 //     ptr->progress_interface("gen_progress");
 //     interface->register_function("gen_part1_fun", "gen_part1_fun"); // тут регистрировать функции?
 //     interface->register_function("gen_part2_fun", "gen_part2_fun");
 //     interface->register_function("gen_part3_fun", "gen_part3_fun");
+    
+    static const auto gen_func = [] (map::generator::context* ctx, sol::table &table, sol::function func) {
+      auto ret = func(ctx, table);
+      if (!ret.valid()) {
+        sol::error err = ret;
+        std::cout << err.what() << "\n";
+        throw std::runtime_error("There are lua errors");
+      }
+    };
 
     {
+      auto func1 = ptr->get_func("setup_generator");
+      auto func2 = ptr->get_func("generate_plates");
+      auto func3 = ptr->get_func("generate_plate_datas");
+      
       const std::vector<map::generator_pair> pairs = {
-//         map::default_generator_pairs[0],
-        map::default_generator_pairs[1],
-        map::default_generator_pairs[2],
-        map::default_generator_pairs[3]
+//         map::default_generator_pairs[0], // это бегин
+//         map::default_generator_pairs[1],
+//         map::default_generator_pairs[2],
+//         map::default_generator_pairs[3]
+        std::make_pair("seting up generator", std::bind(gen_func, std::placeholders::_1, std::placeholders::_2, func1)),
+        std::make_pair("generating plates", std::bind(gen_func, std::placeholders::_1, std::placeholders::_2, func2)),
+        std::make_pair("generating plate datas", std::bind(gen_func, std::placeholders::_1, std::placeholders::_2, func3))
       };
       ptr->create("Tectonic plates generator", "gen_part1_fun", pairs);
     }
 
     {
+      auto func1 = ptr->get_func("compute_boundary_edges");
+      auto func2 = ptr->get_func("compute_plate_boundary_stress");
+      auto func3 = ptr->get_func("compute_plate_boundary_distances");
+      auto func4 = ptr->get_func("calculate_vertex_elevation");
+      auto func5 = ptr->get_func("blur_tile_elevation");
+      auto func6 = ptr->get_func("normalize_tile_elevation");
+      auto func7 = ptr->get_func("compute_tile_heat");
+      auto func8 = ptr->get_func("compute_tile_water_distances");
+      auto func9 = ptr->get_func("compute_tile_moisture");
+      auto func10 = ptr->get_func("create_biomes");
+      
+//       const std::vector<map::generator_pair> pairs = {
+//         map::default_generator_pairs[4],
+//         map::default_generator_pairs[5],
+//         map::default_generator_pairs[6],
+//         map::default_generator_pairs[7],
+//         map::default_generator_pairs[8],
+//         map::default_generator_pairs[9],
+//         map::default_generator_pairs[10],
+//         map::default_generator_pairs[11],
+//         map::default_generator_pairs[12],
+//         map::default_generator_pairs[13]
+//       };
+      
       const std::vector<map::generator_pair> pairs = {
-        map::default_generator_pairs[4],
-        map::default_generator_pairs[5],
-        map::default_generator_pairs[6],
-        map::default_generator_pairs[7],
-        map::default_generator_pairs[8],
-        map::default_generator_pairs[9],
-        map::default_generator_pairs[10],
-        map::default_generator_pairs[11],
-        map::default_generator_pairs[12],
-        map::default_generator_pairs[13]
+        std::make_pair(map::default_generator_pairs[4].first, std::bind(gen_func, std::placeholders::_1, std::placeholders::_2, func1)),
+        std::make_pair(map::default_generator_pairs[5].first, std::bind(gen_func, std::placeholders::_1, std::placeholders::_2, func2)),
+        std::make_pair(map::default_generator_pairs[6].first, std::bind(gen_func, std::placeholders::_1, std::placeholders::_2, func3)),
+        std::make_pair(map::default_generator_pairs[7].first, std::bind(gen_func, std::placeholders::_1, std::placeholders::_2, func4)),
+        std::make_pair(map::default_generator_pairs[8].first, std::bind(gen_func, std::placeholders::_1, std::placeholders::_2, func5)),
+        std::make_pair(map::default_generator_pairs[9].first, std::bind(gen_func, std::placeholders::_1, std::placeholders::_2, func6)),
+        std::make_pair(map::default_generator_pairs[10].first, std::bind(gen_func, std::placeholders::_1, std::placeholders::_2, func7)),
+        std::make_pair(map::default_generator_pairs[11].first, std::bind(gen_func, std::placeholders::_1, std::placeholders::_2, func8)),
+        std::make_pair(map::default_generator_pairs[12].first, std::bind(gen_func, std::placeholders::_1, std::placeholders::_2, func9)),
+        std::make_pair(map::default_generator_pairs[13].first, std::bind(gen_func, std::placeholders::_1, std::placeholders::_2, func10))
       };
 
       ptr->create("Biomes generator", "gen_part2_fun", pairs);
     }
 
     {
+      auto func1 = ptr->get_func("generate_provinces");
+      auto func2 = ptr->get_func("province_postprocessing");
+      auto func3 = ptr->get_func("calculating_province_neighbors");
+      auto func4 = ptr->get_func("generate_cultures");
+      auto func5 = ptr->get_func("generate_countries");
+      auto func6 = ptr->get_func("generate_heraldy");
+      auto func7 = ptr->get_func("generate_titles");
+      auto func8 = ptr->get_func("generate_characters");
+      //auto func9 = ptr->get_func("generate_tech_level");
+      auto func9 = ptr->get_func("generate_cities");
+      
+//       const std::vector<map::generator_pair> pairs = {
+//         map::default_generator_pairs[14],
+//         map::default_generator_pairs[15],
+//         map::default_generator_pairs[16],
+//         map::default_generator_pairs[17],
+//         map::default_generator_pairs[18],
+//         map::default_generator_pairs[22], // геральдики
+//         map::default_generator_pairs[19],
+//         map::default_generator_pairs[20],
+//         map::default_generator_pairs[21],
+//       };
+      
       const std::vector<map::generator_pair> pairs = {
-        map::default_generator_pairs[14],
-        map::default_generator_pairs[15],
-        map::default_generator_pairs[16],
-        map::default_generator_pairs[17],
-        map::default_generator_pairs[18],
-        map::default_generator_pairs[22], // геральдики
-        map::default_generator_pairs[19],
-        map::default_generator_pairs[20],
-        map::default_generator_pairs[21],
+        std::make_pair(map::default_generator_pairs[14].first, std::bind(gen_func, std::placeholders::_1, std::placeholders::_2, func1)),
+        std::make_pair(map::default_generator_pairs[15].first, std::bind(gen_func, std::placeholders::_1, std::placeholders::_2, func2)),
+        std::make_pair(map::default_generator_pairs[16].first, std::bind(gen_func, std::placeholders::_1, std::placeholders::_2, func3)),
+        std::make_pair(map::default_generator_pairs[17].first, std::bind(gen_func, std::placeholders::_1, std::placeholders::_2, func4)),
+        std::make_pair(map::default_generator_pairs[18].first, std::bind(gen_func, std::placeholders::_1, std::placeholders::_2, func5)),
+        std::make_pair(map::default_generator_pairs[22].first, std::bind(gen_func, std::placeholders::_1, std::placeholders::_2, func6)),
+        std::make_pair(map::default_generator_pairs[19].first, std::bind(gen_func, std::placeholders::_1, std::placeholders::_2, func7)),
+        std::make_pair(map::default_generator_pairs[20].first, std::bind(gen_func, std::placeholders::_1, std::placeholders::_2, func8)),
+        std::make_pair(map::default_generator_pairs[21].first, std::bind(gen_func, std::placeholders::_1, std::placeholders::_2, func9)),
+        //std::make_pair(map::default_generator_pairs[13].first, std::bind(gen_func, std::placeholders::_1, std::placeholders::_2, func10))
       };
 
       ptr->create("Countries generator", "gen_part3_fun", pairs);
@@ -154,11 +221,13 @@ namespace devils_engine {
 //   }
 
   void make_random_player_character() {
+    using namespace utils::xoroshiro128starstar;
+    
     auto ctx = global::get<systems::map_t>()->core_context;
     const size_t chars_count = ctx->characters_count();
-    utils::rng::state s = {67586, 987699695};
-    s = utils::rng::next(s);
-    const double val = utils::rng::normalize(utils::rng::value(s));
+    state s = {67586, 987699695};
+    s = rng(s);
+    const double val = utils::rng_normalize(get_value(s));
     const size_t index = chars_count * val;
     auto c = ctx->get_character(index);
     c->make_player();
@@ -194,8 +263,8 @@ namespace devils_engine {
     uint32_t army_tile2 = UINT32_MAX;
     uint32_t attempts = 0;
     while ((army_tile1 == UINT32_MAX || army_tile2 == UINT32_MAX) && attempts < 100) {
-      s = utils::rng::next(s);
-      const double val = utils::rng::normalize(utils::rng::value(s));
+      s = rng(s);
+      const double val = utils::rng_normalize(get_value(s));
       ++attempts;
       ASSERT(province->tiles.size() != 0);
       const uint32_t rand_index = (province->tiles.size()-1) * val;
@@ -257,17 +326,18 @@ namespace devils_engine {
       PRINT_VAR("tile index ", testing_tile)
       PRINT_VAR("n_count    ", n_count)
       for (uint32_t i = 0; i < n_count; ++i) {
-        const uint32_t n_index = tile_data.neighbours[i];
+        const uint32_t n_index = tile_data.neighbors[i];
         PRINT_VAR("neighbour  " + std::to_string(i), n_index)
         const auto &n_tile_data = render::unpack_data(map->get_tile(n_index));
         const uint32_t n_n_count = render::is_pentagon(tile_data) ? 5 : 6;
         bool found = false;
         for (uint32_t j = 0; j < n_n_count; ++j) {
-          const uint32_t n_index = n_tile_data.neighbours[j];
+          const uint32_t n_index = n_tile_data.neighbors[j];
           if (n_index == testing_tile) found = true;
         }
         
         ASSERT(found);
+        UNUSED_VARIABLE(found);
       }
     }
     
@@ -278,17 +348,18 @@ namespace devils_engine {
       PRINT_VAR("tile index ", testing_tile)
       PRINT_VAR("n_count    ", n_count)
       for (uint32_t i = 0; i < n_count; ++i) {
-        const uint32_t n_index = tile_data.neighbours[i];
+        const uint32_t n_index = tile_data.neighbors[i];
         PRINT_VAR("neighbour  " + std::to_string(i), n_index)
         const auto &n_tile_data = render::unpack_data(map->get_tile(n_index));
         const uint32_t n_n_count = render::is_pentagon(tile_data) ? 5 : 6;
         bool found = false;
         for (uint32_t j = 0; j < n_n_count; ++j) {
-          const uint32_t n_index = n_tile_data.neighbours[j];
+          const uint32_t n_index = n_tile_data.neighbors[j];
           if (n_index == testing_tile) found = true;
         }
         
         ASSERT(found);
+        UNUSED_VARIABLE(found);
       }
     }
   }
@@ -431,7 +502,7 @@ namespace devils_engine {
           const auto &data = render::unpack_data(map->get_tile(tile_index));
           const uint32_t n_count = render::is_pentagon(data) ? 5 : 6;
           for (uint32_t k = 0; k < n_count; ++k) {
-            const uint32_t n_index = data.neighbours[k];
+            const uint32_t n_index = data.neighbors[k];
 
             //const uint32_t n_province_index = container->get_data<uint32_t>(map::debug::entities::tile, n_index, map::debug::properties::tile::province_index);
             const uint32_t n_province_index = ctx->get_tile(n_index).province;
@@ -507,7 +578,7 @@ namespace devils_engine {
         const auto &tile_data = render::unpack_data(map->get_tile(current_data.tile_index));
         const uint32_t n_count = render::is_pentagon(tile_data) ? 5 : 6;
 
-        ASSERT(tile_data.neighbours[current_data.edge_index] == current_data.opposite_tile_index);
+        ASSERT(tile_data.neighbors[current_data.edge_index] == current_data.opposite_tile_index);
 
   #ifndef _NDEBUG
         {
@@ -535,8 +606,8 @@ namespace devils_engine {
   #endif
 
         const uint32_t tmp_index = (current_data.edge_index)%n_count;
-        const uint32_t adjacent1 = tile_data.neighbours[(tmp_index+1)%n_count];
-        const uint32_t adjacent2 = tile_data.neighbours[tmp_index == 0 ? n_count-1 : tmp_index-1];
+        const uint32_t adjacent1 = tile_data.neighbors[(tmp_index+1)%n_count];
+        const uint32_t adjacent2 = tile_data.neighbors[tmp_index == 0 ? n_count-1 : tmp_index-1];
 
   #ifndef _NDEBUG
         {
@@ -801,7 +872,7 @@ namespace devils_engine {
 
           uint32_t size = 0;
           for (uint32_t j = 0; j < n_count; ++j) {
-            const uint32_t n_index = tile_data.neighbours[j];
+            const uint32_t n_index = tile_data.neighbors[j];
             const auto &n_tile_data = render::unpack_data(map->get_tile(n_index));
             const float n_tile_height = n_tile_data.height;
             const uint32_t n_height_layer = render::compute_height_layer(n_tile_height);
@@ -818,7 +889,7 @@ namespace devils_engine {
 #endif
           uint32_t counter = 0;
           for (uint32_t j = 0; j < n_count; ++j) {
-            const uint32_t n_index = tile_data.neighbours[j];
+            const uint32_t n_index = tile_data.neighbors[j];
             const auto &n_tile_data = render::unpack_data(map->get_tile(n_index));
             const float n_tile_height = n_tile_data.height;
             const uint32_t n_height_layer = render::compute_height_layer(n_tile_height);
@@ -1484,106 +1555,10 @@ namespace devils_engine {
   //     PRINT_VEC4("mat 1", mat1[1])
   //     PRINT_VEC4("mat 2", mat1[2])
   //     PRINT_VEC4("mat 3", mat1[3])
-      map::container generated_core(core::map::world_radius, core::map::detail_level, glm::mat3(mat1)); // возможно нужно как то это ускорить
-  //     ASSERT(false);
-
-      ASSERT(generated_core.points.size() == map->points_count());
-      ASSERT(generated_core.tiles.size() == map->tiles_count());
-      ASSERT(generated_core.triangles.size() == map->triangles_count());
-
       map->world_matrix = mat1;
       auto pool = global::get<dt::thread_pool>();
-
-      // придется переделать функции и добавить ожидание треду
-      utils::submit_works_async(pool, generated_core.tiles.size(), [&generated_core] (const size_t &start, const size_t &count) {
-  //       size_t start = 0;
-  //       size_t count = generated_core.tiles.size();
-        for (size_t i = start; i < start+count; ++i) {
-          generated_core.fix_tile(i);
-        }
-      });
-      utils::async_wait(pool);
       
-      utils::submit_works_async(pool, generated_core.tiles.size(), [&generated_core] (const size_t &start, const size_t &count) {
-  //       size_t start = 0;
-  //       size_t count = generated_core.tiles.size();
-        for (size_t i = start; i < start+count; ++i) {
-          generated_core.fix_tile2(i);
-        }
-      });
-      utils::async_wait(pool);
-      
-      utils::submit_works_async(pool, generated_core.points.size(), [&generated_core, mat1] (const size_t &start, const size_t &count) {
-        for (size_t i = start; i < start+count; ++i) {
-          generated_core.apply_matrix(i, mat1);
-        }
-      });
-      utils::async_wait(pool);
-
-      utils::submit_works_async(pool, generated_core.tiles.size(), [&generated_core, map] (const size_t &start, const size_t &count) {
-        for (size_t i = start; i < start+count; ++i) {
-          map->set_tile_data(&generated_core.tiles[i], i);
-        }
-      });
-      utils::async_wait(pool);
-
-      utils::submit_works_async(pool, generated_core.points.size(), [&generated_core, map] (const size_t &start, const size_t &count) {
-        for (size_t i = start; i < start+count; ++i) {
-          map->set_point_data(generated_core.points[i], i);
-        }
-      });
-      utils::async_wait(pool);
-
-      const size_t tri_count = core::map::tri_count_d(core::map::accel_struct_detail_level);
-      ASSERT(tri_count == map->accel_triangles_count());
-  //     const size_t hex_count = map::hex_count_d(detail_level);
-      std::mutex mutex;
-      std::unordered_set<uint32_t> unique_tiles;
-      std::atomic<uint32_t> tiles_counter(0);
-
-      utils::submit_works_async(pool, tri_count, [&mutex, &unique_tiles, &generated_core, &tiles_counter, map] (const size_t &start, const size_t &count) {
-        std::vector<uint32_t> tiles_array;
-        size_t offset = 0;
-        for (size_t i = 0; i < core::map::accel_struct_detail_level; ++i) {
-          offset += core::map::tri_count_d(i);
-        }
-
-        for (size_t i = start; i < start+count; ++i) {
-          const size_t tri_index = i + offset;
-          const auto &tri = generated_core.triangles[tri_index];
-          ASSERT(tri.current_level == core::map::accel_struct_detail_level);
-
-          map::map_triangle_add2(&generated_core, tri_index, mutex, unique_tiles, tiles_array);
-
-          uint32_t counter = 0;
-          for (int64_t i = tiles_array.size()-1; i > -1 ; --i) {
-            const uint32_t tile_index = tiles_array[i];
-            if (generated_core.tiles[tile_index].is_pentagon()) {
-              ++counter;
-              ASSERT(counter < 2);
-              std::swap(tiles_array[i], tiles_array.back());
-            }
-          }
-
-          const uint32_t offset = tiles_counter.fetch_add(tiles_array.size());
-          ASSERT(offset + tiles_array.size() <= generated_core.tiles.size());
-          map->set_tile_indices(i, tri.points, tiles_array, offset, tiles_array.size(), counter != 0);
-
-          tiles_array.clear();
-        }
-      });
-      utils::async_wait(pool); // похоже что работает
-
-      ASSERT(pool->working_count() == 1 && pool->tasks_count() == 0);
-
-      ASSERT(generated_core.triangles.size() == map->triangles.size());
-      ASSERT(sizeof(core::map::triangle) == sizeof(map::triangle));
-      {
-        std::unique_lock<std::mutex> lock(map->mutex);
-        memcpy(map->triangles.data(), generated_core.triangles.data(), map->triangles.size()*sizeof(core::map::triangle));
-      }
-
-      map->flush_data();
+      map::make_tiles(mat1, map, pool);
 
   //       ctx->container->set_entity_count(debug::entities::tile, map->tiles_count());
       map->set_status(core::map::status::valid);
@@ -1860,6 +1835,8 @@ namespace devils_engine {
       //advance_progress(prog, "end");
       //advance_progress(prog, "end");
       //advance_progress(prog, "end");
+      
+      UNUSED_VARIABLE(prog);
     }
 
     void from_menu_to_map(utils::progress_container* prog) {
@@ -1964,6 +1941,7 @@ namespace devils_engine {
       utils::setup_lua_noiser(lua);
       utils::setup_lua_battle_map(lua);
       utils::setup_lua_utility_battle_generator_functions(lua);
+      utils::setup_lua_constants(lua);
       
       std::unordered_set<std::string> loaded_scripts;
       std::unordered_set<std::string> loaded_functions;
@@ -2050,7 +2028,7 @@ namespace devils_engine {
       }
     }
     
-    bool validate_tables(const std::function<bool(const uint32_t&, const sol::table&)> &func, map::creator::table_container_t* tables_container, const size_t &index) {
+    void validate_tables(const std::function<bool(const uint32_t&, const sol::table&)> &func, map::creator::table_container_t* tables_container, const size_t &index) {
       const auto &tables = tables_container->get_tables(index);
       bool ret = true;
       for (size_t i = 0; i < tables.size(); ++i) {
@@ -2172,6 +2150,46 @@ namespace devils_engine {
         const auto &tables = tables_container.get_tables(static_cast<size_t>(static_cast<size_t>(battle::structure_type::troop)));
         ctx->create_container<battle::troop>(tables.size());
         utils::load_battle_troops(ctx, tables);
+      }
+      
+      // тип создаем юнитов
+      {
+        auto ctx = global::get<systems::battle_t>()->context;
+        auto map = global::get<systems::battle_t>()->map;
+        size_t counter = 0;
+        for (size_t i = 0; i < ctx->get_entity_count<battle::troop>(); ++i) {
+          auto troop = ctx->get_entity<battle::troop>(i);
+          counter += troop->type->units_count;
+        }
+        
+        map->set_units_count(counter);
+        ctx->create_container<battle::unit>(counter);
+        global::get<render::battle::tile_optimizer>()->update_unit_container();
+        
+        std::random_device dev;
+        
+        size_t offset = 0;
+        for (size_t i = 0; i < ctx->get_entity_count<battle::troop>(); ++i) {
+          auto troop = ctx->get_entity<battle::troop>(i);
+          
+          for (size_t j = 0; j < troop->type->units_count; ++j) {
+            const size_t unit_index = offset + j;
+            auto unit = ctx->get_entity<battle::unit>(unit_index);
+            unit->unit_gpu_index = unit_index;
+            unit->scale = troop->type->unit_scale;
+            const uint64_t seed = make_64bit(dev(), dev());
+            unit->seed_random(seed);
+            ASSERT(troop->type->default_unit_state != nullptr);
+            unit->set_state(troop->type->default_unit_state);
+          }
+          
+          troop->unit_count = troop->type->units_count;
+          troop->unit_offset = offset;
+          const uint32_t troop_data = render::make_troop_data(troop->type->units_count, offset);
+          map->set_tile_troop_data(troop->tile_index, troop_data);
+          
+          offset += troop->type->units_count;
+        }
       }
       
       {

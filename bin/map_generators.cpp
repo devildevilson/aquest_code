@@ -60,7 +60,7 @@ namespace devils_engine {
 
       const auto &tile = render::unpack_data(map->get_tile(tile_index));
       for (uint32_t i = 0; i < 6; ++i) {
-        const uint32_t neighbor_index = tile.neighbours[i];
+        const uint32_t neighbor_index = tile.neighbors[i];
         if (neighbor_index == UINT32_MAX) continue;
         if (tile_plate_indices[neighbor_index] != plate_count) {
           uint32_t data = plate_index;
@@ -75,7 +75,7 @@ namespace devils_engine {
       plate_tile_indices[plate_index].push_back(tile_index);
 
       for (uint32_t i = 0; i < 6; ++i) {
-        const uint32_t neighbor_index = tile.neighbours[i];
+        const uint32_t neighbor_index = tile.neighbors[i];
         if (neighbor_index == UINT32_MAX) continue;
         active_tile_indices.push_back(std::make_pair(neighbor_index, plate_index));
       }
@@ -341,7 +341,7 @@ namespace devils_engine {
 
           const auto &tile = render::unpack_data(map->get_tile(tile_index));
           for (uint32_t i = 0; i < 6; ++i) {
-            const uint32_t neighbor_index = tile.neighbours[i];
+            const uint32_t neighbor_index = tile.neighbors[i];
             if (neighbor_index == UINT32_MAX) continue;
             if (tile_plate_atomic[neighbor_index] != plates_count) continue;
             active_tile_indices.push_back(std::make_pair(neighbor_index, plate_index));
@@ -415,7 +415,7 @@ namespace devils_engine {
           for (size_t i = start; i < start+count; ++i) {
             const auto &tile = render::unpack_data(context->map->get_tile(i));
             for (uint32_t j = 0; j < 6; ++j) {
-              const uint32_t tile_neighbour_index = tile.neighbours[j];
+              const uint32_t tile_neighbour_index = tile.neighbors[j];
               if (tile_neighbour_index == UINT32_MAX) continue;
               
               const uint32_t plate1 = tile_plates_local[i];
@@ -826,7 +826,7 @@ namespace devils_engine {
           const auto &tile = render::unpack_data(context->map->get_tile(current_tile_index));
           const uint32_t n_count = render::is_pentagon(tile) ? 5 : 6;
           for (uint32_t j = 0; j < n_count; ++j) {
-            const uint32_t neighbour_tile_index = tile.neighbours[j];
+            const uint32_t neighbour_tile_index = tile.neighbors[j];
             ASSERT(current_tile_index != neighbour_tile_index);
             
             const uint32_t neighbour_tile_plate_index = context->tile_plate_indices[neighbour_tile_index];
@@ -1140,7 +1140,7 @@ namespace devils_engine {
         
         const auto &tile_data = render::unpack_data(context->map->get_tile(current_tile));
         for (uint32_t i = 0; i < 6; ++i) {
-          const uint32_t n_index = tile_data.neighbours[i];
+          const uint32_t n_index = tile_data.neighbors[i];
           if (n_index == UINT32_MAX) continue;
           
 //           const auto &n_tile_data = render::unpack_data(context->map->get_tile(n_index));
@@ -1238,8 +1238,8 @@ namespace devils_engine {
               
               const auto &tile = render::unpack_data(context->map->get_tile(current_tile_index));
               for (uint32_t j = 0; j < 6; ++j) {
-                if (tile.neighbours[j] == UINT32_MAX) continue;
-                const uint32_t neighbour_tile_index = tile.neighbours[j];
+                if (tile.neighbors[j] == UINT32_MAX) continue;
+                const uint32_t neighbour_tile_index = tile.neighbors[j];
                 const uint32_t plate_index = context->tile_plate_indices[neighbour_tile_index];
                 if (plate_index != i) continue;
                 
@@ -1465,7 +1465,7 @@ namespace devils_engine {
             const auto &tile_data = render::unpack_data(context->map->get_tile(tile_index));
             const uint32_t n_count = render::is_pentagon(tile_data) ? 5 : 6;
             for (uint32_t j = 0; j < n_count; ++j) {
-              const uint32_t n_index = tile_data.neighbours[j];
+              const uint32_t n_index = tile_data.neighbors[j];
               
               if (boundary_dist[n_index].first == UINT32_MAX) {
                 boundary_dist[n_index] = std::make_pair(boundary_dist[tile_index].first, boundary_dist[tile_index].second + 1);
@@ -1493,7 +1493,7 @@ namespace devils_engine {
             uint32_t n_counter = 0;
             uint32_t n_count_valid = 0;
             for (uint32_t k = 0; k < n_count; ++k) {
-              const uint32_t n_index = tile_data.neighbours[k];
+              const uint32_t n_index = tile_data.neighbors[k];
               const uint32_t plate_idx = context->tile_plate_indices[n_index];
               if (plate_idx != plate_index) continue;
               
@@ -1515,7 +1515,7 @@ namespace devils_engine {
             const auto &tile_data = render::unpack_data(context->map->get_tile(tile_index));
             const uint32_t n_count = render::is_pentagon(tile_data) ? 5 : 6;
             for (uint32_t j = 0; j < n_count; ++j) {
-              const uint32_t n_index = tile_data.neighbours[j];
+              const uint32_t n_index = tile_data.neighbors[j];
               
               if (max_dist[n_index] == UINT32_MAX) {
                 max_dist[n_index] = max_dist[tile_index] + 1;
@@ -1632,7 +1632,7 @@ namespace devils_engine {
       const auto base_pos = context->map->get_point(tile.center);
       const uint32_t n_count = render::is_pentagon(tile) ? 5 : 6;
       for (uint32_t i = start; i < n_count; ++i) {
-        const uint32_t n_tile_index = tile.neighbours[i];
+        const uint32_t n_tile_index = tile.neighbors[i];
         const auto &n_tile = (context->map->get_tile(n_tile_index));
         const auto pos = context->map->get_point(n_tile.tile_indices.x);
         
@@ -1693,7 +1693,7 @@ namespace devils_engine {
       if (current_length < final_dist) return;
       
       for (uint32_t i = 0; i < 6; ++i) {
-        const uint32_t n_index = tile_data.neighbours[i];
+        const uint32_t n_index = tile_data.neighbors[i];
         if (n_index == UINT32_MAX) continue;
         
         const uint32_t n_plate_index = context->tile_plate_indices[n_index];
@@ -1751,7 +1751,7 @@ namespace devils_engine {
       if (current_length < final_dist) return;
       
       for (uint32_t i = 0; i < 6; ++i) {
-        const uint32_t n_index = tile_data.neighbours[i];
+        const uint32_t n_index = tile_data.neighbors[i];
         if (n_index == UINT32_MAX) continue;
         
         const uint32_t n_plate_index = context->tile_plate_indices[n_index];
@@ -1799,7 +1799,7 @@ namespace devils_engine {
       float accumulated_elevation = 0.0f;
       const uint32_t n_count = render::is_pentagon(tile_data) ? 5 : 6;
       for (uint32_t i = 0; i < n_count; ++i) {
-        const uint32_t n_index = tile_data.neighbours[i];
+        const uint32_t n_index = tile_data.neighbors[i];
         
         auto &elevation = elevations[n_index];
         {
@@ -1816,7 +1816,7 @@ namespace devils_engine {
       }
       
       for (uint32_t i = 0; i < n_count; ++i) {
-        const uint32_t n_index = tile_data.neighbours[i];
+        const uint32_t n_index = tile_data.neighbors[i];
         plate_friction_req(context, tile_pos, current_length, next_dist, dist_impact_k, n_index, elevations);
       }
     }
@@ -2579,7 +2579,7 @@ namespace devils_engine {
             float accum_ground = 0.0f;
             const uint32_t n_count = render::is_pentagon(tile_data) ? 5 : 6;
             for (uint32_t j = 0; j < n_count; ++j) {
-              const uint32_t n_index = tile_data.neighbours[j];
+              const uint32_t n_index = tile_data.neighbors[j];
               if (n_index == UINT32_MAX) continue;
                             
   //             const uint32_t n_plate_index = context->tile_plate_indices[n_index];
@@ -2737,7 +2737,7 @@ namespace devils_engine {
         const auto &tile_data = render::unpack_data(context->map->get_tile(current_tile));
         const uint32_t n_count = render::is_pentagon(tile_data) ? 5 : 6;
         for (uint32_t i = 0; i < n_count; ++i) {
-          const uint32_t n_index = tile_data.neighbours[i];
+          const uint32_t n_index = tile_data.neighbors[i];
           if (ground_distance[n_index].second == UINT32_MAX) {
             ground_distance[n_index] = std::make_pair(ground_distance[current_tile].first, ground_distance[current_tile].second + 1);
             queue.push(n_index);
@@ -2817,7 +2817,7 @@ namespace devils_engine {
           const auto &tile_data = render::unpack_data(context->map->get_tile(tile_index));
           const uint32_t n_count = render::is_pentagon(tile_data) ? 5 : 6;
           for (uint32_t j = 0; j < n_count; ++j) {
-            const uint32_t n_index = tile_data.neighbours[j];
+            const uint32_t n_index = tile_data.neighbors[j];
             const uint32_t n_dist_to_water = context->water_distance[n_index].second;
             const float n_height = context->tile_elevation[n_index];
             
@@ -2903,7 +2903,7 @@ namespace devils_engine {
           const auto &tile_data = render::unpack_data(context->map->get_tile(tile_index));
           const uint32_t n_count = render::is_pentagon(tile_data) ? 5 : 6;
           for (uint32_t j = 0; j < n_count; ++j) {
-            const uint32_t n_index = tile_data.neighbours[j];
+            const uint32_t n_index = tile_data.neighbors[j];
             const uint32_t n_dist_to_ground = context->ground_distance[n_index].second;
             const float n_height = context->tile_elevation[n_index];
             
@@ -2979,7 +2979,7 @@ namespace devils_engine {
           const auto &tile_data = render::unpack_data(context->map->get_tile(current_tile));
           const uint32_t n_count = render::is_pentagon(tile_data) ? 5 : 6;
           for (uint32_t j = 0; j < n_count; ++j) {
-            const uint32_t n_index = tile_data.neighbours[j];
+            const uint32_t n_index = tile_data.neighbors[j];
             const float h = context->tile_elevation[n_index];
             if (h >= 0.0f) continue;
             if (tile_pool[n_index] == UINT32_MAX) {
@@ -3039,7 +3039,7 @@ namespace devils_engine {
           const auto &tile_data = render::unpack_data(context->map->get_tile(tile_index));
           const uint32_t n_count = render::is_pentagon(tile_data) ? 5 : 6;
           for (uint32_t k = 0; k < n_count; ++k) {
-            const uint32_t n_index = tile_data.neighbours[k];
+            const uint32_t n_index = tile_data.neighbors[k];
             if (context->water_distance[n_index].second == 0) continue;
             if (tile_pool[n_index] == pool_index) continue;
             
@@ -3070,7 +3070,7 @@ namespace devils_engine {
           const auto &tile_data = render::unpack_data(context->map->get_tile(current_tile.first));
           const uint32_t n_count = render::is_pentagon(tile_data) ? 5 : 6;
           for (uint32_t k = 0; k < n_count; ++k) {
-            const uint32_t n_index = tile_data.neighbours[k];
+            const uint32_t n_index = tile_data.neighbors[k];
             ASSERT(n_index != UINT32_MAX);
             if (context->tile_elevation[n_index] > min_height) continue;
             if (tile_pool[n_index] == pool_index) continue;
@@ -3122,7 +3122,7 @@ namespace devils_engine {
             const uint32_t n_count = render::is_pentagon(tile_data) ? 5 : 6;
             uint32_t old_tile_index = current_tile;
             for (uint32_t k = 0; k < n_count; ++k) {
-              const uint32_t n_index = tile_data.neighbours[k];
+              const uint32_t n_index = tile_data.neighbors[k];
               ASSERT(n_index != UINT32_MAX);
               const float n_h = context->tile_elevation[n_index];
               if (n_h > min_height) continue;
@@ -3220,7 +3220,7 @@ namespace devils_engine {
           while (height < 0.75f && founded) {
             founded = false;
             for (uint32_t k = 0; k < n_count; ++k) {
-              const uint32_t new_index = tile_data.neighbours[k];
+              const uint32_t new_index = tile_data.neighbors[k];
               ASSERT(new_index != UINT32_MAX);
               auto new_tile_data = render::unpack_data(context->map->get_tile(new_index));
               const glm::vec4 new_point = context->map->get_point(new_tile_data.center);
@@ -4023,7 +4023,7 @@ namespace devils_engine {
           const auto &tile_data = render::unpack_data(context->map->get_tile(current_tile));
           const uint32_t n_count = render::is_pentagon(tile_data) ? 5 : 6;
           for (uint32_t j = 0; j < n_count; ++j) {
-            const uint32_t n_index = tile_data.neighbours[j];
+            const uint32_t n_index = tile_data.neighbors[j];
             const float h = context->tile_elevation[n_index];
             if (h < 0.0f) continue;
             if (tile_pool[n_index] == UINT32_MAX) {
@@ -4144,7 +4144,7 @@ namespace devils_engine {
           for (uint32_t j = 0; j < n_count; ++j) {
             if (!found) break;
             
-            const uint32_t n_index = tile_data.neighbours[j];
+            const uint32_t n_index = tile_data.neighbors[j];
             if (unique_tiles.find(n_index) != unique_tiles.end()) {
               found = false;
               break;
@@ -4153,7 +4153,7 @@ namespace devils_engine {
             const auto &tile_data = render::unpack_data(context->map->get_tile(n_index));
             const uint32_t n_count = render::is_pentagon(tile_data) ? 5 : 6;
             for (uint32_t k = 0; k < n_count; ++k) {
-              const uint32_t n_index = tile_data.neighbours[k];
+              const uint32_t n_index = tile_data.neighbors[k];
               if (unique_tiles.find(n_index) != unique_tiles.end()) {
                 found = false;
                 break;
@@ -4178,12 +4178,12 @@ namespace devils_engine {
         const auto &tile_data = render::unpack_data(context->map->get_tile(tile_index));
         const uint32_t n_count = render::is_pentagon(tile_data) ? 5 : 6;
         for (uint32_t j = 0; j < n_count; ++j) {
-          const uint32_t n_index = tile_data.neighbours[j];
+          const uint32_t n_index = tile_data.neighbors[j];
           unique_tiles.insert(n_index);
           const auto &tile_data = render::unpack_data(context->map->get_tile(n_index));
           const uint32_t n_count = render::is_pentagon(tile_data) ? 5 : 6;
           for (uint32_t k = 0; k < n_count; ++k) {
-            const uint32_t n_index = tile_data.neighbours[k];
+            const uint32_t n_index = tile_data.neighbors[k];
             unique_tiles.insert(n_index);
           }
         }
@@ -4220,7 +4220,7 @@ namespace devils_engine {
         const auto &tile_data = render::unpack_data(context->map->get_tile(current_tile));
         const uint32_t n_count = render::is_pentagon(tile_data) ? 5 : 6;
         for (uint32_t j = 0; j < n_count; ++j) {
-          const uint32_t n_index = tile_data.neighbours[j];
+          const uint32_t n_index = tile_data.neighbors[j];
           
           const float t = context->tile_heat[n_index];
           if (t <= 0.15f) continue;
@@ -4283,7 +4283,7 @@ namespace devils_engine {
             const uint32_t province1 = tile_provinces_local[i].first;
             if (province1 == UINT32_MAX) continue;
             for (uint32_t j = 0; j < 6; ++j) {
-              const uint32_t tile_neighbour_index = tile.neighbours[j];
+              const uint32_t tile_neighbour_index = tile.neighbors[j];
               if (tile_neighbour_index == UINT32_MAX) continue;
               
               const uint32_t province2 = tile_provinces_local[tile_neighbour_index].first;
@@ -4415,7 +4415,7 @@ namespace devils_engine {
             for (uint32_t j = 0; j < n_count; ++j) {
               if (!found) break;
               
-              const uint32_t n_index = tile_data.neighbours[j];
+              const uint32_t n_index = tile_data.neighbors[j];
               if (unique_tiles.find(n_index) != unique_tiles.end()) {
                 found = false;
                 break;
@@ -4424,7 +4424,7 @@ namespace devils_engine {
               const auto &tile_data = render::unpack_data(context->map->get_tile(n_index));
               const uint32_t n_count = render::is_pentagon(tile_data) ? 5 : 6;
               for (uint32_t k = 0; k < n_count; ++k) {
-                const uint32_t n_index = tile_data.neighbours[k];
+                const uint32_t n_index = tile_data.neighbors[k];
                 if (unique_tiles.find(n_index) != unique_tiles.end()) {
                   found = false;
                   break;
@@ -4476,7 +4476,7 @@ namespace devils_engine {
             for (uint32_t j = 0; j < n_count; ++j) {
               if (!found) break;
               
-              const uint32_t n_index = tile_data.neighbours[j];
+              const uint32_t n_index = tile_data.neighbors[j];
               if (unique_tiles.find(n_index) != unique_tiles.end()) {
                 found = false;
                 break;
@@ -4485,7 +4485,7 @@ namespace devils_engine {
               const auto &tile_data = render::unpack_data(context->map->get_tile(n_index));
               const uint32_t n_count = render::is_pentagon(tile_data) ? 5 : 6;
               for (uint32_t k = 0; k < n_count; ++k) {
-                const uint32_t n_index = tile_data.neighbours[k];
+                const uint32_t n_index = tile_data.neighbors[k];
                 if (unique_tiles.find(n_index) != unique_tiles.end()) {
                   found = false;
                   break;
@@ -4527,7 +4527,7 @@ namespace devils_engine {
           const auto &tile_data = render::unpack_data(context->map->get_tile(current_tile));
           const uint32_t n_count = render::is_pentagon(tile_data) ? 5 : 6;
           for (uint32_t j = 0; j < n_count; ++j) {
-            const uint32_t n_index = tile_data.neighbours[j];
+            const uint32_t n_index = tile_data.neighbors[j];
             
             const float t = context->tile_heat[n_index];
             if (t <= 0.15f) continue;
@@ -4566,7 +4566,7 @@ namespace devils_engine {
           const auto &tile = render::unpack_data(context->map->get_tile(current_tile_index));
           const uint32_t n_count = render::is_pentagon(tile) ? 5 : 6;
           for (uint32_t k = 0; k < n_count; ++k) {
-            const uint32_t n_index = tile.neighbours[k];
+            const uint32_t n_index = tile.neighbors[k];
             const uint32_t province_index2 = tile_province[n_index].first;
             if (province_index2 == UINT32_MAX) continue;
             
@@ -4602,7 +4602,7 @@ namespace devils_engine {
           const auto &tile_data = render::unpack_data(context->map->get_tile(choosen_tile_index));
           const uint32_t n_count = render::is_pentagon(tile_data);
           for (uint32_t j = 0; j < n_count; ++j) {
-            const uint32_t n_index = tile_data.neighbours[j];
+            const uint32_t n_index = tile_data.neighbors[j];
             const uint32_t province_index2 = tile_province[n_index].first;
             if (province_index2 == UINT32_MAX) continue;
             if (i != province_index2) {
@@ -4731,7 +4731,7 @@ namespace devils_engine {
           const auto &tile_data = render::unpack_data(context->map->get_tile(current_tile_index));
           const uint32_t n_count = render::is_pentagon(tile_data) ? 5 : 6;
           for (uint32_t j = 0; j < n_count; ++j) {
-            const uint32_t n_index = tile_data.neighbours[j];
+            const uint32_t n_index = tile_data.neighbors[j];
             if (unique_tiles.find(n_index) != unique_tiles.end()) continue;
             
             const float t = context->tile_heat[current_tile_index];
@@ -4815,7 +4815,7 @@ namespace devils_engine {
             const auto &tile_data = render::unpack_data(context->map->get_tile(current_tile_index));
             const uint32_t n_count = render::is_pentagon(tile_data) ? 5 : 6;
             for (uint32_t j = 0; j < n_count; ++j) {
-              const uint32_t n_index = tile_data.neighbours[j];
+              const uint32_t n_index = tile_data.neighbors[j];
               if (unique_tiles.find(n_index) != unique_tiles.end()) continue;
               
               if (context->tile_province[n_index] != UINT32_MAX) {
@@ -5055,7 +5055,7 @@ namespace devils_engine {
           const auto &tile_data = render::unpack_data(context->map->get_tile(current_tile_index));
           const uint32_t n_count = render::is_pentagon(tile_data) ? 5 : 6;
           for (uint32_t j = 0; j < n_count; ++j) {
-            const uint32_t n_index = tile_data.neighbours[j];
+            const uint32_t n_index = tile_data.neighbors[j];
             const uint32_t n_province_index = context->tile_province[n_index];
             
             if (n_province_index == UINT32_MAX) continue;
@@ -5102,7 +5102,7 @@ namespace devils_engine {
             const auto &tile_data = render::unpack_data(context->map->get_tile(tile_index));
             const uint32_t n_count = render::is_pentagon(tile_data) ? 5 : 6;
             for (uint32_t k = 0; k < n_count; ++k) {
-              const uint32_t n_index = tile_data.neighbours[k];
+              const uint32_t n_index = tile_data.neighbors[k];
               
               const float h = context->tile_elevation[n_index];
               if (h < 0.0f) {
@@ -5123,7 +5123,7 @@ namespace devils_engine {
             const auto &tile_data = render::unpack_data(context->map->get_tile(current_tile_index));
             const uint32_t n_count = render::is_pentagon(tile_data) ? 5 : 6;
             for (uint32_t k = 0; k < n_count; ++k) {
-              const uint32_t n_index = tile_data.neighbours[k];
+              const uint32_t n_index = tile_data.neighbors[k];
               
               if (unique_tiles.find(n_index) != unique_tiles.end()) continue;
                           
@@ -5234,7 +5234,7 @@ namespace devils_engine {
           const auto &tile_data = render::unpack_data(context->map->get_tile(current_tile_index));
           const uint32_t n_count = render::is_pentagon(tile_data) ? 5 : 6;
           for (uint32_t j = 0; j < n_count; ++j) {
-            const uint32_t n_index = tile_data.neighbours[j];
+            const uint32_t n_index = tile_data.neighbors[j];
             const float t = context->tile_heat[n_index];
             if (t <= 0.15f) {
               found = false;
@@ -5255,7 +5255,7 @@ namespace devils_engine {
           culture_tiles[i].push_back(tile_index);
           unique_tiles.insert(tile_index);
           for (uint32_t j = 0; j < n_count; ++j) {
-            const uint32_t n_index = tile_data.neighbours[j];
+            const uint32_t n_index = tile_data.neighbors[j];
             unique_tiles.insert(n_index);
           }
         }
@@ -5276,7 +5276,7 @@ namespace devils_engine {
         const auto &tile_data = render::unpack_data(context->map->get_tile(current_tile_index));
         const uint32_t n_count = render::is_pentagon(tile_data) ? 5 : 6;
         for (uint32_t j = 0; j < n_count; ++j) {
-          const uint32_t n_index = tile_data.neighbours[j];
+          const uint32_t n_index = tile_data.neighbors[j];
           if (tiles_culture[n_index] != UINT32_MAX) continue;
           
           tiles_culture[n_index] = current_culture_index;
@@ -5848,7 +5848,7 @@ namespace devils_engine {
             const auto &tile_data = render::unpack_data(context->map->get_tile(tile_index));
             const uint32_t n_count = render::is_pentagon(tile_data) ? 5 : 6;
             for (size_t c = 0; c < n_count; ++c) {
-              const uint32_t n_index = tile_data.neighbours[c];
+              const uint32_t n_index = tile_data.neighbors[c];
               
               const float h = context->tile_elevation[n_index];
               if (h < 0.0f) {
@@ -6274,7 +6274,7 @@ namespace devils_engine {
           const glm::vec3 current_dir = current / speed;
           float outflow_sum = 0.0f;
           for (uint32_t j = 0; j < neighbor_count; ++j) {
-            const uint32_t neighbor_index = tile.neighbours[j];
+            const uint32_t neighbor_index = tile.neighbors[j];
             const auto &tile = context->map->get_tile(neighbor_index);
             const glm::vec3 neighbor_pos = context->map->get_point(tile.tile_indices.x);
             const glm::vec3 neighbor_vector = glm::normalize(neighbor_pos - pos);
@@ -6413,7 +6413,7 @@ namespace devils_engine {
                         const float circulated = circulating_elsewhere * outflow;
                         if (circulated > 0.0f) {
                           std::unique_lock<std::mutex> lock(mutex);
-                          new_tile_circulating_heat[tile.neighbours[j]] += circulated;
+                          new_tile_circulating_heat[tile.neighbors[j]] += circulated;
                         }
                       }
                     }
@@ -6578,7 +6578,7 @@ namespace devils_engine {
                     circulating -= circulating_elsewhere;
 //                     const auto &tile_data = render::unpack_data(context->map->get_tile(current_tile));
                     for (uint32_t j = 0; j < neighbor_count; ++j) {
-                      const uint32_t n_index = tile.neighbours[j];
+                      const uint32_t n_index = tile.neighbors[j];
                       const float outflow = context->tile_air_outflows[i][j];
                       if (outflow > 0.0f) {
                         has_outflow = true;

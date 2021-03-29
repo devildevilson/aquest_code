@@ -24,6 +24,16 @@ namespace devils_engine {
         check_table_value::value_required, 0, {}
       },
       {
+        "units_count",
+        check_table_value::type::int_t,
+        check_table_value::value_required, 256, {}
+      },
+      {
+        "unit_scale",
+        check_table_value::type::float_t,
+        check_table_value::value_required, 0, {}
+      },
+      {
         "stats",
         check_table_value::type::array_t,
         check_table_value::value_required, 0, 
@@ -70,6 +80,10 @@ namespace devils_engine {
         if (index == SIZE_MAX) throw std::runtime_error("Could not find unit state " + unit_type_id);
         //obj.units_type = ctx->get_entity<battle::unit_type>(index);
         obj.default_unit_state = ctx->get_entity<core::state>(index);
+        
+        obj.units_count = table["units_count"];
+        ASSERT(obj.units_count < 256);
+        obj.unit_scale = table["unit_scale"];
         
         const sol::table t = table["stats"];
         for (size_t i = 0; i < core::troop_stats::count; ++i) {

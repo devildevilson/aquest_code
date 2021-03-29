@@ -8,7 +8,7 @@
 #include "utils/block_allocator.h"
 #include "utils/memory_pool.h"
 #include "character.h"
-
+#include "utils/sol.h"
 // нам где то нужно еще хранить названия сгенерированых сущностей
 // то есть тут полный список данных которые нужно положить для сущностей
 
@@ -47,7 +47,8 @@ namespace devils_engine {
       enum class data_type {
         uint_t,
         int_t,
-        float_t
+        float_t,
+        count
       };
       
       struct entity_type {
@@ -84,23 +85,47 @@ namespace devils_engine {
         
         uint32_t add_entity(const uint32_t &type);
         void set_entity_count(const uint32_t &type, const uint32_t &size);
+        void clear_entities(const uint32_t &type);
         
         template <typename T>
         void set_data(const uint32_t &type, const uint32_t &index, const uint32_t &parameter_type, const T &data);
         template <typename T>
         T get_data(const uint32_t &type, const uint32_t &index, const uint32_t &parameter_type) const;
         
-        void add_child(const uint32_t &type, const uint32_t &index, const uint32_t &child);
+        uint32_t add_child(const uint32_t &type, const uint32_t &index, const uint32_t &child);
         uint32_t get_child(const uint32_t &type, const uint32_t &index, const uint32_t &array_index) const;
         uint32_t get_childs_count(const uint32_t &type, const uint32_t &index) const;
         const std::vector<uint32_t> & get_childs(const uint32_t &type, const uint32_t &index) const;
         std::vector<uint32_t> & get_childs(const uint32_t &type, const uint32_t &index);
+        void clear_childs(const uint32_t &type, const uint32_t &index);
         
         size_t entities_count(const uint32_t &type) const;
         data_type type(const uint32_t &entity, const uint32_t &property) const;
         
+        uint32_t add_entity_lua(const uint32_t &type);
+        void set_entity_count_lua(const uint32_t &type, const uint32_t &size);
+        void clear_entities_lua(const uint32_t &type);
+        
+        template <typename T>
+        void set_data_lua(const uint32_t &type, const uint32_t &index, const uint32_t &parameter_type, const T &data);
+        template <typename T>
+        T get_data_lua(const uint32_t &type, const uint32_t &index, const uint32_t &parameter_type) const;
+        
+        uint32_t add_child_lua(const uint32_t &type, const uint32_t &index, const uint32_t &child);
+        uint32_t get_child_lua(const uint32_t &type, const uint32_t &index, const uint32_t &array_index) const;
+        uint32_t get_childs_count_lua(const uint32_t &type, const uint32_t &index) const;
+        const std::vector<uint32_t> & get_childs_lua(const uint32_t &type, const uint32_t &index) const;
+        std::vector<uint32_t> & get_childs_lua(const uint32_t &type, const uint32_t &index);
+        void clear_childs_lua(const uint32_t &type, const uint32_t &index);
+        
+        size_t entities_count_lua(const uint32_t &type) const;
+        data_type type_lua(const uint32_t &entity, const uint32_t &property) const;
+        
         size_t set_tile_template(const std::vector<data_type> &template_data);
         size_t set_entity_template(const std::vector<data_type> &template_data);
+        
+        size_t set_tile_template_lua(const sol::table &template_data);
+        size_t set_entity_template_lua(const sol::table &template_data);
         
         size_t compute_memory_size() const;
       private:
@@ -108,7 +133,7 @@ namespace devils_engine {
         struct tile_type tile_type;
         std::vector<tile_data> tiles;
         std::vector<std::pair<entity_type, std::vector<entity>>> entities;
-        std::vector<std::vector<uint32_t>> province_neighbours;
+//         std::vector<std::vector<uint32_t>> province_neighbours;
       };
     }
   }

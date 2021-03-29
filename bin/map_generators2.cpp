@@ -16,8 +16,10 @@
 #include "game_time.h"
 #include "seasons.h"
 #include "render/shared_structures.h"
+#include "render/shared_render_utility.h"
 #include "image_parser.h"
 #include "heraldy_parser.h"
+#include "render/yavf.h"
 
 namespace devils_engine {
   namespace map {
@@ -111,18 +113,23 @@ namespace devils_engine {
       ctx->noise->SetSeed(final_num);
     }
 
-    void map_triangle_add2(const map::container* map, const uint32_t &triangle_index, std::mutex &mutex, std::unordered_set<uint32_t> &unique_tiles, std::vector<uint32_t> &tiles_array) {
+    //void map_triangle_add2(const map::container* map, const uint32_t &triangle_index, std::mutex &mutex, std::unordered_set<uint32_t> &unique_tiles, std::vector<uint32_t> &tiles_array) {
+    void map_triangle_add2(const map::container* map, const uint32_t &triangle_index, std::mutex &mutex, std::vector<std::atomic<uint32_t>> &unique_tiles, std::vector<uint32_t> &tiles_array) {
       const auto &tri = map->triangles[triangle_index];
 
       if (tri.current_level == core::map::detail_level) {
         for (uint32_t i = 0; i < 4; ++i) {
           const uint32_t tile_index = tri.next_level[i];
-          {
-            std::unique_lock<std::mutex> lock(mutex);
-            auto itr = unique_tiles.find(tile_index);
-            if (itr != unique_tiles.end()) continue;
-            unique_tiles.insert(tile_index);
-          }
+          
+          const size_t check = unique_tiles[tile_index].fetch_add(1);
+          if (check != 0) continue;
+          
+//           {
+//             std::unique_lock<std::mutex> lock(mutex);
+//             auto itr = unique_tiles.find(tile_index);
+//             if (itr != unique_tiles.end()) continue;
+//             unique_tiles.insert(tile_index);
+//           }
 
           tiles_array.push_back(tile_index);
         }
@@ -158,7 +165,7 @@ namespace devils_engine {
 
       const auto &tile = render::unpack_data(map->get_tile(tile_index));
       for (uint32_t i = 0; i < 6; ++i) {
-        const uint32_t neighbor_index = tile.neighbours[i];
+        const uint32_t neighbor_index = tile.neighbors[i];
         if (neighbor_index == UINT32_MAX) continue;
         if (tile_plate_indices[neighbor_index] != plate_count) {
 //           uint32_t data = plate_index;
@@ -173,7 +180,7 @@ namespace devils_engine {
       plate_tile_indices[plate_index].push_back(tile_index);
 
       for (uint32_t i = 0; i < 6; ++i) {
-        const uint32_t neighbor_index = tile.neighbours[i];
+        const uint32_t neighbor_index = tile.neighbors[i];
         if (neighbor_index == UINT32_MAX) continue;
         active_tile_indices.push_back(std::make_pair(neighbor_index, plate_index));
       }
@@ -198,7 +205,170 @@ namespace devils_engine {
 
       return true;
     }
+    
+    void make_tiles(const glm::mat4 &mat1, core::map* map, dt::thread_pool* pool) {
+      const glm::mat3 mat(mat1);
+      map::container generated_core(core::map::world_radius, core::map::detail_level, mat); // возможно нужно как то это ускорить
 
+      ASSERT(generated_core.points.size() == map->points_count());
+      ASSERT(generated_core.tiles.size() == map->tiles_count());
+      ASSERT(generated_core.triangles.size() == map->triangles_count());
+      
+      {
+        utils::time_log log("fixing tiles");
+        utils::submit_works_async(pool, generated_core.tiles.size(), [&generated_core] (const size_t &start, const size_t &count) {
+          for (size_t i = start; i < start+count; ++i) {
+            generated_core.fix_tile(i);
+          }
+        });
+        utils::async_wait(pool);
+      }
+      
+      {
+        utils::time_log log("fixing tiles 2");
+        utils::submit_works_async(pool, generated_core.tiles.size(), [&generated_core] (const size_t &start, const size_t &count) {
+          for (size_t i = start; i < start+count; ++i) {
+            generated_core.fix_tile2(i);
+          }
+        });
+        utils::async_wait(pool);
+      }
+      
+      {
+        utils::time_log log("applying matrix");
+        utils::submit_works_async(pool, generated_core.points.size(), [&generated_core, mat1] (const size_t &start, const size_t &count) {
+          for (size_t i = start; i < start+count; ++i) {
+            generated_core.apply_matrix(i, mat1);
+          }
+        });
+        utils::async_wait(pool);
+      }
+      
+      {
+        std::vector<render::light_map_tile_t> tiles(map->tiles_count(), render::light_map_tile_t{});
+        std::vector<glm::vec4> points(core::map::points_count_d(core::map::detail_level), glm::vec4(0.0f, 0.0f, 0.0f, 0.0f));
+        {
+          ASSERT(tiles.size() == core::map::hex_count_d(core::map::detail_level));
+          ASSERT(generated_core.tiles.size() == core::map::hex_count_d(core::map::detail_level));
+          utils::time_log log("seting tile data");
+          utils::submit_works_async(pool, generated_core.tiles.size(), [&generated_core, &tiles] (const size_t &start, const size_t &count) {
+            for (size_t i = start; i < start+count; ++i) {
+  //             map->set_tile_data(&generated_core.tiles[i], i);
+              auto tile = &generated_core.tiles[i];
+              const render::map_tile_t map_tile{
+                tile->index,
+                {GPU_UINT_MAX},
+                {GPU_UINT_MAX},
+                0.0f,
+                {tile->neighbours[0].points[0], tile->neighbours[1].points[0], tile->neighbours[2].points[0], tile->neighbours[3].points[0], tile->neighbours[4].points[0], tile->neighbours[5].points[0]},
+                {tile->neighbours[0].index, tile->neighbours[1].index, tile->neighbours[2].index, tile->neighbours[3].index, tile->neighbours[4].index, tile->neighbours[5].index},
+                GPU_UINT_MAX,
+                GPU_UINT_MAX,
+                GPU_UINT_MAX,
+                0
+              };
+              tiles[i] = render::pack_data(map_tile);
+            }
+          });
+          utils::async_wait(pool);
+        }
+
+        {
+          ASSERT(generated_core.points.size() == core::map::points_count_d(core::map::detail_level));
+          ASSERT(points.size() == core::map::points_count_d(core::map::detail_level));
+          utils::time_log log("seting point data");
+          utils::submit_works_async(pool, generated_core.points.size(), [&generated_core, &points] (const size_t &start, const size_t &count) {
+            for (size_t i = start; i < start+count; ++i) {
+  //             map->set_point_data(generated_core.points[i], i);
+              points[i] = glm::vec4(generated_core.points[i], 1.0f);
+            }
+          });
+          utils::async_wait(pool);
+        }
+        
+        const size_t tri_count = core::map::tri_count_d(core::map::accel_struct_detail_level);
+        const size_t tiles_count = core::map::hex_count_d(core::map::detail_level);
+        ASSERT(tri_count == map->accel_triangles_count());
+  //     const size_t hex_count = map::hex_count_d(detail_level);
+        std::mutex mutex;
+        //std::unordered_set<uint32_t> unique_tiles;
+        std::vector<std::atomic<uint32_t>> unique_tiles(tiles_count);
+        for (auto &val : unique_tiles) { val = 0; }
+        std::atomic<uint32_t> tiles_counter(0);
+        std::vector<render::packed_fast_triangle_t> fast_triangles(tri_count, render::packed_fast_triangle_t{});
+        const size_t indices_size = align_to(tiles_count*sizeof(uint32_t), sizeof(glm::uvec4))/sizeof(uint32_t);
+        std::vector<uint32_t> tile_indices(indices_size, UINT32_MAX);
+        
+        {
+          utils::time_log log("making acceleration struct");
+          utils::submit_works_async(pool, tri_count, [&mutex, &unique_tiles, &generated_core, &tiles_counter, &fast_triangles, &tile_indices] (const size_t &start, const size_t &count) {
+            std::vector<uint32_t> tiles_array;
+            size_t tri_offset = 0;
+            for (size_t i = 0; i < core::map::accel_struct_detail_level; ++i) {
+              tri_offset += core::map::tri_count_d(i);
+            }
+
+            for (size_t i = start; i < start+count; ++i) {
+              const size_t tri_index = i + tri_offset;
+              const auto &tri = generated_core.triangles[tri_index];
+              ASSERT(tri.current_level == core::map::accel_struct_detail_level);
+
+              map_triangle_add2(&generated_core, tri_index, mutex, unique_tiles, tiles_array);
+
+              uint32_t counter = 0;
+              for (int64_t i = tiles_array.size()-1; i > -1 ; --i) {
+                const uint32_t tile_index = tiles_array[i];
+                if (generated_core.tiles[tile_index].is_pentagon()) {
+                  ++counter;
+                  ASSERT(counter < 2);
+                  std::swap(tiles_array[i], tiles_array.back());
+                }
+              }
+
+              const uint32_t offset = tiles_counter.fetch_add(tiles_array.size());
+              ASSERT(offset + tiles_array.size() <= generated_core.tiles.size());
+              //map->set_tile_indices(i, tri.points, tiles_array, offset, tiles_array.size(), counter != 0);
+              
+              fast_triangles[i].points[0] = tri.points[0];
+              fast_triangles[i].points[1] = tri.points[1];
+              fast_triangles[i].points[2] = tri.points[2];
+              fast_triangles[i].data[0] = offset;
+              fast_triangles[i].data[1] = tiles_array.size();
+              fast_triangles[i].data[2] = uint32_t(counter != 0);
+              
+              memcpy(&tile_indices.data()[offset], tiles_array.data(), tiles_array.size()*sizeof(tiles_array[0]));
+
+              tiles_array.clear();
+            }
+          });
+          utils::async_wait(pool); // похоже что работает
+        }
+        
+        ASSERT(pool->working_count() == 1 && pool->tasks_count() == 0);
+        
+        ASSERT(generated_core.triangles.size() == map->triangles.size());
+        static_assert(sizeof(core::map::triangle) == sizeof(map::triangle));
+        ASSERT(map->tile_indices->info().size <= tile_indices.size()*sizeof(tile_indices[0]));
+        
+        {
+          utils::time_log log("copying data to map container");
+          std::unique_lock<std::mutex> lock(map->mutex);
+          memcpy(map->tiles->ptr(), tiles.data(), tiles.size()*sizeof(tiles[0]));
+          memcpy(map->points->ptr(), points.data(), points.size()*sizeof(points[0]));
+          memcpy(map->accel_triangles->ptr(), fast_triangles.data(), fast_triangles.size()*sizeof(fast_triangles[0]));
+          memcpy(map->tile_indices->ptr(), tile_indices.data(), tile_indices.size()*sizeof(tile_indices[0]));
+          memcpy(map->triangles.data(), generated_core.triangles.data(), map->triangles.size()*sizeof(map->triangles[0]));
+        }
+      }
+      
+      {
+        utils::time_log log("copying data to gpu");
+        map->flush_data();
+      }
+    }
+    
+    // удалось ускорить бегин в несколько раз
+    // за счет оптимизированного make_tiles
     void begin(generator::context* ctx, sol::table &table) {
       (void)table;
       utils::time_log log("prepare step");
@@ -218,112 +388,16 @@ namespace devils_engine {
       glm::mat3 mat(mat1);
                 mat1 = glm::scale(mat1, glm::vec3(core::map::world_radius, core::map::world_radius, core::map::world_radius));
 
-//       PRINT_VEC3("mat", mat[0])
-//       PRINT_VEC3("mat", mat[1])
-//       PRINT_VEC3("mat", mat[2])
-      map::container generated_core(core::map::world_radius, core::map::detail_level, mat); // возможно нужно как то это ускорить
-
       auto map = ctx->map;
-      ASSERT(generated_core.points.size() == map->points_count());
-      ASSERT(generated_core.tiles.size() == map->tiles_count());
-      ASSERT(generated_core.triangles.size() == map->triangles_count());
-
       map->world_matrix = mat1;
-
-      // придется переделать функции и добавить ожидание треду
-      utils::submit_works_async(ctx->pool, generated_core.tiles.size(), [&generated_core] (const size_t &start, const size_t &count) {
-        for (size_t i = start; i < start+count; ++i) {
-          generated_core.fix_tile(i);
-        }
-      });
-      utils::async_wait(ctx->pool);
       
-      utils::submit_works_async(ctx->pool, generated_core.tiles.size(), [&generated_core] (const size_t &start, const size_t &count) {
-        for (size_t i = start; i < start+count; ++i) {
-          generated_core.fix_tile2(i);
-        }
-      });
-      utils::async_wait(ctx->pool);
-      
-      utils::submit_works_async(ctx->pool, generated_core.points.size(), [&generated_core, mat1] (const size_t &start, const size_t &count) {
-        for (size_t i = start; i < start+count; ++i) {
-          generated_core.apply_matrix(i, mat1);
-        }
-      });
-      utils::async_wait(ctx->pool);
+      make_tiles(mat1, map, ctx->pool);
 
-      utils::submit_works_async(ctx->pool, generated_core.tiles.size(), [&generated_core, map] (const size_t &start, const size_t &count) {
-        for (size_t i = start; i < start+count; ++i) {
-          map->set_tile_data(&generated_core.tiles[i], i);
-        }
-      });
-      utils::async_wait(ctx->pool);
-
-      utils::submit_works_async(ctx->pool, generated_core.points.size(), [&generated_core, map] (const size_t &start, const size_t &count) {
-        for (size_t i = start; i < start+count; ++i) {
-          map->set_point_data(generated_core.points[i], i);
-        }
-      });
-      utils::async_wait(ctx->pool);
-
-      const size_t tri_count = core::map::tri_count_d(core::map::accel_struct_detail_level);
-      ASSERT(tri_count == map->accel_triangles_count());
-//     const size_t hex_count = map::hex_count_d(detail_level);
-      std::mutex mutex;
-      std::unordered_set<uint32_t> unique_tiles;
-      std::atomic<uint32_t> tiles_counter(0);
-
-      utils::submit_works_async(ctx->pool, tri_count, [&mutex, &unique_tiles, &generated_core, &tiles_counter, map] (const size_t &start, const size_t &count) {
-        std::vector<uint32_t> tiles_array;
-        size_t offset = 0;
-        for (size_t i = 0; i < core::map::accel_struct_detail_level; ++i) {
-          offset += core::map::tri_count_d(i);
-        }
-
-        for (size_t i = start; i < start+count; ++i) {
-          const size_t tri_index = i + offset;
-          const auto &tri = generated_core.triangles[tri_index];
-          ASSERT(tri.current_level == core::map::accel_struct_detail_level);
-
-          map_triangle_add2(&generated_core, tri_index, mutex, unique_tiles, tiles_array);
-
-          uint32_t counter = 0;
-          for (int64_t i = tiles_array.size()-1; i > -1 ; --i) {
-            const uint32_t tile_index = tiles_array[i];
-            if (generated_core.tiles[tile_index].is_pentagon()) {
-              ++counter;
-              ASSERT(counter < 2);
-              std::swap(tiles_array[i], tiles_array.back());
-            }
-          }
-
-          const uint32_t offset = tiles_counter.fetch_add(tiles_array.size());
-          ASSERT(offset + tiles_array.size() <= generated_core.tiles.size());
-          map->set_tile_indices(i, tri.points, tiles_array, offset, tiles_array.size(), counter != 0);
-
-          tiles_array.clear();
-        }
-      });
-      utils::async_wait(ctx->pool); // похоже что работает
-
-      ASSERT(ctx->pool->working_count() == 1 && ctx->pool->tasks_count() == 0);
-
-      ASSERT(generated_core.triangles.size() == map->triangles.size());
-      static_assert(sizeof(core::map::triangle) == sizeof(map::triangle));
-      {
-        std::unique_lock<std::mutex> lock(map->mutex);
-        memcpy(map->triangles.data(), generated_core.triangles.data(), map->triangles.size()*sizeof(core::map::triangle));
-      }
-
-      map->flush_data();
-
-//       ctx->container->set_entity_count(debug::entities::tile, map->tiles_count());
       ctx->map->set_status(core::map::status::valid);
     }
 
     void setup_generator(generator::context* ctx, sol::table &table) {
-      (void)table;
-      ctx->container->set_tile_template({
+      ctx->container->set_tile_template(std::vector<generator::data_type>{
         map::generator::data_type::uint_t,    //       plate_index,
         map::generator::data_type::uint_t,    //       edge_index,
         map::generator::data_type::float_t,   //       edge_dist,
@@ -346,7 +420,7 @@ namespace devils_engine {
       });
 
       {
-        const size_t index = ctx->container->set_entity_template({
+        const size_t index = ctx->container->set_entity_template(std::vector<generator::data_type>{
           map::generator::data_type::float_t,  // drift_axis,
           map::generator::data_type::float_t,  // drift_axis1,
           map::generator::data_type::float_t,  // drift_axis2,
@@ -364,7 +438,7 @@ namespace devils_engine {
       }
 
       {
-        const size_t index = ctx->container->set_entity_template({
+        const size_t index = ctx->container->set_entity_template(std::vector<generator::data_type>{
           map::generator::data_type::float_t,  // plate0_movement,
           map::generator::data_type::float_t,  // plate0_movement1,
           map::generator::data_type::float_t,  // plate0_movement2,
@@ -378,7 +452,7 @@ namespace devils_engine {
       }
 
       {
-        const size_t index = ctx->container->set_entity_template({
+        const size_t index = ctx->container->set_entity_template(std::vector<generator::data_type>{
           map::generator::data_type::uint_t,  // country_index,
           map::generator::data_type::uint_t   // title_index
         });
@@ -388,25 +462,25 @@ namespace devils_engine {
       }
       
       {
-        const size_t index = ctx->container->set_entity_template({});
+        const size_t index = ctx->container->set_entity_template(std::vector<generator::data_type>{});
         ASSERT(index == debug::entities::province_neighbours);
         UNUSED_VARIABLE(index);
       }
 
       {
-        const size_t index = ctx->container->set_entity_template({});
+        const size_t index = ctx->container->set_entity_template(std::vector<generator::data_type>{});
         ASSERT(index == debug::entities::culture);
         UNUSED_VARIABLE(index);
       }
 
       {
-        const size_t index = ctx->container->set_entity_template({});
+        const size_t index = ctx->container->set_entity_template(std::vector<generator::data_type>{});
         ASSERT(index == debug::entities::country);
         UNUSED_VARIABLE(index);
       }
 
       {
-        const size_t index = ctx->container->set_entity_template({
+        const size_t index = ctx->container->set_entity_template(std::vector<generator::data_type>{
           map::generator::data_type::uint_t,  // parent
           map::generator::data_type::uint_t,  // owner
         });
@@ -414,6 +488,50 @@ namespace devils_engine {
         ASSERT(index == debug::entities::title);
         UNUSED_VARIABLE(index);
       }
+      
+      // у нас еще должны быть технические строки (тип строки в меню, строки для брат/сестра и проч)
+      auto strings_table = table["strings"].get_or_create<sol::table>();
+      { // названия титулов
+        const uint32_t bank_index = ctx->loc->create_bank().second;
+        strings_table["titles_names"] = bank_index;
+      }
+      
+      { // массив имен культур
+        const uint32_t bank_index = ctx->loc->create_bank().second;
+        strings_table["culture1.names"] = bank_index;
+      }
+      
+      { // массив названий династий у культур (как сделать адекватно? чтобы названия династий были уникальными?)
+        const uint32_t bank_index = ctx->loc->create_bank().second;
+        strings_table["culture1.dynasty_names"] = bank_index;
+      }
+      
+      { // названия всех эвентов (в разные банки нужно пихать только имена, потому что они пойдут в культуры)
+        const uint32_t bank_index = ctx->loc->create_bank().second;
+        strings_table["events.names"] = bank_index;
+      }
+      
+      { // описания эвентов
+        const uint32_t bank_index = ctx->loc->create_bank().second;
+        strings_table["events.descriptions"] = bank_index;
+      }
+      
+      // названия и описания треитов, модификаторов, предметов
+      
+      // нужно еще сделать компиляцию строк, то есть в строке у нас будет что то вроде [religious_head.get_name()]
+      // которые нужно преобразовать в нормальные строки и потом нарисовать это дело игроку
+      
+      // сейчас у меня игра пытается хранить все локализации в памяти
+      // мне нужно сделать отдельное хранилище для локализаций,
+      // а utils::localization будет существовать для сериализации
+      // тогда ворлд дата видимо будет весить уже не 4мб, 
+      // а наверное мб 20 или около того
+      // при загрузке у нас должна быть возможность загрузить 
+      // только необходимые локализации (то есть максимум 2, а лучше одну)
+      // еще одна беда заключается в том что нам нужно пересоздать мир для того чтобы исправить локализацию
+      // такого быть по идее не должно, по идее локализация должна быть таким же ресурсом
+      // как изображения или звуки, то есть не должно быть так что нужно пересоздавать мир 
+      // чтобы исправить ошибки локализации
     }
 
     void generate_plates(generator::context* ctx, sol::table &table) {
@@ -457,7 +575,7 @@ namespace devils_engine {
           const uint32_t n_count = render::is_pentagon(data) ? 5 : 6;
           bool continue_b = false;
           for (uint32_t j = 0; j < n_count; ++j) {
-            const uint32_t n_index = data.neighbours[j];
+            const uint32_t n_index = data.neighbors[j];
             assert(n_index < map->tiles_count());
             if (tile_plate_atomic[n_index] != UINT32_MAX) continue_b = true;
           }
@@ -469,7 +587,7 @@ namespace devils_engine {
           tile_plate_atomic[rand_index] = i;
           plate_tiles_concurrent[i].push_back(rand_index);
           for (uint32_t j = 0; j < n_count; ++j) {
-            const uint32_t n_index = data.neighbours[j];
+            const uint32_t n_index = data.neighbors[j];
 //             unique_tiles.insert(n_index);
 //             tile_plate_atomic[n_index] = i;
 //             plate_tiles_concurrent[i].push_back(n_index);
@@ -536,7 +654,7 @@ namespace devils_engine {
         const auto &data = render::unpack_data(ctx->map->get_tile(tile_index));
         const uint32_t n_count = render::is_pentagon(data) ? 5 : 6;
         for (uint32_t j = 0; j < n_count; ++j) {
-          const uint32_t n_index = data.neighbours[j];
+          const uint32_t n_index = data.neighbors[j];
           if (unique_tiles.find(n_index) != unique_tiles.end()) continue;
 
           active_tile_indices.push_back(std::make_pair(n_index, plate_index));
@@ -656,7 +774,7 @@ namespace devils_engine {
       struct next_plates_data {
         std::mutex mutex;
         //std::unordered_set<uint32_t> neighbours; // плох тем, что не гарантирует порядок значений
-        std::set<uint32_t> neighbours;             // гарантирует порядок, а значит независим от мультипоточных алгоритмов
+        std::set<uint32_t> neighbors;             // гарантирует порядок, а значит независим от мультипоточных алгоритмов
       };
 
       std::vector<std::vector<uint32_t>> plate_tiles_local(plates_count);
@@ -679,7 +797,7 @@ namespace devils_engine {
           for (size_t i = start; i < start+count; ++i) {
             const auto &tile = render::unpack_data(ctx->map->get_tile(i));
             for (uint32_t j = 0; j < 6; ++j) {
-              const uint32_t tile_neighbour_index = tile.neighbours[j];
+              const uint32_t tile_neighbour_index = tile.neighbors[j];
               if (tile_neighbour_index == UINT32_MAX) continue;
 
               const uint32_t plate1 = tile_plates_local[i];
@@ -688,12 +806,12 @@ namespace devils_engine {
               if (plate1 != plate2) {
                 {
                   std::unique_lock<std::mutex> lock(next_plates[plate1].mutex);
-                  next_plates[plate1].neighbours.insert(plate2);
+                  next_plates[plate1].neighbors.insert(plate2);
                 }
 
                 {
                   std::unique_lock<std::mutex> lock(next_plates[plate2].mutex);
-                  next_plates[plate2].neighbours.insert(plate1);
+                  next_plates[plate2].neighbors.insert(plate1);
                 }
               }
             }
@@ -764,7 +882,7 @@ namespace devils_engine {
 //               if (neighbours_vector.empty()) break;
 //             }
 
-            for (auto idx : next_plates[i].neighbours) {
+            for (auto idx : next_plates[i].neighbors) {
               if (!plates_union[idx]) continue;
               // первого соседа?
               plate_index = idx;
@@ -818,8 +936,8 @@ namespace devils_engine {
           continue;
         }
         
-        PRINT_VAR("small plate index", itr - plate_tiles_local.begin())
-        PRINT_VAR("small plate tile ", (*itr)[0])
+//         PRINT_VAR("small plate index", itr - plate_tiles_local.begin())
+//         PRINT_VAR("small plate tile ", (*itr)[0])
         
         itr = plate_tiles_local.erase(itr);
       }
@@ -1071,7 +1189,7 @@ namespace devils_engine {
           const auto &tile = render::unpack_data(context->map->get_tile(current_tile_index));
           const uint32_t n_count = render::is_pentagon(tile) ? 5 : 6;
           for (uint32_t j = 0; j < n_count; ++j) {
-            const uint32_t neighbour_tile_index = tile.neighbours[j];
+            const uint32_t neighbour_tile_index = tile.neighbors[j];
             ASSERT(current_tile_index != neighbour_tile_index);
 
             const uint32_t neighbour_tile_plate_index = context->container->get_data<uint32_t>(debug::entities::tile, neighbour_tile_index, debug::properties::tile::plate_index);
@@ -1248,7 +1366,7 @@ namespace devils_engine {
 
         const auto &tile_data = render::unpack_data(context->map->get_tile(current_tile));
         for (uint32_t i = 0; i < 6; ++i) {
-          const uint32_t n_index = tile_data.neighbours[i];
+          const uint32_t n_index = tile_data.neighbors[i];
           if (n_index == UINT32_MAX) continue;
 
 //           const auto &n_tile_data = render::unpack_data(context->map->get_tile(n_index));
@@ -1317,7 +1435,7 @@ namespace devils_engine {
         const auto &data = render::unpack_data(ctx->map->get_tile(index));
         const uint32_t n_count = render::is_pentagon(data) ? 5 : 6;
         for (uint32_t i = 0; i < n_count; ++i) {
-          const uint32_t n_index = data.neighbours[i];
+          const uint32_t n_index = data.neighbors[i];
           if (unique_tiles.find(n_index) != unique_tiles.end()) continue;
 
           const auto &n_data = render::unpack_data(ctx->map->get_tile(n_index));
@@ -1844,7 +1962,7 @@ namespace devils_engine {
             float accum_ground = 0.0f;
             const uint32_t n_count = render::is_pentagon(tile_data) ? 5 : 6;
             for (uint32_t j = 0; j < n_count; ++j) {
-              const uint32_t n_index = tile_data.neighbours[j];
+              const uint32_t n_index = tile_data.neighbors[j];
               if (n_index == UINT32_MAX) continue;
 
   //             const uint32_t n_plate_index = context->tile_plate_indices[n_index];
@@ -2055,7 +2173,7 @@ namespace devils_engine {
         const auto &tile_data = render::unpack_data(ctx->map->get_tile(current_tile));
         const uint32_t n_count = render::is_pentagon(tile_data) ? 5 : 6;
         for (uint32_t i = 0; i < n_count; ++i) {
-          const uint32_t n_index = tile_data.neighbours[i];
+          const uint32_t n_index = tile_data.neighbors[i];
           if (ground_distance[n_index].second == UINT32_MAX) {
             ground_distance[n_index] = std::make_pair(ground_distance[current_tile].first, ground_distance[current_tile].second + 1);
             queue.push(n_index);
@@ -2107,6 +2225,8 @@ namespace devils_engine {
         // мне нужно сделать так чтобы на берегах была повышенная влажность
         // и чтобы вне экватора влажность распределялась более умерено
         // хотя с другой стороны это можно сделать иначе
+        UNUSED_VARIABLE(height);
+        UNUSED_VARIABLE(heat);
       }
 
       for (size_t i = 0; i < wetness.size(); ++i) {
@@ -2731,7 +2851,7 @@ namespace devils_engine {
           const auto &tile_data = render::unpack_data(ctx->map->get_tile(current_tile));
           const uint32_t n_count = render::is_pentagon(tile_data) ? 5 : 6;
           for (uint32_t j = 0; j < n_count; ++j) {
-            const uint32_t n_index = tile_data.neighbours[j];
+            const uint32_t n_index = tile_data.neighbors[j];
             const float h = ctx->container->get_data<float>(debug::entities::tile, n_index, debug::properties::tile::elevation);
             if (h < 0.0f) continue;
             if (tile_pool[n_index] == UINT32_MAX) {
@@ -2853,7 +2973,7 @@ namespace devils_engine {
           for (uint32_t j = 0; j < n_count; ++j) {
             if (!found) break;
 
-            const uint32_t n_index = tile_data.neighbours[j];
+            const uint32_t n_index = tile_data.neighbors[j];
             if (unique_tiles.find(n_index) != unique_tiles.end()) {
               found = false;
               break;
@@ -2862,7 +2982,7 @@ namespace devils_engine {
             const auto &tile_data = render::unpack_data(ctx->map->get_tile(n_index));
             const uint32_t n_count = render::is_pentagon(tile_data) ? 5 : 6;
             for (uint32_t k = 0; k < n_count; ++k) {
-              const uint32_t n_index = tile_data.neighbours[k];
+              const uint32_t n_index = tile_data.neighbors[k];
               if (unique_tiles.find(n_index) != unique_tiles.end()) {
                 found = false;
                 break;
@@ -2887,12 +3007,12 @@ namespace devils_engine {
         const auto &tile_data = render::unpack_data(ctx->map->get_tile(tile_index));
         const uint32_t n_count = render::is_pentagon(tile_data) ? 5 : 6;
         for (uint32_t j = 0; j < n_count; ++j) {
-          const uint32_t n_index = tile_data.neighbours[j];
+          const uint32_t n_index = tile_data.neighbors[j];
           unique_tiles.insert(n_index);
           const auto &tile_data = render::unpack_data(ctx->map->get_tile(n_index));
           const uint32_t n_count = render::is_pentagon(tile_data) ? 5 : 6;
           for (uint32_t k = 0; k < n_count; ++k) {
-            const uint32_t n_index = tile_data.neighbours[k];
+            const uint32_t n_index = tile_data.neighbors[k];
             unique_tiles.insert(n_index);
           }
         }
@@ -2929,7 +3049,7 @@ namespace devils_engine {
         const auto &tile_data = render::unpack_data(ctx->map->get_tile(current_tile));
         const uint32_t n_count = render::is_pentagon(tile_data) ? 5 : 6;
         for (uint32_t j = 0; j < n_count; ++j) {
-          const uint32_t n_index = tile_data.neighbours[j];
+          const uint32_t n_index = tile_data.neighbors[j];
 
           const float t = ctx->container->get_data<float>(debug::entities::tile, n_index, debug::properties::tile::heat);
           if (t <= 0.15f) continue;
@@ -2992,7 +3112,7 @@ namespace devils_engine {
             const uint32_t province1 = tile_provinces_local[i].first;
             if (province1 == UINT32_MAX) continue;
             for (uint32_t j = 0; j < 6; ++j) {
-              const uint32_t tile_neighbour_index = tile.neighbours[j];
+              const uint32_t tile_neighbour_index = tile.neighbors[j];
               if (tile_neighbour_index == UINT32_MAX) continue;
 
               const uint32_t province2 = tile_provinces_local[tile_neighbour_index].first;
@@ -3126,7 +3246,7 @@ namespace devils_engine {
             for (uint32_t j = 0; j < n_count; ++j) {
               if (!found) break;
 
-              const uint32_t n_index = tile_data.neighbours[j];
+              const uint32_t n_index = tile_data.neighbors[j];
               if (unique_tiles.find(n_index) != unique_tiles.end()) {
                 found = false;
                 break;
@@ -3135,7 +3255,7 @@ namespace devils_engine {
               const auto &tile_data = render::unpack_data(ctx->map->get_tile(n_index));
               const uint32_t n_count = render::is_pentagon(tile_data) ? 5 : 6;
               for (uint32_t k = 0; k < n_count; ++k) {
-                const uint32_t n_index = tile_data.neighbours[k];
+                const uint32_t n_index = tile_data.neighbors[k];
                 if (unique_tiles.find(n_index) != unique_tiles.end()) {
                   found = false;
                   break;
@@ -3187,7 +3307,7 @@ namespace devils_engine {
             for (uint32_t j = 0; j < n_count; ++j) {
               if (!found) break;
 
-              const uint32_t n_index = tile_data.neighbours[j];
+              const uint32_t n_index = tile_data.neighbors[j];
               if (unique_tiles.find(n_index) != unique_tiles.end()) {
                 found = false;
                 break;
@@ -3196,7 +3316,7 @@ namespace devils_engine {
               const auto &tile_data = render::unpack_data(ctx->map->get_tile(n_index));
               const uint32_t n_count = render::is_pentagon(tile_data) ? 5 : 6;
               for (uint32_t k = 0; k < n_count; ++k) {
-                const uint32_t n_index = tile_data.neighbours[k];
+                const uint32_t n_index = tile_data.neighbors[k];
                 if (unique_tiles.find(n_index) != unique_tiles.end()) {
                   found = false;
                   break;
@@ -3238,7 +3358,7 @@ namespace devils_engine {
           const auto &tile_data = render::unpack_data(ctx->map->get_tile(current_tile));
           const uint32_t n_count = render::is_pentagon(tile_data) ? 5 : 6;
           for (uint32_t j = 0; j < n_count; ++j) {
-            const uint32_t n_index = tile_data.neighbours[j];
+            const uint32_t n_index = tile_data.neighbors[j];
 
             const float t = ctx->container->get_data<float>(debug::entities::tile, n_index, debug::properties::tile::heat);
             if (t <= 0.15f) continue;
@@ -3277,7 +3397,7 @@ namespace devils_engine {
           const auto &tile = render::unpack_data(ctx->map->get_tile(current_tile_index));
           const uint32_t n_count = render::is_pentagon(tile) ? 5 : 6;
           for (uint32_t k = 0; k < n_count; ++k) {
-            const uint32_t n_index = tile.neighbours[k];
+            const uint32_t n_index = tile.neighbors[k];
             const uint32_t province_index2 = tile_province[n_index].first;
             if (province_index2 == UINT32_MAX) continue;
 
@@ -3313,7 +3433,7 @@ namespace devils_engine {
           const auto &tile_data = render::unpack_data(ctx->map->get_tile(choosen_tile_index));
           const uint32_t n_count = render::is_pentagon(tile_data);
           for (uint32_t j = 0; j < n_count; ++j) {
-            const uint32_t n_index = tile_data.neighbours[j];
+            const uint32_t n_index = tile_data.neighbors[j];
             const uint32_t province_index2 = tile_province[n_index].first;
             if (province_index2 == UINT32_MAX) continue;
             if (i != province_index2) {
@@ -3429,6 +3549,7 @@ namespace devils_engine {
       PRINT_VAR("final_avg     ", float(accum_tiles_count) / float(count))
 
       //ASSERT(count == province_tiles.size());
+      UNUSED_VARIABLE(table);
     }
 
     void province_postprocessing(generator::context* ctx, sol::table &table) {
@@ -3477,7 +3598,7 @@ namespace devils_engine {
           const auto &tile_data = render::unpack_data(ctx->map->get_tile(current_tile_index));
           const uint32_t n_count = render::is_pentagon(tile_data) ? 5 : 6;
           for (uint32_t j = 0; j < n_count; ++j) {
-            const uint32_t n_index = tile_data.neighbours[j];
+            const uint32_t n_index = tile_data.neighbors[j];
             if (unique_tiles.find(n_index) != unique_tiles.end()) continue;
 
             const float t = ctx->container->get_data<float>(debug::entities::tile, n_index, debug::properties::tile::heat);
@@ -3572,7 +3693,7 @@ namespace devils_engine {
             const auto &tile_data = render::unpack_data(ctx->map->get_tile(current_tile_index));
             const uint32_t n_count = render::is_pentagon(tile_data) ? 5 : 6;
             for (uint32_t j = 0; j < n_count; ++j) {
-              const uint32_t n_index = tile_data.neighbours[j];
+              const uint32_t n_index = tile_data.neighbors[j];
               if (unique_tiles.find(n_index) != unique_tiles.end()) continue;
 
               const uint32_t temp_index = ctx->container->get_data<uint32_t>(debug::entities::tile, n_index, debug::properties::tile::province_index);
@@ -3658,7 +3779,7 @@ namespace devils_engine {
           const auto &tile_data = render::unpack_data(context->map->get_tile(current_tile_index));
           const uint32_t n_count = render::is_pentagon(tile_data) ? 5 : 6;
           for (uint32_t j = 0; j < n_count; ++j) {
-            const uint32_t n_index = tile_data.neighbours[j];
+            const uint32_t n_index = tile_data.neighbors[j];
             const uint32_t n_province_index = context->container->get_data<uint32_t>(debug::entities::tile, n_index, debug::properties::tile::province_index);
 
             if (n_province_index == UINT32_MAX) continue;
@@ -3674,6 +3795,7 @@ namespace devils_engine {
               province_n[current_province_index].neighbours.insert(n);
               ASSERT(n.index() == n_province_index);
               ASSERT(!n.across_water());
+              UNUSED_VARIABLE(n);
             }
 
             {
@@ -3714,7 +3836,7 @@ namespace devils_engine {
             const auto &tile_data = render::unpack_data(context->map->get_tile(tile_index));
             const uint32_t n_count = render::is_pentagon(tile_data) ? 5 : 6;
             for (uint32_t k = 0; k < n_count; ++k) {
-              const uint32_t n_index = tile_data.neighbours[k];
+              const uint32_t n_index = tile_data.neighbors[k];
 
               const float h = context->container->get_data<float>(debug::entities::tile, n_index, debug::properties::tile::elevation);
               if (h < 0.0f) {
@@ -3735,7 +3857,7 @@ namespace devils_engine {
             const auto &tile_data = render::unpack_data(context->map->get_tile(current_tile_index));
             const uint32_t n_count = render::is_pentagon(tile_data) ? 5 : 6;
             for (uint32_t k = 0; k < n_count; ++k) {
-              const uint32_t n_index = tile_data.neighbours[k];
+              const uint32_t n_index = tile_data.neighbors[k];
 
               if (unique_tiles.find(n_index) != unique_tiles.end()) continue;
 
@@ -3856,7 +3978,7 @@ namespace devils_engine {
           const auto &tile_data = render::unpack_data(ctx->map->get_tile(current_tile_index));
           const uint32_t n_count = render::is_pentagon(tile_data) ? 5 : 6;
           for (uint32_t j = 0; j < n_count; ++j) {
-            const uint32_t n_index = tile_data.neighbours[j];
+            const uint32_t n_index = tile_data.neighbors[j];
             const float t = ctx->container->get_data<float>(debug::entities::tile, n_index, debug::properties::tile::heat);
             if (t <= 0.15f) {
               found = false;
@@ -3877,7 +3999,7 @@ namespace devils_engine {
           culture_tiles[i].push_back(tile_index);
           unique_tiles.insert(tile_index);
           for (uint32_t j = 0; j < n_count; ++j) {
-            const uint32_t n_index = tile_data.neighbours[j];
+            const uint32_t n_index = tile_data.neighbors[j];
             unique_tiles.insert(n_index);
           }
         }
@@ -3897,7 +4019,7 @@ namespace devils_engine {
         const auto &tile_data = render::unpack_data(ctx->map->get_tile(current_tile_index));
         const uint32_t n_count = render::is_pentagon(tile_data) ? 5 : 6;
         for (uint32_t j = 0; j < n_count; ++j) {
-          const uint32_t n_index = tile_data.neighbours[j];
+          const uint32_t n_index = tile_data.neighbors[j];
           if (tiles_culture[n_index] != UINT32_MAX) continue;
 
           tiles_culture[n_index] = current_culture_index;
@@ -4036,6 +4158,7 @@ namespace devils_engine {
               }
 
               ASSERT(found);
+              UNUSED_VARIABLE(found);
 
               country_province[country_index].push_back(n_index.index());
               province_country[n_index.index()] = country_index;
@@ -4330,6 +4453,7 @@ namespace devils_engine {
         }
 
         ASSERT(found);
+        UNUSED_VARIABLE(found);
 
         province_country[province_index] = UINT32_MAX;
       }
@@ -4409,6 +4533,7 @@ namespace devils_engine {
         for (size_t j = 0; j < country_province[country].size(); ++j) {
           const uint32_t province = country_province[country][j];
           ASSERT(province_country[province] == country);
+          UNUSED_VARIABLE(province);
         }
       }
 
@@ -4466,7 +4591,7 @@ namespace devils_engine {
             const auto &tile_data = render::unpack_data(ctx->map->get_tile(tile_index));
             const uint32_t n_count = render::is_pentagon(tile_data) ? 5 : 6;
             for (size_t c = 0; c < n_count; ++c) {
-              const uint32_t n_index = tile_data.neighbours[c];
+              const uint32_t n_index = tile_data.neighbors[c];
 
               const float h = ctx->container->get_data<float>(debug::entities::tile, n_index, debug::properties::tile::elevation);
               if (h < 0.0f) {
@@ -4899,7 +5024,7 @@ namespace devils_engine {
           const auto &tile_data = render::unpack_data(ctx->map->get_tile(i));
           const uint32_t n_count = render::is_pentagon(tile_data) ? 5 : 6;
           for (uint32_t j = 0; j < n_count; ++j) {
-            const uint32_t n_index = tile_data.neighbours[j];
+            const uint32_t n_index = tile_data.neighbors[j];
             const uint32_t n_province_index = ctx->container->get_data<uint32_t>(debug::entities::tile, n_index, debug::properties::tile::province_index);
             if (n_province_index == UINT32_MAX) continue;
             if (province_index == n_province_index) continue;
@@ -5273,6 +5398,7 @@ namespace devils_engine {
 
       const uint32_t prov_count = ctx->container->entities_count(debug::entities::province);
       ASSERT(check_duchies_count == prov_count);
+      UNUSED_VARIABLE(prov_count);
 
       (void)table;
       for (size_t i = 0; i < ctx->container->entities_count(debug::entities::tile); ++i) {
@@ -5307,7 +5433,7 @@ namespace devils_engine {
           const auto &tile_data = render::unpack_data(ctx->map->get_tile(i));
           const uint32_t n_count = render::is_pentagon(tile_data) ? 5 : 6;
           for (uint32_t j = 0; j < n_count; ++j) {
-            const uint32_t n_index = tile_data.neighbours[j];
+            const uint32_t n_index = tile_data.neighbors[j];
             const uint32_t n_duchy_index = ctx->container->get_data<uint32_t>(debug::entities::tile, n_index, debug::properties::tile::test_value_uint1);
             if (n_duchy_index == UINT32_MAX) continue;
             if (duchy_index == n_duchy_index) continue;
@@ -5590,7 +5716,7 @@ namespace devils_engine {
           const auto &tile_data = render::unpack_data(ctx->map->get_tile(i));
           const uint32_t n_count = render::is_pentagon(tile_data) ? 5 : 6;
           for (uint32_t j = 0; j < n_count; ++j) {
-            const uint32_t n_index = tile_data.neighbours[j];
+            const uint32_t n_index = tile_data.neighbors[j];
             const uint32_t n_kingdom_index = ctx->container->get_data<uint32_t>(debug::entities::tile, n_index, debug::properties::tile::test_value_uint2);
             if (n_kingdom_index == UINT32_MAX) continue;
             if (kingdom_index == n_kingdom_index) continue;
@@ -5917,6 +6043,7 @@ namespace devils_engine {
 //         ASSERT(empire_index != 14);
 //         emp_title["count"] = empires[empire_index].size();
 //         table[emp_id] = emp_title;
+        UNUSED_VARIABLE(emp_dbg_index);
 
         // по сути мы используем индекс
         // имя нужно будет генерировать на основе культур и местности,
@@ -6020,6 +6147,7 @@ namespace devils_engine {
           const uint32_t duchy_index = kingdoms[kingdom_index][i];
           const uint32_t parent = ctx->container->get_data<uint32_t>(debug::entities::title, duchy_offset + duchy_index, debug::properties::title::parent);
           ASSERT(parent == UINT32_MAX);
+          UNUSED_VARIABLE(parent);
 
           ctx->container->add_child(debug::entities::title, king_offset + kingdom_index, duchy_offset + duchy_index);
           auto duchy_title = global::get<sol::state>()->create_table();
@@ -6037,6 +6165,7 @@ namespace devils_engine {
             const uint32_t baron_index = duchies[duchy_index][c];
             const uint32_t parent = ctx->container->get_data<uint32_t>(debug::entities::title, baron_offset + baron_index, debug::properties::title::parent);
             ASSERT(parent == UINT32_MAX);
+            UNUSED_VARIABLE(parent);
 
             ctx->container->add_child(debug::entities::title, duchy_offset + duchy_index, baron_offset + baron_index);
             auto baron_title = global::get<sol::state>()->create_table();
@@ -6070,6 +6199,7 @@ namespace devils_engine {
           const uint32_t baron_index = duchies[duchy_index][c];
           const uint32_t parent = ctx->container->get_data<uint32_t>(debug::entities::title, baron_offset + baron_index, debug::properties::title::parent);
           ASSERT(parent == UINT32_MAX);
+          UNUSED_VARIABLE(parent);
 
           ctx->container->add_child(debug::entities::title, duchy_offset + duchy_index, baron_offset + baron_index);
           auto baron_title = global::get<sol::state>()->create_table();
@@ -6220,6 +6350,7 @@ namespace devils_engine {
           if (title_owned[j] == 0) continue;
           const uint32_t tmp = ctx->container->get_data<uint32_t>(debug::entities::title, j, debug::properties::title::owner);
           ASSERT(tmp == UINT32_MAX);
+          UNUSED_VARIABLE(tmp);
           //const uint32_t baron_index = j - baron_offset; // так у меня нет информации о том что это за титул
           titles[real_country_index].push_back(j);
           ctx->container->set_data<uint32_t>(debug::entities::title, j, debug::properties::title::owner, real_country_index);
@@ -6918,8 +7049,8 @@ namespace devils_engine {
         utils::add_title(city_title);
       }
 
-      global::get<utils::calendar>()->set_start_date(false, 865, 3, 25);
-      global::get<utils::calendar>()->set_current_date(false, 865, 3, 25);
+      global::get<utils::calendar>()->set_start_date(865, 3, 25);
+      global::get<utils::calendar>()->set_current_date(865, 3, 25);
       global::get<utils::calendar>()->add_month_data({SIZE_MAX, 31}); // январь
       global::get<utils::calendar>()->add_month_data({SIZE_MAX, 29});
       global::get<utils::calendar>()->add_month_data({SIZE_MAX, 31});
@@ -6932,9 +7063,20 @@ namespace devils_engine {
       global::get<utils::calendar>()->add_month_data({SIZE_MAX, 31});
       global::get<utils::calendar>()->add_month_data({SIZE_MAX, 30});
       global::get<utils::calendar>()->add_month_data({SIZE_MAX, 31});
+      
+      auto strings_table = table["strings"].get<sol::table>();
+      const uint32_t titles_names_bank_index = strings_table["titles_names"];
+      auto titles_bank = ctx->loc->get_bank(titles_names_bank_index);
+      
     }
-
-
   }
 }
 
+
+// я тут вот что подумал: у меня есть несколько типов данных которые желательно
+// загружать отдельно от основного файла мира (то есть большую часть информации не нужно записывать в world_data)
+// например локализация, описание эвентов, модификаторов и треитов, имена (?), описание изображений и звуков, ....
+// мне нужен способ по которому я найду необходимые данные среди файлов 
+// этот способ я как раз запомню в ворлд дата, с другой стороны текущий способ тоже может пригодиться,
+// если я хочу сгенерировать или подправить какие то ресурсы используя рандом или что то в этом роде
+// нужно придумать что я конкретно загружаю 

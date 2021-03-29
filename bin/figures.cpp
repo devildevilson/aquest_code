@@ -1,6 +1,7 @@
 #include "figures.h"
 
 #include "utils/utility.h"
+#include "utils/logging.h"
 
 #include <iostream>
 #include <cassert>
@@ -91,7 +92,7 @@ namespace devils_engine {
     }
 
     container::container(const float &radius, const size_t &detail, const glm::mat3 &rotation) {
-//       utils::timer time("tiles generation");
+      utils::time_log time("tiles generation");
 
       std::unordered_map<size_t, uint32_t> edges_point;
       std::unordered_map<size_t, std::pair<uint32_t, uint32_t>> edges_hex;
@@ -121,6 +122,8 @@ namespace devils_engine {
       std::cout << "final_points_count " << final_points_count << '\n';
 
       const float t = (1.0f + std::sqrt(5.0f)) / 2.0f;
+      // поворот я решил вычислять в другом месте (ну то есть отдельно)
+      (void)rotation;
       add_vertex(radius, glm::vec3(-1,  t,  0)); // rotation*
       add_vertex(radius, glm::vec3( 1,  t,  0));
       add_vertex(radius, glm::vec3(-1, -t,  0));
@@ -463,6 +466,9 @@ namespace devils_engine {
     uint32_t container::add_vertex(const float &radius, const glm::vec3 &v) {
       const glm::vec3 norm = glm::normalize(v);
       points.push_back(norm); // *radius
+      // я пока решил не использовать радиус, а потом умножить после построения
+      // насколько это вообще мне помогло?
+      (void)radius;
       return points.size()-1;
     }
 
@@ -730,6 +736,8 @@ namespace devils_engine {
         const uint32_t next_neighbour = (i+1) % n_count;
         ASSERT(current_index == t.neighbours[next_neighbour].points[0]);
         ASSERT(t.neighbours[i].points[1] != t.neighbours[i].points[0]);
+        (void)current_index;
+        (void)next_neighbour;
       }
     }
     
@@ -788,6 +796,8 @@ namespace devils_engine {
         const uint32_t next_neighbour = (i+1) % n_count;
         ASSERT(current_index == t.neighbours[next_neighbour].points[0]);
         ASSERT(t.neighbours[i].points[1] != t.neighbours[i].points[0]);
+        (void)current_index;
+        (void)next_neighbour;
       }
     }
     

@@ -4,21 +4,11 @@
 
 using namespace devils_engine;
 
-// было бы неплохо еще хранить дополнительную инфу (описание?)
-// ну или можно сделать то же самое через несколько функций
-// возможно это предпочтительнее
-struct tile_info {
-  render::biome_data_t* biome;
-  float height;
-  core::province* province;
-  core::city* city;
-};
-
 int main(int argc, char const *argv[]) {
+  UNUSED_VARIABLE(argc);
+  UNUSED_VARIABLE(argv);
+  
   set_application_path();
-
-//   PRINT("first sleep")
-//   std::this_thread::sleep_for(std::chrono::seconds(5));
 
   glfw_t glfw;
 
@@ -38,9 +28,11 @@ int main(int argc, char const *argv[]) {
   global::get(&encounter_systems);
 
   base_systems.create_utility_systems();
+  
   utils::settings settings;
   settings.load_settings();
   global::get(&settings);
+  
   create_render_system(base_systems);
   setup_callbacks();
   base_systems.create_render_stages();
@@ -50,6 +42,8 @@ int main(int argc, char const *argv[]) {
   const auto tile_func = basic_interface_functions(base_systems);
   
   settings.graphics.find_video_mode();
+  
+  input::block();
 
   utils::main_menu_state main_menu_state;
   utils::map_creation_state map_creation_state;
@@ -57,17 +51,17 @@ int main(int argc, char const *argv[]) {
   utils::battle_state battle_state;
   utils::encounter_state encounter_state;
 
-  render::updater upd;
-  global::get(&upd);
-  yacs::world world;
+//   render::updater upd;
+//   global::get(&upd);
+//   yacs::world world;
 
   // по всей видимости луа занимает реально много памяти
   // что то с этим сделать вряд ли можно (интересно есть ли какие нибудь жесткие ограничения на андроиде?)
   // вроде как жестких ограничений нет, смогу ли я сделать приложение меньше чем 500 мб?
   // это хороший ориентир для приложений без луа, но с ним получается как то слишком многопамяти =(
 
-  const float dist = 550.0f;
-  const glm::vec3 default_camera_pos = glm::normalize(glm::vec3(1.0f, 0.0f, 0.0f)) * dist;
+//   const float dist = 550.0f;
+//   const glm::vec3 default_camera_pos = glm::normalize(glm::vec3(1.0f, 0.0f, 0.0f)) * dist;
 
   //components::camera camera(default_camera_pos); // будем использовать эту камеру только в ворлд мап
   //camera.zoom_add(100.0f);
@@ -201,23 +195,30 @@ int main(int argc, char const *argv[]) {
   
   // нужно сделать что? ... отряд (какой то базовый рендер отряда) + управление отрядом
   // управление меняется в зависимости от текущего quest_state, а значит наверное 
-  // логику нужно перенести туда, 
+  // логику нужно перенести туда, более менее переписал инпут, теперь разный инпут в разных состояниях
+  // чет я подумал что бессмысленно перетаскивать логику в quest_state, исправил парочку вещей
+  // теперь по идее нужно сделать войска, чего мне не хватает? рендер войск + выделение
+  // 
   
   // мне нужно придумать способ свободно отключать рендеринг какой то части пайплайна
   
-  // рандом в генераторе нужно огрганизовать как строку из 16 символов
+  // рандом в генераторе нужно организовать как строку из 16 символов
   // тип: deadbeafdeadbeaf
-
-//   const std::vector<std::string> base_interfaces = { // как передать данные?
-//     "main_menu",
-//     "",
-//     // должен быть указатель на персонажа, вообще наверное нет,
-//     // должен быть указатель на какого то помошника (там должен быть более простой доступ ко всем функциям)
-//     // например контейнер для поиска жен, и прочее, как его передать?
-//     "player_interface",
-//     "battle_interface",
-//     "encounter_interface"
-//   };
+  
+  // судя по тому видосу из процджама мне нужно сделать интерфейс получше
+  // возможно стоит сейчас им в принципе заняться, загрузить иконки,
+  // попробовать подобрать цвета для интерфейса, как то оформить поля и кнопки
+  // нужно вести список того что мне нужно в каких то документах
+  
+  // короч я более менее понял что нужно чтобы сделать загрузку в битву
+  // было бы неплохо сейчас набрасывать основные механики в игру
+  // это значит что нужно сделать: интерфейс для персонажа, переходы от одного к другому,
+  // интерфейс титула, (и еще куча других интерфейсов), генерацию строк
+  
+  // начал переписывать функции генератора на луа, хотел вообще изначально сделать генерацию в луа
+  // но чему то решил сделать пока в с++, переписанные функции луа по известным причинам значительно
+  // медленее чем с++ аналоги (с оптимизациями generate_plates занимает 13 секунд)
+  // есть ли хоть какая то возможность ускорить это дело?
 
   const std::array<utils::quest_state*, utils::quest_state::count> game_states = {
     &main_menu_state,
@@ -228,13 +229,13 @@ int main(int argc, char const *argv[]) {
     &encounter_state
   };
 
-  //uint32_t current_game_state_index = utils::quest_state::main_menu;
-  uint32_t current_game_state_index = utils::quest_state::battle;
+  uint32_t current_game_state_index = utils::quest_state::main_menu;
+  //uint32_t current_game_state_index = utils::quest_state::battle;
   utils::quest_state* current_game_state = game_states[current_game_state_index];
   utils::quest_state* previous_game_state = nullptr;
   bool loading = true;
 
-  std::future<void> rendering_future;
+//   std::future<void> rendering_future;
   global::get<render::window>()->show();
   utils::frame_time frame_time;
   while (!global::get<render::window>()->close() && !base_systems.menu->m_quit_game) {
@@ -250,7 +251,7 @@ int main(int argc, char const *argv[]) {
     if (loading) {
       if (current_game_state->load(previous_game_state)) {
         loading = false;
-        base_systems.interface_container->close_all();
+        //base_systems.interface_container->close_all();
       }
     } else {
       current_game_state->update(time);
@@ -423,10 +424,14 @@ int main(int argc, char const *argv[]) {
       // как сделать правильно? у меня есть с этим небольшая проблема, заключается в том что мне нужно нарисовать стенки тайлов
       // неплохо было бы рисовать динамические стенки, для этого нужно проверять соседей у всех видимых тайлов 
       // либо собрать все ребра на карте (по идее их столько же сколько точек), и дополнительно вычислить еще и ребра
+      // динамические стенки у меня например в боеваой карте, там получилось неплохо, по идее если я так же сделаю 
+      // в ворлд мапе потери производительности не должно быть + ко всему я избавлюсь от лишней мороки
     }
     
+    // нужно сделать управление для разных типов карт, по идее лучше переопределить функцию у quest_state
     auto camera = get_camera();
     const uint32_t tile_index = cast_mouse_ray();
+    const uint32_t battle_tile_index = get_casted_battle_map_tile();
     mouse_input(camera, time, tile_index);
     key_input(time, current_game_state_index, loading);
     zoom_input(camera);
@@ -438,6 +443,107 @@ int main(int argc, char const *argv[]) {
 //     PRINT_VEC3("camera pos", camera->current_pos())
     
     base_systems.interface_container->draw(time);
+    
+    // в текущем виде занимает в среднем от 20-50 мкс, 
+    // я так подозреваю что проблемы начнутся только от 1000 юнитов
+    // вообще обновлять юниты нужно от отрядов, так как только 
+    // в этом случае можно рассчитать конкретное положение
+    if (!loading && current_game_state == &battle_state) {
+      static size_t counter = 0;
+      static size_t time_counter = 0;
+      static auto t_point = std::chrono::steady_clock::now();
+      
+      auto start = std::chrono::steady_clock::now();
+      auto battle = global::get<systems::battle_t>();
+      auto ctx = battle->context;
+      auto map = battle->map;
+      
+      const float insc_radius = (glm::sqrt(3.0f) / 2.0f) * 1.0f;
+      //const float dist = 1.0f * glm::sin(glm::radians(45.0f));
+      const float dist = (insc_radius) * glm::sqrt(2.0f);
+      const glm::vec3 fwd = glm::vec3(0.0f, 0.0f, -1.0f);
+      const glm::vec3 right = glm::vec3(1.0f, 0.0f, 0.0f);
+      // чет не понимаю почему все равно за пределы тайла выходит отряд
+      // но вроде при 0.3f выглядит более менее
+      const float tile_side_offset = 0.3f * (dist * 2.0f);
+      const float box_side = (dist * 2.0f) - 2.0f * tile_side_offset;
+      const float box_half_side = box_side / 2.0f;
+      
+      const size_t troop_count = ctx->get_entity_count<battle::troop>();
+      for (size_t i = 0; i < troop_count; ++i) {
+        auto troop = ctx->get_entity<battle::troop>(i);
+        // нужно выяснить что происходит вокруг + прикинуть где должны находиться юниты
+        const auto tile_pos = map->get_tile_pos(troop->tile_index);
+        // по идее юнитов мы можем расположить в радиусе 1.0 (примерно)
+        // нужно сделать построение в окружности, максимальный вписанный квадрат в окружность, которая вписана в гекс
+        // вроде более менее сделал (но пока что средне по удачности), 
+        // теперь нужно сделать выделение и перемещение войск
+        
+        const glm::vec3 box[] = {
+          //tile_pos + ( fwd) * (box_half_side - tile_side_offset) + (-right) * (box_half_side - tile_side_offset),
+          tile_pos + ( fwd) * box_half_side + (-right) * box_half_side,
+          tile_pos + ( fwd) * box_half_side + ( right) * box_half_side,
+          tile_pos + (-fwd) * box_half_side + (-right) * box_half_side,
+          tile_pos + (-fwd) * box_half_side + ( right) * box_half_side,
+        };
+        
+        size_t row_counter = 0;
+        size_t column_counter = 0;
+        const float offset_column = box_side / 4.0f; // здесь обязательно box_side / (max_column - 1)
+        const float offset_row = box_side / 3.0f;    // здесь обязательно box_side / (max_row - 1)
+        for (size_t i = troop->unit_offset; i < troop->unit_offset + troop->unit_count; ++i) {
+          auto unit = ctx->get_entity<battle::unit>(i);
+          const auto pos = box[0] + (-fwd) * (offset_row * row_counter) + right * (offset_column * column_counter);
+          unit->set_pos(glm::vec4(pos, 1.0f));
+          unit->set_dir(glm::vec4(0.0f, 0.0f, -1.0f, 0.0f));
+          
+          ++column_counter;
+          if (column_counter >= 5) {
+            if (row_counter == 0) {
+              const auto dist = glm::distance(pos, box[1]);
+              ASSERT(dist < EPSILON);
+            }
+            
+            ++row_counter;
+            column_counter = 0;
+          }
+          
+          unit->update(time);
+        }
+      }
+      const size_t unit_count = ctx->get_entity_count<battle::unit>();
+//       for (size_t i = 0; i < unit_count; ++i) {
+//         auto unit = ctx->get_entity<battle::unit>(i);
+//         unit->update(time);
+//       }
+      
+      auto end = std::chrono::steady_clock::now() - start;
+      auto mcs = std::chrono::duration_cast<std::chrono::microseconds>(end).count();
+      //PRINT_VAR("20 unit state time: ", mcs)
+      ++counter;
+      time_counter += mcs;
+      
+//       if (time_counter > ONE_SECOND) {
+//         const size_t avg_time = time_counter / counter;
+//         PRINT_VAR(std::to_string(unit_count) + " unit state avg time", avg_time)
+//         time_counter = 0;
+//         counter = 0;
+//       }
+      
+      auto end2 = std::chrono::steady_clock::now() - t_point;
+      auto mcs2 = std::chrono::duration_cast<std::chrono::microseconds>(end2).count();
+      if (mcs2 > ONE_SECOND) {
+        const size_t avg_time = time_counter / counter;
+        PRINT_VAR(std::to_string(unit_count) + " unit state avg time", avg_time)
+        time_counter = 0;
+        counter = 0;
+        t_point = std::chrono::steady_clock::now();
+      }
+      
+//       if (battle_tile_index != UINT32_MAX) {
+//         PRINT_VAR("battle_tile_index", battle_tile_index)
+//       }
+    }
     
     // сделал, теперь наконец алгортим учитывает все нововведения
     // все остальное зависит от того где мы применяем функцию
@@ -480,11 +586,13 @@ int main(int argc, char const *argv[]) {
     //lock_rendering();
     //base_systems.render_slots->update(global::get<render::container>());
     const size_t sync_time = global::get<render::window>()->flags.vsync() ? global::get<render::window>()->refresh_rate_mcs() : 0;
-    sync(frame_time, sync_time, rendering_future);
+    sync(frame_time, sync_time); // rendering_future
   }
   
+  // нужно тут отправлять флажок для завершения генерации + сделать более простые функции
   pool.compute();
   pool.wait();
+//   pool.stop_works();
 
   return 0;
 }

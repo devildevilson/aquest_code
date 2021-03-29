@@ -35,6 +35,9 @@
 #include "render/render_mode_container.h"
 #include "render/pipeline_mode_updater.h"
 #include "render/slots.h"
+#include "render/shared_battle_structures.h"
+#include "render/battle_render_stages.h"
+#include "render/image_controller.h"
 
 #include "ai/sub_system.h"
 #include "ai/build_subsystem.h"
@@ -64,6 +67,8 @@
 #include "tiles_funcs.h"
 #include "objects_selector.h"
 #include "battle_map.h"
+#include "battle_context.h"
+#include "battle_structures.h"
 
 #include <set>
 #include <vector>
@@ -91,12 +96,13 @@ namespace devils_engine {
   void return_cursor();
   
   void keys_setup(); // это не работает !!!!!!!! функционал перенесен в сеттингс
-  void mouse_input(components::camera* camera, const size_t &time, const uint32_t &casted_tile_index);
+  void mouse_input(components::camera* camera, const size_t &time, const uint32_t &casted_tile_index); // маус инпут будет другим для энкаунтера + нужно выключить для меню
   void key_input(const size_t &time, const uint32_t &current_state, const bool loading);
   void zoom_input(components::camera* camera);
   glm::vec4 get_cursor_dir(render::buffers* buffers, render::window* window, const double xpos, const double ypos);
   uint32_t cast_mouse_ray();
-  void draw_tooltip(const uint32_t &index, const sol::function &tile_func);
+  uint32_t get_casted_battle_map_tile();
+//   void draw_tooltip(const uint32_t &index, const sol::function &tile_func);
   void next_nk_frame(const size_t &time);
 
   void create_render_system(systems::core_t &base_systems);
@@ -110,8 +116,8 @@ namespace devils_engine {
 
   void update(const size_t &time);
 
-  //void sync(utils::frame_time &frame_time, const size_t &time);
-  void sync(utils::frame_time &frame_time, const size_t &time, std::future<void> &rendering_future);
+  void sync(utils::frame_time &frame_time, const size_t &time);
+  //void sync(utils::frame_time &frame_time, const size_t &time, std::future<void> &rendering_future);
   
   void check_tile(const map::container* map, const uint32_t &tile_index);
   

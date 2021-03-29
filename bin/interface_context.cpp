@@ -152,6 +152,7 @@ namespace devils_engine {
       load_font_settings(j, fonts_data);
       
       null.texture = nk_handle_image(render::image_t{GPU_UINT_MAX});
+      null.uv = {0.0f, 0.0f};
 
       nk_buffer_init_default(&cmds);
 
@@ -204,13 +205,21 @@ namespace devils_engine {
 //                                                                 VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT),
 //                               VMA_MEMORY_USAGE_GPU_ONLY);
           img = pool->image;
+          
+          const VkImageCopy c{
+            {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
+            {0,0,0},
+            {VK_IMAGE_ASPECT_COLOR_BIT, 0, render::get_image_layer(cont_img), 1},
+            {0,0,0},
+            {uint32_t(w),uint32_t(h),1}
+          };
 
           yavf::TransferTask* task = device->allocateTransferTask();
 
           task->begin();
           task->setBarrier(staging, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
           task->setBarrier(img, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-          task->copy(staging, img);
+          task->copy(staging, img, c);
           task->setBarrier(img, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
           task->end();
 
@@ -355,13 +364,21 @@ namespace devils_engine {
 //                                                                 VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT),
 //                               VMA_MEMORY_USAGE_GPU_ONLY);
           img = pool->image;
+          
+          const VkImageCopy c{
+            {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
+            {0,0,0},
+            {VK_IMAGE_ASPECT_COLOR_BIT, 0, render::get_image_layer(cont_img), 1},
+            {0,0,0},
+            {uint32_t(w),uint32_t(h),1}
+          };
 
           yavf::TransferTask* task = device->allocateTransferTask();
 
           task->begin();
           task->setBarrier(staging, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
           task->setBarrier(img, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-          task->copy(staging, img);
+          task->copy(staging, img, c);
           task->setBarrier(img, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
           task->end();
 

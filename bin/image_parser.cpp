@@ -19,7 +19,7 @@
 #define STBI_WINDOWS_UTF8
 #endif
 #define STB_IMAGE_IMPLEMENTATION
-#include "stb/stb_image.h"
+#include "stb_image.h"
 
 namespace devils_engine {
   namespace utils {
@@ -215,8 +215,8 @@ namespace devils_engine {
     };
     
     void add_image(const sol::table &table) {
-      const auto str = table["id"].get<std::string>();
-      if (!str.empty()) PRINT_VAR("image", str)
+      const auto proxy = table["id"];
+      if (proxy.valid() && proxy.get_type() == sol::type::string) PRINT_VAR("image", proxy.get<std::string>())
       global::get<map::creator::table_container_t>()->add_table(static_cast<size_t>(utils::generator_table_container::additional_data::image), table);
     }
     
@@ -508,7 +508,7 @@ namespace devils_engine {
       }
       
       auto container = controller->container;
-      size_t counter = 0;
+//       size_t counter = 0; // ???
       for (size_t i = 0; i < concrete_datas.size(); ++i) {
         auto &concrete_d = concrete_datas[i];
         size_t images_count = 0;
@@ -683,6 +683,10 @@ namespace devils_engine {
         seasons->create_biome(counter, b);
         ++counter;
       }
+    }
+    
+    size_t add_biome(const sol::table &table) {
+      return global::get<map::creator::table_container_t>()->add_table(static_cast<size_t>(utils::generator_table_container::additional_data::biome), table);
     }
     
     size_t add_battle_biome(const sol::table &table) {

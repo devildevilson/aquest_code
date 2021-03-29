@@ -69,6 +69,7 @@ namespace devils_engine {
       buffers->update_pos(pos);
       buffers->update_dir(dir);
       buffers->update_zoom(zoom_norm);
+      buffers->update_dimensions(window->surface.extent.width, window->surface.extent.height);
     }
   }
   
@@ -85,18 +86,20 @@ namespace devils_engine {
       const float final_lenght = glm::clamp(lenght, core::map::world_radius + minimum_camera_height + min_zoom, core::map::world_radius + minimum_camera_height + max_zoom);
       const glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0f);
       m_zoom = final_lenght - (core::map::world_radius + minimum_camera_height + min_zoom);
-      m_front = -normalize;
-      m_right = glm::normalize(glm::cross(up, m_front));
-      m_up = glm::normalize(glm::cross(m_front, m_right));
+//       m_front = -normalize;
+//       m_right = glm::normalize(glm::cross(up, m_front));
+//       m_up = glm::normalize(glm::cross(m_front, m_right));
+      compute_orientation(pos);
+      
       ASSERT(glm::dot(up, m_up) >= 0.0f);
       float a;
       m_dir = compute_dir(m_front, m_zoom, a);
-      m_spherical_pos = from_decard_to_spherical(normalize*final_lenght);
+      m_spherical_pos = from_decard_to_spherical(m_up*final_lenght);
       m_spherical_end_pos = m_spherical_pos;
     }
     
     void world_map_camera::update(const size_t &time) {
-      const glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0f);
+//       const glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0f);
       const float k = double(time) / double(ONE_SECOND);
       
       const float CAMERA_CONST = 2.0f * k; // как то должно видимо работать со временем
@@ -107,9 +110,13 @@ namespace devils_engine {
       m_spherical_pos = m_spherical_pos + tmp * CAMERA_CONST; // d < 0.1f ? m_spherical_end_pos : 
       
       const glm::vec3 current_pos = from_spherical_to_decard(m_spherical_pos);
-      m_front = -glm::normalize(current_pos);
-      m_right = glm::normalize(glm::cross(up, m_front));
-      m_up = glm::normalize(glm::cross(m_front, m_right));
+//       m_front = -glm::normalize(current_pos);
+//       m_right = glm::normalize(glm::cross(up, m_front));
+//       m_up = glm::normalize(glm::cross(m_front, m_right));
+//       m_up = -glm::normalize(current_pos);
+//       m_right = glm::normalize(glm::cross(up, m_up));
+//       m_front = glm::normalize(glm::cross(m_up, m_right));
+      compute_orientation(current_pos);
       
       float current_zoom = glm::length(current_pos) - (core::map::world_radius + minimum_camera_height);
       //ASSERT(current_zoom >= (min_zoom-1.0f) && current_zoom <= (max_zoom+1.0f));
@@ -157,30 +164,45 @@ namespace devils_engine {
       
 //       auto trans = m_ent->get<components::transform>();
       const glm::vec3 converted = from_spherical_to_decard(m_spherical_pos);
-      const glm::vec3 current_pos = converted + (-m_right) * (horisontal_angle * zoom_norm) + m_up * (vertical_angle * zoom_norm);
+      const glm::vec3 current_pos = converted + (m_right) * (horisontal_angle * zoom_norm) + (-m_front) * (vertical_angle * zoom_norm);
 //       PRINT_VEC3("converted", converted);
       
 //       glm::vec3 right;
 //       glm::vec3 up;
-      const glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0f);
-      const glm::vec3 norm = glm::normalize(current_pos);
+//       const glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0f);
+//       const glm::vec3 norm = glm::normalize(current_pos);
       //const glm::vec3 new_up = glm::normalize(project_vec_on_plane(xnorm, current_pos, glm::vec3(0.0f, 1.0f, 0.0f)));
       
-//       if (glm::abs(norm[0]) < EPSILON && glm::abs(norm[1]) < EPSILON) {
-//         right = glm::vec3(1.0f, 0.0f, 0.0f);
-//         up = glm::vec3(0.0f, 1.0f, 0.0f);
+      // -norm - должен быть вверх
+      // m_front - должен быть направлен вверх, фиксированная камера
+      // m_right - кросс 
+//       m_up = -norm; // это плоскость
+//       m_right = glm::normalize(glm::cross(up, m_up));
+//       m_front = glm::normalize(glm::cross(m_up, m_right));
+      compute_orientation(current_pos);
+      
+//       const auto up1    = glm::normalize(glm::vec3(0.0f, 1.0f, 1.0f));
+//       const auto front1 = glm::vec3(0.0f, 1.0f, 0.0f);
+//       const auto right1 = glm::normalize(glm::cross(front1, up1));
+//       const auto front2 = glm::normalize(glm::cross(up1, right1));
+//       assert(false);
+      
+      // тут может получиться что m_front направлен в другую сторону, а он так или иначе должен смотреть вверх
+//       if (glm::abs(m_up[0]) < EPSILON && glm::abs(m_up[1]) < EPSILON) {
+//         m_right = glm::vec3(1.0f, 0.0f, 0.0f);
+//         m_front = glm::vec3(0.0f, -1.0f, 0.0f);
 //       } else {
-//         right = glm::normalize(glm::vec3(-norm[1], norm[0], 0.0f));
-//         up = glm::normalize(glm::vec3(-norm[0]*norm[2], -norm[1]*norm[2], norm[0]*norm[0] + norm[1]*norm[1]));
+//         m_right = glm::normalize(glm::vec3(-norm[1], norm[0], 0.0f));
+//         m_front = glm::normalize(glm::vec3(-norm[0]*norm[2], -norm[1]*norm[2], norm[0]*norm[0] + norm[1]*norm[1]));
 //       }
       
-      m_front = -norm;
-      m_right = glm::normalize(glm::cross(up, m_front));
-      m_up = glm::normalize(glm::cross(m_front, m_right));
+//       m_front = -norm;
+//       m_right = glm::normalize(glm::cross(up, m_front));
+//       m_up = glm::normalize(glm::cross(m_front, m_right));
       
       float a;
       m_dir = compute_dir(m_front, current_zoom, a);
-      const glm::vec3 final_current_pos = -m_front * (core::map::world_radius + minimum_camera_height + current_zoom);
+      const glm::vec3 final_current_pos = m_up * (core::map::world_radius + minimum_camera_height + current_zoom);
       m_spherical_pos = from_decard_to_spherical(final_current_pos);
       m_spherical_end_pos = m_spherical_pos;
       
@@ -218,7 +240,7 @@ namespace devils_engine {
       m_zoom = glm::min(m_zoom, max_zoom);
       if (m_zoom == min_zoom || m_zoom == max_zoom) m_accumulation_zoom = 0.0f;
       //const glm::vec3 dir = compute_dir(m_front, m_spherical_pos.x - (core::map::world_radius + minimum_camera_height));
-      const glm::vec3 final_pos = -m_front * (core::map::world_radius + minimum_camera_height + m_zoom);
+      const glm::vec3 final_pos = m_up * (core::map::world_radius + minimum_camera_height + m_zoom);
       m_spherical_end_pos = from_decard_to_spherical(final_pos);
 //       auto trans = m_ent->get<components::transform>();
 //       trans->pos = final_pos;
@@ -255,7 +277,7 @@ namespace devils_engine {
       // нужно найти вектор 45 градусов
       //const glm::vec3 dir = glm::rotate(normalize, glm::radians(-45.0f), m_right); // не тот вектор, хотя нет, правильный
       float current_angle;
-      const glm::vec3 dir = compute_dir(-normalize, final_length - min_camera_radius, current_angle);
+      const glm::vec3 dir = compute_dir(m_front, final_length - min_camera_radius, current_angle);
       //const float c = minimum_camera_height / glm::cos(current_angle) + 1.0f;
       const float c = 5.0f / glm::cos(current_angle) + 1.0f;
       // единственное в чем может быть проблема, это в том что может быть сгенерирован неверная высота
@@ -297,14 +319,32 @@ namespace devils_engine {
       // тут нужно подобрать несколько коэффициентов 
       // по которым камера плавно переходит от одного угла к другому
       // 3 состояния: камера не меняется 45 градусов, камера плавно переходит к 0 градусам, камера не меняется в 0 градусах
-      const float height1 = 5.0f;
-      const float height2 = 85.0f;
+//       const float height1 = 5.0f;
+//       const float height2 = 85.0f;
+//       
+//       float angle = glm::radians(30.0f);
+//       if (zoom > height1 && zoom <= height2) angle = glm::radians(glm::mix(30.0f, 0.0f, (zoom - height1) / (height2 - height1)));
+//       else if (zoom > height2) angle = 0.0f;
+//       current_angle = angle;
+//       return glm::normalize(glm::rotate(normal, angle, m_right));
       
-      float angle = glm::radians(30.0f);
-      if (zoom > height1 && zoom <= height2) angle = glm::radians(glm::mix(30.0f, 0.0f, (zoom - height1) / (height2 - height1)));
-      else if (zoom > height2) angle = 0.0f;
+      const float height1 = min_zoom + 5.0f;
+      const float height2 = max_zoom - 15.0f;
+      const float angle_min = -30.0f;
+      const float angle_max = -89.0f;
+      
+      float angle = glm::radians(angle_min);
+      if (zoom > height1 && zoom <= height2) angle = glm::radians(glm::mix(angle_min, angle_max, (zoom - height1) / (height2 - height1)));
+      else if (zoom > height2) angle = glm::radians(angle_max);
       current_angle = angle;
       return glm::normalize(glm::rotate(normal, angle, m_right));
+    }
+    
+    void world_map_camera::compute_orientation(const glm::vec3 &pos) {
+      const glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0f);
+      m_up = glm::normalize(pos);
+      m_right = glm::normalize(glm::cross(m_up, up));
+      m_front = glm::normalize(glm::cross(m_up, m_right));
     }
     
     battle_camera::battle_camera(const glm::vec3 &pos) : camera(min_zoom, max_zoom), m_current_pos(pos), m_end_pos(pos), m_end_dir(0.0f, -1.0f, 0.0f) {}

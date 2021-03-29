@@ -1,4 +1,6 @@
 #include "generator.h"
+#include "render/window.h"
+#include "utils/globals.h"
 
 namespace devils_engine {
   namespace systems {
@@ -8,10 +10,12 @@ namespace devils_engine {
     }
     
     void generator::generate(map::generator::context* context, sol::table &data) {
+      auto w = global::get<render::window>();
       current_part = 0;
       for (const auto &part : parts) {
         part.second(context, data);
         ++current_part;
+        if (w->close()) break;
       }
     }
     

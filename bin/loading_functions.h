@@ -41,6 +41,10 @@ namespace devils_engine {
     struct core_t;
     struct map_t;
     
+    constexpr uint64_t make_64bit(const uint32_t &first, const uint32_t &second) {
+      return (uint64_t(first) << 32) | uint64_t(second);
+    }
+    
     std::array<std::pair<uint32_t, uint32_t>, MAX_BIOMES_COUNT> get_season_biomes_data(const systems::map_t* map_system);
     
     void advance_progress(utils::progress_container* prog, const std::string &str);

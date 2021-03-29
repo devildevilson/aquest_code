@@ -242,21 +242,23 @@ namespace devils_engine {
     auto buffers = global::get<render::buffers>();
     auto opt = global::get<render::tile_optimizer>();
     auto window = global::get<render::window>();
-    if (opt == nullptr) return false;
+    auto battle_opt = global::get<render::battle::tile_optimizer>();
+    if (battle_opt == nullptr && opt == nullptr) return false;
     
     // сначала проверить кликаем ли мы по карте или по интерфейсу
     // (или вообще мимо карты)
     
     static bool was_pressed = false;
-    static double prev_xpos = -1.0, prev_ypos = -1.0;
+    static double prev_xpos = -1.0, prev_ypos = -1.0; // тут поди нужно запомнить все же положение 
 //     static glm::vec4 first_point, first_point_height;
     
     static const utils::id activate_click = utils::id::get("activate_click");
     //const bool current_pressed = input::check_event(activate_click, input::state_press | input::state_double_press | input::state_long_press);
     const bool current_pressed = input::is_event_pressed(activate_click);
     
-    opt->set_selection_box({glm::vec4(0.0f, 0.0f, 0.0f, 1.0f), glm::vec4(0.0f, 0.0f, 0.0f, 1.0f)});
-    opt->set_selection_frustum(default_fru);
+    if (battle_opt != nullptr) battle_opt->update_selection_frustum(default_fru);
+    if (opt != nullptr) opt->set_selection_box({glm::vec4(0.0f, 0.0f, 0.0f, 1.0f), glm::vec4(0.0f, 0.0f, 0.0f, 1.0f)});
+    if (opt != nullptr) opt->set_selection_frustum(default_fru);
     if (!was_pressed && !current_pressed) return false;
     
     if (!was_pressed && current_pressed) {
@@ -360,7 +362,7 @@ namespace devils_engine {
     ASSERT(glm::dot(normals[0], normals[5]) < -EPSILON);
 //     ASSERT(glm::dot(normals[1], normals[4]) < -EPSILON); // тут может получиться очень большой угол
 //     ASSERT(glm::dot(normals[2], normals[3]) < -EPSILON);
-    ASSERT(glm::dot(normals[4], glm::vec4(0.0f, 1.0f, 0.0f, 0.0f)) < -EPSILON);
+    //ASSERT(glm::dot(normals[4], glm::vec4(0.0f, 1.0f, 0.0f, 0.0f)) < -EPSILON);
     
     //normals[0].w = -glm::dot(normals[0], points[0]);
     normals[0].w = -glm::dot(normals[0], camera_pos + camera_dir * near);
@@ -374,7 +376,8 @@ namespace devils_engine {
     //assert(false);
     
     const utils::frustum fru{normals[0], normals[1], normals[2], normals[3], normals[4], normals[5]};
-    opt->set_selection_frustum(fru);
+    if (battle_opt != nullptr) battle_opt->update_selection_frustum(fru);
+    if (opt != nullptr) opt->set_selection_frustum(fru);
     
     global::get<utils::objects_selector>()->clear();
     
@@ -568,7 +571,7 @@ namespace devils_engine {
     glfwGetCursorPos(window->handle, &xpos, &ypos);
     
 //     if (!lock_mouse) { // cursor_in_window
-      const auto keys = global::get<input::data>()->key_events.container;
+      const auto &keys = input::get_input_data()->container;
       for (uint32_t i = GLFW_MOUSE_BUTTON_1; i <= GLFW_MOUSE_BUTTON_LAST; ++i) {
         lock_mouse = lock_mouse || (keys[i].event != input::release);
       }
@@ -576,6 +579,7 @@ namespace devils_engine {
     
     const auto size = window->surface.extent;
     // нужно поставить ограничения на выход за пределы окна, но при этом нужно сделать это настраиваемым
+    // причем желательно сделать отрисовку курсора в самом рендере
     if (lock_mouse) {
       //ASSERT(false);
       xpos = glm::max(glm::min(xpos, double(size.width)),  0.0);
@@ -617,7 +621,7 @@ namespace devils_engine {
 
     static_assert(sizeof(modes) / sizeof(modes[0]) == render::modes::count);
 
-    static const utils::id escape = utils::id::get("escape");
+    //static const utils::id escape = utils::id::get("escape");
     static const utils::id border_render = utils::id::get("border_render");
     static const utils::id go_to_capital = utils::id::get("home");
 
@@ -627,7 +631,7 @@ namespace devils_engine {
     auto s = global::get<systems::core_t>();
     const bool get_menu = current_state != utils::quest_state::map_creation &&
                           //current_state != game_state::loading &&
-                          input::check_event(escape, input::state::state_click | input::state::state_double_click | input::state::state_long_click);
+                          input::check_key(GLFW_KEY_ESCAPE, input::state::state_click | input::state::state_double_click | input::state::state_long_click);
     const bool last_menu = current_state == utils::quest_state::main_menu && s->menu->menu_stack.size() == 1;
     if (!loading && get_menu) {
       if (s->interface->escape()) return;
@@ -638,7 +642,7 @@ namespace devils_engine {
       return;
     }
 
-    {
+    if (current_state == utils::quest_state::world_map) {
       size_t mem = 0;
       auto change = input::next_input_event(mem, 1);
       while (change.id.valid()) {
@@ -658,7 +662,8 @@ namespace devils_engine {
           
           if (local_copy.id == go_to_capital) {
 //             PRINT(local_copy.id.name())
-            auto camera = global::get<components::camera>();
+            //auto camera = global::get<components::camera>();
+            auto camera = get_camera();
             auto p = game::get_player();
             ASSERT(p != nullptr);
             //if (p == nullptr) continue;
@@ -686,11 +691,30 @@ namespace devils_engine {
         }
       }
     }
+    
+    if (current_state == utils::quest_state::battle) {
+      size_t mem = 0;
+      auto change = input::next_input_event(mem, 1);
+      while (change.id.valid()) {
+        auto local_copy = change;
+        change = input::next_input_event(mem, 1);
+        
+        if (local_copy.event != input::release) {
+          if (local_copy.id == go_to_capital) {
+            // тут мы переместимся к своей армии
+          }
+        }
+      }
+    }
+    
+    if (current_state == utils::quest_state::encounter) {
+      
+    }
   }
 
   void zoom_input(components::camera* camera) {
     if (camera == nullptr) return;
-    auto input_data = global::get<input::data>();
+    auto input_data = input::get_input_data();
     auto ctx = global::get<interface::context>();
     const bool window_focus = nk_window_is_any_hovered(&ctx->ctx);
     if (window_focus) return;
@@ -773,12 +797,62 @@ namespace devils_engine {
     return tile_index_local1;
   }
   
-  void draw_tooltip(const uint32_t &index, const sol::function &tile_func) {
+  union convert_int_unit_float {
+    uint32_t ui;
+    int32_t i;
+    float f;
+  };
+  
+  // по идее теперь должно работать нормально
+  // мне нужно придумать какой то особый фрустум или как то пометить так чтобы не получать каждый кадр выделение 0-го тайла
+  uint32_t get_casted_battle_map_tile() {
+    auto battle = global::get<systems::battle_t>();
+    if (!battle->is_init()) return UINT32_MAX;
+    
+    float min_dist = 100000.0f;
+    uint32_t final_tile_index = UINT32_MAX;
+    
+//     convert_int_unit_float c;
+    //const uint32_t mask = uint32_t(1) << 31;
+    const uint32_t mask = 0x1;
+    auto buffer = global::get<render::battle::tile_optimizer>()->get_selection_indices();
+    auto indirect = global::get<render::battle::tile_optimizer>()->get_indirect_buffer();
+    auto tiles_data = reinterpret_cast<render::battle::tile_optimizer::indirect_buffer_data*>(indirect->ptr());
+    //const size_t selection_slots = render::battle::tile_optimizer::selection_slots;
+    const size_t selection_slots = tiles_data->sizes_data.z / 2;
+    auto array = reinterpret_cast<uint32_t*>(buffer->ptr());
+    for (size_t i = 0; i < selection_slots; ++i) {
+      const size_t final_index = i*2;
+      const uint32_t val = array[final_index];
+      const uint32_t tile_index = array[final_index+1];
+      // это по идее результат фрустума
+      //const bool frustum_result = ((val >> 31) & mask) == mask;
+      // плохая идея, скорее нужно так сравнивать, не применяя маску
+      const bool frustum_result = val == mask;
+      if (frustum_result) {
+        
+      } else {
+        const float dist = glm::uintBitsToFloat(val);
+//         PRINT_VAR("dist", dist)
+//         PRINT_VAR("tile_index", tile_index)
+        if (min_dist > dist) {
+          min_dist = dist;
+          final_tile_index = tile_index;
+        }
+      }
+      
+      //if (val == 0) continue; // похоже что -0 не равно 0
+    }
+    
+    return final_tile_index;
+  }
+  
+//   void draw_tooltip(const uint32_t &index, const sol::function &tile_func) {
 //     if (tile_index != UINT32_MAX) {
 //       global::get<render::tile_highlights_render>()->add(tile_index);
 //       if (current_game_state == &world_map_state && !loading) tile_func(base_systems.interface_container->moonnuklear_ctx, tile_index);
 //     }
-  }
+//   }
 
   bool long_key(const int &key, const size_t &time) {
     UNUSED_VARIABLE(time);
@@ -795,8 +869,10 @@ namespace devils_engine {
     int widht, height, display_width, display_height;
     glfwGetWindowSize(window->handle, &widht, &height);
     glfwGetFramebufferSize(window->handle, &display_width, &display_height);
-    global::get<input::data>()->fb_scale.x = float(display_width / widht);
-    global::get<input::data>()->fb_scale.y = float(display_height / height);
+    input::get_input_data()->fb_scale.x = float(display_width / widht);
+    input::get_input_data()->fb_scale.y = float(display_height / height);
+//     global::get<input::data>()->fb_scale.x = float(display_width / widht);
+//     global::get<input::data>()->fb_scale.y = float(display_height / height);
 
 //     if (global::get<input::data>()->interface_focus) {
       nk_input_begin(ctx);
@@ -805,8 +881,8 @@ namespace devils_engine {
       // по идее можем, там не оч сложные вычисления
       //nk_input_unicode(ctx, 'f');
 
-      for (uint32_t i = 0; i < global::get<input::data>()->current_text; ++i) {
-        nk_input_unicode(ctx, global::get<input::data>()->text[i]);
+      for (uint32_t i = 0; i < input::get_input_data()->current_text; ++i) {
+        nk_input_unicode(ctx, input::get_input_data()->text[i]);
       }
 
 //       const int32_t test_in = glfwGetKey(window->handle, GLFW_KEY_DELETE);
@@ -817,7 +893,8 @@ namespace devils_engine {
 
       const uint32_t rel_event = static_cast<uint32_t>(input::type::release);
       //const bool* keys = Global::data()->keys;
-      const auto keys = global::get<input::data>()->key_events.container;
+      //const auto keys = global::get<input::data>()->key_events.container;
+      const auto &keys = input::get_input_data()->container;
       //nk_input_key(ctx, NK_KEY_DEL, keys[GLFW_KEY_DELETE].event != rel_event);
       //nk_input_key(ctx, NK_KEY_DEL, input::check_key(GLFW_KEY_DELETE, input::state_click | input::state_long_press));
       //nk_input_key(ctx, NK_KEY_DEL, glfwGetKey(window->handle, GLFW_KEY_DELETE) == GLFW_PRESS);
@@ -880,13 +957,13 @@ namespace devils_engine {
       nk_input_button(ctx, NK_BUTTON_MIDDLE,(int)x, (int)y, keys[GLFW_MOUSE_BUTTON_MIDDLE].event != rel_event);
       nk_input_button(ctx, NK_BUTTON_RIGHT, (int)x, (int)y, keys[GLFW_MOUSE_BUTTON_RIGHT].event != rel_event);
 
-      nk_input_button(ctx, NK_BUTTON_DOUBLE, int(global::get<input::data>()->click_pos.x), int(global::get<input::data>()->click_pos.y), input::check_key(GLFW_MOUSE_BUTTON_LEFT, input::state_double_click));
-      nk_input_scroll(ctx, nk_vec2(global::get<input::data>()->mouse_wheel, 0.0f));
+      nk_input_button(ctx, NK_BUTTON_DOUBLE, int(input::get_input_data()->click_pos.x), int(input::get_input_data()->click_pos.y), input::check_key(GLFW_MOUSE_BUTTON_LEFT, input::state_double_click));
+      nk_input_scroll(ctx, nk_vec2(input::get_input_data()->mouse_wheel, 0.0f));
       nk_input_end(ctx);
       // обнуляем
-      global::get<input::data>()->click_pos = glm::uvec2(x, y);
-      global::get<input::data>()->current_text = 0;
-      global::get<input::data>()->mouse_wheel = 0.0f;
+      input::get_input_data()->click_pos = glm::uvec2(x, y);
+      input::get_input_data()->current_text = 0;
+      input::get_input_data()->mouse_wheel = 0.0f;
 
       glfwSetInputMode(window->handle, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
 //     } else {
@@ -1068,8 +1145,7 @@ namespace devils_engine {
 //     }
   }
   
-  void sync(utils::frame_time &frame_time, const size_t &time, std::future<void> &rendering_future) {
-    //auto start = std::chrono::steady_clock::now();
+  void sync(utils::frame_time &frame_time, const size_t &time) { // , std::future<void> &rendering_future
     frame_time.end();
     
     static const auto lambda = [] () {
@@ -1420,17 +1496,22 @@ namespace devils_engine {
 //     std::cout << "scroll " << yoffset << "\n";
 
     (void)xoffset;
-    global::get<input::data>()->mouse_wheel += float(yoffset);
+    //global::get<input::data>()->mouse_wheel += float(yoffset);
+    auto ptr = input::get_input_data();
+    ptr->mouse_wheel += float(yoffset);
   }
 
   void charCallback(GLFWwindow*, unsigned int c) {
     if (!global::get<render::window>()->flags.focused()) return;
     //if (!global::get<input::data>()->interface_focus) return;
 
-    global::get<input::data>()->text[global::get<input::data>()->current_text] = c;
-    ++global::get<input::data>()->current_text;
+//     global::get<input::data>()->text[global::get<input::data>()->current_text] = c;
+//     ++global::get<input::data>()->current_text;
   //   ImGuiIO& io = ImGui::GetIO();
   //   if (c > 0 && c < 0x10000) io.AddInputCharacter((unsigned short)c);
+    auto ptr = input::get_input_data();
+    ptr->text[ptr->current_text] = c;
+    ++ptr->current_text;
   }
 
   void mouseButtonCallback(GLFWwindow*, int button, int action, int mods) {
@@ -1443,10 +1524,10 @@ namespace devils_engine {
   //   if (action == GLFW_RELEASE) mousePressed[button] = false;
 
     //global::data()->keys[button] = !(action == GLFW_RELEASE);
-    auto data = global::get<input::data>();
-    const auto old = data->key_events.container[button].event;
-    data->key_events.container[button].event = static_cast<input::type>(action);
-    if (old != static_cast<input::type>(action)) data->key_events.container[button].event_time = 0;
+    auto data = input::get_input_data();
+    const auto old = data->container[button].event;
+    data->container[button].event = static_cast<input::type>(action);
+    if (old != static_cast<input::type>(action)) data->container[button].event_time = 0;
   }
 
   void keyCallback(GLFWwindow*, int key, int scancode, int action, int mods) {
@@ -1466,10 +1547,10 @@ namespace devils_engine {
 //     PRINT(name)
 
     //global::data()->keys[key] = !(action == GLFW_RELEASE);
-    auto data = global::get<input::data>();
-    const auto old = data->key_events.container[key].event;
-    data->key_events.container[key].event = static_cast<input::type>(action);
-    if (old != static_cast<input::type>(action)) data->key_events.container[key].event_time = 0;
+    auto data = input::get_input_data();
+    const auto old = data->container[key].event;
+    data->container[key].event = static_cast<input::type>(action);
+    if (old != static_cast<input::type>(action)) data->container[key].event_time = 0;
 
     //ASSERT(false);
     (void)scancode;
@@ -1490,9 +1571,10 @@ namespace devils_engine {
     settings->graphics.height = h;
 
     system->graphics_container->render->recreate(w, h);
+    system->image_controller->update_set();
+    
     auto map = global::get<systems::map_t>();
-    if (map != nullptr) {
-      if (map->optimizators_container == nullptr) return;
+    if (map != nullptr && map->optimizators_container != nullptr) {
       map->optimizators_container->recreate(w, h);
       map->render_container->recreate(w, h);
     }

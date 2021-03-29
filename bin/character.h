@@ -11,6 +11,7 @@
 #include "data_parser.h"
 #include "declare_structures.h"
 #include "utils/linear_rng.h"
+#include "parallel_hashmap/phmap.h"
 
 // взаимоотношения между персонажами должны быть сделанны с помощью таблицы
 // я думал использовать какую-нибудь базу данных 
@@ -239,8 +240,10 @@ namespace devils_engine {
       uint32_t heraldy;
       
       // думаю что в титулах маленькие контейнеры потребуются
-      events_container<events_container_size> events; // должно хватить
-      flags_container<flags_container_size> flags; // флагов довольно много
+      //events_container<events_container_size> events; // должно хватить
+      //flags_container<flags_container_size> flags; // флагов довольно много
+      phmap::flat_hash_map<const event*, event_container> events;
+      phmap::flat_hash_map<std::string_view, size_t> flags;
       
       titulus();
       titulus(const enum type &t);
@@ -287,6 +290,8 @@ namespace devils_engine {
       static const size_t modificators_container_size = 75;
       static const size_t events_container_size = 30; // поди больше нужен
       static const size_t flags_container_size = 50;
+      
+      using state = utils::xoshiro256plusplus::state;
       
       static bool is_cousin(const character* a, const character* b);
       static bool is_sibling(const character* a, const character* b);
@@ -335,20 +340,20 @@ namespace devils_engine {
         static const size_t max_game_lovers = 4;
         
         // друзья, враги, брачные узы, любовники (сколько выделять памяти?)
-        character* friends[max_game_friends]; // врядли будет больше 4-6
-        character* rivals[max_game_rivals];  // тут тоже многовато 16
+        std::array<character*, max_game_friends> friends; // врядли будет больше 4-6
+        std::array<character*, max_game_rivals> rivals;  // тут тоже многовато 16
         // брак близкого родственника с человеком из другой династии (может быть довольно много, можно ограничить только текущим поколением)
         // если ограничить текущим поколением, то не нужно даже запоминать
         //character* marriage_ties[16];
-        character* lovers[max_game_lovers];  // вряд ли больше 2-3
+        std::array<character*, max_game_lovers> lovers;  // вряд ли больше 2-3
         
         relations();
       };
       
-      stat_container stats[character_stats::count]; // по умолчанию
-      stat_container current_stats[character_stats::count]; // пересчитаные статы от треитов, шмоток и модификаторов
-      stat_container hero_stats[hero_stats::count];
-      stat_container current_hero_stats[hero_stats::count];
+      std::array<stat_container, character_stats::count> stats; // по умолчанию
+      std::array<stat_container, character_stats::count> current_stats; // пересчитаные статы от треитов, шмоток и модификаторов
+      std::array<stat_container, hero_stats::count> hero_stats;
+      std::array<stat_container, hero_stats::count> current_hero_stats;
       uint32_t name_number; // если в династии уже есть использованное имя, то тут нужно указать сколько раз встречалось
 //       float money; // деньги наследуются
       
@@ -377,20 +382,28 @@ namespace devils_engine {
       const struct religion* hidden_religion;
       // в элективных монархиях существует фракция персонажа, фракция элективного государства (в этой фракции титулы передаются к избранному наследнику),
       // по идее нужно будет создать еще фракцию совета, там временно будут храниться отобранные титулы
-      struct faction* factions[faction_type_count]; // если здесь есть указатели на совет и на суд, то персонаж состоит в совете или в суде
+      std::array<struct faction*, faction_type_count> factions; // если здесь есть указатели на совет и на суд, то персонаж состоит в совете или в суде
       // совет строго относится к текущему правителю (то есть если даже избирательная система у вассалов, то совет набирается значит из избранных вассалов)
       
       utils::bit_field<1> data;
-      utils::rng::state rng_state; // нужно ли передать в луа?
+      state rng_state; // нужно ли передать в луа?
       
       // можем ли мы разделить трейты на группы? можем, сколько теперь выделять для каждой группы
       // в цк2 трейты разделены на группы, некоторые трейты замещают другие в одной группе
       // некоторые трейты не могут быть взяты из-за религии
-      traits_container<traits_container_size> traits;
+      //traits_container<traits_container_size> traits;
       // после смерти нам это не нужно
-      modificators_container<modificators_container_size>* modificators;
-      events_container<events_container_size>* events;
-      flags_container<flags_container_size>* flags;
+      //modificators_container<modificators_container_size>* modificators;
+      //events_container<events_container_size>* events;
+      //flags_container<flags_container_size>* flags;
+      
+      phmap::flat_hash_set<const trait*> traits;
+      // модификаторы, затронутые эвенты и флаги не нужны после смерти
+      phmap::flat_hash_map<const modificator*, size_t> modificators;
+      phmap::flat_hash_map<const event*, event_container> events;
+      // нужно ли как то оформять флаги? нет, это будут строго внутренние вещи
+      phmap::flat_hash_map<std::string_view, size_t> flags;
+      //phmap::flat_hash_set<std::string_view> flags; // а может вообще без хода?
       
       character(const bool male, const bool dead);
       ~character();
@@ -445,9 +458,13 @@ namespace devils_engine {
       bool get_bit(const size_t &index) const; // тут по максимуму от того что останется
       bool set_bit(const size_t &index, const bool value);
       
-      bool has_flag(const size_t &flag) const;
-      void add_flag(const size_t &flag);
-      void remove_flag(const size_t &flag);
+//       bool has_flag(const size_t &flag) const;
+//       void add_flag(const size_t &flag);
+//       void remove_flag(const size_t &flag);
+      
+      size_t has_flag(const std::string_view &flag) const;
+      void add_flag(const std::string_view &flag, const size_t &turn);
+      void remove_flag(const std::string_view &flag);
       
       bool has_trait(const trait* t) const;
       void add_trait(const trait* t);
@@ -461,6 +478,9 @@ namespace devils_engine {
       void add_event(const event* e, const event_container &cont);
       void remove_event(const event* e);
       
+      uint64_t get_random();
+      
+      // откуда это брать? по идее это задано по умолчанию, но при этом нужно как то локализацию сделать
       std::string_view object_pronoun() const;
       std::string_view poss_pronoun() const;
       std::string_view reflexive_pronoun() const;
@@ -480,6 +500,8 @@ namespace devils_engine {
       std::string_view patriarch_gender() const;
       std::string_view sibling_gender() const;
       
+      // эти штуки нужно составлять из разных строк, по идее тут нужно возвращать обычный std string
+      // я уже забыл что есть что
       std::string_view first_name() const;
       std::string_view first_name_with_nick() const;
       std::string_view title_str() const;
@@ -519,7 +541,7 @@ namespace devils_engine {
       character* courtiers;
       character* prisoners; // в тюрьму мы сажаем непосредственно персонажей
       // глобальные характеристики
-      stat_container stats[faction_stats::count]; // кому уходят характеристики? по идее если это не личная фракция, то всем
+      std::array<stat_container, faction_stats::count> stats; // кому уходят характеристики? по идее если это не личная фракция, то всем
       // статы должны пересчитываться после наследования? я пока не очень понимаю как тут вообще статы будут
       // принятые законы (законы по категориям, причем первые две категории всегда про наследование)
       // права жителей фракции (скорее всего едины с законами) (состоят из прав религии и локальных прав, что то еще?) (более менее сделано)

@@ -68,7 +68,7 @@ namespace devils_engine {
       // какой максимум поселений? 7 в цк2, у меня скорее всего меньше (3-4?)
       uint32_t cities_max_count; // в зависимости от размера провинции
       uint32_t cities_count;
-      city* cities[cities_max_game_count];
+      std::array<city*, cities_max_game_count> cities;
       
       modificators_container<modificators_container_size> modificators; // по идее их меньше чем треитов
       events_container<events_container_size> events; // должно хватить
@@ -91,9 +91,9 @@ namespace devils_engine {
       std::vector<utils::functions_container::operation> potential;
       std::vector<utils::functions_container::operation> conditions;
       // предыдущие постройки (достаточно ли?) (с другой стороны вряд ли имеет смысл ограничивать)
-      const building_type* prev_buildings[maximum_prev_buildings];
+      std::array<const building_type*, maximum_prev_buildings> prev_buildings;
       // нельзя построить если существуют ...
-      const building_type* limit_buildings[maximum_limit_buildings];
+      std::array<const building_type*, maximum_limit_buildings> limit_buildings;
       // то что заменяет (индекс? заменяет предыдущий уровень?)
       const building_type* replaced;
       // улучшение (если построено предыдущее здание, то открывается это)
@@ -106,8 +106,8 @@ namespace devils_engine {
       // вижен? (дает ли вижен провинции для игрока построившего это) (это для дополнительных построек вроде торговых постов в цк2)
       // во что конвертируется (?) (нужно ли делать переход от одного типа города к другому?)
       // модификаторы (в цк2 могло дать скорость иследований, в моем случае нужно придумать какой то иной способ)
-      stat_modifier mods[maximum_stat_modifiers];
-      unit_stat_modifier unit_mods[maximum_unit_stat_modifiers]; // модификаторы героев по типу
+      std::array<stat_modifier, maximum_stat_modifiers> mods;
+      std::array<unit_stat_modifier, maximum_unit_stat_modifiers> unit_mods; // модификаторы героев по типу
       // здания наверное могу давать какие то эвенты с какой то периодичностью
       
       float money_cost;
@@ -123,11 +123,11 @@ namespace devils_engine {
       static const size_t maximum_buildings = 128;
       std::string id;
       // вообще по идее мы можем здесь не ограничивать количество зданий, нет это нужно для непосредственно города
-      const building_type* buildings[maximum_buildings];
+      std::array<const building_type*, maximum_buildings> buildings;
       // нужно указать что этот город это епископство для механики религии
       // тут я так понимаю может потребоваться несколько флагов
       // дефолтные статы?
-      stat_container stats[city_stats::count];
+      std::array<stat_container, city_stats::count> stats;
       // локализация (название типа)
       size_t name_id;
       size_t desc_id;
@@ -164,11 +164,12 @@ namespace devils_engine {
       uint32_t building_index;
       uint32_t tile_index;
       // характеристики (текущие характеристики города, база + со всех зданий) (характеристики довольно ограничены, нужно ли дать возможность их модифицировать?)
-      stat_container current_stats[city_stats::count];
+      std::array<stat_container, city_stats::count> current_stats;
       
-      modificators_container<modificators_container_size> modificators; // по идее их меньше чем треитов
+//       modificators_container<modificators_container_size> modificators; // по идее их меньше чем треитов
 //       events_container<events_container_size> events; // эвенты и флаги хранятся в титуле
 //       flags_container<flags_container_size> flags;
+      phmap::flat_hash_map<const modificator*, size_t> modificators;
       
       city();
       
@@ -204,7 +205,7 @@ namespace devils_engine {
       render::image_t icon;
       utils::bit_field_32<1> attribs;
       //stat_bonus bonuses[16]; 
-      stat_modifier bonuses[max_stat_modifiers_count]; // нужно еще сгенерировать описание для этого
+      std::array<stat_modifier, max_stat_modifiers_count> bonuses; // нужно еще сгенерировать описание для этого
       
       // надеюсь можно будет передать функцию в луа (но кажется нельзя ссылаться на inline функцию)
       trait();
@@ -224,7 +225,7 @@ namespace devils_engine {
       render::image_t icon;
       utils::bit_field_32<1> attribs;
       //stat_bonus bonuses[16]; // нужно еще сгенерировать описание для этого
-      stat_modifier bonuses[max_stat_modifiers_count]; // нужно еще сгенерировать описание для этого
+      std::array<stat_modifier, max_stat_modifiers_count> bonuses; // нужно еще сгенерировать описание для этого
       // бонус к отношениям
       
       // надеюсь можно будет передать функцию в луа (но кажется нельзя ссылаться на inline функцию)
@@ -239,7 +240,7 @@ namespace devils_engine {
       size_t name_id;
       size_t description_id;
       // сильные и слабые стороны?
-      stat_container stats[troop_stats::count];
+      std::array<stat_container, troop_stats::count> stats;
       // нужны иконки и отображение в бою (2д графика с 8 гранями)
       render::image_t card; // карточка для отображения в контейнере интерфейса армии
       // отображение в бою можно сделать через состояния
@@ -248,12 +249,14 @@ namespace devils_engine {
       troop_type();
     };
     
+    // отряды поди должны отдельно существовать (?), мы либо их в городе держим как подкреп
+    // либо нанимаем, на мой взгляд и в том и в другом случае нужен указатель
     struct troop {
       const troop_type* type;
       struct character* character; // это может быть отряд полководца
       // характеристики (здоровье, количество в отряде, атака, урон и прочее)
-      stat_container moded_stats[troop_stats::count]; // название нужно сменить
-      stat_container current_stats[troop_stats::count]; //  изменяются только в бою?
+      std::array<stat_container, troop_stats::count> moded_stats; // название нужно сменить
+      std::array<stat_container, troop_stats::count> current_stats; //  изменяются только в бою?
       
       troop();
     };
@@ -264,6 +267,19 @@ namespace devils_engine {
       finding_path,
       stop,
       stopped,
+    };
+    
+    // по идее что у армии что у героев (что у всех остальных объектов движения)
+    // данные поиска пути вообще не особенно будут отличаться,
+    // поэтому лучше все это дело унифицировать, причем эта же структура
+    // по идее должна работать и битве и в столкновении
+    struct path_finding_data {
+      std::atomic<ai::path_container*> path;
+      size_t path_size;
+      size_t current_path;
+      std::atomic<uint32_t> start_tile;
+      std::atomic<uint32_t> end_tile;
+      std::atomic<size_t> path_task;
     };
     
     // армия создается только когда мы собираем войска
@@ -285,8 +301,8 @@ namespace devils_engine {
       // позиция (просто указатель на тайл?)
       uint32_t tile_index;
       // характеристики армии? передвижение, атака, защита (?), все характеристики для отрядов
-      stat_container computed_stats[army_stats::count]; // 
-      stat_container current_stats[army_stats::count];
+      std::array<stat_container, army_stats::count> computed_stats; // 
+      std::array<stat_container, army_stats::count> current_stats;
       // какие то спутники? (спутники по идее у персонажа)
       // графика (иконка и отображение на карте)
       //render::image_t map_img; // на карте это нужно отображать с флагом
@@ -306,9 +322,12 @@ namespace devils_engine {
       uint32_t army_gpu_slot;
       std::atomic<size_t> path_task;
       
-      modificators_container<modificators_container_size> modificators; // по идее их меньше чем треитов
-      events_container<events_container_size> events; // должно хватить
-      flags_container<flags_container_size> flags; // флагов довольно много
+      phmap::flat_hash_map<const modificator*, size_t> modificators;
+      phmap::flat_hash_map<const event*, event_container> events;
+      phmap::flat_hash_map<std::string_view, size_t> flags;
+      //modificators_container<modificators_container_size> modificators; // по идее их меньше чем треитов
+      //events_container<events_container_size> events; // должно хватить
+      //flags_container<flags_container_size> flags; // флагов довольно много
       
       army();
       ~army();
@@ -325,10 +344,13 @@ namespace devils_engine {
     };
     
     // возможно будет частью персонажа
+    // нужно у персонажа сделать отдельную геройскую секцию
+    // героями будут ну очень малое количество людей по сравнению с общим
+    // но при этом несколько геройских вещей должны быть доступны и обычным челикам
     struct hero {
       struct character* character;
-      stat_container moded_stats[hero_stats::count];
-      stat_container current_stats[hero_stats::count];
+      std::array<stat_container, hero_stats::count> moded_stats;
+      std::array<stat_container, hero_stats::count> current_stats;
       // графика, как отображать персов в интерфейсе? (нужно хотя бы интерфейс сделать, хаха) думаю что карточки персонажей как раз то что нужно
       
       hero();
@@ -376,9 +398,12 @@ namespace devils_engine {
       uint32_t army_gpu_slot; // это обязательный аттрибут любой армии или героя, нужно где то сделать поиск в обратную сторону
       // статы
       
-      modificators_container<modificators_container_size> modificators;
-      events_container<events_container_size> events;
-      flags_container<flags_container_size> flags;
+      phmap::flat_hash_map<const modificator*, size_t> modificators;
+      phmap::flat_hash_map<const event*, event_container> events;
+      phmap::flat_hash_map<std::string_view, size_t> flags;
+//       modificators_container<modificators_container_size> modificators;
+//       events_container<events_container_size> events;
+//       flags_container<flags_container_size> flags;
       
       hero_troop();
       ~hero_troop();
@@ -475,7 +500,7 @@ namespace devils_engine {
       const culture* parent; // культурная группа?
       // модификаторы
       // модификаторы персонажа
-      stat_modifier attrib[max_stat_modifiers_count]; // модификаторы юнитов?
+      std::array<stat_modifier, max_stat_modifiers_count> attrib; // модификаторы юнитов?
       utils::bit_field_32<utils::culture_mechanics::bit_container_size> mechanics;
       
       culture();
@@ -491,8 +516,8 @@ namespace devils_engine {
       std::string id;
       size_t name_id; // у некоторых сущностей имена должны быть определены заранее (ну то есть мы наверное можем сгенерировать закон, но пока нет)
       size_t description_id;
-      stat_modifier attrib[max_stat_modifiers_count];                        // закон тоже может изменить аттрибуты
-      utils::mechanics_modifier modificators[max_mechanics_modifiers_count]; // применяем изменения к механикам государства (тут видимо нужно делать больше размер)
+      std::array<stat_modifier, max_stat_modifiers_count> attrib;                        // закон тоже может изменить аттрибуты
+      std::array<utils::mechanics_modifier, max_mechanics_modifiers_count> modificators; // применяем изменения к механикам государства (тут видимо нужно делать больше размер)
       std::vector<utils::functions_container::operation> potential;
       std::vector<utils::functions_container::operation> conditions;
       // но закон еще меняет механику, механика будет привязана к функции луа (не будет наверное)
@@ -547,6 +572,8 @@ namespace devils_engine {
       std::array<option, max_options_count> options;
       
       event();
+      
+      void fire(character* c);
     };
   }
 }

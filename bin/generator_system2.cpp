@@ -13,6 +13,7 @@ namespace devils_engine {
     void generator::generate(map::generator::context* ctx, sol::table &table) {
       // по идее мы должны засунуть генерацию в отдельный поток
       // и нарисовать во время генерации прогресс бар
+      
       current_step = 0;
       for (const auto &pair : generators) {
         pair.second(ctx, table);

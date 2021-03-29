@@ -178,9 +178,14 @@ namespace devils_engine {
       render::unit_t get_unit_data(const uint32_t &index) const;
       void set_unit_data(const uint32_t &index, const render::unit_t &data);
       
+      void set_tile_troop_data(const uint32_t &index, const uint32_t &data);
+      uint32_t get_tile_troop_data(const uint32_t &index) const;
+      
       void set_biomes(const std::array<render::battle_biome_data_t, BATTLE_BIOMES_MAX_COUNT> &data);
       
       void add_unit_textures(const std::vector<render::image_t> &array);
+      
+      glm::vec3 get_tile_pos(const uint32_t &tile_index) const;
     };
   }
 }

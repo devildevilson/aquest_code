@@ -66,6 +66,7 @@ namespace devils_engine {
       enum status status;
       uint32_t unit_gpu_index;
       const core::state* current_state;
+      const core::state* next_state;
       size_t state_time;
       size_t user_time;
       // состояние псевдогенератора (достаточно небольшого, но нам нужно будет использовать его в мультипотоке + в луа)
@@ -73,6 +74,7 @@ namespace devils_engine {
       // где то тут еще положение и направление
       // данные для гпу (собств поз, дир, текстурки и все?)
       
+      float scale;
       uint32_t change_counter;
       
       unit();
@@ -84,7 +86,7 @@ namespace devils_engine {
       double random(const double &lower, const double &upper);
       std::string_view state() const;
 
-      void update(const size_t &time);
+      void update(const size_t &time); // тут по идее new_state должен быть всегда нулл
       void seed_random(const uint64_t &seed);
       void set_state(const struct core::state* state);
       glm::vec4 get_pos() const;
@@ -98,7 +100,8 @@ namespace devils_engine {
       
       std::string id;
       //const unit_type* units_type;
-//       uint32_t units_count;
+      uint32_t units_count; // почему я это убрал?
+      float unit_scale;
       core::state* default_unit_state;
       core::stat_container stats[core::troop_stats::count];
     };
@@ -107,7 +110,7 @@ namespace devils_engine {
       static const structure_type type_id = structure_type::troop;
       
       const troop_type* type;
-      uint32_t tile_index;
+      uint32_t tile_index; // тут информация о количестве хранится?
       core::stat_container stats[core::troop_stats::count];
       // конкретные юниты + статы отряда
       // + данные для гпу (какие? количество и оффсет?)
@@ -117,7 +120,10 @@ namespace devils_engine {
       // как быть с мертвыми? их по идее тоже нужно рисовать, но уже относительно тайла
       // было бы неплохо сделать для них рендер вроде частиц
       
+      uint32_t unit_count;
+      uint32_t unit_offset;
       
+      troop();
     };
   }
 }

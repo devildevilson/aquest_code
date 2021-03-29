@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <cstddef>
 #include "battle_structures_enum.h"
+#include "render/shared_structures.h"
 
 namespace devils_engine {
   namespace core {
@@ -14,19 +15,22 @@ namespace devils_engine {
     
     // это какая то картинка + функция перехода + время
     struct state { // не должно ли это вообще быть все в луа? неплохо было бы использовать мультитрединг, в принципе в функцию должен передаваться юнит
-      static const battle::structure_type type_id = battle::structure_type::unit_state;
+      static const battle::structure_type type_id = battle::structure_type::unit_state; // это не очень удобно сделано
       
       std::string id;
       
-      uint32_t texture_offset;
-      uint32_t texture_count;
+      // чем меньше у меня текстурок, тем лучше, поэтому я решил что лучше использовать одну в каждом состоянии, 
+      // и просто флипать ее в зависимости от того где находится враг
+      //uint32_t texture_offset;
+      //uint32_t texture_count;
+      render::image_t texture;
       
       size_t time;
       state* next;
       
       uint32_t func_index;
       
-      inline state() : texture_offset(UINT32_MAX), texture_count(0), time(SIZE_MAX), next(nullptr), func_index(UINT32_MAX) {}
+      inline state() : texture{UINT32_MAX}, time(SIZE_MAX), next(nullptr), func_index(UINT32_MAX) {}
     };
   }
 }

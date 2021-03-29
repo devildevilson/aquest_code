@@ -24,6 +24,7 @@ namespace devils_engine {
   
   namespace utils {
     struct random_engine_st;
+    class localization;
   }
   
   namespace map {
@@ -87,6 +88,7 @@ namespace devils_engine {
         FastNoise* noise;
         core::map* map;
         core::seasons* seasons;
+        utils::localization* loc;
         dt::thread_pool* pool;
       };
     }

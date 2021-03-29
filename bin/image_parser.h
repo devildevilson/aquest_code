@@ -33,6 +33,7 @@ namespace devils_engine {
     
     void load_biomes(render::image_controller* controller, core::seasons* seasons, const std::vector<sol::table> &biome_tables);
     
+    size_t add_biome(const sol::table &table);
     size_t add_battle_biome(const sol::table &table);
     bool validate_battle_biome(const uint32_t &index, const sol::table &table);
     // сохранять при генерации битвы ничего не нужно

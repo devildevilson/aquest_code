@@ -4,23 +4,23 @@
 namespace devils_engine {
   namespace utils {
     calendar::date::date() : m_year(INT32_MAX), m_month(INT16_MAX), m_day(INT16_MAX) {}
-    calendar::date::date(const int32_t &m_year, const int16_t &m_month, const uint16_t &m_day, const bool before_zero) : m_year(m_year), m_month(m_month), m_day(before_zero ? -int16_t(m_day) : m_day) {}
-    uint32_t calendar::date::year() const { return m_year; }
+    calendar::date::date(const int32_t &m_year, const uint16_t &m_month, const uint16_t &m_day) : m_year(m_year), m_month(m_month), m_day(m_day) {}
+    int32_t calendar::date::year() const { return m_year; }
     uint32_t calendar::date::month() const { return m_month; }
-    uint32_t calendar::date::day() const { return std::abs(m_day); }
-    bool calendar::date::before_zero() const { return m_day < 0; }
+    uint32_t calendar::date::day() const { return m_day; }
+    bool calendar::date::before_zero() const { return m_year < 0; }
     bool calendar::date::valid() const { return m_year != INT32_MAX; }
     
     static calendar::date load_start_date;
     static calendar::date load_current_date;
     
     calendar::calendar() : m_name_str(SIZE_MAX), m_week_days_count(7), m_start_day(INT64_MAX), m_current_turn(SIZE_MAX), m_years_days(SIZE_MAX) {}
-    void calendar::set_start_date(const bool before_zero, const uint32_t &year, const uint32_t &month, const uint32_t &day) {
-      load_start_date = calendar::date(year, month, day, before_zero);
+    void calendar::set_start_date(const int32_t &year, const uint32_t &month, const uint32_t &day) {
+      load_start_date = calendar::date(year, month, day);
     }
     
-    void calendar::set_current_date(const bool before_zero, const uint32_t &year, const uint32_t &month, const uint32_t &day) {
-      load_current_date = calendar::date(year, month, day, before_zero);
+    void calendar::set_current_date(const int32_t &year, const uint32_t &month, const uint32_t &day) {
+      load_current_date = calendar::date(year, month, day);
     }
     
     void calendar::set_week_days_count(const uint32_t &count) { m_week_days_count = count; }
@@ -50,31 +50,30 @@ namespace devils_engine {
     
     calendar::date calendar::convert_days_to_date(const int64_t &days) const {
       ASSERT(m_years_days != SIZE_MAX);
-      const uint32_t cur_year = std::abs(days) / m_years_days;
+      const int32_t cur_year = std::abs(days) / m_years_days;
       size_t current_year_day = std::abs(days) - cur_year * m_years_days;
       ASSERT(current_year_day < m_years_days);
       uint32_t month_index = 0;
-      while (month_index < m_months.size() && current_year_day > m_months[month_index].days_count) {
+      for (; month_index < m_months.size() && current_year_day > m_months[month_index].days_count; ++month_index) {
         current_year_day -= m_months[month_index].days_count;
-        ++month_index;
-        ASSERT(month_index != m_months.size());
       }
       
-      const int16_t final_days = days < 0 ? -int16_t(current_year_day) : int16_t(current_year_day);
-      const date current_date(int32_t(cur_year), int16_t(month_index), final_days, days < 0);
+      const date current_date(days < 0 ? -cur_year : cur_year, int16_t(month_index), int16_t(current_year_day));
       return current_date;
     }
     
     int64_t calendar::convert_date_to_days(const struct date &date) const {
+      // положительное число
       int64_t days_count = date.day();
-      int32_t month_index = date.month()-1;
-      while (month_index >= 0) {
+      for (uint32_t month_index = 0; month_index < date.month(); ++month_index) {
         days_count += m_months[month_index].days_count;
-        --month_index;
       }
       
+      const bool before_zero = date.year() < 0;
+      days_count = before_zero ? -days_count : days_count;
       days_count += date.year() * m_years_days; // это количество дней прошедшее от 0 года
-      return std::abs(m_start_day) + (date.before_zero() ? -1 * days_count : days_count);
+      if (before_zero) {ASSERT(days_count < 0);}
+      return std::abs(m_start_day) + days_count;
     }
     
     void calendar::validate() {
@@ -115,10 +114,14 @@ namespace devils_engine {
       return date1.m_year == date2.m_year && date1.m_month == date2.m_month && date1.m_day == date2.m_day;
     }
     
+    bool operator!=(const calendar::date &date1, const calendar::date &date2) {
+      return date1.m_year != date2.m_year || date1.m_month != date2.m_month || date1.m_day != date2.m_day;
+    }
+    
     bool operator>=(const calendar::date &date1, const calendar::date &date2) {
       if (date1.before_zero() == date2.before_zero()) {
         if (date1.year() == date2.year()) {
-          if (date1.month() == date2.month()) return date1.m_day >= date2.m_day;
+          if (date1.month() == date2.month()) return date1.before_zero() ? -date1.m_day >= -date2.m_day : date1.m_day >= date2.m_day;
           return date1.before_zero() ? -date1.m_month >= -date2.m_month : date1.m_month >= date2.m_month;
         }
         
@@ -131,7 +134,7 @@ namespace devils_engine {
     bool operator<=(const calendar::date &date1, const calendar::date &date2) {
       if (date1.before_zero() == date2.before_zero()) {
         if (date1.year() == date2.year()) {
-          if (date1.month() == date2.month()) return date1.m_day <= date2.m_day;
+          if (date1.month() == date2.month()) return date1.before_zero() ? -date1.m_day <= -date2.m_day : date1.m_day <= date2.m_day;
           return date1.before_zero() ? -date1.m_month <= -date2.m_month : date1.m_month <= date2.m_month;
         }
         
@@ -144,7 +147,7 @@ namespace devils_engine {
     bool operator>(const calendar::date &date1, const calendar::date &date2) {
       if (date1.before_zero() == date2.before_zero()) {
         if (date1.year() == date2.year()) {
-          if (date1.month() == date2.month()) return date1.m_day > date2.m_day;
+          if (date1.month() == date2.month()) return date1.before_zero() ? -date1.m_day > -date2.m_day : date1.m_day > date2.m_day;
           return date1.before_zero() ? -date1.m_month > -date2.m_month : date1.m_month > date2.m_month;
         }
         
@@ -157,7 +160,7 @@ namespace devils_engine {
     bool operator<(const calendar::date &date1, const calendar::date &date2) {
       if (date1.before_zero() == date2.before_zero()) {
         if (date1.year() == date2.year()) {
-          if (date1.month() == date2.month()) return date1.m_day < date2.m_day;
+          if (date1.month() == date2.month()) return date1.before_zero() ? -date1.m_day < -date2.m_day : date1.m_day < date2.m_day;
           return date1.before_zero() ? -date1.m_month < -date2.m_month : date1.m_month < date2.m_month;
         }
         

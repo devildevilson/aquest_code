@@ -52,7 +52,17 @@ namespace devils_engine {
           ), 
           VMA_MEMORY_USAGE_GPU_ONLY
         );
+        units_buffer = device->create(yavf::BufferCreateInfo::buffer(1*sizeof(render::unit_t), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT), VMA_MEMORY_USAGE_CPU_ONLY);
         // короч думаю прост надо сделать сначала квадрат, а потом если захочу гекс (но по идее ничего сложного, но нужно париться в шейдерах с изменением формул)
+        
+        auto tiles_array_ptr = reinterpret_cast<render::battle_map_tile_data_t*>(tiles_buffer->ptr());
+        for (size_t i = 0; i < tiles_count; ++i) {
+          tiles_array_ptr[i].height = 1.0f;
+          tiles_array_ptr[i].ground = render::image_t{GPU_UINT_MAX};
+          tiles_array_ptr[i].walls = render::image_t{GPU_UINT_MAX};
+          tiles_array_ptr[i].biome_index = GPU_UINT_MAX;
+          tiles_array_ptr[i].troop_data = GPU_UINT_MAX;
+        }
         
         yavf::Buffer staging(device, yavf::BufferCreateInfo::buffer(sizeof(uniform_buffer_data), VK_BUFFER_USAGE_TRANSFER_SRC_BIT), VMA_MEMORY_USAGE_CPU_ONLY);
         auto data = reinterpret_cast<uniform_buffer_data*>(staging.ptr());
@@ -61,7 +71,7 @@ namespace devils_engine {
         data->map_properties.z = height;
         data->map_properties.w = type.container[0];
         
-        std::unique_lock<std::mutex> lock(mutex);
+//         std::unique_lock<std::mutex> lock(mutex);
         
         auto task = device->allocateTransferTask();
         task->begin();
@@ -87,13 +97,14 @@ namespace devils_engine {
                     .binding(2, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_ALL)
                     .binding(3, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_ALL)
                     .binding(4, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_ALL)
+                    .binding(5, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_ALL)
                     .create(BATTLE_MAP_DESCRIPTOR_SET_LAYOUT_NAME);
       }
       
       yavf::DescriptorPool pool = VK_NULL_HANDLE;
       {
         yavf::DescriptorPoolMaker dpm(device);
-        pool = dpm.poolSize(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 5).poolSize(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1).create(BATTLE_MAP_DESCRIPTOR_POOL_NAME);
+        pool = dpm.poolSize(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 6).poolSize(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1).create(BATTLE_MAP_DESCRIPTOR_POOL_NAME);
       }
       
       {
@@ -105,6 +116,7 @@ namespace devils_engine {
       set->add({tiles_buffer, 0, tiles_buffer->info().size, 0, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER});
       set->add({offsets_buffer, 0, offsets_buffer->info().size, 0, 2, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER});
       set->add({biomes_buffer, 0, biomes_buffer->info().size, 0, 3, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER});
+      set->add({units_buffer, 0, units_buffer->info().size, 0, 5, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER});
       set->update();
     }
     
@@ -140,7 +152,12 @@ namespace devils_engine {
     
     void map::set_units_count(const uint32_t &count) {
       units_count = count;
-      units_buffer = device->create(yavf::BufferCreateInfo::buffer(count*sizeof(render::unit_t), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT), VMA_MEMORY_USAGE_CPU_ONLY);
+      
+      std::unique_lock<std::mutex> lock(mutex);
+      const size_t size = align_to(count*sizeof(render::unit_t), 16);
+      units_buffer->resize(size);
+      set->add({units_buffer, 0, units_buffer->info().size, 0, 5, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER});
+      set->update();
     }
     
     render::unit_t map::get_unit_data(const uint32_t &index) const {
@@ -154,6 +171,19 @@ namespace devils_engine {
       ASSERT(index < units_count);
       auto units = reinterpret_cast<render::unit_t*>(units_buffer->ptr());
       units[index] = data;
+    }
+    
+    void map::set_tile_troop_data(const uint32_t &index, const uint32_t &data) {
+      if (index >= tiles_count) throw std::runtime_error("Bad tile index");
+      std::unique_lock<std::mutex> lock(mutex);
+      auto array = reinterpret_cast<render::battle_map_tile_data_t*>(tiles_buffer->ptr());
+      array[index].troop_data = data;
+    }
+    
+    uint32_t map::get_tile_troop_data(const uint32_t &index) const {
+      if (index >= tiles_count) throw std::runtime_error("Bad tile index");
+      auto array = reinterpret_cast<render::battle_map_tile_data_t*>(tiles_buffer->ptr());
+      return array[index].troop_data;
     }
     
     void map::set_biomes(const std::array<render::battle_biome_data_t, BATTLE_BIOMES_MAX_COUNT> &data) {
@@ -198,6 +228,40 @@ namespace devils_engine {
       set->update();
       
       // что еще?
+    }
+    
+    glm::vec3 map::get_tile_pos(const uint32_t &tile_index) const {
+      static const glm::vec2 hex_map_row_const_offset[] = {
+        glm::vec2(-0.5f, 0.0f),
+        glm::vec2( 0.5f, 0.0f),
+        glm::vec2( 0.0f,-0.5f),
+        glm::vec2( 0.0f, 0.5f)
+      };
+      
+      if (tile_index >= tiles_count) throw std::runtime_error("Bad tile index");
+      
+      const uint32_t row_index    = tile_index / height;
+      const uint32_t column_index = tile_index % height;
+      const glm::uvec2 tile_coord = glm::uvec2(column_index, row_index);
+      //const uvec2 tile_coord = uvec2(0, 0);
+
+      const float hex_size = 1.0f;
+      const float hex_width = glm::mix(glm::sqrt(3.0f) * hex_size, 2.0f * hex_size, float(is_flat()));
+      const float hex_height = glm::mix(2.0f * hex_size, glm::sqrt(3.0f) * hex_size, float(is_flat()));
+      const float hex_width_dist = glm::mix(1.0f * hex_width, (3.0f/4.0f) * hex_width, float(is_flat()));
+      const float hex_height_dist = glm::mix((3.0f/4.0f) * hex_height, 1.0f * hex_height, float(is_flat()));
+
+      const uint32_t offset_type_index = uint32_t(is_odd()) + 2 * uint32_t(is_flat());
+
+      // 4 константы зависят от того как мы представляем координатные системы
+      // квадратная карта может быть представлена: четный оффсет по строкам, нечетный оффсет по строкам, четный оффсет по столбцам, нечетный оффсет по столбцам
+      const uint32_t row_column = uint32_t(is_flat()) * column_index + uint32_t(!is_flat()) * row_index;
+      const glm::vec2 const_pos_k = float(row_column % 2 == 1) * hex_map_row_const_offset[offset_type_index] * glm::vec2(hex_width_dist, hex_height_dist);
+
+      const glm::vec2 tile_pos = glm::vec2(tile_coord) * glm::vec2(hex_width_dist, hex_height_dist) + const_pos_k;
+      
+      const float h = get_tile_height(tile_index);
+      return glm::vec3(tile_pos.x, h, tile_pos.y);
     }
   }
 }

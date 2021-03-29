@@ -22,9 +22,7 @@ namespace devils_engine {
       if (c->current_stats[core::character_stats::money].fval < 200.0f) return SUB_SYSTEM_SKIP;
 
       // получаем новое случайное число примерно так
-      const auto current_state = c->rng_state;
-      c->rng_state = utils::rng::next(c->rng_state);
-      const double val = utils::rng::normalize(utils::rng::value(current_state));
+      const double val = utils::rng_normalize(c->get_random());
       ASSERT(val >= 0.0 && val <= 1.0);
 
       // какая вероятность?
@@ -99,9 +97,7 @@ namespace devils_engine {
       for (size_t k = 0; k < cities.size(); ++k) {
         for (size_t i = 0; i < core::city_type::maximum_buildings; ++i) {
           if (probabilities[k][i] < EPSILON) continue;
-          const auto current_state = c->rng_state;
-          c->rng_state = utils::rng::next(c->rng_state);
-          const double val = utils::rng::normalize(utils::rng::value(current_state));
+          const double val = utils::rng_normalize(c->get_random());
 
           if (val < probabilities[k][i]) {
             if (cities[k]->start_build(c, i)) { // здесь мы отнимаем денюжку

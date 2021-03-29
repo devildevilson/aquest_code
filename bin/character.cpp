@@ -28,14 +28,14 @@ namespace devils_engine {
     
     const structure city_type::s_type;
     const size_t city_type::maximum_buildings;
-    city_type::city_type() : buildings{nullptr}, city_image_top{GPU_UINT_MAX}, city_image_face{GPU_UINT_MAX}, city_icon{GPU_UINT_MAX}, scale(1.0f) { memset(stats, 0, sizeof(stats[0]) * city_stats::count); }
+    city_type::city_type() : buildings{nullptr}, city_image_top{GPU_UINT_MAX}, city_image_face{GPU_UINT_MAX}, city_icon{GPU_UINT_MAX}, scale(1.0f) { memset(stats.data(), 0, sizeof(stats[0]) * city_stats::count); }
     const structure city::s_type;
     const size_t city::modificators_container_size;
     const size_t city::events_container_size;
     const size_t city::flags_container_size;
     const size_t city::bit_field_size;
     city::city() : province(nullptr), title(nullptr), type(nullptr), start_building(SIZE_MAX), building_index(UINT32_MAX), tile_index(UINT32_MAX) { 
-      memset(current_stats, 0, sizeof(current_stats[0]) * city_stats::count);
+      memset(current_stats.data(), 0, sizeof(current_stats[0]) * city_stats::count);
     }
     
     bool city::check_build(character* c, const uint32_t &building_index) const {
@@ -90,10 +90,10 @@ namespace devils_engine {
     const size_t modificator::max_stat_modifiers_count;
     modificator::modificator() : name_id(SIZE_MAX), description_id(SIZE_MAX), time(0), icon{GPU_UINT_MAX} {}
     const structure troop_type::s_type;
-    troop_type::troop_type() : name_id(SIZE_MAX), description_id(SIZE_MAX), card{GPU_UINT_MAX} { memset(stats, 0, sizeof(stats[0]) * troop_stats::count); }
+    troop_type::troop_type() : name_id(SIZE_MAX), description_id(SIZE_MAX), card{GPU_UINT_MAX} { memset(stats.data(), 0, sizeof(stats[0]) * troop_stats::count); }
     troop::troop() : type(nullptr), character(nullptr) { 
-      memset(moded_stats, 0, sizeof(moded_stats[0]) * troop_stats::count);
-      memset(current_stats, 0, sizeof(current_stats[0]) * troop_stats::count);
+      memset(moded_stats.data(), 0, sizeof(moded_stats[0]) * troop_stats::count);
+      memset(current_stats.data(), 0, sizeof(current_stats[0]) * troop_stats::count);
     }
     
     const structure army::s_type;
@@ -115,6 +115,10 @@ namespace devils_engine {
       auto map = global::get<systems::map_t>()->map;
       std::unique_lock<std::mutex> lock(map->mutex);
       army_gpu_slot = map->allocate_army_data();
+      
+      modificators.reserve(modificators_container_size);
+      events.reserve(events_container_size);
+      flags.reserve(flags_container_size);
     }
     
     army::~army() {
@@ -167,6 +171,10 @@ namespace devils_engine {
       auto map = global::get<systems::map_t>()->map;
       std::unique_lock<std::mutex> lock(map->mutex);
       army_gpu_slot = map->allocate_army_data();
+      
+      modificators.reserve(modificators_container_size);
+      events.reserve(events_container_size);
+      flags.reserve(flags_container_size);
     }
     
     hero_troop::~hero_troop() {
@@ -205,6 +213,35 @@ namespace devils_engine {
     const structure event::s_type;
     event::event() : name_id(SIZE_MAX), description_id(SIZE_MAX), target(utils::target_data::type::count), image{GPU_UINT_MAX}, mtth(SIZE_MAX), options_count(0) {}
     event::option::option() : name_id(SIZE_MAX), desc_id(SIZE_MAX) {}
+    
+    struct current_context {
+      utils::target_data target;
+      bool cond;
+      uint32_t cond_function;
+    };
+    
+    void event::fire(character* c) {
+      std::stack<utils::target_data> target_stack;
+      target_stack.push({utils::target_data::type::character, {c}});
+      std::stack<bool> bool_stack;
+      bool_stack.push(true);
+      
+      bool cond_var = true;
+      for (const auto &opt : conditions) {
+        //if (!cond_var) break;
+        
+        switch (opt.type) {
+          case 0: {
+            const auto &cond = opt.condition;
+            bool_stack.top() = bool_stack.top() && cond->func(target_stack.top(), 123, nullptr);
+            
+            // 
+            
+            break;
+          }
+        }
+      }
+    }
     
     const structure titulus::s_type;
     const size_t titulus::events_container_size;
@@ -403,24 +440,28 @@ namespace devils_engine {
       culture(nullptr),
       religion(nullptr),
       hidden_religion(nullptr),
-      factions{nullptr, nullptr, nullptr, nullptr},
-      modificators(nullptr),
-      events(nullptr),
-      flags(nullptr)
+      factions{nullptr, nullptr, nullptr, nullptr}
+//       modificators(nullptr),
+//       events(nullptr),
+//       flags(nullptr)
     {
       data.set(system::male, male);
       data.set(system::dead, dead);
+      traits.reserve(traits_container_size);
       if (!dead) {
-        modificators = new modificators_container<modificators_container_size>;
-        events = new events_container<events_container_size>;
-        flags = new flags_container<flags_container_size>;
+        modificators.reserve(modificators_container_size);
+        events.reserve(events_container_size);
+        flags.reserve(flags_container_size);
+//         modificators = new modificators_container<modificators_container_size>;
+//         events = new events_container<events_container_size>;
+//         flags = new flags_container<flags_container_size>;
       }
     }
     
     character::~character() {
-      delete modificators;
-      delete events;
-      delete flags;
+//       delete modificators;
+//       delete events;
+//       delete flags;
     }
     
     bool character::is_independent() const {
@@ -477,9 +518,23 @@ namespace devils_engine {
       // разрушается когда? когда некому наследовать
       //global::get<core::context>()->destroy(factions[self]);
       
-      delete modificators;
-      delete events;
-      delete flags;
+//       delete modificators;
+//       delete events;
+//       delete flags;
+      {
+        phmap::flat_hash_map<const modificator*, size_t> m;
+        modificators.swap(m);
+      }
+      
+      {
+        phmap::flat_hash_map<const event*, event_container> e;
+        events.swap(e);
+      }
+      
+      {
+        phmap::flat_hash_map<std::string_view, size_t> f;
+        flags.swap(f);
+      }
     }
     
     void character::make_hero() {
@@ -707,53 +762,41 @@ namespace devils_engine {
       return data.set(final_index, value);
     }
     
-    bool character::has_flag(const size_t &flag) const {
-      if (is_dead()) return false; // ASSERT(flags != nullptr);
-      return flags->has(flag);
-    }
+//     bool character::has_flag(const size_t &flag) const {
+//       if (is_dead()) return false; // ASSERT(flags != nullptr);
+//       return flags->has(flag);
+//     }
+//     
+//     void character::add_flag(const size_t &flag) {
+//       if (is_dead()) return;
+//       flags->add(flag);
+//     }
+//     
+//     void character::remove_flag(const size_t &flag) {
+//       if (is_dead()) return;
+//       flags->remove(flag);
+//     }
+
+    size_t character::has_flag(const std::string_view &flag) const { return flags.find(flag) != flags.end(); }
+    void character::add_flag(const std::string_view &flag, const size_t &turn) { flags.try_emplace(flag, turn); }
+    void character::remove_flag(const std::string_view &flag) { flags.erase(flag); }
     
-    void character::add_flag(const size_t &flag) {
-      if (is_dead()) return;
-      flags->add(flag);
-    }
+    bool character::has_trait(const trait* t) const { return traits.find(t) != traits.end(); }
+    void character::add_trait(const trait* t) { traits.emplace(t); }
+    void character::remove_trait(const trait* t) { traits.erase(t); }
     
-    void character::remove_flag(const size_t &flag) {
-      if (is_dead()) return;
-      flags->remove(flag);
-    }
+    bool character::has_modificator(const modificator* m) const { return modificators.find(m) != modificators.end(); }
+    void character::add_modificator(const modificator* m, const size_t &turn) { if (is_dead()) return; modificators.try_emplace(m, turn); }
+    void character::remove_modificator(const modificator* m) { if (is_dead()) return; modificators.erase(m); }
     
-    bool character::has_trait(const trait* t) const { return traits.has(t); }
-    void character::add_trait(const trait* t) { traits.add(t); }
-    void character::remove_trait(const trait* t) { traits.remove(t); }
+    bool character::has_event(const event* e) const { return events.find(e) != events.end(); }
+    void character::add_event(const event* e, const event_container &cont) { if (is_dead()) return; events.try_emplace(e, cont); }
+    void character::remove_event(const event* e) { if (is_dead()) return; events.erase(e); }
     
-    bool character::has_modificator(const modificator* m) const {
-      if (is_dead()) return false;
-      return modificators->has(m);
-    }
-    
-    void character::add_modificator(const modificator* m, const size_t &turn) {
-      if (is_dead()) return;
-      modificators->add(m, turn);
-    }
-    
-    void character::remove_modificator(const modificator* m) {
-      if (is_dead()) return;
-      modificators->remove(m);
-    }
-    
-    bool character::has_event(const event* e) const {
-      if (is_dead()) return false;
-      return events->has(e);
-    }
-    
-    void character::add_event(const event* e, const event_container &cont) {
-      if (is_dead()) return;
-      events->add(e, cont);
-    }
-    
-    void character::remove_event(const event* e) {
-      if (is_dead()) return;
-      events->remove(e);
+    uint64_t character::get_random() {
+      using namespace utils::xoshiro256plusplus;
+      rng_state = rng(rng_state);
+      return get_value(rng_state);
     }
     
     const structure faction::s_type;
@@ -771,7 +814,10 @@ namespace devils_engine {
       main_title(nullptr), 
       courtiers(nullptr),
       prisoners(nullptr) 
-    {}
+    {
+      // тут было бы неплохо создать сразу с персонажем это дело
+      memset(stats.data(), 0, sizeof(stats));
+    }
     
     void faction::succession() {
       ASSERT(is_state() || is_self());
@@ -807,10 +853,17 @@ namespace devils_engine {
         
         if (heir->factions[character::elective] != nullptr) {
           ASSERT(heir->factions[character::elective]->is_state());
-          heir->factions[character::elective]->succession(); // если у наследника выборная форма, то мы просто выбираем следующего
+          heir->factions[character::elective]->succession(); 
+          // если у наследника выборная форма, то мы просто выбираем следующего
+          // нет тут более сложная херня, наследник может быть вообще каким нибудь хером с горы
+          // если это личные владения то они и прейдут в личные владения наследника
+          // если это элективные владения, то они должны остаться и достаться элективному наследнику
+          // то бишь получается что у челика может быть как бы множество наследников
         }
         
         heir->current_stats[core::character_stats::money].fval += leader->current_stats[core::character_stats::money].fval;
+        
+        heir->factions[character::self] = this;
       }
       
       leader = heir;
@@ -820,6 +873,8 @@ namespace devils_engine {
       // можем ли мы вызвать эвенты до смерти персонажа и передачи прав? можем по идее
       // множество эвентов запускается в этот момент (в основном проверки и передача флагов наследникам)
       // просто проверяем че там в on_action контейнере
+      
+      // я теряю тут указатель
     }
     
     void faction::add_title(titulus* title) {

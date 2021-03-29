@@ -3,6 +3,9 @@
 #include <cstring>
 #include <stdexcept>
 
+#define FROM_LUA_INDEX(index) (index-1)
+#define TO_LUA_INDEX(index) (index+1)
+
 namespace devils_engine {
   namespace map {
     namespace generator {
@@ -67,10 +70,6 @@ namespace devils_engine {
         if (entities.size() <= final_type) throw std::runtime_error("Bad entity type");
         entities[final_type].second.push_back({{}, new float[entities[final_type].first.types_count]});
         
-        if (type == 3) {
-          province_neighbours.emplace_back();
-        }
-        
         return entities[final_type].second.size()-1;
       }
       
@@ -79,19 +78,38 @@ namespace devils_engine {
         
         const uint32_t final_type = type-1;
         if (final_type >= entities.size()) throw std::runtime_error("Bad entity type");
-        if (entities[final_type].second.size() != 0) throw std::runtime_error("Resizing entity count is not allowed");
-        ASSERT(entities[final_type].second.size() == 0); // щас пока не понятно нужно ли копировать
+        //if (entities[final_type].second.size() == size) return;
+        //if (entities[final_type].second.size() != 0) throw std::runtime_error("Resizing entity count is not allowed");
+        //ASSERT(entities[final_type].second.size() == 0); // щас пока не понятно нужно ли копировать
+        
+        const size_t old_size = entities[final_type].second.size();
+        if (size < entities[final_type].second.size()) {
+          for (size_t i = size; i < entities[final_type].second.size(); ++i) {
+            delete [] entities[final_type].second[i].data;
+            entities[final_type].second[i].data = nullptr;
+          }
+        }
         
         entities[final_type].second.resize(size, {{}, nullptr});
         const bool empty = entities[final_type].first.types_count == 0;
-        for (size_t i = 0; i < entities[final_type].second.size(); ++i) {
+        for (size_t i = old_size; i < entities[final_type].second.size(); ++i) {
           entities[final_type].second[i].data = empty ? nullptr : new float[entities[final_type].first.types_count];
           if (!empty) memset(entities[final_type].second[i].data, 0, sizeof(entities[final_type].second[i].data[0]) * entities[final_type].first.types_count);
         }
+      }
+      
+      void container::clear_entities(const uint32_t &type) {
+        if (type == 0) throw std::runtime_error("Tiles count is constant value");
         
-        if (type == 3) { // это нужно будет убрать
-          province_neighbours.resize(size);
+        const uint32_t final_type = type-1;
+        if (final_type >= entities.size()) throw std::runtime_error("Bad entity type");
+        
+        for (size_t i = 0; i < entities[final_type].second.size(); ++i) {
+          delete [] entities[final_type].second[i].data;
+          entities[final_type].second[i].data = nullptr;
         }
+        
+        entities[final_type].second.clear();
       }
       
       template <>
@@ -266,13 +284,14 @@ namespace devils_engine {
         return glm::vec3(entities[final_type].second[index].data[parameter_type+0], entities[final_type].second[index].data[parameter_type+1], entities[final_type].second[index].data[parameter_type+2]);
       }
       
-      void container::add_child(const uint32_t &type, const uint32_t &index, const uint32_t &child) {
+      uint32_t container::add_child(const uint32_t &type, const uint32_t &index, const uint32_t &child) {
         if (type == 0) throw std::runtime_error("Tiles dont have childs");
         const uint32_t final_type = type-1;
         if (entities.size() <= final_type) throw std::runtime_error("Bad entity type");
         if (entities[final_type].second.size() <= index) throw std::runtime_error("Bad entity index");
         
         entities[final_type].second[index].childs.push_back(child);
+        return entities[final_type].second[index].childs.size()-1;
       }
       
       uint32_t container::get_child(const uint32_t &type, const uint32_t &index, const uint32_t &array_index) const {
@@ -312,6 +331,15 @@ namespace devils_engine {
         return entities[final_type].second[index].childs;
       }
       
+      void container::clear_childs(const uint32_t &type, const uint32_t &index) {
+        if (type == 0) throw std::runtime_error("Tiles dont have childs");
+        const uint32_t final_type = type-1;
+        if (entities.size() <= final_type) throw std::runtime_error("Bad entity type");
+        if (entities[final_type].second.size() <= index) throw std::runtime_error("Bad entity index");
+        
+        entities[final_type].second[index].childs.clear();
+      }
+      
       size_t container::entities_count(const uint32_t &type) const {
         if (type == 0) return core::map::hex_count_d(core::map::detail_level);
         
@@ -330,6 +358,84 @@ namespace devils_engine {
         if (entities.size() <= final_type) throw std::runtime_error("Bad entity type");
         if (entities[final_type].first.types_count <= property) throw std::runtime_error("Bad property type");
         return entities[final_type].first.types[property];
+      }
+      
+      uint32_t container::add_entity_lua(const uint32_t &type) { return TO_LUA_INDEX(add_entity(FROM_LUA_INDEX(type))); }
+      void container::set_entity_count_lua(const uint32_t &type, const uint32_t &size) { return set_entity_count(FROM_LUA_INDEX(type), size); }
+      void container::clear_entities_lua(const uint32_t &type) { clear_entities(FROM_LUA_INDEX(type)); }
+      
+      template <>
+      void container::set_data_lua(const uint32_t &type, const uint32_t &index, const uint32_t &parameter_type, const uint32_t &data) {
+        // нужно тут приводить к НЕЛУА виду? по идее нет, так как мы эти данные нигде не используем в програме, после создания удаляем вообще
+        set_data<uint32_t>(FROM_LUA_INDEX(type), FROM_LUA_INDEX(index), FROM_LUA_INDEX(parameter_type), data);
+      }
+      
+      template <>
+      uint32_t container::get_data_lua(const uint32_t &type, const uint32_t &index, const uint32_t &parameter_type) const {
+        return get_data<uint32_t>(FROM_LUA_INDEX(type), FROM_LUA_INDEX(index), FROM_LUA_INDEX(parameter_type));
+      }
+      
+      template <>
+      void container::set_data_lua(const uint32_t &type, const uint32_t &index, const uint32_t &parameter_type, const int32_t &data) {
+        // нужно тут приводить к НЕЛУА виду? по идее нет, так как мы эти данные нигде не используем в програме, после создания удаляем вообще
+        set_data<int32_t>(FROM_LUA_INDEX(type), FROM_LUA_INDEX(index), FROM_LUA_INDEX(parameter_type), data);
+      }
+      
+      template <>
+      int32_t container::get_data_lua(const uint32_t &type, const uint32_t &index, const uint32_t &parameter_type) const {
+        return get_data<int32_t>(FROM_LUA_INDEX(type), FROM_LUA_INDEX(index), FROM_LUA_INDEX(parameter_type));
+      }
+      
+      template <>
+      void container::set_data_lua(const uint32_t &type, const uint32_t &index, const uint32_t &parameter_type, const float &data) {
+        // нужно тут приводить к НЕЛУА виду? по идее нет, так как мы эти данные нигде не используем в програме, после создания удаляем вообще
+        set_data<float>(FROM_LUA_INDEX(type), FROM_LUA_INDEX(index), FROM_LUA_INDEX(parameter_type), data);
+      }
+      
+      template <>
+      float container::get_data_lua(const uint32_t &type, const uint32_t &index, const uint32_t &parameter_type) const {
+        return get_data<float>(FROM_LUA_INDEX(type), FROM_LUA_INDEX(index), FROM_LUA_INDEX(parameter_type));
+      }
+      
+      template <>
+      void container::set_data_lua(const uint32_t &type, const uint32_t &index, const uint32_t &parameter_type, const glm::vec3 &data) {
+        // нужно тут приводить к НЕЛУА виду? по идее нет, так как мы эти данные нигде не используем в програме, после создания удаляем вообще
+        set_data<glm::vec3>(FROM_LUA_INDEX(type), FROM_LUA_INDEX(index), FROM_LUA_INDEX(parameter_type), data);
+      }
+      
+      template <>
+      glm::vec3 container::get_data_lua(const uint32_t &type, const uint32_t &index, const uint32_t &parameter_type) const {
+        return get_data<glm::vec3>(FROM_LUA_INDEX(type), FROM_LUA_INDEX(index), FROM_LUA_INDEX(parameter_type));
+      }
+      
+      uint32_t container::add_child_lua(const uint32_t &type, const uint32_t &index, const uint32_t &child) {
+        return TO_LUA_INDEX(add_child(FROM_LUA_INDEX(type), FROM_LUA_INDEX(index), child));
+      }
+      
+      uint32_t container::get_child_lua(const uint32_t &type, const uint32_t &index, const uint32_t &array_index) const {
+        return get_child(FROM_LUA_INDEX(type), FROM_LUA_INDEX(index), FROM_LUA_INDEX(array_index));
+      }
+      
+      uint32_t container::get_childs_count_lua(const uint32_t &type, const uint32_t &index) const {
+        return get_childs_count(FROM_LUA_INDEX(type), FROM_LUA_INDEX(index));
+      }
+      
+      const std::vector<uint32_t> & container::get_childs_lua(const uint32_t &type, const uint32_t &index) const {
+        return get_childs(FROM_LUA_INDEX(type), FROM_LUA_INDEX(index));
+      }
+      
+      std::vector<uint32_t> & container::get_childs_lua(const uint32_t &type, const uint32_t &index) {
+        return get_childs(FROM_LUA_INDEX(type), FROM_LUA_INDEX(index));
+      }
+      
+      void container::clear_childs_lua(const uint32_t &type, const uint32_t &index) { clear_childs(FROM_LUA_INDEX(type), FROM_LUA_INDEX(index)); }
+      
+      size_t container::entities_count_lua(const uint32_t &type) const {
+        return entities_count(FROM_LUA_INDEX(type));
+      }
+      
+      data_type container::type_lua(const uint32_t &entity, const uint32_t &property) const {
+        return type(FROM_LUA_INDEX(entity), FROM_LUA_INDEX(property));
       }
       
       size_t container::set_tile_template(const std::vector<data_type> &template_data) {
@@ -355,7 +461,34 @@ namespace devils_engine {
         entities[current_index].first.types_count = template_data.size();
         entities[current_index].first.types = template_data.empty() ? nullptr : new data_type[template_data.size()];
         if (!template_data.empty()) memcpy(entities[current_index].first.types, template_data.data(), sizeof(template_data[0]) * template_data.size());
-        return current_index+1;
+        return current_index+1; // потому что темплейт для тайла задается по другому
+      }
+      
+      size_t container::set_tile_template_lua(const sol::table &template_data) {
+        if (tile_type.types != nullptr) throw std::runtime_error("Could not set tile template twice");
+        if (template_data.empty()) throw std::runtime_error("Empty tile template");
+        
+        std::vector<data_type> datas;
+        for (const auto &obj : template_data) {
+          if (!obj.second.is<size_t>()) continue;
+          const size_t data = obj.second.as<size_t>();
+          if (data >= static_cast<size_t>(data_type::count)) continue;
+          datas.push_back(static_cast<data_type>(data));
+        }
+        
+        return TO_LUA_INDEX(set_tile_template(datas));
+      }
+      
+      size_t container::set_entity_template_lua(const sol::table &template_data) {
+        std::vector<data_type> datas;
+        for (const auto &obj : template_data) {
+          if (!obj.second.is<size_t>()) continue;
+          const size_t data = obj.second.as<size_t>();
+          if (data >= static_cast<size_t>(data_type::count)) continue;
+          datas.push_back(static_cast<data_type>(data));
+        }
+        
+        return TO_LUA_INDEX(set_entity_template(datas));
       }
       
       size_t container::compute_memory_size() const {

@@ -77,42 +77,57 @@ namespace devils_engine {
     void load_battle_unit_states(battle::context* ctx, const std::vector<sol::table> &tables, std::unordered_set<std::string> &parsed_scripts) {
       auto data_container = global::get<systems::battle_t>()->unit_states_map;
       auto states = global::get<systems::battle_t>()->lua_states;
-      auto map = global::get<systems::battle_t>()->map;
+//       auto map = global::get<systems::battle_t>()->map;
       auto controller = global::get<systems::core_t>()->image_controller;
       
       ASSERT(!tables.empty());
       
-      std::vector<render::image_t> textures_array;
+//       std::vector<render::image_t> textures_array;
       for (size_t i = 0; i < tables.size(); ++i) {
         const auto &table = tables[i];
         core::state state;
         state.id = table["id"];
         
-        const size_t textures_offset = textures_array.size();
-        size_t textures_count = 0;
+//         const size_t textures_offset = textures_array.size();
+//         size_t textures_count = 0;
         const auto textures_table = table["textures"].get<sol::table>();
-        for (const auto &obj : textures_table) {
-          if (!obj.second.is<std::string>()) continue;
-          
-          const std::string image_id_container = obj.second.as<std::string>();
-          std::string_view image_id;
-          uint32_t layer;
-          bool flip_u;
-          bool flip_v;
-          const bool ret = render::parse_image_id(image_id_container, image_id, layer, flip_u, flip_v);
-          if (!ret) throw std::runtime_error("Could not parse image id " + image_id_container);
-          
-          const auto view = controller->get_view(std::string(image_id));
-          if (view == nullptr) throw std::runtime_error("Could not find image " + std::string(image_id));
-          const auto render_id = view->get_image(layer, flip_u, flip_v);
-          textures_array.push_back(render_id);
-          ++textures_count;
-        }
+//         for (const auto &obj : textures_table) {
+//           if (!obj.second.is<std::string>()) continue;
+//           
+//           const std::string image_id_container = obj.second.as<std::string>();
+//           std::string_view image_id;
+//           uint32_t layer;
+//           bool flip_u;
+//           bool flip_v;
+//           const bool ret = render::parse_image_id(image_id_container, image_id, layer, flip_u, flip_v);
+//           if (!ret) throw std::runtime_error("Could not parse image id " + image_id_container);
+//           
+//           const auto view = controller->get_view(std::string(image_id));
+//           if (view == nullptr) throw std::runtime_error("Could not find image " + std::string(image_id));
+//           const auto render_id = view->get_image(layer, flip_u, flip_v);
+//           textures_array.push_back(render_id);
+//           ++textures_count;
+//         }
+        
+        ASSERT(textures_table[0] == sol::nil);
+        ASSERT(textures_table[1].get_type() == sol::type::string);
+        const auto image_id_container = textures_table[1].get<std::string>();
+        std::string_view image_id;
+        uint32_t layer;
+        bool flip_u;
+        bool flip_v;
+        const bool ret = render::parse_image_id(image_id_container, image_id, layer, flip_u, flip_v);
+        if (!ret) throw std::runtime_error("Could not parse image id " + image_id_container);
+        
+        const auto view = controller->get_view(std::string(image_id));
+        if (view == nullptr) throw std::runtime_error("Could not find image " + std::string(image_id));
+        const auto render_id = view->get_image(layer, flip_u, flip_v);
+        state.texture = render_id;
         
         // по идее теперь нужно просто добавить textures_array в буфер 
         // как это сделать? точнее куда положить
-        state.texture_offset = textures_offset;
-        state.texture_count  = textures_count;
+//         state.texture_offset = textures_offset;
+//         state.texture_count  = textures_count;
         
         if (auto proxy = table["next"]; proxy.valid() && proxy.get_type() == sol::type::string) {
           // тут нужно найти указатели на другие состояния
@@ -152,7 +167,7 @@ namespace devils_engine {
         data_container->insert(ptr->id, i);
       }
       
-      map->add_unit_textures(textures_array);
+//       map->add_unit_textures(textures_array);
     }
   }
 }

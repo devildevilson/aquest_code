@@ -11,6 +11,7 @@
 #include "utils/random_engine.h"
 #include "FastNoise.h"
 #include "utils/table_container.h"
+#include "utils/battle_map_enum.h"
 
 // нужен класс который соберет в себя несколько шагов создания карты
 // примерно тоже самое что и менюинг, но должно задаваться из json
@@ -116,7 +117,7 @@ namespace devils_engine {
     public:
       using table_container_t = utils::table_container<static_cast<size_t>(utils::generator_table_container::additional_data::count)>;
       
-      creator(utils::interface_container* interface, core::map* map, core::seasons* seasons);
+      creator(utils::interface_container* interface, core::map* map, core::seasons* seasons, utils::localization* loc);
       ~creator();
 //       step* create(const bool first, const size_t &container_size, const std::string &name, const std::vector<map::generator_pair> &pairs, const std::string &rendering_mode);
       //step* create(const std::string_view &interface_name, const std::vector<map::generator_pair> &pairs); //const bool first, 
@@ -129,6 +130,7 @@ namespace devils_engine {
       void run_script(const std::string_view &path);
       void run_interface_script(const std::string_view &path);
 //       void progress_interface(const std::string_view &name);
+      sol::function get_func(const std::string_view &name, const bool remove_global = true);
       
       sol::state & state();
       table_container_t & table_container();
@@ -139,11 +141,13 @@ namespace devils_engine {
       uint32_t get_noise_seed() const;
     private:
       sol::state lua;
+      sol::environment env_lua;
       sol::table table;
       systems::generator gen;
       map::generator::context ctx;
       map::generator::container temp_container; // нужно переделать покраску карты
       //utils::typeless_container container;
+      utils::world_map_string_container string_container;
       uint64_t rand_seed;
       uint32_t noise_seed;
       int32_t current_step;
@@ -161,6 +165,8 @@ namespace devils_engine {
       std::string world_name;
       std::string folder_name;
       std::string world_settings;
+      
+      std::atomic_bool scripts_needs_to_update;
     };
   }
 }

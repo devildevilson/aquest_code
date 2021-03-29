@@ -956,6 +956,22 @@ namespace devils_engine {
       return tiles_arr[index];
     }
     
+    const render::map_tile_t* map::get_tile_ptr(const uint32_t &index) const {
+      if (index >= tiles_count()) return nullptr;
+      auto tiles_arr = reinterpret_cast<render::map_tile_t*>(tiles->ptr());
+      return &tiles_arr[index];
+    }
+    
+    render::map_tile_t* map::get_tile_ptr(const uint32_t &index) {
+      if (index >= tiles_count()) return nullptr;
+      auto tiles_arr = reinterpret_cast<render::map_tile_t*>(tiles->ptr());
+      return &tiles_arr[index];
+    }
+    
+    const render::map_tile_t* map::get_tile_ptr_lua(const uint32_t &index) const {
+      return get_tile_ptr(index-1);
+    }
+    
     const glm::vec4 map::get_point(const uint32_t &index) const {
       ASSERT(index < points_count());
 //       std::unique_lock<std::mutex> lock(mutex);
@@ -997,7 +1013,8 @@ namespace devils_engine {
         {tile->neighbours[0].index, tile->neighbours[1].index, tile->neighbours[2].index, tile->neighbours[3].index, tile->neighbours[4].index, tile->neighbours[5].index},
         GPU_UINT_MAX,
         GPU_UINT_MAX,
-        GPU_UINT_MAX
+        GPU_UINT_MAX,
+        0
       };
       tiles_arr[index] = pack_data(map_tile);
     }
@@ -1146,6 +1163,10 @@ namespace devils_engine {
       tiles_arr[tile_index].tile_indices.w = glm::floatBitsToUint(tile_hight);
     }
     
+    void map::set_tile_height_lua(const uint32_t &tile_index, const float &tile_hight) {
+      set_tile_height(tile_index-1, tile_hight);
+    }
+    
     void map::set_tile_border_data(const uint32_t &tile_index, const uint32_t &offset, const uint32_t &size) {
       ASSERT(tile_index < tiles_count());
       ASSERT(size <= render::border_size_mask);
@@ -1173,6 +1194,7 @@ namespace devils_engine {
       ASSERT(tile_index < tiles_count());
       const uint32_t data_count = sizeof(array_data_type) / sizeof(uint32_t);
       ASSERT(data_index < data_count);
+      UNUSED_VARIABLE(data_count);
       const uint32_t lesser_data_count = sizeof(glm::uvec4) / sizeof(uint32_t);
       auto array = reinterpret_cast<array_data_type*>(tile_object_indices->ptr());
       
@@ -1189,6 +1211,7 @@ namespace devils_engine {
       ASSERT(tile_index < tiles_count());
       const uint32_t data_count = sizeof(array_data_type) / sizeof(uint32_t);
       ASSERT(data_index < data_count);
+      UNUSED_VARIABLE(data_count);
       const uint32_t lesser_data_count = sizeof(glm::uvec4) / sizeof(uint32_t);
       
       auto array = reinterpret_cast<array_data_type*>(tile_object_indices->ptr());
@@ -1204,6 +1227,7 @@ namespace devils_engine {
       ASSERT(tile_index < tiles_count());
       const uint32_t data_count = sizeof(array_data_type) / sizeof(uint32_t);
       ASSERT(data_index < data_count);
+      UNUSED_VARIABLE(data_count);
       const uint32_t lesser_data_count = sizeof(glm::uvec4) / sizeof(uint32_t);
       
       auto array = reinterpret_cast<array_data_type*>(tile_object_indices->ptr());
@@ -1287,6 +1311,10 @@ namespace devils_engine {
       std::unique_lock<std::mutex> lock(mutex);
       auto tiles_arr = reinterpret_cast<render::light_map_tile_t*>(tiles->ptr());
       return glm::uintBitsToFloat(tiles_arr[tile_index].tile_indices.w);
+    }
+    
+    float map::get_tile_height_lua(const uint32_t &tile_index) const {
+      return get_tile_height(tile_index-1);
     }
     
     void map::copy_biomes(const seasons* s) {

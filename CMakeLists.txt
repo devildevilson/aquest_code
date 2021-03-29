@@ -67,6 +67,8 @@ include_directories(
   include/cista/include/
   include/glm/
   include/parallel-hashmap/
+  include/Nuklear/
+  include/stb/
 )
 link_directories(
   ${CMAKE_CURRENT_BINARY_DIR}
@@ -204,6 +206,8 @@ file(GLOB_RECURSE GLSL_SOURCE_FILES
   raw_shaders/battle_map_tiles.frag
   raw_shaders/battle_biome_objects.vert
   raw_shaders/battle_biome_objects.frag
+  raw_shaders/battle_map_unit.vert
+  raw_shaders/battle_map_unit.frag
 )
 
 foreach(GLSL ${GLSL_SOURCE_FILES})
@@ -279,6 +283,9 @@ set(SRC_LIST
   utils/lua_initialization_progress_container.cpp
   utils/lua_initialization_battle_generator_functions.cpp
   utils/lua_initialization_battle_unit.cpp
+  utils/lua_initialization_world_map.cpp
+  utils/lua_initialization_world_map_generator_functions.cpp
+  utils/lua_initialization_calendar.cpp
   utils/string_container.cpp
   utils/string_bank.cpp
   utils/progress_container.cpp

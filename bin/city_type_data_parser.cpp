@@ -87,7 +87,8 @@ namespace devils_engine {
 //       auto str = table_to_string(lua, table, keyallow);
       auto str = table_to_string(lua, table, sol::table());
       if (str.empty()) throw std::runtime_error("Could not serialize city type table");
-      container->add_data(core::structure::city_type, std::move(str));
+      ASSERT(false);
+      //container->add_data(core::structure::city_type, std::move(str));
       
       return true;
     }

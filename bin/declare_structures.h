@@ -3,8 +3,6 @@
 
 #include <cstdint>
 
-#define UNUSED_VARIABLE(var) (void)var
-
 namespace devils_engine {
   namespace core {
     struct tile;

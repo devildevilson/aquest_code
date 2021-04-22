@@ -18,11 +18,13 @@
 #include "utils/serializator_helper.h"
 #include "utils/progress_container.h"
 #include "utils/systems.h"
-#include "utils/interface_container.h"
+//#include "utils/interface_container.h"
+#include "utils/interface_container2.h"
 #include "utils/main_menu.h"
 #include "utils/quest_states.h"
 #include "utils/settings.h"
 #include "utils/astar_search.h"
+#include "utils/game_context.h"
 //#include "utils/perlin.h"
 #include "FastNoise.h"
 
@@ -104,6 +106,14 @@ namespace devils_engine {
   uint32_t get_casted_battle_map_tile();
 //   void draw_tooltip(const uint32_t &index, const sol::function &tile_func);
   void next_nk_frame(const size_t &time);
+  
+  void manage_states(
+    const std::array<utils::quest_state*, utils::quest_state::count> &states, 
+    utils::quest_state** current_game_state, 
+    utils::quest_state** previous_game_state, 
+    game::context* game_ctx,
+    const size_t &time
+  );
 
   void create_render_system(systems::core_t &base_systems);
   void setup_callbacks();

@@ -16,7 +16,7 @@ namespace devils_engine {
     const size_t province::events_container_size;
     const size_t province::flags_container_size;
     const size_t province::cities_max_game_count;
-    tile::tile() : height(0.0f), province(UINT32_MAX) {}
+    tile::tile() : height(0.0f), province(UINT32_MAX), city(UINT32_MAX), struct_index(UINT32_MAX) {}
     province::province() : title(nullptr), cities_max_count(0), cities_count(0), cities{nullptr} {}
     const structure building_type::s_type;
     const size_t building_type::maximum_prev_buildings;

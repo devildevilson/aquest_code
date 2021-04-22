@@ -8,11 +8,14 @@
 #include "utils/serializator_helper.h"
 #include "map_creator.h"
 
+#define TO_LUA_INDEX(index) ((index)+1)
+#define FROM_LUA_INDEX(index) ((index)-1)
+
 namespace devils_engine {
   namespace utils {
     const check_table_value province_table[] = {
       {
-        "neighbours",
+        "neighbors",
         check_table_value::type::array_t,
         0, 0, 
         {
@@ -92,7 +95,8 @@ namespace devils_engine {
 //       auto str = table_to_string(lua, table, keyallow);
       auto str = table_to_string(lua, table, sol::table());
       if (str.empty()) throw std::runtime_error("Could not serialize province table");
-      container->add_data(core::structure::province, std::move(str));
+      ASSERT(false);
+      //container->add_data(core::structure::province, std::move(str));
       
       return true;
     }
@@ -102,21 +106,23 @@ namespace devils_engine {
       auto ctx = global::get<core::context>();
       
       { // тут можно собрать от тайлов (скорее всего не все данные тайла будем задавать в генераторе)
-        const auto &tiles = table.get<sol::table>("tiles");
+        const auto proxy = table["tiles"];
+        if (!proxy.valid() && proxy.get_type() != sol::type::table) throw std::runtime_error("Province table lacks tiles array");
+        const auto &tiles = proxy.get<sol::table>();
         for (auto itr = tiles.begin(); itr != tiles.end(); ++itr) {
           if (!(*itr).second.is<uint32_t>()) continue;
-          const uint32_t tile_index = (*itr).second.as<uint32_t>();
+          const uint32_t tile_index = FROM_LUA_INDEX((*itr).second.as<uint32_t>());
           province->tiles.push_back(tile_index);
         }
         
         province->tiles.shrink_to_fit();
       }
       
-      {
-        const auto &tiles = table.get<sol::table>("neighbours");
+      if (const auto proxy = table["neighbors"]; proxy.valid() && proxy.get_type() == sol::type::table) {
+        const auto &tiles = proxy.get<sol::table>();
         for (auto itr = tiles.begin(); itr != tiles.end(); ++itr) {
           if (!(*itr).second.is<uint32_t>()) continue;
-          const uint32_t neighbour_index = (*itr).second.as<uint32_t>();
+          const uint32_t neighbour_index = FROM_LUA_INDEX((*itr).second.as<uint32_t>());
           province->neighbours.push_back(neighbour_index);
         }
         

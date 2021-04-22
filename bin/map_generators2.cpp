@@ -303,6 +303,7 @@ namespace devils_engine {
           utils::time_log log("making acceleration struct");
           utils::submit_works_async(pool, tri_count, [&mutex, &unique_tiles, &generated_core, &tiles_counter, &fast_triangles, &tile_indices] (const size_t &start, const size_t &count) {
             std::vector<uint32_t> tiles_array;
+            tiles_array.reserve(200);
             size_t tri_offset = 0;
             for (size_t i = 0; i < core::map::accel_struct_detail_level; ++i) {
               tri_offset += core::map::tri_count_d(i);
@@ -349,6 +350,9 @@ namespace devils_engine {
         ASSERT(generated_core.triangles.size() == map->triangles.size());
         static_assert(sizeof(core::map::triangle) == sizeof(map::triangle));
         ASSERT(map->tile_indices->info().size <= tile_indices.size()*sizeof(tile_indices[0]));
+        
+        ASSERT(map->accel_triangles != nullptr);
+        ASSERT(map->accel_triangles->ptr() != nullptr);
         
         {
           utils::time_log log("copying data to map container");
@@ -490,31 +494,31 @@ namespace devils_engine {
       }
       
       // у нас еще должны быть технические строки (тип строки в меню, строки для брат/сестра и проч)
-      auto strings_table = table["strings"].get_or_create<sol::table>();
-      { // названия титулов
-        const uint32_t bank_index = ctx->loc->create_bank().second;
-        strings_table["titles_names"] = bank_index;
-      }
-      
-      { // массив имен культур
-        const uint32_t bank_index = ctx->loc->create_bank().second;
-        strings_table["culture1.names"] = bank_index;
-      }
-      
-      { // массив названий династий у культур (как сделать адекватно? чтобы названия династий были уникальными?)
-        const uint32_t bank_index = ctx->loc->create_bank().second;
-        strings_table["culture1.dynasty_names"] = bank_index;
-      }
-      
-      { // названия всех эвентов (в разные банки нужно пихать только имена, потому что они пойдут в культуры)
-        const uint32_t bank_index = ctx->loc->create_bank().second;
-        strings_table["events.names"] = bank_index;
-      }
-      
-      { // описания эвентов
-        const uint32_t bank_index = ctx->loc->create_bank().second;
-        strings_table["events.descriptions"] = bank_index;
-      }
+//       auto strings_table = table["strings"].get_or_create<sol::table>();
+//       { // названия титулов
+//         const uint32_t bank_index = ctx->loc->create_bank().second;
+//         strings_table["titles_names"] = bank_index;
+//       }
+//       
+//       { // массив имен культур
+//         const uint32_t bank_index = ctx->loc->create_bank().second;
+//         strings_table["culture1.names"] = bank_index;
+//       }
+//       
+//       { // массив названий династий у культур (как сделать адекватно? чтобы названия династий были уникальными?)
+//         const uint32_t bank_index = ctx->loc->create_bank().second;
+//         strings_table["culture1.dynasty_names"] = bank_index;
+//       }
+//       
+//       { // названия всех эвентов (в разные банки нужно пихать только имена, потому что они пойдут в культуры)
+//         const uint32_t bank_index = ctx->loc->create_bank().second;
+//         strings_table["events.names"] = bank_index;
+//       }
+//       
+//       { // описания эвентов
+//         const uint32_t bank_index = ctx->loc->create_bank().second;
+//         strings_table["events.descriptions"] = bank_index;
+//       }
       
       // названия и описания треитов, модификаторов, предметов
       
@@ -2394,6 +2398,8 @@ namespace devils_engine {
         utils::add_image(image_table);
       }
       
+      ASSERT(false); // эту функцию нужно теперь переписывать
+      
 //       {
 //         auto image_table = global::get<sol::state>()->create_table();
 //         image_table["id"] = "test_img2";
@@ -2434,333 +2440,333 @@ namespace devils_engine {
 
       // нужно с цветами немного поработать, слишком яркие, более менее нашел текстурки для биомов
       // почему то некоторые изображения плохо грузятся (например, upper_tree6.png)
-      {
-        auto biome_table = global::get<sol::state>()->create_table();
-//         biome_table["texture"] = "hex_water";
-        biome_table["color"] = render::make_color(0.2f, 0.2f, 0.8f, 1.0f).container;
-        //biome_table["color"] = render::make_color(0.545f, 0.882f, 0.922f, 1.0f).container;
-        biome_table["object1"] = sol::nil;
-        biome_table["object2"] = sol::nil;
-        biome_table["min_scale1"] = 0.0f;
-        biome_table["max_scale1"] = 0.0f;
-        biome_table["min_scale2"] = 0.1f;
-        biome_table["max_scale2"] = 0.3f;
-        biome_table["density"] = 9.0f;
-        biome_table["height1"] = 0.0f;
-        biome_table["height2"] = 0.0f;
-        // может быть добавится множитель uv координат
-        // + может быть добавятся флаги
-        const uint32_t biome_ocean = ctx->seasons->add_biome(biome_table);
-        ASSERT(biome_ocean == render::biome_ocean);
-        UNUSED_VARIABLE(biome_ocean);
-      }
-      
-      {
-        auto biome_table = global::get<sol::state>()->create_table();
-//         biome_table["texture"] = "hex_cold_water";
-        biome_table["color"] = render::make_color(0.8f, 0.8f, 1.0f, 1.0f).container;
-        biome_table["object1"] = sol::nil;
-        biome_table["object2"] = sol::nil;
-        biome_table["min_scale1"] = 0.0f;
-        biome_table["max_scale1"] = 0.0f;
-        biome_table["min_scale2"] = 0.0f;
-        biome_table["max_scale2"] = 0.0f;
-        biome_table["density"] = 0.0f;
-        biome_table["height1"] = 0.0f;
-        biome_table["height2"] = 0.0f;
-        const uint32_t biome_ocean = ctx->seasons->add_biome(biome_table);
-        ASSERT(biome_ocean == render::biome_ocean_glacier);
-        UNUSED_VARIABLE(biome_ocean);
-      }
-      
-      {
-        auto biome_table = global::get<sol::state>()->create_table();
-//         biome_table["texture"] = "hex_desert";
-        biome_table["color"] = render::make_color(0.914f, 0.914f, 0.2f, 1.0f).container;
-        biome_table["object1"] = sol::nil;
-        biome_table["object2"] = sol::nil;
-        biome_table["min_scale1"] = 0.0f;
-        biome_table["max_scale1"] = 0.0f;
-        biome_table["min_scale2"] = 0.0f;
-        biome_table["max_scale2"] = 0.0f;
-        biome_table["density"] = 0.0f;
-        biome_table["height1"] = 0.0f;
-        biome_table["height2"] = 0.0f;
-        const uint32_t biome_ocean = ctx->seasons->add_biome(biome_table);
-        ASSERT(biome_ocean == render::biome_desert);
-        UNUSED_VARIABLE(biome_ocean);
-      }
-      
-      {
-        auto biome_table = global::get<sol::state>()->create_table();
-//         biome_table["texture"] = "hex_grass1";
-        biome_table["color"] = render::make_color(0.0f, 0.7f, 0.2f, 1.0f).container;
-        biome_table["object1"] = sol::nil;
-        biome_table["object2"] = "rain_tree";
-        biome_table["min_scale1"] = 0.0f;
-        biome_table["max_scale1"] = 0.0f;
-        biome_table["min_scale2"] = 0.3f;
-        biome_table["max_scale2"] = 1.0f;
-        biome_table["density"] = 9.0f;
-        biome_table["height1"] = 0.0f;
-        biome_table["height2"] = 0.0f;
-        const uint32_t biome_ocean = ctx->seasons->add_biome(biome_table);
-        ASSERT(biome_ocean == render::biome_rain_forest);
-        UNUSED_VARIABLE(biome_ocean);
-      }
-      
-      {
-        auto biome_table = global::get<sol::state>()->create_table();
-        biome_table["texture"] = sol::nil;
-        biome_table["color"] = render::make_color(1.0f, 0.2f, 0.2f, 1.0f).container;
-        biome_table["object1"] = sol::nil;
-        biome_table["object2"] = sol::nil;
-        biome_table["min_scale1"] = 0.0f;
-        biome_table["max_scale1"] = 0.0f;
-        biome_table["min_scale2"] = 0.0f;
-        biome_table["max_scale2"] = 0.0f;
-        biome_table["density"] = 0.0f;
-        biome_table["height1"] = 0.0f;
-        biome_table["height2"] = 0.0f;
-        const uint32_t biome_ocean = ctx->seasons->add_biome(biome_table);
-        ASSERT(biome_ocean == render::biome_rocky);
-        UNUSED_VARIABLE(biome_ocean);
-      }
-      
-      {
-        auto biome_table = global::get<sol::state>()->create_table();
-//         biome_table["texture"] = "hex_grass2";
-        biome_table["color"] = render::make_color(0.553f, 0.769f, 0.208f, 1.0f).container;
-        biome_table["object1"] = sol::nil;
-        biome_table["object2"] = sol::nil;
-        biome_table["min_scale1"] = 0.0f;
-        biome_table["max_scale1"] = 0.0f;
-        biome_table["min_scale2"] = 0.0f;
-        biome_table["max_scale2"] = 0.0f;
-        biome_table["density"] = 0.0f;
-        biome_table["height1"] = 0.0f;
-        biome_table["height2"] = 0.0f;
-        const uint32_t biome_ocean = ctx->seasons->add_biome(biome_table);
-        ASSERT(biome_ocean == render::biome_plains);
-        UNUSED_VARIABLE(biome_ocean);
-      }
-      
-      {
-        auto biome_table = global::get<sol::state>()->create_table();
-        biome_table["texture"] = sol::nil;
-        biome_table["color"] = render::make_color(0.0f, 1.0f, 0.0f, 1.0f).container;
-        biome_table["object1"] = sol::nil;
-        biome_table["object2"] = sol::nil;
-        biome_table["min_scale1"] = 0.0f;
-        biome_table["max_scale1"] = 0.0f;
-        biome_table["min_scale2"] = 0.0f;
-        biome_table["max_scale2"] = 0.0f;
-        biome_table["density"] = 0.0f;
-        biome_table["height1"] = 0.0f;
-        biome_table["height2"] = 0.0f;
-        const uint32_t biome_ocean = ctx->seasons->add_biome(biome_table);
-        ASSERT(biome_ocean == render::biome_swamp);
-        UNUSED_VARIABLE(biome_ocean);
-      }
-      
-      {
-        auto biome_table = global::get<sol::state>()->create_table();
-//         biome_table["texture"] = "hex_grass2";
-//         biome_table["color"] = render::make_color(0.2f, 1.0f, 0.2f, 1.0f).container;
-//         biome_table["color"] = render::make_color(0.412f, 0.757f, 0.153f, 1.0f).container;
-        biome_table["color"] = render::make_color(0.553f, 0.769f, 0.208f, 1.0f).container;
-        biome_table["object1"] = sol::nil;
-        biome_table["object2"] = sol::nil;
-        biome_table["min_scale1"] = 0.0f;
-        biome_table["max_scale1"] = 0.0f;
-        biome_table["min_scale2"] = 0.5f;
-        biome_table["max_scale2"] = 1.0f;
-        biome_table["density"] = 4.0f;
-        biome_table["height1"] = 0.0f;
-        biome_table["height2"] = 0.0f;
-        const uint32_t biome_ocean = ctx->seasons->add_biome(biome_table);
-        ASSERT(biome_ocean == render::biome_grassland);
-        UNUSED_VARIABLE(biome_ocean);
-      }
-      
-      {
-        auto biome_table = global::get<sol::state>()->create_table();
-//         biome_table["texture"] = "hex_grass1";
-        biome_table["color"] = render::make_color(0.0f, 0.8f, 0.0f, 1.0f).container;
-        biome_table["object1"] = sol::nil;
-        biome_table["object2"] = "deciduous_tree";
-        biome_table["min_scale1"] = 0.0f;
-        biome_table["max_scale1"] = 0.0f;
-        biome_table["min_scale2"] = 0.4f;
-        biome_table["max_scale2"] = 1.0f;
-        biome_table["density"] = 6.0f;
-        biome_table["height1"] = 0.0f;
-        biome_table["height2"] = 0.0f;
-        const uint32_t biome_ocean = ctx->seasons->add_biome(biome_table);
-        ASSERT(biome_ocean == render::biome_deciduous_forest);
-        UNUSED_VARIABLE(biome_ocean);
-      }
-      
-      {
-        auto biome_table = global::get<sol::state>()->create_table();
-        biome_table["texture"] = sol::nil;
-        biome_table["color"] = render::make_color(0.6f, 0.6f, 0.6f, 1.0f).container;
-        biome_table["object1"] = sol::nil;
-        biome_table["object2"] = sol::nil;
-        biome_table["min_scale1"] = 0.0f;
-        biome_table["max_scale1"] = 0.0f;
-        biome_table["min_scale2"] = 0.0f;
-        biome_table["max_scale2"] = 0.0f;
-        biome_table["density"] = 0.0f;
-        biome_table["height1"] = 0.0f;
-        biome_table["height2"] = 0.0f;
-        const uint32_t biome_ocean = ctx->seasons->add_biome(biome_table);
-        ASSERT(biome_ocean == render::biome_tundra);
-        UNUSED_VARIABLE(biome_ocean);
-      }
-      
-      {
-        auto biome_table = global::get<sol::state>()->create_table();
-//         biome_table["texture"] = "hex_snow";
-        biome_table["color"] = render::make_color(0.914f, 0.988f, 1.0f, 1.0f).container;
-        biome_table["object1"] = sol::nil;
-        biome_table["object2"] = sol::nil;
-        biome_table["min_scale1"] = 0.0f;
-        biome_table["max_scale1"] = 0.0f;
-        biome_table["min_scale2"] = 0.0f;
-        biome_table["max_scale2"] = 0.0f;
-        biome_table["density"] = 0.0f;
-        biome_table["height1"] = 0.0f;
-        biome_table["height2"] = 0.0f;
-        const uint32_t biome_ocean = ctx->seasons->add_biome(biome_table);
-        ASSERT(biome_ocean == render::biome_land_glacier);
-        UNUSED_VARIABLE(biome_ocean);
-      }
-      
-{
-        auto biome_table = global::get<sol::state>()->create_table();
-//         biome_table["texture"] = "hex_grass1";
-        biome_table["color"] = render::make_color(0.0f, 0.6f, 0.0f, 1.0f).container;
-        biome_table["object1"] = sol::nil;
-        biome_table["object2"] = "coniferous_tree";
-        biome_table["min_scale1"] = 0.0f;
-        biome_table["max_scale1"] = 0.0f;
-        biome_table["min_scale2"] = 0.5f;
-        biome_table["max_scale2"] = 1.2f;
-        biome_table["density"] = 9.0f;
-        biome_table["height1"] = 0.0f;
-        biome_table["height2"] = 0.0f;
-        const uint32_t biome_ocean = ctx->seasons->add_biome(biome_table);
-        ASSERT(biome_ocean == render::biome_conifer_forest);
-        UNUSED_VARIABLE(biome_ocean);
-      }
-      
-      {
-        auto biome_table = global::get<sol::state>()->create_table();
-        biome_table["texture"] = sol::nil;
-        biome_table["color"] = render::make_color(0.2f, 0.2f, 0.2f, 1.0f).container;
-        biome_table["object1"] = sol::nil;
-        biome_table["object2"] = sol::nil;
-        biome_table["min_scale1"] = 0.0f;
-        biome_table["max_scale1"] = 0.0f;
-        biome_table["min_scale2"] = 0.0f;
-        biome_table["max_scale2"] = 0.0f;
-        biome_table["density"] = 0.0f;
-        biome_table["height1"] = 0.0f;
-        biome_table["height2"] = 0.0f;
-        const uint32_t biome_ocean = ctx->seasons->add_biome(biome_table);
-        ASSERT(biome_ocean == render::biome_mountain);
-        UNUSED_VARIABLE(biome_ocean);
-      }
-      
-      {
-        auto biome_table = global::get<sol::state>()->create_table();
-//         biome_table["texture"] = "hex_snow";
-//         biome_table["color"] = render::make_color(1.0f, 1.0f, 1.0f, 1.0f).container;
-        biome_table["color"] = render::make_color(0.914f, 0.988f, 1.0f, 1.0f).container;
-        biome_table["object1"] = sol::nil;
-        biome_table["object2"] = sol::nil;
-        biome_table["min_scale1"] = 0.0f;
-        biome_table["max_scale1"] = 0.0f;
-        biome_table["min_scale2"] = 0.0f;
-        biome_table["max_scale2"] = 0.0f;
-        biome_table["density"] = 0.0f;
-        biome_table["height1"] = 0.0f;
-        biome_table["height2"] = 0.0f;
-        const uint32_t biome_ocean = ctx->seasons->add_biome(biome_table);
-        ASSERT(biome_ocean == render::biome_snowy_mountain);
-        UNUSED_VARIABLE(biome_ocean);
-      }
-
-      ctx->seasons->create_biome(render::biome_ocean, {
-        { GPU_UINT_MAX }, render::make_color(0.2f, 0.2f, 0.8f, 1.0f), { GPU_UINT_MAX }, { GPU_UINT_MAX },
-        0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f
-      });
-
-      ctx->seasons->create_biome(render::biome_ocean_glacier, {
-        { GPU_UINT_MAX }, render::make_color(0.8f, 0.8f, 1.0f, 1.0f), { GPU_UINT_MAX }, { GPU_UINT_MAX },
-        0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f
-      });
-
-      ctx->seasons->create_biome(render::biome_desert, {
-        { GPU_UINT_MAX }, render::make_color(1.0f, 1.0f, 0.0f, 1.0f), { GPU_UINT_MAX }, { GPU_UINT_MAX },
-        0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f
-      });
-
-      ctx->seasons->create_biome(render::biome_rain_forest, {
-        { GPU_UINT_MAX }, render::make_color(0.0f, 0.7f, 0.2f, 1.0f), { GPU_UINT_MAX }, { GPU_UINT_MAX },
-        0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f
-      });
-
-      ctx->seasons->create_biome(render::biome_rocky, {
-        { GPU_UINT_MAX }, render::make_color(1.0f, 0.2f, 0.2f, 1.0f), { GPU_UINT_MAX }, { GPU_UINT_MAX },
-        0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f
-      });
-
-      ctx->seasons->create_biome(render::biome_plains, {
-        { GPU_UINT_MAX }, render::make_color(0.0f, 1.0f, 0.2f, 1.0f), { GPU_UINT_MAX }, { GPU_UINT_MAX },
-        0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f
-      });
-
-      ctx->seasons->create_biome(render::biome_swamp, {
-        { GPU_UINT_MAX }, render::make_color(0.0f, 1.0f, 0.0f, 1.0f), { GPU_UINT_MAX }, { GPU_UINT_MAX },
-        0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f
-      });
-
-      ctx->seasons->create_biome(render::biome_grassland, {
-        { GPU_UINT_MAX }, render::make_color(0.2f, 1.0f, 0.2f, 1.0f), { GPU_UINT_MAX }, { GPU_UINT_MAX },
-        0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f
-      });
-
-      ctx->seasons->create_biome(render::biome_deciduous_forest, {
-        { GPU_UINT_MAX }, render::make_color(0.0f, 0.8f, 0.0f, 1.0f), { GPU_UINT_MAX }, { GPU_UINT_MAX },
-        0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f
-      });
-
-      ctx->seasons->create_biome(render::biome_tundra, {
-        { GPU_UINT_MAX }, render::make_color(0.6f, 0.6f, 0.6f, 1.0f), { GPU_UINT_MAX }, { GPU_UINT_MAX },
-        0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f
-      });
-
-      ctx->seasons->create_biome(render::biome_land_glacier, {
-        { GPU_UINT_MAX }, render::make_color(0.9f, 0.9f, 0.9f, 1.0f), { GPU_UINT_MAX }, { GPU_UINT_MAX },
-        0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f
-      });
-
-      ctx->seasons->create_biome(render::biome_conifer_forest, {
-        { GPU_UINT_MAX }, render::make_color(0.0f, 0.6f, 0.0f, 1.0f), { GPU_UINT_MAX }, { GPU_UINT_MAX },
-        0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f
-      });
-
-      ctx->seasons->create_biome(render::biome_mountain, {
-        { GPU_UINT_MAX }, render::make_color(0.2f, 0.2f, 0.2f, 1.0f), { GPU_UINT_MAX }, { GPU_UINT_MAX },
-        0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f
-      });
-
-      ctx->seasons->create_biome(render::biome_snowy_mountain, {
-        { GPU_UINT_MAX }, render::make_color(1.0f, 1.0f, 1.0f, 1.0f), { GPU_UINT_MAX }, { GPU_UINT_MAX },
-        0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f
-      });
+//       {
+//         auto biome_table = global::get<sol::state>()->create_table();
+// //         biome_table["texture"] = "hex_water";
+//         biome_table["color"] = render::make_color(0.2f, 0.2f, 0.8f, 1.0f).container;
+//         //biome_table["color"] = render::make_color(0.545f, 0.882f, 0.922f, 1.0f).container;
+//         biome_table["object1"] = sol::nil;
+//         biome_table["object2"] = sol::nil;
+//         biome_table["min_scale1"] = 0.0f;
+//         biome_table["max_scale1"] = 0.0f;
+//         biome_table["min_scale2"] = 0.1f;
+//         biome_table["max_scale2"] = 0.3f;
+//         biome_table["density"] = 9.0f;
+//         biome_table["height1"] = 0.0f;
+//         biome_table["height2"] = 0.0f;
+//         // может быть добавится множитель uv координат
+//         // + может быть добавятся флаги
+//         const uint32_t biome_ocean = ctx->seasons->add_biome(biome_table);
+//         ASSERT(biome_ocean == render::biome_ocean);
+//         UNUSED_VARIABLE(biome_ocean);
+//       }
+//       
+//       {
+//         auto biome_table = global::get<sol::state>()->create_table();
+// //         biome_table["texture"] = "hex_cold_water";
+//         biome_table["color"] = render::make_color(0.8f, 0.8f, 1.0f, 1.0f).container;
+//         biome_table["object1"] = sol::nil;
+//         biome_table["object2"] = sol::nil;
+//         biome_table["min_scale1"] = 0.0f;
+//         biome_table["max_scale1"] = 0.0f;
+//         biome_table["min_scale2"] = 0.0f;
+//         biome_table["max_scale2"] = 0.0f;
+//         biome_table["density"] = 0.0f;
+//         biome_table["height1"] = 0.0f;
+//         biome_table["height2"] = 0.0f;
+//         const uint32_t biome_ocean = ctx->seasons->add_biome(biome_table);
+//         ASSERT(biome_ocean == render::biome_ocean_glacier);
+//         UNUSED_VARIABLE(biome_ocean);
+//       }
+//       
+//       {
+//         auto biome_table = global::get<sol::state>()->create_table();
+// //         biome_table["texture"] = "hex_desert";
+//         biome_table["color"] = render::make_color(0.914f, 0.914f, 0.2f, 1.0f).container;
+//         biome_table["object1"] = sol::nil;
+//         biome_table["object2"] = sol::nil;
+//         biome_table["min_scale1"] = 0.0f;
+//         biome_table["max_scale1"] = 0.0f;
+//         biome_table["min_scale2"] = 0.0f;
+//         biome_table["max_scale2"] = 0.0f;
+//         biome_table["density"] = 0.0f;
+//         biome_table["height1"] = 0.0f;
+//         biome_table["height2"] = 0.0f;
+//         const uint32_t biome_ocean = ctx->seasons->add_biome(biome_table);
+//         ASSERT(biome_ocean == render::biome_desert);
+//         UNUSED_VARIABLE(biome_ocean);
+//       }
+//       
+//       {
+//         auto biome_table = global::get<sol::state>()->create_table();
+// //         biome_table["texture"] = "hex_grass1";
+//         biome_table["color"] = render::make_color(0.0f, 0.7f, 0.2f, 1.0f).container;
+//         biome_table["object1"] = sol::nil;
+//         biome_table["object2"] = "rain_tree";
+//         biome_table["min_scale1"] = 0.0f;
+//         biome_table["max_scale1"] = 0.0f;
+//         biome_table["min_scale2"] = 0.3f;
+//         biome_table["max_scale2"] = 1.0f;
+//         biome_table["density"] = 9.0f;
+//         biome_table["height1"] = 0.0f;
+//         biome_table["height2"] = 0.0f;
+//         const uint32_t biome_ocean = ctx->seasons->add_biome(biome_table);
+//         ASSERT(biome_ocean == render::biome_rain_forest);
+//         UNUSED_VARIABLE(biome_ocean);
+//       }
+//       
+//       {
+//         auto biome_table = global::get<sol::state>()->create_table();
+//         biome_table["texture"] = sol::nil;
+//         biome_table["color"] = render::make_color(1.0f, 0.2f, 0.2f, 1.0f).container;
+//         biome_table["object1"] = sol::nil;
+//         biome_table["object2"] = sol::nil;
+//         biome_table["min_scale1"] = 0.0f;
+//         biome_table["max_scale1"] = 0.0f;
+//         biome_table["min_scale2"] = 0.0f;
+//         biome_table["max_scale2"] = 0.0f;
+//         biome_table["density"] = 0.0f;
+//         biome_table["height1"] = 0.0f;
+//         biome_table["height2"] = 0.0f;
+//         const uint32_t biome_ocean = ctx->seasons->add_biome(biome_table);
+//         ASSERT(biome_ocean == render::biome_rocky);
+//         UNUSED_VARIABLE(biome_ocean);
+//       }
+//       
+//       {
+//         auto biome_table = global::get<sol::state>()->create_table();
+// //         biome_table["texture"] = "hex_grass2";
+//         biome_table["color"] = render::make_color(0.553f, 0.769f, 0.208f, 1.0f).container;
+//         biome_table["object1"] = sol::nil;
+//         biome_table["object2"] = sol::nil;
+//         biome_table["min_scale1"] = 0.0f;
+//         biome_table["max_scale1"] = 0.0f;
+//         biome_table["min_scale2"] = 0.0f;
+//         biome_table["max_scale2"] = 0.0f;
+//         biome_table["density"] = 0.0f;
+//         biome_table["height1"] = 0.0f;
+//         biome_table["height2"] = 0.0f;
+//         const uint32_t biome_ocean = ctx->seasons->add_biome(biome_table);
+//         ASSERT(biome_ocean == render::biome_plains);
+//         UNUSED_VARIABLE(biome_ocean);
+//       }
+//       
+//       {
+//         auto biome_table = global::get<sol::state>()->create_table();
+//         biome_table["texture"] = sol::nil;
+//         biome_table["color"] = render::make_color(0.0f, 1.0f, 0.0f, 1.0f).container;
+//         biome_table["object1"] = sol::nil;
+//         biome_table["object2"] = sol::nil;
+//         biome_table["min_scale1"] = 0.0f;
+//         biome_table["max_scale1"] = 0.0f;
+//         biome_table["min_scale2"] = 0.0f;
+//         biome_table["max_scale2"] = 0.0f;
+//         biome_table["density"] = 0.0f;
+//         biome_table["height1"] = 0.0f;
+//         biome_table["height2"] = 0.0f;
+//         const uint32_t biome_ocean = ctx->seasons->add_biome(biome_table);
+//         ASSERT(biome_ocean == render::biome_swamp);
+//         UNUSED_VARIABLE(biome_ocean);
+//       }
+//       
+//       {
+//         auto biome_table = global::get<sol::state>()->create_table();
+// //         biome_table["texture"] = "hex_grass2";
+// //         biome_table["color"] = render::make_color(0.2f, 1.0f, 0.2f, 1.0f).container;
+// //         biome_table["color"] = render::make_color(0.412f, 0.757f, 0.153f, 1.0f).container;
+//         biome_table["color"] = render::make_color(0.553f, 0.769f, 0.208f, 1.0f).container;
+//         biome_table["object1"] = sol::nil;
+//         biome_table["object2"] = sol::nil;
+//         biome_table["min_scale1"] = 0.0f;
+//         biome_table["max_scale1"] = 0.0f;
+//         biome_table["min_scale2"] = 0.5f;
+//         biome_table["max_scale2"] = 1.0f;
+//         biome_table["density"] = 4.0f;
+//         biome_table["height1"] = 0.0f;
+//         biome_table["height2"] = 0.0f;
+//         const uint32_t biome_ocean = ctx->seasons->add_biome(biome_table);
+//         ASSERT(biome_ocean == render::biome_grassland);
+//         UNUSED_VARIABLE(biome_ocean);
+//       }
+//       
+//       {
+//         auto biome_table = global::get<sol::state>()->create_table();
+// //         biome_table["texture"] = "hex_grass1";
+//         biome_table["color"] = render::make_color(0.0f, 0.8f, 0.0f, 1.0f).container;
+//         biome_table["object1"] = sol::nil;
+//         biome_table["object2"] = "deciduous_tree";
+//         biome_table["min_scale1"] = 0.0f;
+//         biome_table["max_scale1"] = 0.0f;
+//         biome_table["min_scale2"] = 0.4f;
+//         biome_table["max_scale2"] = 1.0f;
+//         biome_table["density"] = 6.0f;
+//         biome_table["height1"] = 0.0f;
+//         biome_table["height2"] = 0.0f;
+//         const uint32_t biome_ocean = ctx->seasons->add_biome(biome_table);
+//         ASSERT(biome_ocean == render::biome_deciduous_forest);
+//         UNUSED_VARIABLE(biome_ocean);
+//       }
+//       
+//       {
+//         auto biome_table = global::get<sol::state>()->create_table();
+//         biome_table["texture"] = sol::nil;
+//         biome_table["color"] = render::make_color(0.6f, 0.6f, 0.6f, 1.0f).container;
+//         biome_table["object1"] = sol::nil;
+//         biome_table["object2"] = sol::nil;
+//         biome_table["min_scale1"] = 0.0f;
+//         biome_table["max_scale1"] = 0.0f;
+//         biome_table["min_scale2"] = 0.0f;
+//         biome_table["max_scale2"] = 0.0f;
+//         biome_table["density"] = 0.0f;
+//         biome_table["height1"] = 0.0f;
+//         biome_table["height2"] = 0.0f;
+//         const uint32_t biome_ocean = ctx->seasons->add_biome(biome_table);
+//         ASSERT(biome_ocean == render::biome_tundra);
+//         UNUSED_VARIABLE(biome_ocean);
+//       }
+//       
+//       {
+//         auto biome_table = global::get<sol::state>()->create_table();
+// //         biome_table["texture"] = "hex_snow";
+//         biome_table["color"] = render::make_color(0.914f, 0.988f, 1.0f, 1.0f).container;
+//         biome_table["object1"] = sol::nil;
+//         biome_table["object2"] = sol::nil;
+//         biome_table["min_scale1"] = 0.0f;
+//         biome_table["max_scale1"] = 0.0f;
+//         biome_table["min_scale2"] = 0.0f;
+//         biome_table["max_scale2"] = 0.0f;
+//         biome_table["density"] = 0.0f;
+//         biome_table["height1"] = 0.0f;
+//         biome_table["height2"] = 0.0f;
+//         const uint32_t biome_ocean = ctx->seasons->add_biome(biome_table);
+//         ASSERT(biome_ocean == render::biome_land_glacier);
+//         UNUSED_VARIABLE(biome_ocean);
+//       }
+//       
+// {
+//         auto biome_table = global::get<sol::state>()->create_table();
+// //         biome_table["texture"] = "hex_grass1";
+//         biome_table["color"] = render::make_color(0.0f, 0.6f, 0.0f, 1.0f).container;
+//         biome_table["object1"] = sol::nil;
+//         biome_table["object2"] = "coniferous_tree";
+//         biome_table["min_scale1"] = 0.0f;
+//         biome_table["max_scale1"] = 0.0f;
+//         biome_table["min_scale2"] = 0.5f;
+//         biome_table["max_scale2"] = 1.2f;
+//         biome_table["density"] = 9.0f;
+//         biome_table["height1"] = 0.0f;
+//         biome_table["height2"] = 0.0f;
+//         const uint32_t biome_ocean = ctx->seasons->add_biome(biome_table);
+//         ASSERT(biome_ocean == render::biome_conifer_forest);
+//         UNUSED_VARIABLE(biome_ocean);
+//       }
+//       
+//       {
+//         auto biome_table = global::get<sol::state>()->create_table();
+//         biome_table["texture"] = sol::nil;
+//         biome_table["color"] = render::make_color(0.2f, 0.2f, 0.2f, 1.0f).container;
+//         biome_table["object1"] = sol::nil;
+//         biome_table["object2"] = sol::nil;
+//         biome_table["min_scale1"] = 0.0f;
+//         biome_table["max_scale1"] = 0.0f;
+//         biome_table["min_scale2"] = 0.0f;
+//         biome_table["max_scale2"] = 0.0f;
+//         biome_table["density"] = 0.0f;
+//         biome_table["height1"] = 0.0f;
+//         biome_table["height2"] = 0.0f;
+//         const uint32_t biome_ocean = ctx->seasons->add_biome(biome_table);
+//         ASSERT(biome_ocean == render::biome_mountain);
+//         UNUSED_VARIABLE(biome_ocean);
+//       }
+//       
+//       {
+//         auto biome_table = global::get<sol::state>()->create_table();
+// //         biome_table["texture"] = "hex_snow";
+// //         biome_table["color"] = render::make_color(1.0f, 1.0f, 1.0f, 1.0f).container;
+//         biome_table["color"] = render::make_color(0.914f, 0.988f, 1.0f, 1.0f).container;
+//         biome_table["object1"] = sol::nil;
+//         biome_table["object2"] = sol::nil;
+//         biome_table["min_scale1"] = 0.0f;
+//         biome_table["max_scale1"] = 0.0f;
+//         biome_table["min_scale2"] = 0.0f;
+//         biome_table["max_scale2"] = 0.0f;
+//         biome_table["density"] = 0.0f;
+//         biome_table["height1"] = 0.0f;
+//         biome_table["height2"] = 0.0f;
+//         const uint32_t biome_ocean = ctx->seasons->add_biome(biome_table);
+//         ASSERT(biome_ocean == render::biome_snowy_mountain);
+//         UNUSED_VARIABLE(biome_ocean);
+//       }
+// 
+//       ctx->seasons->create_biome(render::biome_ocean, {
+//         { GPU_UINT_MAX }, render::make_color(0.2f, 0.2f, 0.8f, 1.0f), { GPU_UINT_MAX }, { GPU_UINT_MAX },
+//         0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f
+//       });
+// 
+//       ctx->seasons->create_biome(render::biome_ocean_glacier, {
+//         { GPU_UINT_MAX }, render::make_color(0.8f, 0.8f, 1.0f, 1.0f), { GPU_UINT_MAX }, { GPU_UINT_MAX },
+//         0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f
+//       });
+// 
+//       ctx->seasons->create_biome(render::biome_desert, {
+//         { GPU_UINT_MAX }, render::make_color(1.0f, 1.0f, 0.0f, 1.0f), { GPU_UINT_MAX }, { GPU_UINT_MAX },
+//         0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f
+//       });
+// 
+//       ctx->seasons->create_biome(render::biome_rain_forest, {
+//         { GPU_UINT_MAX }, render::make_color(0.0f, 0.7f, 0.2f, 1.0f), { GPU_UINT_MAX }, { GPU_UINT_MAX },
+//         0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f
+//       });
+// 
+//       ctx->seasons->create_biome(render::biome_rocky, {
+//         { GPU_UINT_MAX }, render::make_color(1.0f, 0.2f, 0.2f, 1.0f), { GPU_UINT_MAX }, { GPU_UINT_MAX },
+//         0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f
+//       });
+// 
+//       ctx->seasons->create_biome(render::biome_plains, {
+//         { GPU_UINT_MAX }, render::make_color(0.0f, 1.0f, 0.2f, 1.0f), { GPU_UINT_MAX }, { GPU_UINT_MAX },
+//         0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f
+//       });
+// 
+//       ctx->seasons->create_biome(render::biome_swamp, {
+//         { GPU_UINT_MAX }, render::make_color(0.0f, 1.0f, 0.0f, 1.0f), { GPU_UINT_MAX }, { GPU_UINT_MAX },
+//         0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f
+//       });
+// 
+//       ctx->seasons->create_biome(render::biome_grassland, {
+//         { GPU_UINT_MAX }, render::make_color(0.2f, 1.0f, 0.2f, 1.0f), { GPU_UINT_MAX }, { GPU_UINT_MAX },
+//         0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f
+//       });
+// 
+//       ctx->seasons->create_biome(render::biome_deciduous_forest, {
+//         { GPU_UINT_MAX }, render::make_color(0.0f, 0.8f, 0.0f, 1.0f), { GPU_UINT_MAX }, { GPU_UINT_MAX },
+//         0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f
+//       });
+// 
+//       ctx->seasons->create_biome(render::biome_tundra, {
+//         { GPU_UINT_MAX }, render::make_color(0.6f, 0.6f, 0.6f, 1.0f), { GPU_UINT_MAX }, { GPU_UINT_MAX },
+//         0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f
+//       });
+// 
+//       ctx->seasons->create_biome(render::biome_land_glacier, {
+//         { GPU_UINT_MAX }, render::make_color(0.9f, 0.9f, 0.9f, 1.0f), { GPU_UINT_MAX }, { GPU_UINT_MAX },
+//         0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f
+//       });
+// 
+//       ctx->seasons->create_biome(render::biome_conifer_forest, {
+//         { GPU_UINT_MAX }, render::make_color(0.0f, 0.6f, 0.0f, 1.0f), { GPU_UINT_MAX }, { GPU_UINT_MAX },
+//         0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f
+//       });
+// 
+//       ctx->seasons->create_biome(render::biome_mountain, {
+//         { GPU_UINT_MAX }, render::make_color(0.2f, 0.2f, 0.2f, 1.0f), { GPU_UINT_MAX }, { GPU_UINT_MAX },
+//         0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f
+//       });
+// 
+//       ctx->seasons->create_biome(render::biome_snowy_mountain, {
+//         { GPU_UINT_MAX }, render::make_color(1.0f, 1.0f, 1.0f, 1.0f), { GPU_UINT_MAX }, { GPU_UINT_MAX },
+//         0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f
+//       });
 
       std::vector<uint32_t> tile_biome(ctx->map->tiles_count(), UINT32_MAX);
       utils::submit_works_async(ctx->pool, ctx->map->tiles_count(), [&tile_biome] (const size_t &start, const size_t &count, const generator::context* ctx) {
@@ -2772,7 +2778,7 @@ namespace devils_engine {
           const uint32_t biome_id = calcutate_biome2(elevation, temperature, wetness);
           ASSERT(biome_id != UINT32_MAX);
           tile_biome[tile_index] = biome_id;
-          ctx->seasons->set_tile_biome(tile_index, biome_id);
+          ctx->seasons->set_tile_biome(ctx->seasons->current_season, tile_index, biome_id);
         }
       }, ctx);
       utils::async_wait(ctx->pool);
@@ -7051,23 +7057,24 @@ namespace devils_engine {
 
       global::get<utils::calendar>()->set_start_date(865, 3, 25);
       global::get<utils::calendar>()->set_current_date(865, 3, 25);
-      global::get<utils::calendar>()->add_month_data({SIZE_MAX, 31}); // январь
-      global::get<utils::calendar>()->add_month_data({SIZE_MAX, 29});
-      global::get<utils::calendar>()->add_month_data({SIZE_MAX, 31});
-      global::get<utils::calendar>()->add_month_data({SIZE_MAX, 30});
-      global::get<utils::calendar>()->add_month_data({SIZE_MAX, 31}); // май
-      global::get<utils::calendar>()->add_month_data({SIZE_MAX, 30});
-      global::get<utils::calendar>()->add_month_data({SIZE_MAX, 31});
-      global::get<utils::calendar>()->add_month_data({SIZE_MAX, 31});
-      global::get<utils::calendar>()->add_month_data({SIZE_MAX, 30}); // сентябрь
-      global::get<utils::calendar>()->add_month_data({SIZE_MAX, 31});
-      global::get<utils::calendar>()->add_month_data({SIZE_MAX, 30});
-      global::get<utils::calendar>()->add_month_data({SIZE_MAX, 31});
+//       global::get<utils::calendar>()->add_month_data({SIZE_MAX, 31}); // январь
+//       global::get<utils::calendar>()->add_month_data({SIZE_MAX, 29});
+//       global::get<utils::calendar>()->add_month_data({SIZE_MAX, 31});
+//       global::get<utils::calendar>()->add_month_data({SIZE_MAX, 30});
+//       global::get<utils::calendar>()->add_month_data({SIZE_MAX, 31}); // май
+//       global::get<utils::calendar>()->add_month_data({SIZE_MAX, 30});
+//       global::get<utils::calendar>()->add_month_data({SIZE_MAX, 31});
+//       global::get<utils::calendar>()->add_month_data({SIZE_MAX, 31});
+//       global::get<utils::calendar>()->add_month_data({SIZE_MAX, 30}); // сентябрь
+//       global::get<utils::calendar>()->add_month_data({SIZE_MAX, 31});
+//       global::get<utils::calendar>()->add_month_data({SIZE_MAX, 30});
+//       global::get<utils::calendar>()->add_month_data({SIZE_MAX, 31});
       
-      auto strings_table = table["strings"].get<sol::table>();
-      const uint32_t titles_names_bank_index = strings_table["titles_names"];
-      auto titles_bank = ctx->loc->get_bank(titles_names_bank_index);
+//       auto strings_table = table["strings"].get<sol::table>();
+//       const uint32_t titles_names_bank_index = strings_table["titles_names"];
+//       auto titles_bank = ctx->loc->get_bank(titles_names_bank_index);
       
+      // довольно много что переделал уже
     }
   }
 }

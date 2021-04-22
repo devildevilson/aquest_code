@@ -65,9 +65,9 @@ namespace devils_engine {
             auto ctx = global::get<systems::map_t>()->core_context;
             ctx->sort_characters();
             const size_t first_not_dead = ctx->first_not_dead_character();
-            const size_t first_playable = ctx->first_playable_character();
+//             const size_t first_playable = ctx->first_playable_character();
             const size_t count_not_dead = ctx->characters_count() - first_not_dead;
-            const size_t count_playable = ctx->characters_count() - first_playable;
+//             const size_t count_playable = ctx->characters_count() - first_playable;
             
             // статы у городов, провинций, фракций, армий и героев (возможно сначало нужно посчитать эвенты)
             
@@ -85,7 +85,8 @@ namespace devils_engine {
             pool->compute();
             
             // должно сработать (текущий тред занят этой конкретной функцией)
-            while (pool->working_count() != 1) { std::this_thread::sleep_for(std::chrono::microseconds(1)); }
+            //while (pool->working_count() != 1) { std::this_thread::sleep_for(std::chrono::microseconds(1)); }
+            utils::async_wait(pool);
             
             // вычислить эвенты (?)
             // вычислить рождения/смерти (тут же нужно посчитать наследство)
@@ -181,10 +182,12 @@ namespace devils_engine {
               // должно сработать (текущий тред занят этой конкретной функцией)
               // кажется работает, осталось немного поработать над синхронизацией всего этого дела
               // мне нужно сделать так чтобы когда я буду заполнять данные в рендер у меня все не ломалось
-              while (pool->working_count() != 1 || pool->tasks_count() != 0) { // pool->tasks_count() != 0 по идее это избыточно
-                //PRINT("Thread waits")
-                std::this_thread::sleep_for(std::chrono::microseconds(1)); 
-              }
+//               while (pool->working_count() != 1 || pool->tasks_count() != 0) { // pool->tasks_count() != 0 по идее это избыточно
+//                 //PRINT("Thread waits")
+//                 std::this_thread::sleep_for(std::chrono::microseconds(1)); 
+//               }
+              
+              utils::async_wait(pool);
               
               // такая ситуация должна быть очень редкой
               // мы можем использовать это для запуска луа функции

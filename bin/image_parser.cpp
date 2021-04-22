@@ -13,6 +13,8 @@
 #include "map.h"
 #include "map_creator.h"
 #include "battle_map.h"
+#include "core_context.h"
+#include "seasons.h"
 #include <filesystem>
 
 #ifdef _WIN32
@@ -214,6 +216,92 @@ namespace devils_engine {
       // ???
     };
     
+    const check_table_value biome_table[] = {
+      {
+        "id",
+        check_table_value::type::string_t,
+        check_table_value::value_required, 0, {}
+      },
+      {
+        "color",
+        check_table_value::type::int_t,
+        check_table_value::value_required, 0, {}
+      },
+      {
+        "object1",
+        check_table_value::type::string_t,
+        0, 0, {}
+      },
+      {
+        "object2",
+        check_table_value::type::string_t,
+        0, 0, {}
+      },
+      {
+        "min_scale1",
+        check_table_value::type::float_t,
+        0, 0, {}
+      },
+      {
+        "max_scale1",
+        check_table_value::type::float_t,
+        0, 0, {}
+      },
+      {
+        "min_scale2",
+        check_table_value::type::float_t,
+        0, 0, {}
+      },
+      {
+        "max_scale2",
+        check_table_value::type::float_t,
+        0, 0, {}
+      },
+      {
+        "density",
+        check_table_value::type::float_t,
+        0, 0, {}
+      },
+      {
+        "height1",
+        check_table_value::type::float_t,
+        0, 0, {}
+      },
+      {
+        "height2",
+        check_table_value::type::float_t,
+        0, 0, {}
+      },
+    };
+    
+    render::image_t parse_image(const std::string_view &str_id, render::image_controller* controller) {
+      std::string_view img_id;
+      uint32_t layer;
+      bool mirror_u;
+      bool mirror_v;
+      const bool ret = render::parse_image_id(str_id, img_id, layer, mirror_u, mirror_v);
+      if (!ret) throw std::runtime_error("Bad texture id " + std::string(str_id));
+      const auto image_id = std::string(img_id);
+      auto view = controller->get_view(image_id);
+      if (layer >= view->count) throw std::runtime_error("Image pack " + image_id + " does not have " + std::to_string(layer) + " amount of images");
+      return view->get_image(layer, mirror_u, mirror_v);
+    }
+    
+    render::image_t parse_image(const std::string_view &key, const sol::table &table, render::image_controller* controller) {
+      auto t_proxy = table[key];
+      if (!t_proxy.valid() || t_proxy.get_type() != sol::type::string) return render::image_t{GPU_UINT_MAX};
+      
+      const std::string_view str = t_proxy.get<std::string_view>();
+//           PRINT(str)
+      return parse_image(str, controller);
+    }
+    
+    double parse_number(const std::string_view &key, const sol::table &table, const double &default_value) {
+      const auto &proxy = table[key];
+      if (!proxy.valid() || proxy.get_type() != sol::type::number) return default_value;
+      return proxy.get<double>();
+    }
+    
     void add_image(const sol::table &table) {
       const auto proxy = table["id"];
       if (proxy.valid() && proxy.get_type() == sol::type::string) PRINT_VAR("image", proxy.get<std::string>())
@@ -243,7 +331,8 @@ namespace devils_engine {
       sol::state_view state(lua);
       auto str = table_to_string(lua, table, sol::table());
       if (str.empty()) throw std::runtime_error("Could not serialize image table");
-      container->add_image_data(std::move(str));
+      ASSERT(false);
+      //container->add_image_data(std::move(str));
       
       return true;
     }
@@ -620,6 +709,9 @@ namespace devils_engine {
     }
     
     void load_biomes(render::image_controller* controller, core::seasons* seasons, const std::vector<sol::table> &biome_tables) {
+//       auto to_data = global::get<utils::data_string_container>();
+//       auto ctx = global::get<core::context>();
+      
       size_t counter = 0;
       for (const auto &table : biome_tables) {
         if (!table["color"].valid()) throw std::runtime_error("Bad biome table");
@@ -674,15 +766,20 @@ namespace devils_engine {
           b.object_texture2 = view->get_image(layer, mirror_u, mirror_v);
         } else b.object_texture2 = { GPU_UINT_MAX };
         
-        b.min_scale1 = table["min_scale1"].valid() ? table["min_scale1"] : 0.0f;
-        b.max_scale1 = table["max_scale1"].valid() ? table["max_scale1"] : 0.0f;
-        b.min_scale2 = table["min_scale2"].valid() ? table["min_scale2"] : 0.0f;
-        b.max_scale2 = table["max_scale2"].valid() ? table["max_scale2"] : 0.0f;
-        b.density = table["density"].valid() ? table["density"] : 0.0f;
+        b.min_scale1 = parse_number("min_scale1", table, 0.0);
+        b.max_scale1 = parse_number("max_scale1", table, 0.0);
+        b.min_scale2 = parse_number("min_scale2", table, 0.0);
+        b.max_scale2 = parse_number("max_scale2", table, 0.0);
+        b.density = parse_number("density", table, 0.0);
         
+        ASSERT(counter < MAX_BIOMES_COUNT);
         seasons->create_biome(counter, b);
         ++counter;
       }
+      
+      ASSERT(counter != 0);
+      if (seasons->biomes_count != 0) { ASSERT(seasons->biomes_count == counter); }
+      seasons->biomes_count = counter;
     }
     
     size_t add_biome(const sol::table &table) {
@@ -693,6 +790,22 @@ namespace devils_engine {
       const auto str = table["id"].get<std::string>();
       if (!str.empty()) PRINT_VAR("biome", str)
       return global::get<map::creator::table_container_t>()->add_table(static_cast<size_t>(utils::generator_table_container::additional_data::biome), table);
+    }
+    
+    bool validate_biome(const uint32_t &index, const sol::table &table) {
+      size_t counter = 0;
+      auto id = table["id"];
+      std::string check_str;
+      if (id.valid()) {
+        check_str = id;
+      } else {
+        check_str = "biome" + std::to_string(index);
+      }
+      
+      const size_t size = sizeof(biome_table) / sizeof(biome_table[0]);
+      recursive_check(check_str, "biome", table, nullptr, biome_table, size, counter);
+      
+      return counter == 0;
     }
     
     bool validate_battle_biome(const uint32_t &index, const sol::table &table) {
@@ -709,34 +822,6 @@ namespace devils_engine {
       recursive_check(check_str, "biome", table, nullptr, battle_biome_table, size, counter);
       
       return counter == 0;
-    }
-    
-    render::image_t parse_image(const std::string_view &str_id, render::image_controller* controller) {
-      std::string_view img_id;
-      uint32_t layer;
-      bool mirror_u;
-      bool mirror_v;
-      const bool ret = render::parse_image_id(str_id, img_id, layer, mirror_u, mirror_v);
-      if (!ret) throw std::runtime_error("Bad texture id " + std::string(str_id));
-      const auto image_id = std::string(img_id);
-      auto view = controller->get_view(image_id);
-      if (layer >= view->count) throw std::runtime_error("Image pack " + image_id + " does not have " + std::to_string(layer) + " amount of images");
-      return view->get_image(layer, mirror_u, mirror_v);
-    }
-    
-    render::image_t parse_image(const std::string_view &key, const sol::table &table, render::image_controller* controller) {
-      auto t_proxy = table[key];
-      if (!t_proxy.valid() || t_proxy.get_type() != sol::type::string) return render::image_t{GPU_UINT_MAX};
-      
-      const std::string_view str = t_proxy.get<std::string_view>();
-//           PRINT(str)
-      return parse_image(str, controller);
-    }
-    
-    double parse_number(const std::string_view &key, const sol::table &table, const double &default_value) {
-      const auto &proxy = table[key];
-      if (!proxy.valid() || proxy.get_type() != sol::type::number) return default_value;
-      return proxy.get<double>();
     }
     
     void load_battle_biomes(render::image_controller* controller, const std::vector<sol::table> &biome_tables) {

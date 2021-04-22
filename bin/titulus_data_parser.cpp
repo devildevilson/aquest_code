@@ -69,7 +69,8 @@ namespace devils_engine {
       sol::state_view state(lua);
       auto str = table_to_string(lua, table, sol::table());
       if (str.empty()) throw std::runtime_error("Could not serialize title table");
-      container->add_data(core::structure::titulus, std::move(str));
+      ASSERT(false);
+//       container->add_data(core::structure::titulus, std::move(str));
       
       return true;
     }

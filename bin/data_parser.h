@@ -337,7 +337,7 @@ namespace devils_engine {
     std::string table_to_string(sol::this_state lua, const sol::table &table, const sol::table &keyallow);
     
     size_t add_building(const sol::table &table);
-    bool validate_building(const size_t &index, const sol::table &table);
+    bool validate_building_type(const size_t &index, const sol::table &table);
     bool validate_building_and_save(const size_t &index, sol::this_state lua, const sol::table &table, utils::world_serializator* container);
     void parse_building(core::building_type* building_type, const sol::table &table);
     

@@ -7,6 +7,9 @@
 #include "utils/serializator_helper.h"
 #include "map_creator.h"
 
+#define TO_LUA_INDEX(index) ((index)+1)
+#define FROM_LUA_INDEX(index) ((index)-1)
+
 namespace devils_engine {
   namespace utils {
     const check_table_value character_table[] = {
@@ -184,7 +187,8 @@ namespace devils_engine {
       sol::state_view state(lua);
       auto str = table_to_string(lua, table, sol::table());
       if (str.empty()) throw std::runtime_error("Could not serialize character table");
-      container->add_data(core::structure::character, std::move(str));
+      ASSERT(false);
+      //container->add_data(core::structure::character, std::move(str));
       
       return true;
     }
@@ -199,14 +203,14 @@ namespace devils_engine {
         const auto &family_table = table.get<sol::table>("family");
         if (const auto &p = family_table["parents"]; p.valid()) {
           const auto &parents = p.get<sol::table>();
-          if (const auto &tmp = parents[0]; tmp.valid()) {
-            const size_t index = tmp.get<size_t>();
+          if (const auto &tmp = parents[1]; tmp.valid()) {
+            const size_t index = FROM_LUA_INDEX(tmp.get<size_t>());
             auto c = ctx->get_character(index);
             character->family.parents[0] = c;
           }
           
-          if (const auto &tmp = parents[1]; tmp.valid()) {
-            const size_t index = tmp.get<size_t>();
+          if (const auto &tmp = parents[2]; tmp.valid()) {
+            const size_t index = FROM_LUA_INDEX(tmp.get<size_t>());
             auto c = ctx->get_character(index);
             character->family.parents[1] = c;
           }
@@ -244,20 +248,20 @@ namespace devils_engine {
         // братьев и сестер мы можем проверить по родителям
         
         if (const auto &o = family_table["owner"]; o.valid()) {
-          const size_t index = o.get<size_t>();
+          const size_t index = FROM_LUA_INDEX(o.get<size_t>());
           auto c = ctx->get_character(index);
           character->family.owner = c;
         }
         
         if (const auto &c = family_table["consort"]; c.valid()) {
-          const size_t index = c.get<size_t>();
+          const size_t index = FROM_LUA_INDEX(c.get<size_t>());
           auto ch = ctx->get_character(index);
           character->family.consort = ch;
         }
         
         // в династии чет пока что мало что нужно указывать
         if (const auto &d = family_table["dynasty"]; d.valid()) {
-          const size_t index = d.get<size_t>();
+          const size_t index = FROM_LUA_INDEX(d.get<size_t>()); // тут по идее нужен id
           auto dynasty = ctx->get_dynasty(index);
           character->family.dynasty = dynasty;
         }
@@ -271,7 +275,7 @@ namespace devils_engine {
             for (auto itr = friends.begin(); itr != friends.end(); ++itr) {
               if (!(*itr).second.is<size_t>()) continue;
               
-              const size_t index = (*itr).second.as<size_t>();
+              const size_t index = FROM_LUA_INDEX((*itr).second.as<size_t>());
               auto c = ctx->get_character(index);
               if (counter >= core::character::relations::max_game_friends) throw std::runtime_error("Bad relations data");
               character->relations.friends[counter] = c;
@@ -285,7 +289,7 @@ namespace devils_engine {
             for (auto itr = rivals.begin(); itr != rivals.end(); ++itr) {
               if (!(*itr).second.is<size_t>()) continue;
               
-              const size_t index = (*itr).second.as<size_t>();
+              const size_t index = FROM_LUA_INDEX((*itr).second.as<size_t>());
               auto c = ctx->get_character(index);
               if (counter >= core::character::relations::max_game_rivals) throw std::runtime_error("Bad relations data");
               character->relations.rivals[counter] = c;
@@ -299,7 +303,7 @@ namespace devils_engine {
             for (auto itr = lovers.begin(); itr != lovers.end(); ++itr) {
               if (!(*itr).second.is<size_t>()) continue;
               
-              const size_t index = (*itr).second.as<size_t>();
+              const size_t index = FROM_LUA_INDEX((*itr).second.as<size_t>());
               auto c = ctx->get_character(index);
               if (counter >= core::character::relations::max_game_lovers) throw std::runtime_error("Bad relations data");
               character->relations.lovers[counter] = c;
@@ -364,7 +368,7 @@ namespace devils_engine {
       
       // нужно бы проверить есть ли титулы у сюзерена
       if (const auto &suzerain = table["suzerain"]; suzerain.valid()) {
-        const auto &index = suzerain.get<size_t>();
+        const auto &index = FROM_LUA_INDEX(suzerain.get<size_t>());
         auto c = ctx->get_character(index);
         ASSERT(c->factions[core::character::self] != nullptr);
         character->suzerain = c;
@@ -372,7 +376,7 @@ namespace devils_engine {
       
       // какая фракция? нужно ли делать тюрьму в элективном органе?
       if (const auto &imprisoner = table["imprisoner"]; imprisoner.valid()) {
-        const auto &index = imprisoner.get<size_t>();
+        const auto &index = FROM_LUA_INDEX(imprisoner.get<size_t>());
         auto c = ctx->get_character(index);
         ASSERT(c->factions[core::character::self] != nullptr);
         character->imprisoner = c->factions[core::character::self];
@@ -411,7 +415,7 @@ namespace devils_engine {
       if (const auto &liege = table["liege"]; liege.valid()) {
         if (character->factions[core::character::self] == nullptr) character->factions[core::character::self] = ctx->create_faction();
         
-        const size_t index = liege.get<size_t>();
+        const size_t index = FROM_LUA_INDEX(liege.get<size_t>());
         auto c = ctx->get_character(index);
         if (c->factions[core::character::self] == nullptr) c->factions[core::character::self] = ctx->create_faction();
         character->factions[core::character::self]->liege = c->factions[core::character::self]; // наверное нужно указать государство

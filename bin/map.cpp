@@ -7,6 +7,9 @@
 #include "seasons.h"
 #include "utils/thread_pool.h"
 #include "utils/works_utils.h"
+#include "seasons.h"
+#include "utils/globals.h"
+#include "utils/utility.h"
 #include <atomic>
 
 #define MAP_CONTAINER_DESCRIPTOR_POOL_NAME "map_container_descriptor_pool"
@@ -15,6 +18,10 @@ namespace devils_engine {
   namespace core {
     static_assert(sizeof(std::atomic<uint32_t>) == sizeof(uint32_t));
     static_assert(alignof(std::atomic<uint32_t>) == alignof(uint32_t));
+    
+    const size_t seasons::maximum_biomes;
+    const size_t seasons::maximum_seasons;
+    const int32_t seasons::invalid_biome;
     
     struct c_tile_data {
       std::atomic<uint32_t> data[2][4];
@@ -1339,7 +1346,7 @@ namespace devils_engine {
       std::unique_lock<std::mutex> lock(mutex);
       auto tiles_arr = reinterpret_cast<render::light_map_tile_t*>(tiles->ptr());
       for (size_t i = 0; i < tiles_count(); ++i) {
-        const uint8_t index = s->get_tile_biome(i);
+        const uint8_t index = s->get_tile_biome(s->current_season, i);
         const uint32_t mask = 0x00ffffff;
         const uint32_t final_container = uint32_t(index) << 24 | mask;
         tiles_arr[i].packed_data4[2] = final_container;

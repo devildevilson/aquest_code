@@ -4,6 +4,7 @@
 #include "utils/thread_pool.h"
 #include "utils/globals.h"
 #include "map.h"
+#include "seasons.h"
 #include "battle_map.h"
 #include "figures.h"
 #include "utils/works_utils.h"
@@ -29,6 +30,10 @@
 #include "battle_context.h"
 #include "utils/lua_initialization.h"
 #include "utils/battle_map_enum.h"
+#include "utils/lua_environment.h"
+#include "utils/localization_container.h"
+
+#include "utils/interface_container2.h"
 
 #include "render/image_container.h"
 #include "render/image_controller.h"
@@ -50,7 +55,8 @@ namespace devils_engine {
       
       std::array<std::pair<uint32_t, uint32_t>, MAX_BIOMES_COUNT> biomes_data;
       for (size_t i = 0; i < core::map::hex_count_d(core::map::detail_level); ++i) {
-        const uint32_t index = map_system->seasons->get_tile_biome(i);
+        const uint32_t index = map_system->seasons->get_tile_biome(map_system->seasons->current_season, i);
+        assert(index < MAX_BIOMES_COUNT);
         ++biomes_data[index].second;
       }
       
@@ -89,9 +95,9 @@ namespace devils_engine {
     auto ptr = map_data->map_creator;
     ASSERT(ptr != nullptr);
 
-    ptr->run_interface_script(global::root_directory() + "scripts/gen_part1.lua");
-    ptr->run_interface_script(global::root_directory() + "scripts/gen_part2.lua");
-    ptr->run_interface_script(global::root_directory() + "scripts/gen_part3.lua");
+//     ptr->run_interface_script(global::root_directory() + "scripts/gen_part1.lua");
+//     ptr->run_interface_script(global::root_directory() + "scripts/gen_part2.lua");
+//     ptr->run_interface_script(global::root_directory() + "scripts/gen_part3.lua");
     ptr->run_script(global::root_directory() + "scripts/gen_part1_functions.lua");
     ptr->run_script(global::root_directory() + "scripts/gen_part2_functions.lua");
     ptr->run_script(global::root_directory() + "scripts/gen_part3_functions.lua");
@@ -124,7 +130,7 @@ namespace devils_engine {
         std::make_pair("generating plates", std::bind(gen_func, std::placeholders::_1, std::placeholders::_2, func2)),
         std::make_pair("generating plate datas", std::bind(gen_func, std::placeholders::_1, std::placeholders::_2, func3))
       };
-      ptr->create("Tectonic plates generator", "gen_part1_fun", pairs);
+      ptr->create("Tectonic plates generator", pairs);
     }
 
     {
@@ -165,7 +171,7 @@ namespace devils_engine {
         std::make_pair(map::default_generator_pairs[13].first, std::bind(gen_func, std::placeholders::_1, std::placeholders::_2, func10))
       };
 
-      ptr->create("Biomes generator", "gen_part2_fun", pairs);
+      ptr->create("Biomes generator", pairs);
     }
 
     {
@@ -200,12 +206,12 @@ namespace devils_engine {
         std::make_pair(map::default_generator_pairs[18].first, std::bind(gen_func, std::placeholders::_1, std::placeholders::_2, func5)),
         std::make_pair(map::default_generator_pairs[22].first, std::bind(gen_func, std::placeholders::_1, std::placeholders::_2, func6)),
         std::make_pair(map::default_generator_pairs[19].first, std::bind(gen_func, std::placeholders::_1, std::placeholders::_2, func7)),
-        std::make_pair(map::default_generator_pairs[20].first, std::bind(gen_func, std::placeholders::_1, std::placeholders::_2, func8)),
-        std::make_pair(map::default_generator_pairs[21].first, std::bind(gen_func, std::placeholders::_1, std::placeholders::_2, func9)),
+        std::make_pair(map::default_generator_pairs[20].first, std::bind(gen_func, std::placeholders::_1, std::placeholders::_2, func9)),
+        std::make_pair(map::default_generator_pairs[21].first, std::bind(gen_func, std::placeholders::_1, std::placeholders::_2, func8)),
         //std::make_pair(map::default_generator_pairs[13].first, std::bind(gen_func, std::placeholders::_1, std::placeholders::_2, func10))
       };
 
-      ptr->create("Countries generator", "gen_part3_fun", pairs);
+      ptr->create("Countries generator", pairs);
     }
   }
   
@@ -1267,185 +1273,199 @@ namespace devils_engine {
     void validate_and_create_data(systems::map_t* map_systems, utils::progress_container* prog) { //systems::core_t* systems,
       auto ctx = map_systems->core_context;
       auto creator = map_systems->map_creator;
-      auto tables = &creator->table_container();
+//       auto tables = &creator->table_container();
       utils::data_string_container string_container;
       global::get(&string_container);
       utils::numeric_string_container heraldy_container;
       global::get(&heraldy_container);
 
-      advance_progress(prog, "validating data"); // 1
+      //advance_progress(prog, "validating data"); // 1
 
       //if ()
 
-      utils::world_serializator cont;
+      // создается сериализатор не здесь, а в креаторе
+//       utils::world_serializator cont;
+//       global::get(&cont);
   //     const std::string_view test_name = "Test world 1\0";
   //     const std::string_view test_tname = "test_world_1\0";
   //     const std::string_view test_settings = "{}\0";
-      cont.set_name(creator->get_world_name());
-      cont.set_technical_name(creator->get_folder_name());
-      cont.set_settings(creator->get_settings());
-      cont.set_rand_seed(creator->get_rand_seed());
-      cont.set_noise_seed(creator->get_noise_seed());
+      auto cont = creator->serializator_ptr();
+      cont->set_name(creator->get_world_name());
+      cont->set_technical_name(creator->get_folder_name());
+      cont->set_settings(creator->get_settings());
+      cont->set_rand_seed(creator->get_rand_seed());
+      cont->set_noise_seed(creator->get_noise_seed());
 
-      const std::function<bool(const size_t &, sol::this_state, const sol::table&, utils::world_serializator*)> validation_funcs[] = {
-        nullptr,                   // tile    : нужна ли тайлу валидация? я не уверен что хорошей идеей будет использовать луа таблицы для заполнения тайла
-        utils::validate_province_and_save,  // province
-        utils::validate_building_and_save,  // building_type,
-        utils::validate_city_type_and_save, // city_type,
-        utils::validate_city_and_save,      // city,
-        nullptr,                   // trait,
-        nullptr,                   // modificator,
-        nullptr,                   // troop_type,
-        nullptr,                   // decision,
-        nullptr,                   // religion_group,
-        nullptr,                   // religion,
-        nullptr,                   // culture,
-        nullptr,                   // law,
-        nullptr,                   // event,
-        utils::validate_title_and_save,     // titulus,
-        utils::validate_character_and_save, // character,
-        nullptr,                   // dynasty,
-        nullptr,                   // faction,    // это и далее делать не нужно по идее
-        nullptr,                   // hero_troop,
-        nullptr,                   // army,
-
-      };
-
-      global::get<utils::calendar>()->validate();
-
-      auto &lua = creator->state();
-      //ASSERT(lua != nullptr);
-
-  //     auto &tables = creator->table_container();
-      const size_t count = static_cast<size_t>(core::structure::count);
-      bool ret = true;
-      for (size_t i = 0; i < count; ++i) {
-        if (!validation_funcs[i]) continue;
-        //const auto &data = tables->get_tables(static_cast<core::structure>(i));
-        const auto &data = tables->get_tables(i);
-        size_t counter = 0;
-        for (const auto &table : data) {
-          ret = ret && validation_funcs[i](counter, lua.lua_state(), table, &cont);
-          ++counter;
-        }
-      }
+//       const std::function<bool(const size_t &, sol::this_state, const sol::table&, utils::world_serializator*)> validation_funcs[] = {
+//         nullptr,                   // tile    : нужна ли тайлу валидация? я не уверен что хорошей идеей будет использовать луа таблицы для заполнения тайла
+//         utils::validate_province_and_save,  // province
+//         utils::validate_building_and_save,  // building_type,
+//         utils::validate_city_type_and_save, // city_type,
+//         utils::validate_city_and_save,      // city,
+//         nullptr,                   // trait,
+//         nullptr,                   // modificator,
+//         nullptr,                   // troop_type,
+//         nullptr,                   // decision,
+//         nullptr,                   // religion_group,
+//         nullptr,                   // religion,
+//         nullptr,                   // culture,
+//         nullptr,                   // law,
+//         nullptr,                   // event,
+//         utils::validate_title_and_save,     // titulus,
+//         utils::validate_character_and_save, // character,
+//         nullptr,                   // dynasty,
+//         nullptr,                   // faction,    // это и далее делать не нужно по идее
+//         nullptr,                   // hero_troop,
+//         nullptr,                   // army,
+// 
+//       };
+// 
+//       global::get<utils::calendar>()->validate();
+// 
+//       auto &lua = creator->state();
+//       //ASSERT(lua != nullptr);
+//       
+//       // тут можно вызвать функцию лоад ворлд, ее естественно нужно немного переделать
+//       // данные мы уже распарсили и положили в ворлд дата, тут сократиться примерно 70% функции
+// 
+//   //     auto &tables = creator->table_container();
+//       const size_t count = static_cast<size_t>(core::structure::count);
+//       bool ret = true;
+//       for (size_t i = 0; i < count; ++i) {
+//         if (!validation_funcs[i]) continue;
+//         //const auto &data = tables->get_tables(static_cast<core::structure>(i));
+//         const auto &data = tables->get_tables(i);
+//         size_t counter = 0;
+//         for (const auto &table : data) {
+//           ret = ret && validation_funcs[i](counter, lua.lua_state(), table, &cont);
+//           ++counter;
+//         }
+//       }
+//       
+//       //const auto &image_data = tables->get_tables(utils::table_container::additional_data::image);
+//       const auto &image_data = tables->get_tables(static_cast<size_t>(utils::generator_table_container::additional_data::image));
+//       size_t counter = 0;
+//       for (const auto &table : image_data) {
+//         ret = ret && utils::validate_image_and_save(counter, lua.lua_state(), table, &cont);
+//         ++counter;
+//       }
+//       
+//       //const auto &heraldy_data = tables->get_tables(utils::table_container::additional_data::heraldy);
+//       const auto &heraldy_data = tables->get_tables(static_cast<size_t>(utils::generator_table_container::additional_data::heraldy));
+//       for (size_t i = 0; i < heraldy_data.size(); ++i) {
+//         const auto &table = heraldy_data[i];
+//         ret = ret && utils::validate_heraldy_layer_and_save(i, lua.lua_state(), table, &cont);
+//       }
+//       
+//       if (!ret) throw std::runtime_error("There is validation errors");
+//       
+//       auto device = global::get<systems::core_t>()->graphics_container->device;
+//       
+//       auto controller = global::get<systems::core_t>()->image_controller;
+//       global::get(controller);
+//       for (size_t i = 0; i < static_cast<size_t>(render::image_controller::image_type::count); ++i) {
+//         //utils::load_images(controller, image_data, static_cast<uint32_t>(render::image_controller::image_type::system));
+//         utils::load_images(controller, image_data, i);
+//       }
+//       //utils::load_biomes(controller, map_systems->seasons, tables->get_tables(utils::table_container::additional_data::biome));
+//       utils::load_biomes(controller, map_systems->seasons, tables->get_tables(static_cast<size_t>(utils::generator_table_container::additional_data::biome)));
+//       yavf::Buffer heraldy_tmp(device, yavf::BufferCreateInfo::buffer(16, VK_BUFFER_USAGE_TRANSFER_SRC_BIT), VMA_MEMORY_USAGE_CPU_ONLY);
+//       utils::load_heraldy_layers(controller, heraldy_data, &heraldy_tmp);
+//       
+//       const auto &data = get_season_biomes_data(map_systems);
+//       
+//       map_systems->lock_map();
+//       controller->update_set();
+//       map_systems->map->copy_biomes(map_systems->seasons);
+//       global::get<render::tile_optimizer>()->set_biome_tile_count(data);
+//       map_systems->unlock_map();
+//       
+//       map_systems->map->set_tile_biome(map_systems->seasons);
+// 
+//       advance_progress(prog, "allocating memory"); // 2
+// 
+//       // нужно собрать инфу о дубликатах
+//       create_entities_without_id<core::province>(ctx, tables);
+//       create_entities<core::building_type>(ctx, tables);
+//       create_entities<core::city_type>(ctx, tables);
+//       create_entities_without_id<core::city>(ctx, tables);
+//       create_entities<core::titulus>(ctx, tables);
+//       create_characters(ctx, tables);
+// 
+//       advance_progress(prog, "creating entities"); // 3
+// 
+//       global::get(ctx);
+// 
+//       parse_entities<core::titulus>(ctx, tables, utils::parse_title);
+//       parse_entities<core::province>(ctx, tables, utils::parse_province);
+//       parse_entities<core::building_type>(ctx, tables, utils::parse_building);
+//       parse_entities<core::city_type>(ctx, tables, utils::parse_city_type);
+//       parse_entities<core::city>(ctx, tables, utils::parse_city);
+//       parse_characters(ctx, tables, utils::parse_character);
+//       parse_characters(ctx, tables, utils::parse_character_goverment);
+//       // тут нужно еще соединить все полученные данные друг с другом
+//       connect_game_data(map_systems->map, ctx);
+// 
+//       // по идее в этой точке все игровые объекты созданы
+//       // и можно непосредственно переходить к геймплею
+//       // если валидация и парсинг успешны это повод сохранить мир на диск
+//       // это означает: сериализация данных карты + записать на диск все таблицы + сериализация персонажей и династий (первых)
+//       // могу ли я сериализовать конкретные типы? скорее да чем нет,
+//       // но при этом мне придется делать отдельный сериализатор для каждого типа
+//       // понятное дело делать отдельный сериализатор не сруки
+//       
+//       {
+//         auto buffers = global::get<render::buffers>();
+//         const size_t structures_count = ctx->get_entity_count<core::city>();
+//         const size_t structure_data_size = ctx->get_entity_count<core::city_type>() * sizeof(render::world_structure_t);
+//         yavf::Buffer buf(device, yavf::BufferCreateInfo::buffer(structure_data_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT), VMA_MEMORY_USAGE_CPU_ONLY);
+//         auto map = map_systems->map;
+//         map_systems->lock_map();
+//         copy_structure_data(ctx, 0, map, &buf);
+//         map->structures->resize(structure_data_size);
+//         buffers->heraldy->resize(heraldy_tmp.info().size);
+//         
+//         auto task = device->allocateTransferTask();
+//         task->begin();
+//         task->copy(&buf, map->structures);
+//         task->copy(&heraldy_tmp, buffers->heraldy);
+//         task->end();
+//         task->start();
+//         task->wait();
+//         device->deallocate(task);
+//         
+//         global::get<render::tile_optimizer>()->set_max_structures_count(structures_count);
+//         global::get<render::tile_optimizer>()->set_max_heraldy_count(structures_count);
+//         map->flush_structures();
+//         map_systems->unlock_map();
+//       }
       
-      //const auto &image_data = tables->get_tables(utils::table_container::additional_data::image);
-      const auto &image_data = tables->get_tables(static_cast<size_t>(utils::generator_table_container::additional_data::image));
-      size_t counter = 0;
-      for (const auto &table : image_data) {
-        ret = ret && utils::validate_image_and_save(counter, lua.lua_state(), table, &cont);
-        ++counter;
-      }
-      
-      //const auto &heraldy_data = tables->get_tables(utils::table_container::additional_data::heraldy);
-      const auto &heraldy_data = tables->get_tables(static_cast<size_t>(utils::generator_table_container::additional_data::heraldy));
-      for (size_t i = 0; i < heraldy_data.size(); ++i) {
-        const auto &table = heraldy_data[i];
-        ret = ret && utils::validate_heraldy_layer_and_save(i, lua.lua_state(), table, &cont);
-      }
-      
-      if (!ret) throw std::runtime_error("There is validation errors");
-      
-      auto device = global::get<systems::core_t>()->graphics_container->device;
-      
-      auto controller = global::get<systems::core_t>()->image_controller;
-      global::get(controller);
-      for (size_t i = 0; i < static_cast<size_t>(render::image_controller::image_type::count); ++i) {
-        //utils::load_images(controller, image_data, static_cast<uint32_t>(render::image_controller::image_type::system));
-        utils::load_images(controller, image_data, i);
-      }
-      //utils::load_biomes(controller, map_systems->seasons, tables->get_tables(utils::table_container::additional_data::biome));
-      utils::load_biomes(controller, map_systems->seasons, tables->get_tables(static_cast<size_t>(utils::generator_table_container::additional_data::biome)));
-      yavf::Buffer heraldy_tmp(device, yavf::BufferCreateInfo::buffer(16, VK_BUFFER_USAGE_TRANSFER_SRC_BIT), VMA_MEMORY_USAGE_CPU_ONLY);
-      utils::load_heraldy_layers(controller, heraldy_data, &heraldy_tmp);
-      
-      const auto &data = get_season_biomes_data(map_systems);
-      
-      map_systems->lock_map();
-      controller->update_set();
-      map_systems->map->copy_biomes(map_systems->seasons);
-      global::get<render::tile_optimizer>()->set_biome_tile_count(data);
-      map_systems->unlock_map();
-      
-      map_systems->map->set_tile_biome(map_systems->seasons);
+      advance_progress(prog, "serializing world"); // 1
 
-      advance_progress(prog, "allocating memory"); // 2
-
-      // нужно собрать инфу о дубликатах
-      create_entities_without_id<core::province>(ctx, tables);
-      create_entities<core::building_type>(ctx, tables);
-      create_entities<core::city_type>(ctx, tables);
-      create_entities_without_id<core::city>(ctx, tables);
-      create_entities<core::titulus>(ctx, tables);
-      create_characters(ctx, tables);
-
-      advance_progress(prog, "creating entities"); // 3
-
-      global::get(ctx);
-
-      parse_entities<core::titulus>(ctx, tables, utils::parse_title);
-      parse_entities<core::province>(ctx, tables, utils::parse_province);
-      parse_entities<core::building_type>(ctx, tables, utils::parse_building);
-      parse_entities<core::city_type>(ctx, tables, utils::parse_city_type);
-      parse_entities<core::city>(ctx, tables, utils::parse_city);
-      parse_characters(ctx, tables, utils::parse_character);
-      parse_characters(ctx, tables, utils::parse_character_goverment);
-      // тут нужно еще соединить все полученные данные друг с другом
-      connect_game_data(map_systems->map, ctx);
-
-      // по идее в этой точке все игровые объекты созданы
-      // и можно непосредственно переходить к геймплею
-      // если валидация и парсинг успешны это повод сохранить мир на диск
-      // это означает: сериализация данных карты + записать на диск все таблицы + сериализация персонажей и династий (первых)
-      // могу ли я сериализовать конкретные типы? скорее да чем нет,
-      // но при этом мне придется делать отдельный сериализатор для каждого типа
-      // понятное дело делать отдельный сериализатор не сруки
-      
-      {
-        auto buffers = global::get<render::buffers>();
-        const size_t structures_count = ctx->get_entity_count<core::city>();
-        const size_t structure_data_size = ctx->get_entity_count<core::city_type>() * sizeof(render::world_structure_t);
-        yavf::Buffer buf(device, yavf::BufferCreateInfo::buffer(structure_data_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT), VMA_MEMORY_USAGE_CPU_ONLY);
-        auto map = map_systems->map;
-        map_systems->lock_map();
-        copy_structure_data(ctx, 0, map, &buf);
-        map->structures->resize(structure_data_size);
-        buffers->heraldy->resize(heraldy_tmp.info().size);
-        
-        auto task = device->allocateTransferTask();
-        task->begin();
-        task->copy(&buf, map->structures);
-        task->copy(&heraldy_tmp, buffers->heraldy);
-        task->end();
-        task->start();
-        task->wait();
-        device->deallocate(task);
-        
-        global::get<render::tile_optimizer>()->set_max_structures_count(structures_count);
-        global::get<render::tile_optimizer>()->set_max_heraldy_count(structures_count);
-        map->flush_structures();
-        map_systems->unlock_map();
-      }
-
-      advance_progress(prog, "serializing world"); // 4
-
-      cont.copy_seasons(map_systems->seasons);
-      cont.set_world_matrix(map_systems->map->world_matrix);
+      cont->copy_seasons(map_systems->seasons);
+      cont->set_world_matrix(map_systems->map->world_matrix);
 
       for (size_t i = 0; i < core::map::hex_count_d(core::map::detail_level); ++i) {
-        const auto &d = ctx->get_tile(i);
-        cont.set_tile_data(i, {d.height, d.province}); // тут даже по идее ничего делать особо не нужно
+        //const auto &d = ctx->get_tile(i);
+        //cont->set_tile_data(i, {d.height, d.province}); // тут даже по идее ничего делать особо не нужно
+        
+        //counter += size_t(d.province != UINT32_MAX);
+        auto tile = map_systems->map->get_tile_ptr(i);
+        cont->set_tile_data(i, {tile->height, UINT32_MAX});
       }
 
-      cont.serialize(); //
+      cont->serialize(); //
+      
+      // вот это по идее не нужно, у меня грузится это все в loading_world
+      map_systems->world_name = cont->get_name();
+      map_systems->folder_name = cont->get_technical_name();
+      map_systems->generator_settings = cont->get_settings();
+      memcpy(map_systems->hash, cont->get_hash(), systems::map_t::hash_size);
+      
+      // тут нам не нужно создавать данные карты заново
+      loading_world(map_systems, prog, cont, false);
 
-      map_systems->world_name = cont.get_name();
-      map_systems->folder_name = cont.get_technical_name();
-      map_systems->generator_settings = cont.get_settings();
-      memcpy(map_systems->hash, cont.get_hash(), systems::map_t::hash_size);
-
-      advance_progress(prog, "checking world"); // 5
+      advance_progress(prog, "checking world"); // 9
 
       utils::world_serializator test;
       test.deserialize(global::root_directory() + "saves/" + creator->get_folder_name() + "/world_data");
@@ -1456,12 +1476,12 @@ namespace devils_engine {
       ASSERT(test.get_rand_seed() == creator->get_rand_seed());
       ASSERT(test.get_noise_seed() == creator->get_noise_seed());
 
-      ASSERT(tables->get_tables(static_cast<size_t>(core::structure::province)).size() == cont.get_data_count(core::structure::province));
-      ASSERT(tables->get_tables(static_cast<size_t>(core::structure::city_type)).size() == cont.get_data_count(core::structure::city_type));
-      ASSERT(tables->get_tables(static_cast<size_t>(core::structure::city)).size() == cont.get_data_count(core::structure::city));
-      ASSERT(tables->get_tables(static_cast<size_t>(core::structure::building_type)).size() == cont.get_data_count(core::structure::building_type));
-      ASSERT(tables->get_tables(static_cast<size_t>(core::structure::titulus)).size() == cont.get_data_count(core::structure::titulus));
-      ASSERT(tables->get_tables(static_cast<size_t>(core::structure::character)).size() == cont.get_data_count(core::structure::character));
+//       ASSERT(tables->get_tables(utils::world_serializator::province).size() == cont.get_data_count(utils::world_serializator::province));
+//       ASSERT(tables->get_tables(utils::world_serializator::city_type).size() == cont.get_data_count(utils::world_serializator::city_type));
+//       ASSERT(tables->get_tables(utils::world_serializator::city).size() == cont.get_data_count(utils::world_serializator::city));
+//       ASSERT(tables->get_tables(utils::world_serializator::building_type).size() == cont.get_data_count(utils::world_serializator::building_type));
+//       ASSERT(tables->get_tables(utils::world_serializator::title).size() == cont.get_data_count(utils::world_serializator::title));
+//       ASSERT(tables->get_tables(utils::world_serializator::character).size() == cont.get_data_count(utils::world_serializator::character));
 
   //     PRINT_VAR("size", tables->get_tables(core::structure::province).size())
   //     PRINT_VAR("size", tables->get_tables(core::structure::city_type).size())
@@ -1477,21 +1497,21 @@ namespace devils_engine {
   //     PRINT_VAR("size", cont.get_data_count(core::structure::titulus))
   //     PRINT_VAR("size", cont.get_data_count(core::structure::character))
 
-      ASSERT(cont.get_data_count(core::structure::province) == test.get_data_count(core::structure::province));
-      ASSERT(cont.get_data_count(core::structure::city_type) == test.get_data_count(core::structure::city_type));
-      ASSERT(cont.get_data_count(core::structure::city) == test.get_data_count(core::structure::city));
-      ASSERT(cont.get_data_count(core::structure::building_type) == test.get_data_count(core::structure::building_type));
-      ASSERT(cont.get_data_count(core::structure::titulus) == test.get_data_count(core::structure::titulus));
-      ASSERT(cont.get_data_count(core::structure::character) == test.get_data_count(core::structure::character));
+      ASSERT(cont->get_data_count(utils::world_serializator::province) == test.get_data_count(utils::world_serializator::province));
+      ASSERT(cont->get_data_count(utils::world_serializator::city_type) == test.get_data_count(utils::world_serializator::city_type));
+      ASSERT(cont->get_data_count(utils::world_serializator::city) == test.get_data_count(utils::world_serializator::city));
+      ASSERT(cont->get_data_count(utils::world_serializator::building_type) == test.get_data_count(utils::world_serializator::building_type));
+      ASSERT(cont->get_data_count(utils::world_serializator::title) == test.get_data_count(utils::world_serializator::title));
+      ASSERT(cont->get_data_count(utils::world_serializator::character) == test.get_data_count(utils::world_serializator::character));
 
       //PRINT(cont.get_data(var, i))
-  #define CHECK_CONTENT(var) for (uint32_t i = 0; i < cont.get_data_count(var); ++i) { ASSERT(cont.get_data(var, i) == test.get_data(var, i)); }
-      CHECK_CONTENT(core::structure::province)
-      CHECK_CONTENT(core::structure::city_type)
-      CHECK_CONTENT(core::structure::city)
-      CHECK_CONTENT(core::structure::building_type)
-      CHECK_CONTENT(core::structure::titulus)
-      CHECK_CONTENT(core::structure::character)
+  #define CHECK_CONTENT(var) for (uint32_t i = 0; i < cont->get_data_count(var); ++i) { ASSERT(cont->get_data(var, i) == test.get_data(var, i)); }
+      CHECK_CONTENT(utils::world_serializator::province)
+      CHECK_CONTENT(utils::world_serializator::city_type)
+      CHECK_CONTENT(utils::world_serializator::city)
+      CHECK_CONTENT(utils::world_serializator::building_type)
+      CHECK_CONTENT(utils::world_serializator::title)
+      CHECK_CONTENT(utils::world_serializator::character)
 
       // кажется все правильно сериализуется и десериализуется
       // сохранения должны храниться в папках с файлом world_data
@@ -1530,13 +1550,15 @@ namespace devils_engine {
 
   //     create_game_state();
       validate_and_create_data(map_systems, prog); // создаем объекты
-      advance_progress(prog, "connecting tiles");
-      generate_tile_connections(map_systems->map, global::get<dt::thread_pool>());
-      advance_progress(prog, "making borders");
+      advance_progress(prog, "connecting tiles"); // 10
+      //generate_tile_connections(map_systems->map, global::get<dt::thread_pool>());
+      advance_progress(prog, "making borders"); // 11
       find_border_points(map_systems->map, ctx); // после генерации нужно сделать много вещей
       // по идее создать границы нужно сейчас, так как в титулах появились данные о цвете
+      
+      make_random_player_character();
 
-      advance_progress(prog, "ending");
+      advance_progress(prog, "ending"); // 12
 
       //create_interface(systems);
   //     systems.interface->init_types();
@@ -1546,10 +1568,9 @@ namespace devils_engine {
   //     create_ai_systems(systems);
       // нужно выбрать себе какого нибудь персонажа
       // кажется у меня сейчас все персонажи живы, так что можно любого
-      make_random_player_character();
     }
 
-    void load_map_data(core::map* map, utils::world_serializator* world) {
+    void load_map_data(core::map* map, const utils::world_serializator* world, const bool make_tiles) {
       glm::mat4 mat1 = world->get_world_matrix();
   //     PRINT_VEC4("mat 0", mat1[0])
   //     PRINT_VEC4("mat 1", mat1[1])
@@ -1558,7 +1579,7 @@ namespace devils_engine {
       map->world_matrix = mat1;
       auto pool = global::get<dt::thread_pool>();
       
-      map::make_tiles(mat1, map, pool);
+      if (make_tiles) map::make_tiles(mat1, map, pool);
 
   //       ctx->container->set_entity_count(debug::entities::tile, map->tiles_count());
       map->set_status(core::map::status::valid);
@@ -1567,23 +1588,130 @@ namespace devils_engine {
         map->set_tile_height(i, world->get_tile_data(i).height);
       }
     }
-
-    template <typename T>
-    void create_entity_without_id(core::context* ctx, utils::world_serializator* world) {
-      ctx->create_container<T>(world->get_data_count(T::s_type));
+    
+    void parse_script_path(const std::string_view &path, std::string_view &mod_name, std::string_view &script_path) {
+      const size_t index = path.find('/');
+      if (index != std::string_view::npos) {
+        mod_name = path.substr(0, index);
+        script_path = path.substr(index+1, std::string_view::npos);
+      }
     }
-
-    template <typename T>
-    void create_entity(core::context* ctx, utils::world_serializator* world, sol::state_view tmp_state, utils::data_string_container* to_data) {
-      ctx->create_container<T>(world->get_data_count(T::s_type));
-      for (size_t i = 0; i < world->get_data_count(T::s_type); ++i) {
-        auto ret = tmp_state.script("return " + std::string(world->get_data(T::s_type, i)));
+    
+    std::vector<sol::table> get_data_tables(
+      const utils::world_serializator* w, 
+      sol::state_view state, 
+      const uint32_t &type, 
+      const std::string_view &type_str, 
+      const std::function<bool(const uint32_t&,const sol::table&)> validation_func
+    ) {
+      std::vector<sol::table> tables;
+      tables.reserve(w->get_data_count(type)*2);
+      for (size_t i = 0; i < w->get_data_count(type); ++i) {
+        auto ret = state.script("return " + std::string(w->get_data(type, i)));
         if (!ret.valid()) {
           sol::error err = ret;
           std::cout << err.what();
-          throw std::runtime_error("Could not load entity table");
+          throw std::runtime_error("Could not load " + std::string(type_str) + " table");
         }
+        
         sol::table t = ret;
+        // тут нам было бы неплохо проверить что это за таблица
+        const bool table_string = t[1].valid() && t[1].get_type() == sol::type::string && t.size() == 1;
+        if (table_string) { // таблица-путь, подгрузим скрипт
+          if (type == utils::world_serializator::biome) throw std::runtime_error("Removed biome table scripts");
+          
+          const std::string path = t[1];
+          // путь вида "*название мода*/*путь до скрипта*"
+          std::string_view mod_name;
+          std::string_view script_path;
+          parse_script_path(path, mod_name, script_path);
+          if (mod_name.empty() || script_path.empty()) throw std::runtime_error("Path " + path + " is not a valid script path");
+          // проверим есть ли такой мод, и проверим есть ли такой файл в моде
+          // еще нужно проверить является ли этот путь относительным
+          ASSERT(mod_name == "apates_quest");
+          const std::string final_script_path = global::root_directory() + "/" + std::string(script_path);
+          // нужно еще указать энвайронмент, хотя с другой стороны, возможно просто в самом стейте отменить некоторые функции
+          // но в любом случае нужно еще погрузить минимально необходимый набор функций
+          auto ret = state.script_file(final_script_path);
+          if (!ret.valid()) {
+            sol::error err = ret;
+            std::cout << err.what();
+            throw std::runtime_error("Could not load " + std::string(type_str) + " table");
+          }
+          
+          size_t counter = 0;
+          sol::table data_tables = ret;
+          for (const auto &obj : data_tables) {
+            if (obj.second.get_type() != sol::type::table) continue;
+            
+            sol::table final_t = obj.second.as<sol::table>();
+            const bool valid = validation_func(counter, final_t);
+            ++counter;
+            if (!valid) throw std::runtime_error("Invalid " + std::string(type_str) + " table in script " + path);
+            tables.push_back(final_t);
+          }
+        } else tables.push_back(t); // сгенерированная таблица данных
+      }
+      
+      return tables;
+    }
+
+//     template <typename T>
+//     void create_entity_without_id(core::context* ctx, const utils::world_serializator* world, const uint32_t &world_type) {
+//       ctx->create_container<T>(world->get_data_count(world_type));
+//     }
+
+//     template <typename T>
+//     void create_entity(core::context* ctx, const utils::world_serializator* world, sol::state_view tmp_state, const uint32_t &world_type, utils::data_string_container* to_data) {
+//       ctx->create_container<T>(world->get_data_count(world_type));
+//       for (size_t i = 0; i < world->get_data_count(world_type); ++i) {
+//         auto ret = tmp_state.script("return " + std::string(world->get_data(world_type, i)));
+//         if (!ret.valid()) {
+//           sol::error err = ret;
+//           std::cout << err.what();
+//           throw std::runtime_error("Could not load entity table");
+//         }
+//         sol::table t = ret;
+//         auto proxy = t["id"];
+//         ASSERT(proxy.valid());
+// 
+//         std::string_view str = proxy.get<std::string_view>();
+//         auto ptr = ctx->get_entity<T>(i);
+//         ptr->id = str;
+//         to_data->insert(ptr->id, i);
+//       }
+//     }
+    
+    template <typename T>
+    void create_entity_without_id(
+      core::context* ctx, 
+      const utils::world_serializator* world, 
+      sol::state_view state, 
+      const uint32_t &world_type, 
+      const std::string_view &world_type_str,
+      const std::function<bool(const uint32_t&,const sol::table&)> validation_func
+    ) {
+      // с новым типом таблиц придется парсить сначала все таблицы, потом создавать энтити
+      // потом опять парсить, и ужа зполнять данными, ну тип это все равно загрузка
+      
+      const auto &tables = get_data_tables(world, state, world_type, world_type_str, validation_func);
+      ctx->create_container<T>(tables.size());
+    }
+    
+    template <typename T>
+    void create_entity(
+      core::context* ctx, 
+      utils::data_string_container* to_data, 
+      const utils::world_serializator* world, 
+      sol::state_view state,
+      const uint32_t &world_type, 
+      const std::string_view &world_type_str,
+      const std::function<bool(const uint32_t&,const sol::table&)> validation_func
+    ) {
+      const auto &tables = get_data_tables(world, state, world_type, world_type_str, validation_func);
+      ctx->create_container<T>(tables.size());
+      for (size_t i = 0; i < tables.size(); ++i) {
+        const sol::table &t = tables[i];
         auto proxy = t["id"];
         ASSERT(proxy.valid());
 
@@ -1594,16 +1722,42 @@ namespace devils_engine {
       }
     }
 
-    void create_characters(core::context* ctx, utils::world_serializator* world, sol::state_view tmp_state) {
-      const size_t count = world->get_data_count(core::character::s_type);
-      for (size_t i = 0; i < count; ++i) {
-        auto ret = tmp_state.script("return " + std::string(world->get_data(core::character::s_type, i)));
-        if (!ret.valid()) {
-          sol::error err = ret;
-          std::cout << err.what();
-          throw std::runtime_error("Could not load entity table");
-        }
-        sol::table t = ret;
+//     void create_characters(core::context* ctx, const utils::world_serializator* world, sol::state_view tmp_state) {
+//       const size_t count = world->get_data_count(utils::world_serializator::character);
+//       for (size_t i = 0; i < count; ++i) {
+//         auto ret = tmp_state.script("return " + std::string(world->get_data(utils::world_serializator::character, i)));
+//         if (!ret.valid()) {
+//           sol::error err = ret;
+//           std::cout << err.what();
+//           throw std::runtime_error("Could not load entity table");
+//         }
+//         sol::table t = ret;
+// 
+//         bool male = true;
+//         bool dead = false;
+// 
+//         if (const auto &proxy = t["male"]; proxy.valid()) {
+//           male = proxy.get<bool>();
+//         }
+// 
+//         if (const auto &proxy = t["dead"]; proxy.valid()) {
+//           dead = proxy.get<bool>();
+//         }
+// 
+//         auto c = ctx->create_character(male, dead);
+// 
+//         // нам нужно заполнить стейт рандомайзера
+//         // нужно проконтролировать какой глобальный стейт мы используем
+//         const size_t state1 = global::advance_state();
+//         const size_t state2 = global::advance_state();
+//         c->rng_state = {state1, state2};
+//       }
+//     }
+
+    void create_characters(core::context* ctx, const utils::world_serializator* world, sol::state_view state) {
+      const auto &tables = get_data_tables(world, state, utils::world_serializator::character, "character", utils::validate_character);
+      for (size_t i = 0; i < tables.size(); ++i) {
+        const sol::table &t = tables[i];
 
         bool male = true;
         bool dead = false;
@@ -1620,159 +1774,293 @@ namespace devils_engine {
 
         // нам нужно заполнить стейт рандомайзера
         // нужно проконтролировать какой глобальный стейт мы используем
+        // скорее здесь нужно использовать какой то локальный генератор
         const size_t state1 = global::advance_state();
         const size_t state2 = global::advance_state();
-        c->rng_state = {state1, state2};
+        const size_t state3 = global::advance_state();
+        const size_t state4 = global::advance_state();
+        c->rng_state = {state1, state2, state3, state4};
       }
     }
+
+//     template <typename T>
+//     void parse_entities(core::context* ctx, const utils::world_serializator* world, sol::state_view tmp_state, const uint32_t &world_type, const std::function<void(T*, const sol::table&)> &parsing_func) {
+//       const size_t count = world->get_data_count(world_type);
+//       for (size_t i = 0; i < count; ++i) {
+//         auto ret = tmp_state.script("return " + std::string(world->get_data(world_type, i)));
+//         if (!ret.valid()) {
+//           sol::error err = ret;
+//           std::cout << err.what();
+//           throw std::runtime_error("Could not load entity table");
+//         }
+//         sol::table t = ret;
+//         auto ptr = ctx->get_entity<T>(i);
+// 
+//         parsing_func(ptr, t);
+//       }
+//     }
+// 
+//     void parse_character(core::context* ctx, const utils::world_serializator* world, sol::state_view tmp_state, const std::function<void(core::character*, const sol::table&)> &parsing_func) {
+//       const size_t count = world->get_data_count(utils::world_serializator::character);
+//       for (size_t i = 0; i < count; ++i) {
+//         auto ret = tmp_state.script("return " + std::string(world->get_data(utils::world_serializator::character, i)));
+//         if (!ret.valid()) {
+//           sol::error err = ret;
+//           std::cout << err.what();
+//           throw std::runtime_error("Could not load entity table");
+//         }
+//         sol::table t = ret;
+//         auto ptr = ctx->get_character(i);
+// 
+//         parsing_func(ptr, t);
+//       }
+//     }
 
     template <typename T>
-    void parse_entities(core::context* ctx, utils::world_serializator* world, sol::state_view tmp_state, const std::function<void(T*, const sol::table&)> &parsing_func) {
-      const size_t count = world->get_data_count(T::s_type);
-      for (size_t i = 0; i < count; ++i) {
-        auto ret = tmp_state.script("return " + std::string(world->get_data(T::s_type, i)));
-        if (!ret.valid()) {
-          sol::error err = ret;
-          std::cout << err.what();
-          throw std::runtime_error("Could not load entity table");
-        }
-        sol::table t = ret;
+    void parse_entities(
+      core::context* ctx, 
+      const utils::world_serializator* world, 
+      sol::state_view state,
+      const uint32_t &world_type, 
+      const std::string_view &world_type_str,
+      const std::function<bool(const uint32_t&,const sol::table&)> validation_func, 
+      const std::function<void(T*, const sol::table&)> &parsing_func
+    ) {
+      const auto &tables = get_data_tables(world, state, world_type, world_type_str, validation_func);
+      for (size_t i = 0; i < tables.size(); ++i) {
+        const sol::table &t = tables[i];
         auto ptr = ctx->get_entity<T>(i);
-
         parsing_func(ptr, t);
       }
     }
 
-    void parse_character(core::context* ctx, utils::world_serializator* world, sol::state_view tmp_state, const std::function<void(core::character*, const sol::table&)> &parsing_func) {
-      const size_t count = world->get_data_count(core::character::s_type);
-      for (size_t i = 0; i < count; ++i) {
-        auto ret = tmp_state.script("return " + std::string(world->get_data(core::character::s_type, i)));
-        if (!ret.valid()) {
-          sol::error err = ret;
-          std::cout << err.what();
-          throw std::runtime_error("Could not load entity table");
-        }
-        sol::table t = ret;
+    void parse_character(core::context* ctx, const utils::world_serializator* world, sol::state_view state) {
+      const auto &tables = get_data_tables(world, state, utils::world_serializator::character, "character", utils::validate_character);
+      for (size_t i = 0; i < tables.size(); ++i) {
+        const sol::table &t = tables[i];
         auto ptr = ctx->get_character(i);
-
-        parsing_func(ptr, t);
+        utils::parse_character(ptr, t);
+      }
+      
+      for (size_t i = 0; i < tables.size(); ++i) {
+        const sol::table &t = tables[i];
+        auto ptr = ctx->get_character(i);
+        utils::parse_character_goverment(ptr, t);
       }
     }
     
-    std::vector<sol::table> get_images_tables(const utils::world_serializator* w, sol::state_view state) {
-      std::vector<sol::table> tables;
-      for (size_t i = 0; i < w->get_images_count(); ++i) {
-        auto ret = state.script("return " + std::string(w->get_image_data(i)));
+//     std::vector<sol::table> get_images_tables(const utils::world_serializator* w, sol::state_view state) {
+//       std::vector<sol::table> tables;
+//       for (size_t i = 0; i < w->get_images_count(); ++i) {
+//         auto ret = state.script("return " + std::string(w->get_image_data(i)));
+//         if (!ret.valid()) {
+//           sol::error err = ret;
+//           std::cout << err.what();
+//           throw std::runtime_error("Could not load image table");
+//         }
+//         
+//         sol::table t = ret;
+//         // тут нам было бы неплохо проверить что это за таблица
+//         const bool table_string = t[1].valid() && t[1].get_type() == sol::type::string && t.size() == 1;
+//         if (table_string) { // таблица-путь, подгрузим скрипт
+//           const std::string path = t[1];
+//           // путь вида "*название мода*/*путь до скрипта*"
+//           std::string_view mod_name;
+//           std::string_view script_path;
+//           parse_script_path(path, mod_name, script_path);
+//           if (mod_name.empty() || script_path.empty()) throw std::runtime_error("Path " + path + " is not a valid script path");
+//           // проверим есть ли такой мод, и проверим есть ли такой файл в моде
+//           // еще нужно проверить является ли этот путь относительным
+//           const std::string final_script_path = global::root_directory() + "/" + std::string(script_path);
+//           // нужно еще указать энвайронмент, хотя с другой стороны, возможно просто в самом стейте отменить некоторые функции
+//           // но в любом случае нужно еще погрузить минимально необходимый набор функций
+//           auto ret = state.script_file(final_script_path);
+//           if (!ret.valid()) {
+//             sol::error err = ret;
+//             std::cout << err.what();
+//             throw std::runtime_error("Could not load image table");
+//           }
+//           
+//           size_t counter = 0;
+//           sol::table data_tables = ret;
+//           for (const auto &obj : data_tables) {
+//             if (obj.second.get_type() != sol::type::table) continue;
+//             
+//             sol::table final_t = obj.second.as<sol::table>();
+//             const bool valid = utils::validate_image(counter, final_t);
+//             ++counter;
+//             if (!valid) throw std::runtime_error("Invalid image table in script " + path);
+//             tables.push_back(final_t);
+//           }
+//         } else tables.push_back(t); // сгенерированная таблица данных
+//       }
+//       
+//       return tables;
+//     }
+//     
+//     std::vector<sol::table> get_heraldy_layers_tables(const utils::world_serializator* w, sol::state_view state) {
+//       std::vector<sol::table> tables;
+//       for (size_t i = 0; i < w->get_heraldies_count(); ++i) {
+//         auto ret = state.script("return " + std::string(w->get_heraldy_data(i)));
+//         if (!ret.valid()) {
+//           sol::error err = ret;
+//           std::cout << err.what();
+//           throw std::runtime_error("Could not load heraldy table");
+//         }
+//         
+//         sol::table t = ret;
+//         tables.push_back(t);
+//       }
+//       
+//       return tables;
+//     }
+
+    void load_localization(const utils::world_serializator* w, sol::state_view lua, const sol::environment &env, localization::container* cont) {
+      // этот луа стейт ДОЛЖЕН БЫТЬ стейтом интерфейса
+      
+      for (size_t i = 0; i < w->get_localization_size(); ++i) {
+        const std::string_view path = w->get_localization(i);
+        std::string_view mod_name;
+        std::string_view script_path;
+        parse_script_path(path, mod_name, script_path);
+        if (mod_name.empty() || script_path.empty()) throw std::runtime_error("Path " + std::string(path) + " is not a valid script path");
+        ASSERT(mod_name == "apates_quest");
+        
+        const std::string final_script_path = global::root_directory() + "/" + std::string(script_path);
+        // нужно еще указать энвайронмент, хотя с другой стороны, возможно просто в самом стейте отменить некоторые функции
+        // но в любом случае нужно еще погрузить минимально необходимый набор функций
+        auto ret = lua.script_file(final_script_path, env);
         if (!ret.valid()) {
           sol::error err = ret;
           std::cout << err.what();
-          throw std::runtime_error("Could not load image table");
+          throw std::runtime_error("Could not load localization table");
         }
         
-        sol::table t = ret;
-        tables.push_back(t);
-      }
-      
-      return tables;
-    }
-    
-    std::vector<sol::table> get_heraldy_layers_tables(const utils::world_serializator* w, sol::state_view state) {
-      std::vector<sol::table> tables;
-      for (size_t i = 0; i < w->get_heraldies_count(); ++i) {
-        auto ret = state.script("return " + std::string(w->get_heraldy_data(i)));
-        if (!ret.valid()) {
-          sol::error err = ret;
-          std::cout << err.what();
-          throw std::runtime_error("Could not load heraldy table");
+        sol::table data_tables = ret;
+        for (const auto &pair : data_tables) {
+          if (pair.first.get_type() != sol::type::string) throw std::runtime_error("Locale key must be a string");
+          const auto key = pair.first.as<std::string_view>();
+          if (!localization::is_valid_locale(key)) throw std::runtime_error("Locale key " + std::string(key) + " is invalid");
+          const auto l = localization::container::locale(key);
+          if (localization::container::get_current_locale() != l && localization::container::get_fall_back_locale() != l) continue;
+          
+          if (pair.second.get_type() != sol::type::table) throw std::runtime_error("Locale " + std::string(key) + " value must be a valid table");
+          const auto t = pair.second.as<sol::table>();
+          if (!localization::is_valid_table(t)) throw std::runtime_error("Locale " + std::string(key) + " value must be a valid table");
+          
+          cont->set_table(l, t);
         }
-        
-        sol::table t = ret;
-        tables.push_back(t);
       }
-      
-      return tables;
     }
 
-    void loading_world(systems::map_t* map_systems, utils::progress_container* prog, const std::string &world_path) {
-      ASSERT(!world_path.empty());
-      advance_progress(prog, "deserialization");
-      utils::world_serializator world_data;
-      world_data.deserialize(world_path);
+    //void loading_world(systems::map_t* map_systems, utils::progress_container* prog, const std::string &world_path) {
+    void loading_world(systems::map_t* map_systems, utils::progress_container* prog, const utils::world_serializator* world_data, const bool create_map_tiles) {
+      //ASSERT(!world_path.empty());
+      advance_progress(prog, "preparation"); // 1
+      //utils::world_serializator world_data;
+      //world_data.deserialize(world_path);
       utils::data_string_container to_data;
       global::get(&to_data);
       utils::numeric_string_container heraldy_data_container;
       global::get(&heraldy_data_container);
       global::get(map_systems->core_context);
 
-      map_systems->world_name = world_data.get_name();
-      map_systems->folder_name = world_data.get_technical_name();
-      map_systems->generator_settings = world_data.get_settings();
+      map_systems->world_name = world_data->get_name();
+      map_systems->folder_name = world_data->get_technical_name();
+      map_systems->generator_settings = world_data->get_settings();
       static_assert(systems::map_t::hash_size == utils::world_serializator::hash_size);
-      memcpy(map_systems->hash, world_data.get_hash(), systems::map_t::hash_size);
+      memcpy(map_systems->hash, world_data->get_hash(), systems::map_t::hash_size);
       // и что собственно теперь? мы должны парсить таблицы и заполнять данные в типах
       // create, parse, connect, end
 
-      map_systems->map->world_matrix = world_data.get_world_matrix();
-
-      advance_progress(prog, "creating earth");
+      map_systems->map->world_matrix = world_data->get_world_matrix();
+      
+      // это нужно только если мы создаем карту заново
+      advance_progress(prog, "creating earth"); // 2
       // нужно создать непосредственно core map
-      load_map_data(map_systems->map, &world_data);
+      load_map_data(map_systems->map, world_data, create_map_tiles);
       
       auto device = global::get<systems::core_t>()->graphics_container->device;
       sol::state lua;
-      advance_progress(prog, "loading images");
-      const auto image_data = get_images_tables(&world_data, lua);
-      const auto heraldies_data = get_heraldy_layers_tables(&world_data, lua);
+      lua.open_libraries(sol::lib::base, sol::lib::string, sol::lib::table, sol::lib::bit32, sol::lib::math, sol::lib::utf8); // sol::lib::coroutine // корутины не нужны
+      utils::setup_lua_safe_utils(lua);
+      utils::setup_lua_loading_functions(lua);
+      utils::setup_lua_constants(lua);
+      
+      // мне тут нужен энвайронмент, там нужно удалить рандомность у математики + в этом конкретном случае не делать 
+      // где бы функцию для энвайронмента сделать?
+      // нужно добавить несколько функций из утилс
+      sol::environment env(lua, sol::create);
+      utils::make_environment(lua, env);
+      // тут наверное пригодятся и реквайр и ио линес
+      
+      advance_progress(prog, "loading images"); // 3
+//       const auto image_data = get_images_tables(world_data, lua);
+//       const auto heraldies_data = get_heraldy_layers_tables(world_data, lua);
       auto controller = global::get<systems::core_t>()->image_controller;
       global::get(controller);
-      for (size_t i = 0; i < static_cast<size_t>(render::image_controller::image_type::count); ++i) {
-        //utils::load_images(controller, image_data, static_cast<uint32_t>(render::image_controller::image_type::system));
-        utils::load_images(controller, image_data, i);
+      
+      // тут у нас появляются два типа таблиц: таблица описание, таблица путь
+      {
+        const auto image_data = get_data_tables(world_data, lua, utils::world_serializator::image, "image", utils::validate_image);
+        // было бы неплохо избавиться от этого, но нужно сортануть таблицы
+        for (size_t i = 0; i < static_cast<size_t>(render::image_controller::image_type::count); ++i) {
+          //utils::load_images(controller, image_data, static_cast<uint32_t>(render::image_controller::image_type::system));
+          utils::load_images(controller, image_data, i);
+        }
       }
-      //utils::load_biomes(controller, map_systems->seasons, tables->get_biome_tables());
+      
       yavf::Buffer heraldy_tmp(device, yavf::BufferCreateInfo::buffer(16, VK_BUFFER_USAGE_TRANSFER_SRC_BIT), VMA_MEMORY_USAGE_CPU_ONLY);
-      utils::load_heraldy_layers(controller, heraldies_data, &heraldy_tmp);
+      {
+        const auto heraldies_data = get_data_tables(world_data, lua, utils::world_serializator::heraldy_layer, "heraldy", utils::validate_heraldy_layer);
+        utils::load_heraldy_layers(controller, heraldies_data, &heraldy_tmp);
+      }
+      
+      {
+        const auto biomes_data = get_data_tables(world_data, lua, utils::world_serializator::biome, "biome", utils::validate_biome);
+        utils::load_biomes(controller, map_systems->seasons, biomes_data);
+        
+        map_systems->seasons->validate();
+      }
+      
+      {
+        //load_localization(world_data, lua, global::get<systems::core_t>()->loc);
+        auto inter = global::get<systems::core_t>()->interface_container;
+        load_localization(world_data, inter->lua, inter->env, global::get<systems::core_t>()->loc);
+      }
 
-      advance_progress(prog, "creating entities");
-      create_entity_without_id<core::province>(map_systems->core_context, &world_data);
-      create_entity<core::building_type>(map_systems->core_context, &world_data, lua, &to_data);
-      create_entity<core::city_type>(map_systems->core_context, &world_data, lua, &to_data);
-      create_entity_without_id<core::city>(map_systems->core_context, &world_data);
-      create_entity<core::titulus>(map_systems->core_context, &world_data, lua, &to_data);
+      advance_progress(prog, "creating entities"); // 4
+      create_entity_without_id<core::province>(map_systems->core_context, world_data, lua, utils::world_serializator::province, "province", utils::validate_province);
+      create_entity<core::building_type>(map_systems->core_context, &to_data, world_data, lua, utils::world_serializator::building_type, "building_type", utils::validate_building_type);
+      create_entity<core::city_type>(map_systems->core_context, &to_data, world_data, lua, utils::world_serializator::city_type, "city_type", utils::validate_city_type);
+      create_entity_without_id<core::city>(map_systems->core_context, world_data, lua, utils::world_serializator::city, "city", utils::validate_city);
+      create_entity<core::titulus>(map_systems->core_context, &to_data, world_data, lua, utils::world_serializator::title, "title", utils::validate_title);
   //     map_systems->core_context->create_container<core::province>(world_data.get_data_count(core::structure::province));
   //     map_systems->core_context->create_container<core::building_type>(world_data.get_data_count(core::structure::building_type));
   //     map_systems->core_context->create_container<core::city_type>(world_data.get_data_count(core::structure::city_type));
   //     map_systems->core_context->create_container<core::city>(world_data.get_data_count(core::structure::city));
   //     map_systems->core_context->create_container<core::titulus>(world_data.get_data_count(core::structure::titulus));
       //map_systems->core_context->create_container<core::character>(world_data.get_data_count(core::structure::character));
-      create_characters(map_systems->core_context, &world_data, lua);
+      create_characters(map_systems->core_context, world_data, lua);
 
-      advance_progress(prog, "parsing entities");
-      parse_entities<core::titulus>(map_systems->core_context, &world_data, lua, utils::parse_title);
-      parse_entities<core::province>(map_systems->core_context, &world_data, lua, utils::parse_province);
-      parse_entities<core::building_type>(map_systems->core_context, &world_data, lua, utils::parse_building);
-      parse_entities<core::city_type>(map_systems->core_context, &world_data, lua, utils::parse_city_type);
-      parse_entities<core::city>(map_systems->core_context, &world_data, lua, utils::parse_city);
-      parse_character(map_systems->core_context, &world_data, lua, utils::parse_character);
-      parse_character(map_systems->core_context, &world_data, lua, utils::parse_character_goverment);
+      advance_progress(prog, "parsing entities"); // 5
+      parse_entities<core::titulus>(map_systems->core_context, world_data, lua, utils::world_serializator::title, "title", utils::validate_title, utils::parse_title);
+      parse_entities<core::province>(map_systems->core_context, world_data, lua, utils::world_serializator::province, "province", utils::validate_province, utils::parse_province);
+      parse_entities<core::building_type>(map_systems->core_context, world_data, lua, utils::world_serializator::building_type, "building_type", utils::validate_building_type, utils::parse_building);
+      parse_entities<core::city_type>(map_systems->core_context, world_data, lua, utils::world_serializator::city_type, "city_type", utils::validate_city_type, utils::parse_city_type);
+      parse_entities<core::city>(map_systems->core_context, world_data, lua, utils::world_serializator::city, "city", utils::validate_city, utils::parse_city);
+      parse_character(map_systems->core_context, world_data, lua);
       // тут нужно еще соединить все полученные данные друг с другом
-      advance_progress(prog, "connecting game data");
+      advance_progress(prog, "connecting game data"); // 6
       connect_game_data(map_systems->map, map_systems->core_context);
       // тут тупое копирование для того чтобы это работало нужно расположить данные так же как они были до сохранения
       // это зависит от расположения картинок в массиве и по идее это расположение не изменяется
       // мы можем просто добавить таблицы биомов в сохранку
       
-      advance_progress(prog, "preparing biomes");
-      world_data.fill_seasons(map_systems->seasons);
+      advance_progress(prog, "preparing biomes"); // 7
+      //world_data->fill_seasons(map_systems->seasons);
       
       const auto &data = get_season_biomes_data(map_systems);
-      map_systems->lock_map();
-      controller->update_set();
-      map_systems->map->copy_biomes(map_systems->seasons);
-      global::get<render::tile_optimizer>()->set_biome_tile_count(data);
-      map_systems->unlock_map();
-      
-      map_systems->map->set_tile_biome(map_systems->seasons);
       
       {
         auto buffers = global::get<render::buffers>();
@@ -1782,6 +2070,10 @@ namespace devils_engine {
         yavf::Buffer buf(device, yavf::BufferCreateInfo::buffer(structure_data_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT), VMA_MEMORY_USAGE_CPU_ONLY);
         auto map = map_systems->map;
         map_systems->lock_map();
+        controller->update_set();
+        map_systems->map->copy_biomes(map_systems->seasons);
+        global::get<render::tile_optimizer>()->set_biome_tile_count(data);
+        
         copy_structure_data(ctx, 0, map, &buf);
         map->structures->resize(structure_data_size);
         buffers->heraldy->resize(heraldy_tmp.info().size);
@@ -1800,6 +2092,8 @@ namespace devils_engine {
         map->flush_structures();
         map_systems->unlock_map();
       }
+      
+      map_systems->map->set_tile_biome(map_systems->seasons);
 
       map_systems->render_modes->at(render::modes::biome)();
       global::get(reinterpret_cast<utils::data_string_container*>(SIZE_MAX));
@@ -1807,12 +2101,10 @@ namespace devils_engine {
       global::get(reinterpret_cast<render::image_controller*>(SIZE_MAX));
       global::get(reinterpret_cast<utils::numeric_string_container*>(SIZE_MAX));
 
-      advance_progress(prog, "filling tile connections");
-      generate_tile_connections(map_systems->map, global::get<dt::thread_pool>());
-      advance_progress(prog, "creating borders");
+      //advance_progress(prog, "filling tile connections");
+      //generate_tile_connections(map_systems->map, global::get<dt::thread_pool>()); // это теперь не нужно
+      advance_progress(prog, "creating borders"); // 8
       find_border_points(map_systems->map, map_systems->core_context); // после генерации нужно сделать много вещей
-      
-      make_random_player_character();
     }
 
     void from_menu_to_create_map(utils::progress_container* prog) {
@@ -1857,10 +2149,20 @@ namespace devils_engine {
   //     setup_map_generator(*map_systems);
       auto t = global::get<render::tile_optimizer>();
       t->set_border_rendering(false);
-
-      loading_world(map_systems, prog, base_systems->menu->loading_path); // мы должны выбрать: либо загрузка мира, либо загрузка сохранения (там загрузка мира тоже будет)
-      base_systems->menu->loading_path.clear();
-      base_systems->menu->loading_path.shrink_to_fit();
+      
+      //ASSERT(!base_systems->menu->loading_path.empty())
+      ASSERT(!map_systems->load_world.empty());
+      
+      utils::world_serializator world_data;
+      world_data.deserialize(map_systems->load_world);
+      
+      world_data.fill_seasons(map_systems->seasons);
+      // мы должны выбрать: либо загрузка мира, либо загрузка сохранения (там загрузка мира тоже будет)
+      loading_world(map_systems, prog, &world_data, true);
+//       ASSERT(false);
+      make_random_player_character();
+      map_systems->load_world.clear();
+      map_systems->load_world.shrink_to_fit();
       advance_progress(prog, "end");
       
       ASSERT(prog->finished());

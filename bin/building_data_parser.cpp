@@ -259,7 +259,7 @@ namespace devils_engine {
       }
     }
     
-    bool validate_building(const size_t &index, const sol::table &table) {
+    bool validate_building_type(const size_t &index, const sol::table &table) {
       size_t counter = 0;
       auto id = table["id"];
       std::string check_str;
@@ -276,7 +276,7 @@ namespace devils_engine {
     }
     
     bool validate_building_and_save(const size_t &index, sol::this_state lua, const sol::table &table, utils::world_serializator* container) {
-      const bool ret = validate_building(index, table);
+      const bool ret = validate_building_type(index, table);
       if (!ret) return false;
       
 //       const size_t size = sizeof(building_table) / sizeof(building_table[0]);
@@ -288,7 +288,8 @@ namespace devils_engine {
 //       auto str = table_to_string(lua, table, keyallow);
       auto str = table_to_string(lua, table, sol::table());
       if (str.empty()) throw std::runtime_error("Could not serialize building table");
-      container->add_data(core::structure::building_type, std::move(str));
+      ASSERT(false);
+      //container->add_data(core::structure::building_type, std::move(str));
       
       return true;
     }

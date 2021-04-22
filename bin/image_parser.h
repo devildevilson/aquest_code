@@ -2,7 +2,7 @@
 #define IMAGE_PARSER_H
 
 #include "utils/sol.h"
-#include "seasons.h"
+#include "render/shared_structures.h"
 
 // в таблицах изображения указываются в виде "img_name.index.mirror"
 // это позволяет мне не парится по поводу каких то возвращаемых значений из парсера
@@ -19,6 +19,10 @@
 // скорее всего тут тоже неполучится узнать заранее что нам нужно а что нет
 
 namespace devils_engine {
+  namespace core {
+    struct seasons;
+  }
+  
   namespace render {
     struct image_controller;
   }
@@ -35,6 +39,7 @@ namespace devils_engine {
     
     size_t add_biome(const sol::table &table);
     size_t add_battle_biome(const sol::table &table);
+    bool validate_biome(const uint32_t &index, const sol::table &table);
     bool validate_battle_biome(const uint32_t &index, const sol::table &table);
     // сохранять при генерации битвы ничего не нужно
     //bool validate_battle_biome_and_save(const uint32_t &index, sol::this_state lua, const sol::table &table, world_serializator* container);

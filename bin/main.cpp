@@ -45,15 +45,17 @@ int main(int argc, char const *argv[]) {
   
   input::block();
 
+  utils::main_menu_loading_state main_menu_loading_state;
   utils::main_menu_state main_menu_state;
+  utils::map_creation_loading_state map_creation_loading_state;
   utils::map_creation_state map_creation_state;
+  utils::map_creation_generation_state map_creation_generation_state;
+  utils::world_map_loading_state world_map_loading_state;
   utils::world_map_state world_map_state;
+  utils::battle_loading_state battle_loading_state;
   utils::battle_state battle_state;
+  utils::encounter_loading_state encounter_loading_state;
   utils::encounter_state encounter_state;
-
-//   render::updater upd;
-//   global::get(&upd);
-//   yacs::world world;
 
   // по всей видимости луа занимает реально много памяти
   // что то с этим сделать вряд ли можно (интересно есть ли какие нибудь жесткие ограничения на андроиде?)
@@ -219,57 +221,74 @@ int main(int argc, char const *argv[]) {
   // но чему то решил сделать пока в с++, переписанные функции луа по известным причинам значительно
   // медленее чем с++ аналоги (с оптимизациями generate_plates занимает 13 секунд)
   // есть ли хоть какая то возможность ускорить это дело?
+  
+  // несколько очень важных изменений: теперь весь интерфейс одной функцией у меня
+  // в том числе не существует явных переходов между одним интерфейсом и другим
+  // все это дело задается с помощью разных таблиц и игрового состояния
+  // это избавляет меня от придумывания сложных состояний и отделяет интерфейс
+  // от других частей программы, остается вопрос с инпутом, если нет явных переходов
+  // то и явных ограничений на инпут тоже нет + интерфейс рисуется полностью
+  // а значит и менюшка поверх геймплея рисуется в это же время, без необходимости
+  // заводить отдельную структуру меню, логика меню будет собственно в этой функции,
+  // короче что делать с инпутом? собственно два варианта: либо всю логику перетащить
+  // в луа, либо только часть логики, мы можем перетащить всю логику, для этого
+  // нам нужно сделать выделение, приказ на передвижение и проч
+  // полностью перенести уже не получится, перемещение камеры контролируется 
+  // довольно сложно... ну хотя сложность заключается в основном в том что
+  // мне нужно еще положение курсора получать, в общем пока что фиг с ним
+  // что нужно сделать сейчас так это кнопки, лучше конечно сделать 
+  // просто тупа все эвенты чтобы в интерфейсе можно было поймать, 
+  // единственное разраничение что на одну кнопку можно несколько эвентов повесить 
+  // по состояниям приложения
 
   const std::array<utils::quest_state*, utils::quest_state::count> game_states = {
+    &main_menu_loading_state,
     &main_menu_state,
+    &map_creation_loading_state,
     &map_creation_state,
+    &map_creation_generation_state,
+    &world_map_loading_state,
     &world_map_state,
     // эти стейты должны генерить карту, сохранения? в любом случае будут в этом стейте
+    &battle_loading_state,
     &battle_state,
+    &encounter_loading_state,
     &encounter_state
   };
+  
+#ifndef _NDEBUG
+  for (size_t i = 0; i < game_states.size(); ++i) {
+    assert(game_states[i]->current_state() == i);
+  }
+  
+  assert(game_states[utils::quest_state::main_menu_loading]->current_state() == utils::quest_state::main_menu_loading);
+  assert(game_states[utils::quest_state::world_map]->current_state() == utils::quest_state::world_map);
+  assert(game_states[utils::quest_state::world_map_generator]->current_state() == utils::quest_state::world_map_generator);
+#endif
+  
+  // теперь у меня есть структура с игровым контекстом
+  // нам нужно использовать тамошние переменные
+  auto game_ctx = base_systems.game_ctx;
+  game_ctx->state = utils::quest_state::main_menu_loading;
 
-  uint32_t current_game_state_index = utils::quest_state::main_menu;
+  //uint32_t current_game_state_index = utils::quest_state::main_menu_loading;
   //uint32_t current_game_state_index = utils::quest_state::battle;
-  utils::quest_state* current_game_state = game_states[current_game_state_index];
+  utils::quest_state* current_game_state = game_states[game_ctx->state];
   utils::quest_state* previous_game_state = nullptr;
   bool loading = true;
+  current_game_state->enter(previous_game_state);
 
 //   std::future<void> rendering_future;
   global::get<render::window>()->show();
   utils::frame_time frame_time;
-  while (!global::get<render::window>()->close() && !base_systems.menu->m_quit_game) {
+  while (!global::get<render::window>()->close() && !game_ctx->quit_game_var) { // !base_systems.menu->m_quit_game
     frame_time.start();
     const size_t time = frame_time.get();
     input::update_time(time);
     poll_events();
     if (global::get<render::window>()->close()) break;
     
-    //if (rendering_future.valid()) rendering_future.get();
-    //if (rendering_future.valid()) rendering_future.wait();
-
-    if (loading) {
-      if (current_game_state->load(previous_game_state)) {
-        loading = false;
-        //base_systems.interface_container->close_all();
-      }
-    } else {
-      current_game_state->update(time);
-      if (current_game_state->next_state() != UINT32_MAX) {
-        const uint32_t index = current_game_state->next_state();
-        // ождается что здесь мы почистим все ресурсы доконца и обратно вернем next_state к UINT32_MAX
-        // это не работает для перехода от карты к битве и обратно
-        // мне либо делать так же как в героях (то есть не чистить память мира)
-        // либо нужно придумать иной способ взаимодействия между стейтами
-        // переделал немного
-        previous_game_state = current_game_state;
-//         current_game_state->clean();
-        current_game_state = game_states[index];
-//         current_game_state->enter(); // здесь мы должны подготовить системы к использованию
-        loading = true;
-        current_game_state_index = index;
-      }
-    }
+    manage_states(game_states, &current_game_state, &previous_game_state, game_ctx, time);
     
     if (!loading && current_game_state == &world_map_state) {
 //       static bool first = true;
@@ -433,7 +452,7 @@ int main(int argc, char const *argv[]) {
     const uint32_t tile_index = cast_mouse_ray();
     const uint32_t battle_tile_index = get_casted_battle_map_tile();
     mouse_input(camera, time, tile_index);
-    key_input(time, current_game_state_index, loading);
+    key_input(time, 0, loading);
     zoom_input(camera);
     next_nk_frame(time);
     camera::strategic(camera);
@@ -442,7 +461,8 @@ int main(int argc, char const *argv[]) {
     
 //     PRINT_VEC3("camera pos", camera->current_pos())
     
-    base_systems.interface_container->draw(time);
+    //base_systems.interface_container->draw(time);
+    base_systems.interface_container->update(time);
     
     // в текущем виде занимает в среднем от 20-50 мкс, 
     // я так подозреваю что проблемы начнутся только от 1000 юнитов

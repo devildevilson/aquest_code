@@ -36,7 +36,7 @@ namespace devils_engine {
       auto window = global::get<render::window>();
       auto buffers = global::get<render::buffers>();
       
-      const float minimum_dist = 100.0f;
+      const float minimum_dist = 150.0f;
       const float maximum_dist = 256.0f;
       
       const float raw_zoom = camera->zoom();
@@ -58,10 +58,6 @@ namespace devils_engine {
         0.0f, 0.0f, 1.0f, 0.0f,
         0.0f, 0.0f, 0.0f, 1.0f
       );
-      
-//       PRINT_VEC3("camera pos", pos)
-//       PRINT_VEC3("camera dir", dir)
-//       PRINT_VEC3("camera up ", up)
       
       //buffers->update_matrix(persp * view);
       buffers->update_projection_matrix(persp);
@@ -297,6 +293,10 @@ namespace devils_engine {
       return from_spherical_to_decard(m_spherical_pos);
     }
     
+    float world_map_camera::zoom() const {
+      return glm::length(current_pos()) - (core::map::world_radius + minimum_camera_height);
+    }
+    
 //     float camera::zoom() const { return m_spherical_pos.x - (core::map::world_radius + minimum_camera_height); }
 //     
 //     glm::vec3 camera::dir() const {
@@ -330,8 +330,8 @@ namespace devils_engine {
       
       const float height1 = min_zoom + 5.0f;
       const float height2 = max_zoom - 15.0f;
-      const float angle_min = -30.0f;
-      const float angle_max = -89.0f;
+      const float angle_min = -50.0f;
+      const float angle_max = -89.9f;
       
       float angle = glm::radians(angle_min);
       if (zoom > height1 && zoom <= height2) angle = glm::radians(glm::mix(angle_min, angle_max, (zoom - height1) / (height2 - height1)));
@@ -455,6 +455,10 @@ namespace devils_engine {
       return m_current_pos;
     }
     
+    float battle_camera::zoom() const {
+      return m_current_pos.y - (minimum_camera_height + min_zoom);
+    }
+    
     glm::vec3 battle_camera::compute_dir(const glm::vec3 &normal, const float zoom, float &current_angle) {
       // тут нужно подобрать несколько коэффициентов 
       // по которым камера плавно переходит от одного угла к другому
@@ -475,4 +479,5 @@ namespace devils_engine {
 //     transform::transform(const glm::vec3 &pos, const glm::vec3 &scale) : pos(pos), scale(scale) {}
   }
 }
+
 

@@ -606,6 +606,8 @@ namespace devils_engine {
 
   void key_input(const size_t &time, const uint32_t &current_state, const bool loading) {
     (void)time;
+    (void)loading;
+    
     static const utils::id modes[] = {
       utils::id::get("biome_render_mode"),
       utils::id::get("cultures_render_mode"),
@@ -629,20 +631,20 @@ namespace devils_engine {
 //     auto container = global::get<map::generator::container>();
 
     auto s = global::get<systems::core_t>();
-    const bool get_menu = current_state != utils::quest_state::map_creation &&
-                          //current_state != game_state::loading &&
-                          input::check_key(GLFW_KEY_ESCAPE, input::state::state_click | input::state::state_double_click | input::state::state_long_click);
-    const bool last_menu = current_state == utils::quest_state::main_menu && s->menu->menu_stack.size() == 1;
-    if (!loading && get_menu) {
-      if (s->interface->escape()) return;
-      if (!s->menu->exist()) {
-        if (current_state == utils::quest_state::main_menu) s->menu->push("main_menu");
-        else s->menu->push("main_menu_map");
-      } else if (!last_menu) s->menu->escape();
-      return;
-    }
+//     const bool get_menu = current_state != utils::quest_state::map_creation &&
+//                           //current_state != game_state::loading &&
+//                           input::check_key(GLFW_KEY_ESCAPE, input::state::state_click | input::state::state_double_click | input::state::state_long_click);
+//     const bool last_menu = current_state == utils::quest_state::main_menu && s->menu->menu_stack.size() == 1;
+//     if (!loading && get_menu) {
+//       if (s->interface->escape()) return;
+//       if (!s->menu->exist()) {
+//         if (current_state == utils::quest_state::main_menu) s->menu->push("main_menu");
+//         else s->menu->push("main_menu_map");
+//       } else if (!last_menu) s->menu->escape();
+//       return;
+//     }
 
-    if (current_state == utils::quest_state::world_map) {
+//     if (current_state == utils::quest_state::world_map) {
       size_t mem = 0;
       auto change = input::next_input_event(mem, 1);
       while (change.id.valid()) {
@@ -683,28 +685,28 @@ namespace devils_engine {
             continue;
           }
 
-          for (size_t i = 0; i < render::modes::count; ++i) {
-            if (local_copy.id != modes[i]) continue;
-            render::mode(static_cast<render::modes::values>(i));
-            break;
-          }
+//           for (size_t i = 0; i < render::modes::count; ++i) {
+//             if (local_copy.id != modes[i]) continue;
+//             render::mode(static_cast<render::modes::values>(i));
+//             break;
+//           }
         }
       }
-    }
+//     }
     
-    if (current_state == utils::quest_state::battle) {
-      size_t mem = 0;
-      auto change = input::next_input_event(mem, 1);
-      while (change.id.valid()) {
-        auto local_copy = change;
-        change = input::next_input_event(mem, 1);
-        
-        if (local_copy.event != input::release) {
-          if (local_copy.id == go_to_capital) {
-            // тут мы переместимся к своей армии
-          }
-        }
-      }
+    if (current_state == utils::quest_state::battle_map) {
+//       size_t mem = 0;
+//       auto change = input::next_input_event(mem, 1);
+//       while (change.id.valid()) {
+//         auto local_copy = change;
+//         change = input::next_input_event(mem, 1);
+//         
+//         if (local_copy.event != input::release) {
+//           if (local_copy.id == go_to_capital) {
+//             // тут мы переместимся к своей армии
+//           }
+//         }
+//       }
     }
     
     if (current_state == utils::quest_state::encounter) {
@@ -970,6 +972,82 @@ namespace devils_engine {
 //       glfwSetInputMode(window->handle, GLFW_CURSOR, GLFW_CURSOR_HIDDEN);
 //     }
   }
+  
+  void manage_states(
+    const std::array<utils::quest_state*, utils::quest_state::count> &states, 
+    utils::quest_state** current_game_state, 
+    utils::quest_state** previous_game_state, 
+    game::context* game_ctx,
+    const size_t &time
+  ) {
+    auto cur = *current_game_state;
+    auto prev = *previous_game_state;
+    
+    // что-то в программе или current_game_state обновляет новый стейт
+    // в интерфейсе мы делаем какую нидуь анимацию конца стейта и обновляем текущий
+    // здесь при смене текущего мы должны обновить гейм стейт
+    // ... ???
+    
+    //if (game_ctx->is_loading() || !game_ctx->state_eq()) return;
+    
+//     if (game_ctx->is_loading()) {
+//       if (game_ctx->state_eq()) {if (cur->load(prev)) {
+//         game_ctx->new_state = static_cast<enum game::context::state>(static_cast<size_t>(game_ctx->state) + 1);
+//       }}
+//       
+//       return;
+//     } 
+//     
+//     cur->update(time, prev);
+//     if (cur->next_state() != UINT32_MAX) {
+//       const uint32_t index = cur->next_state();
+//       // ождается что здесь мы почистим все ресурсы доконца и обратно вернем next_state к UINT32_MAX
+//       // это не работает для перехода от карты к битве и обратно
+//       // мне либо делать так же как в героях (то есть не чистить память мира)
+//       // либо нужно придумать иной способ взаимодействия между стейтами
+//       // переделал немного
+//       *previous_game_state = *current_game_state;
+//       *current_game_state = states[index];
+//       switch (index) {
+//         case utils::quest_state::main_menu:    game_ctx->new_state = game::context::state::main_menu_loading; break;
+//         case utils::quest_state::map_creation: game_ctx->new_state = game::context::state::world_map_generator_loading; break;
+//         case utils::quest_state::world_map:    game_ctx->new_state = game::context::state::world_map_loading; break;
+//         case utils::quest_state::battle:       game_ctx->new_state = game::context::state::battle_map_loading; break;
+//         case utils::quest_state::encounter:    game_ctx->new_state = game::context::state::encounter_loading; break;
+//         default: throw std::runtime_error("Bad state index");
+//       }
+//     }
+    
+    // нужно быть предельно аккуратным, переход от лодинга к меню, например, почистит не все ресурсы (!!!)
+    // как быть? можно в клин добавить указатель на некст_стейт, и если он не совпадает с ожидаемым, чистить ресурсы как положено
+    // похоже что это самое нормальное решение
+    if (game_ctx->state != (*current_game_state)->current_state()) {
+      *previous_game_state = *current_game_state;
+      *current_game_state = states[game_ctx->state];
+      (*current_game_state)->enter(*previous_game_state);
+    }
+    
+    // короче нужно сделать квест стейт по количеству геймстейтов
+    // у квест стейта оставить только апдейт, ну и собственно его и обновлять
+    // энтер, клир, апдейт
+    
+    // идея с отложенным началом следующего стейта - говно
+    // начать вычисления стейта мы должны как можно скорее
+    // 
+    
+    // перестает обновляться когда стейт обновился, хотя не должен
+    const uint32_t next_state = cur->update(time, prev);
+    if (next_state == UINT32_MAX || next_state == cur->current_state()) return;
+    
+//     if (next_state != UINT32_MAX || next_state != cur->current_state()) {
+      //const uint32_t index = cur->next_state();
+      const uint32_t index = next_state;
+      *previous_game_state = *current_game_state;
+      *current_game_state = states[index];
+      (*current_game_state)->enter(*previous_game_state);
+      game_ctx->state = index;
+//     }
+  }
 
   void create_render_system(systems::core_t &base_systems) {
     uint32_t count;
@@ -989,24 +1067,26 @@ namespace devils_engine {
   }
 
   sol::function basic_interface_functions(systems::core_t &base_systems) {
-    const std::string script_folder = global::root_directory() + "scripts/";
-    base_systems.interface_container->process_script_file(script_folder + "generator_progress.lua");
-    base_systems.interface_container->process_script_file(script_folder + "user_interface.lua");
-    base_systems.interface_container->process_script_file(script_folder + "player_layer.lua");
-    base_systems.interface_container->process_script_file(script_folder + "settings_menu.lua");
-    base_systems.interface_container->process_script_file(script_folder + "tile_interface.lua");
-    //options_window
-    base_systems.interface_container->register_function("progress_bar", "progress_bar");
-    base_systems.interface_container->register_function("main_menu_window", "main_menu");
-    base_systems.interface_container->register_function("main_menu_map", "main_menu_map");
-    base_systems.interface_container->register_function("worlds_window_func", "worlds_window");
-    base_systems.interface_container->register_function("main_interface_layer", "player_interface");
-    base_systems.interface_container->register_function("options_menu_window", "options_window");
-    base_systems.interface_container->register_function("graphics_options_window", "graphics_window");
-    
-    const auto proxy = base_systems.interface_container->lua["tile_window"];
-    if (proxy.get_type() != sol::type::function) throw std::runtime_error("Bad tile interface function");
-    return proxy.get<sol::function>();
+//     const std::string script_folder = global::root_directory() + "scripts/";
+//     base_systems.interface_container->process_script_file(script_folder + "generator_progress.lua");
+//     base_systems.interface_container->process_script_file(script_folder + "user_interface.lua");
+//     base_systems.interface_container->process_script_file(script_folder + "player_layer.lua");
+//     base_systems.interface_container->process_script_file(script_folder + "settings_menu.lua");
+//     base_systems.interface_container->process_script_file(script_folder + "tile_interface.lua");
+//     //options_window
+//     base_systems.interface_container->register_function("progress_bar", "progress_bar");
+//     base_systems.interface_container->register_function("main_menu_window", "main_menu");
+//     base_systems.interface_container->register_function("main_menu_map", "main_menu_map");
+//     base_systems.interface_container->register_function("worlds_window_func", "worlds_window");
+//     base_systems.interface_container->register_function("main_interface_layer", "player_interface");
+//     base_systems.interface_container->register_function("options_menu_window", "options_window");
+//     base_systems.interface_container->register_function("graphics_options_window", "graphics_window");
+//     
+//     const auto proxy = base_systems.interface_container->lua["tile_window"];
+//     if (proxy.get_type() != sol::type::function) throw std::runtime_error("Bad tile interface function");
+//     return proxy.get<sol::function>();
+    base_systems.interface_container->load_interface_file(global::root_directory() + "scripts/interface/main.lua");
+    return sol::nil;
   }
 
   #define OUTSIDE 0
@@ -1563,7 +1643,7 @@ namespace devils_engine {
     //global::get<render::stage_container>()->recreate(w, h);
     system->interface_container->free_fonts();
     global::get<interface::context>()->remake_font_atlas(w, h);
-    system->interface_container->make_fonts();
+    system->interface_container->get_fonts();
   //   std::cout << "window_resize_callback width " << w << " height " << h << '\n';
     
     auto settings = global::get<utils::settings>();

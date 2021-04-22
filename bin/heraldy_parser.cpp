@@ -105,7 +105,8 @@ namespace devils_engine {
       sol::state_view state(lua);
       auto str = table_to_string(lua, table, sol::table());
       if (str.empty()) throw std::runtime_error("Could not serialize image table");
-      container->add_heraldy_data(std::move(str));
+      ASSERT(false);
+      //container->add_heraldy_data(std::move(str));
       
       return true;
     }

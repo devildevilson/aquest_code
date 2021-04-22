@@ -55,8 +55,9 @@ namespace devils_engine {
     void validate_and_create_data(systems::map_t* map_systems, utils::progress_container* prog);
     void post_generation_work(systems::map_t* map_systems, systems::core_t* systems, utils::progress_container* prog);
     
-    void load_map_data(core::map* map, utils::world_serializator* world);
-    void loading_world(systems::map_t* map_systems, utils::progress_container* prog, const std::string &world_path);
+    void load_map_data(core::map* map, const utils::world_serializator* world, const bool make_tiles);
+    //void loading_world(systems::map_t* map_systems, utils::progress_container* prog, const std::string &world_path);
+    void loading_world(systems::map_t* map_systems, utils::progress_container* prog, const utils::world_serializator* world_data, const bool create_map_tiles);
     void from_menu_to_create_map(utils::progress_container* prog);
     void from_menu_to_map(utils::progress_container* prog);
     void from_create_map_to_map(utils::progress_container* prog);

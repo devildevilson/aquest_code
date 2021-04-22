@@ -43,8 +43,8 @@ namespace devils_engine {
       virtual void set_end_pos(const glm::vec3 &end_pos) = 0;
       virtual void set_end_point(const glm::vec3 &end_pos) = 0;
       virtual glm::vec3 current_pos() const = 0;
+      virtual float zoom() const = 0;
       
-      inline float zoom() const { return m_zoom; }
       inline float min_zoom() const { return m_min_zoom; }
       inline float max_zoom() const { return m_max_zoom; }
       
@@ -89,6 +89,7 @@ namespace devils_engine {
       void set_end_point(const glm::vec3 &end_pos) override; // мы летим к точке такой чтобы камера была напралена к точке
       
       glm::vec3 current_pos() const override;
+      float zoom() const override;
       
 //       float zoom() const;
 //       glm::vec3 dir() const;
@@ -130,6 +131,7 @@ namespace devils_engine {
       void set_end_pos(const glm::vec3 &end_pos) override;
       void set_end_point(const glm::vec3 &end_pos) override;
       glm::vec3 current_pos() const override;
+      float zoom() const override;
     private:
       glm::vec3 m_current_pos;
       glm::vec3 m_end_pos;

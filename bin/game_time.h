@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <vector>
 #include <atomic>
+#include <string>
 #include "render/shared_structures.h"
 
 namespace devils_engine {
@@ -27,7 +28,7 @@ namespace devils_engine {
     
     struct calendar {
       struct month_data {
-        size_t name_str;
+        std::string name_id;
         uint32_t days_count;
       };
       

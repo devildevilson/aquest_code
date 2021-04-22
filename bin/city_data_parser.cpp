@@ -8,6 +8,9 @@
 #include "map_creator.h"
 #include <iostream>
 
+#define TO_LUA_INDEX(index) ((index)+1)
+#define FROM_LUA_INDEX(index) ((index)-1)
+
 namespace devils_engine {
   namespace utils {
     const check_table_value city_table[] = {
@@ -86,7 +89,8 @@ namespace devils_engine {
       //auto str = table_to_string(lua, table, keyallow);
       auto str = table_to_string(lua, table, sol::table());
       if (str.empty()) throw std::runtime_error("Could not serialize city type table");
-      container->add_data(core::structure::city, std::move(str));
+      ASSERT(false);
+      //container->add_data(core::structure::city, std::move(str));
       
       return true;
     }
@@ -96,7 +100,10 @@ namespace devils_engine {
       auto ctx = global::get<core::context>();
       
       {
-        const size_t index = table["province"];
+        // индексы у нас приходят из луа, а это значит что все они будут смещены на единичку
+        // тут в парсере нужно исправлять это дело, можно ли сделать это унифицированным способом?
+        // так чтобы на всякий случай можно было бы быстро переключить? макросы короче говоря
+        const size_t index = FROM_LUA_INDEX(table["province"].get<uint32_t>());
         auto province = ctx->get_entity<core::province>(index);
         city->province = province;
       }
@@ -118,7 +125,7 @@ namespace devils_engine {
         memcpy(city->current_stats.data(), city_type->stats.data(), sizeof(core::stat_container) * core::city_stats::count);
       }
       
-      city->tile_index = table["tile_index"];
+      city->tile_index = FROM_LUA_INDEX(table["tile_index"].get<uint32_t>());
       
       // пока все ???
     }

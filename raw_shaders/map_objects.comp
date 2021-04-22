@@ -2,6 +2,7 @@
 
 #extension GL_GOOGLE_include_directive : enable
 #include "../render/shared_structures.h"
+#include "../render/shared_render_utility.h"
 #include "../utils/shared_mathematical_constant.h"
 
 layout(set = 0, binding = 0) uniform Camera {
@@ -47,8 +48,10 @@ layout(std140, set = 1, binding = 7) readonly buffer army_data_buffer { // эт�
 };
 
 layout(std140, set = 2, binding = 0) buffer tile_indirect_buffer {
-  uvec4 tiles_indirect;
-  uvec4 tiles_data;
+  uvec4 pen_tiles_indirect;
+  uvec4 pen_tiles_data;
+  uvec4 hex_tiles_indirect;
+  uvec4 hex_tiles_data;
   uvec4 borders_indirect;
   uvec4 borders_data;
   uvec4 walls_indirect;
@@ -113,23 +116,17 @@ bool test_ray_aabb(const vec4 ray_pos, const vec4 ray_dir, const vec4 box_center
 
 layout(local_size_x = WORK_GROUP, local_size_y = 1, local_size_z = 1) in;
 
+// рендер поменялся, теперь у нас первые 12 слотов в буфере - это пентагоны
+// причем не все 12 слотов заняты, остальные после 12 индексы заняты полностью
+
 void main() {
   const uint local_index = gl_GlobalInvocationID.x;
-  // у нас не всегда 7 индексов на тайл, есть легкие вкрапления 6 индексов
-  // мы по прежнему можем найти нужный тайл с помощью цикла
-  // было бы лучше сделать все же везде 7 индексов
-  const uint final_index = local_index * (PACKED_TILE_INDEX_COEF+1);
-  // uint counter = 0;
-  // for (uint i = 0 ; i < final_index; ++i) {
-  //   const uint inst_index = i / 4;
-  //   const uint vec_index  = i % 4;
-  //   counter += tiles_indices[inst_index][vec_index] == GPU_UINT_MAX;
-  // }
-  if (final_index >= tiles_indirect.x) return;
+  const uint final_index = local_index; // * (PACKED_TILE_INDEX_COEF+1)
+  if (final_index >= hex_tiles_indirect.y + pen_tiles_indirect.y) return;
 
   const uint inst_index = final_index / 4;
   const uint vec_index  = final_index % 4;
-  const uint tile_index = tiles_indices[inst_index].index[vec_index] / PACKED_TILE_INDEX_COEF;
+  const uint tile_index = tiles_indices[inst_index].index[vec_index]; //  / PACKED_TILE_INDEX_COEF
   // было бы неплохо использовать предыдущие буфферы
   // я могу использовать borders_indices, walls_indices, objects_indices
   // нужно сделать эти буферы какого то одного большого размера

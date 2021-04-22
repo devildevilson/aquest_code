@@ -252,21 +252,14 @@ namespace devils_engine {
 
       void recreate_pipelines(const game::image_resources_t* resource) override;
       void change_rendering_mode(const uint32_t &render_mode, const uint32_t &water_mode, const uint32_t &render_slot, const uint32_t &water_slot, const glm::vec3 &color);
-      void add(const uint32_t &tile_index); // кажется только индекс тайла нам нужен
-      void picked_tile(const uint32_t &tile_index);
       
       yavf::Buffer* vertex_indices() const;
     private:
       yavf::Device* device;
       tile_optimizer* opt;
       yavf::Pipeline pipe;
-      yavf::Pipeline one_tile_pipe;
-//       yavf::Buffer* indices;
       yavf::Buffer* points_indices;
       yavf::DescriptorSet* images_set;
-      uint32_t picked_tile_index;
-
-      void create_render_pass();
     };
     
     class tile_border_render : public stage, public pipeline_stage {

@@ -968,40 +968,13 @@ namespace devils_engine {
                  .colorBlendBegin(VK_FALSE)
                    .colorWriteMask(VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT)
                  .create(TILE_RENDER_PIPELINE_NAME, layout, global::get<render::window>()->render_pass);
-                 
-//         pm.clearBlending();
-//         one_tile_pipe = pm.addShader(VK_SHADER_STAGE_VERTEX_BIT, vertex2)
-//                  .addShader(VK_SHADER_STAGE_FRAGMENT_BIT, fragment2)
-//                  .vertexBinding(0, sizeof(uint32_t))
-//                    .vertexAttribute(0, 0, VK_FORMAT_R32_UINT, 0)
-//                  .depthTest(VK_FALSE)
-//                  .depthWrite(VK_FALSE)
-//                  .frontFace(VK_FRONT_FACE_COUNTER_CLOCKWISE)
-//                  .cullMode(VK_CULL_MODE_FRONT_BIT)
-//                  .assembly(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN)
-//                  .viewport()
-//                  .scissor()
-//                  .dynamicState(VK_DYNAMIC_STATE_VIEWPORT)
-//                  .dynamicState(VK_DYNAMIC_STATE_SCISSOR)
-//                  .colorBlendBegin(VK_FALSE)
-//                    .colorWriteMask(VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT)
-//                  .create("one_tile_pipeline", layout2, global::get<render::window>()->render_pass);
       }
-
-      // {
-      //   yavf::DescriptorMaker dm(device);
-      //   auto desc = dm.layout(storage_layout).create(pool)[0];
-      //   size_t i = desc->add({indices, 0, indices->info().size, 0, 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER});
-      //   indices->setDescriptor(desc, i);
-      // }
     }
 
     tile_render::~tile_render() {
       device->destroy(points_indices);
       device->destroy(pipe.layout());
       device->destroy(pipe);
-//       device->destroy(one_tile_pipe.layout());
-//       device->destroy(one_tile_pipe);
     }
 
     void tile_render::begin() {}
@@ -1012,8 +985,6 @@ namespace devils_engine {
       
       auto uniform = global::get<render::buffers>()->uniform;
       auto tiles = map->tiles;
-//       auto points = global::get<render::buffers>()->points;
-//       auto biomes = global::get<render::buffers>()->biomes;
       
       auto indirect_buffer = opt->indirect_buffer();
       auto indices_buffer = opt->tiles_index_buffer();
@@ -1021,7 +992,6 @@ namespace devils_engine {
       auto task = ctx->graphics();
       task->setPipeline(pipe);
       ASSERT(uniform->descriptorSet() != nullptr);
-      // забыл создать буферу дескриптор
       ASSERT(tiles->descriptorSet() != nullptr);
       task->setDescriptor({uniform->descriptorSet()->handle(), images_set->handle(), tiles->descriptorSet()->handle()}, 0);
       
@@ -1032,42 +1002,9 @@ namespace devils_engine {
       task->setVertexBuffer(indices_buffer, 0, sizeof(uint32_t)*12);
       task->setIndexBuffer(points_indices, VK_INDEX_TYPE_UINT16, sizeof(pen_index_array));
       task->drawIndexedIndirect(indirect_buffer, 1, offsetof123(struct render::tile_optimizer::indirect_buffer, hex_tiles_command));
-      
-//       task->setVertexBuffer(instances_buffer, 0);
-//       task->setVertexBuffer(points_indices, 1);
-//       task->drawIndirect(indirect_buffer, 1, offsetof(struct tile_optimizer::indirect_buffer, pentagon_command));
-// //       task->draw(5, 6, 0, 0);
-//       
-//       task->setVertexBuffer(instances_buffer, 0, sizeof(uint32_t)*12);
-//       task->setVertexBuffer(points_indices, 1, sizeof(uint32_t)*5);
-//       task->drawIndirect(indirect_buffer, 1, offsetof(struct tile_optimizer::indirect_buffer, hexagon_command));
-//       
-//       // нужно нарисовать один выбранный тайл
-//       if (picked_tile_index != UINT32_MAX) {
-//         task->setPipeline(one_tile_pipe);
-//         task->setDescriptor({uniform->descriptorSet()->handle(), tiles->descriptorSet()->handle()}, 0);
-//         if (picked_tile_index < 12) task->setVertexBuffer(points_indices, 1);
-//         else task->setVertexBuffer(points_indices, 1, sizeof(uint32_t)*5);
-//         task->setConsts(0, sizeof(uint32_t), &picked_tile_index);
-//         task->draw(6, 1, 0, 0);
-//       }
-//       task->draw(6, 250000, 0, 0);
-
-//       for (uint32_t i = 0; i < indices_count; ++i) {
-//         const uint32_t start = i;
-//         task->draw(1, 1, start, 0);
-//       }
-      
-      //task->setIndexBuffer(indices_buffer);
-      //task->drawIndexedIndirect(indirect_buffer, 1, offsetof123(struct render::tile_optimizer::indirect_buffer, hex_tiles_command));
     }
 
-    void tile_render::clear() {
-//       pentagons_count = 0;
-//       hexagons_count = 0;
-//       unique_indices.clear();
-    }
-
+    void tile_render::clear() {}
     void tile_render::recreate_pipelines(const game::image_resources_t* resource) {
       (void)resource;
     }
@@ -1120,85 +1057,6 @@ namespace devils_engine {
       return points_indices;
     }
     
-    void tile_render::add(const uint32_t &tile_index) {
-      (void)tile_index;
-// //       const uint32_t index = indices_count.fetch_add(1);
-// //       ASSERT(index < max_tiles);
-// //       auto idx = reinterpret_cast<uint32_t*>(indices->ptr());
-// //       idx[index] = tile_index;
-//       
-//       // мьютекс слишком дорогое удовольствие по всей видимости
-// //       {
-// //         std::unique_lock<std::mutex> lock(mutex);
-// //         auto itr = unique_indices.find(tile_index);
-// //         if (itr != unique_indices.end()) return;
-// //         unique_indices.insert(tile_index);
-// //       }
-//       
-//       auto tiles = global::get<render::buffers>()->tiles;
-//       auto tiles_arr = reinterpret_cast<light_map_tile_t*>(tiles->ptr());
-//       auto idx = reinterpret_cast<uint32_t*>(indices->ptr());
-//       const auto &current_tile = tiles_arr[tile_index];
-//       //const uint32_t n_count = current_tile.is_pentagon() ? 5 : 6;
-//       
-//       ASSERT(tile_index != UINT32_MAX);
-//       
-//       if (is_pentagon(current_tile)) {
-//         const uint32_t index_offset = pentagons_count.fetch_add(1);
-//         idx[index_offset] = tile_index;
-//         //ASSERT(pentagons_count <= 12);
-//       } else {
-//         const uint32_t index_offset = hexagons_count.fetch_add(1);
-//         idx[index_offset+12] = tile_index;
-//       }
-//       
-// //       const uint32_t index_offset = indices_count.fetch_add(n_count+1);
-// //       ASSERT(index_offset < max_tiles);
-// //       idx[index_offset] = current_tile.neighbours[0].points[0];
-// //       for (uint32_t i = 1; i < n_count; ++i) {
-// //         idx[index_offset+i] = current_tile.neighbours[i].points[0];
-// //       }
-// //       
-// //       idx[index_offset+n_count] = UINT32_MAX;
-//       
-//       // тут наверное нужно завести буфер для тайлов или текстурок
-//       // текстурные координаты мы можем расчитать из мировых позиций
-//       // приводим
-    }
-    
-    void tile_render::picked_tile(const uint32_t &tile_index) {
-      picked_tile_index = tile_index;
-    }
-
-    void tile_render::create_render_pass() {
-//       yavf::RenderPassMaker rpm(device);
-
-      // default_render_pass = rpm.attachmentBegin(surface.format.format)
-      //                            .attachmentLoadOp(VK_ATTACHMENT_LOAD_OP_CLEAR)
-      //                            .attachmentStoreOp(VK_ATTACHMENT_STORE_OP_STORE)
-      //                            .attachmentInitialLayout(VK_IMAGE_LAYOUT_UNDEFINED)
-      //                            .attachmentFinalLayout(VK_IMAGE_LAYOUT_PRESENT_SRC_KHR)
-      //                          .attachmentBegin(swapchain.depths[0]->info().format)
-      //                            .attachmentLoadOp(VK_ATTACHMENT_LOAD_OP_CLEAR)
-      //                            .attachmentStoreOp(VK_ATTACHMENT_STORE_OP_DONT_CARE)
-      //                            .attachmentInitialLayout(VK_IMAGE_LAYOUT_UNDEFINED)
-      //                            .attachmentFinalLayout(VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
-      //                          .subpassBegin(VK_PIPELINE_BIND_POINT_GRAPHICS)
-      //                            .subpassColorAttachment(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, 0)
-      //                            .subpassDepthStencilAttachment(VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, 1)
-      //                          .dependencyBegin(VK_SUBPASS_EXTERNAL, 0)
-      //                            .dependencySrcStageMask(VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT)
-      //                            .dependencyDstStageMask(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT)
-      //                            .dependencySrcAccessMask(VK_ACCESS_MEMORY_READ_BIT)
-      //                            .dependencyDstAccessMask(VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT)
-      //                          .dependencyBegin(0, VK_SUBPASS_EXTERNAL)
-      //                            .dependencySrcStageMask(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT)
-      //                            .dependencyDstStageMask(VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT)
-      //                            .dependencySrcAccessMask(VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT)
-      //                            .dependencyDstAccessMask(VK_ACCESS_MEMORY_READ_BIT)
-      //                          .create("tiles_render_pass");
-    }
-    
     tile_border_render::tile_border_render(const create_info &info) :
       device(info.device),
       opt(info.opt),
@@ -1230,23 +1088,11 @@ namespace devils_engine {
 
         pipe = pm.addShader(VK_SHADER_STAGE_VERTEX_BIT, vertex)
                  .addShader(VK_SHADER_STAGE_FRAGMENT_BIT, fragment)
-//                  .addSpecializationEntry(0, offsetof(glm::vec3, x), sizeof(color.x))
-//                  .addSpecializationEntry(1, offsetof(glm::vec3, y), sizeof(color.y))
-//                  .addSpecializationEntry(2, offsetof(glm::vec3, z), sizeof(color.z))
-//                    .addData(sizeof(glm::vec3), &color)
-//                  .vertexBinding(0, sizeof(instance_data_t), VK_VERTEX_INPUT_RATE_INSTANCE)
-//                    .vertexAttribute(0, 0, VK_FORMAT_R32_UINT, 0)
-//                  .vertexBinding(0, sizeof(uint32_t))
-//                    .vertexAttribute(0, 0, VK_FORMAT_R32_UINT, 0)
-//                  .depthTest(VK_FALSE)
-//                  .depthWrite(VK_FALSE)
                  .depthTest(VK_TRUE)
                  .depthWrite(VK_TRUE)
-//                  .depthBias(VK_TRUE)
                  .frontFace(VK_FRONT_FACE_CLOCKWISE)
                  .cullMode(VK_CULL_MODE_BACK_BIT)
                  .assembly(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP, VK_TRUE)
-//                  .lineWidth(5.0f)
                  .viewport()
                  .scissor()
                  .dynamicState(VK_DYNAMIC_STATE_VIEWPORT)
@@ -1271,7 +1117,6 @@ namespace devils_engine {
       auto uniform = global::get<render::buffers>()->uniform;
       auto borders = map_buffers->border_buffer;
       auto types = map_buffers->border_types;
-//       auto indices = global::get<render::buffers>()->border_indices;
       auto tiles = map->tiles;
       
       // должен быть еще буфер с индексами
@@ -1285,24 +1130,9 @@ namespace devils_engine {
       
       auto task = ctx->graphics();
       task->setPipeline(pipe);
-      //task->setDepthBias(0.1f, 0.0f, 5.0f);
       task->setDescriptor({uniform->descriptorSet()->handle(), borders->descriptorSet()->handle(), types->descriptorSet()->handle(), tiles->descriptorSet()->handle()}, 0);
-//       task->setVertexBuffer(vertices_buffer, 0);
-//       task->drawIndirect(indirect_buffer, 1, offsetof(struct tile_borders_optimizer::indirect_buffer, border_command));
       task->setIndexBuffer(indices_buffer);
       task->drawIndexedIndirect(indirect_buffer, 1, offsetof123(struct tile_optimizer::indirect_buffer, borders_command));
-      
-//       auto task = ctx->graphics();
-//       task->setPipeline(pipe);
-//       task->setDescriptor({uniform->descriptorSet()->handle(), tiles->descriptorSet()->handle()}, 0);
-//       
-//       task->setVertexBuffer(instances_buffer, 0);
-//       task->setVertexBuffer(points_indices, 1);
-//       task->drawIndirect(indirect_buffer, 1, offsetof(struct tile_optimizer::indirect_buffer, pentagon_command));
-      
-//       task->setVertexBuffer(instances_buffer, 0, sizeof(uint32_t)*12);
-//       task->setVertexBuffer(points_indices, 1, sizeof(uint32_t)*5);
-//       task->drawIndirect(indirect_buffer, 1, offsetof(struct tile_optimizer::indirect_buffer, hexagon_command));
     }
     
     void tile_border_render::clear() {}
@@ -1342,8 +1172,6 @@ namespace devils_engine {
 
         pipe = pm.addShader(VK_SHADER_STAGE_VERTEX_BIT, vertex)
                  .addShader(VK_SHADER_STAGE_FRAGMENT_BIT, fragment)
-//                  .vertexBinding(0, sizeof(uint32_t))
-//                    .vertexAttribute(0, 0, VK_FORMAT_R32_UINT, 0)
                  .depthTest(VK_TRUE)
                  .depthWrite(VK_TRUE)
                  .frontFace(VK_FRONT_FACE_CLOCKWISE)
@@ -1357,13 +1185,6 @@ namespace devils_engine {
                    .colorWriteMask(VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT)
                  .create("walls_rendering_pipeline", layout, global::get<render::window>()->render_pass);
       }
-
-      // {
-      //   yavf::DescriptorMaker dm(device);
-      //   auto desc = dm.layout(storage_layout).create(pool)[0];
-      //   size_t i = desc->add({indices, 0, indices->info().size, 0, 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER});
-      //   indices->setDescriptor(desc, i);
-      // }
     }
     
     tile_connections_render::~tile_connections_render() {
@@ -1552,7 +1373,7 @@ namespace devils_engine {
                    .vertexAttribute(1, 0, VK_FORMAT_R32_UINT, sizeof(uint32_t))
                  .depthTest(VK_TRUE)
                  .depthWrite(VK_TRUE)
-                 .frontFace(VK_FRONT_FACE_CLOCKWISE)
+                 .frontFace(VK_FRONT_FACE_COUNTER_CLOCKWISE)
                  .cullMode(VK_CULL_MODE_BACK_BIT)
                  .assembly(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN, VK_TRUE)
                  .viewport()

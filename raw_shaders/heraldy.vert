@@ -83,6 +83,11 @@ void main() {
   const vec4 center = tile_points[tile.tile_indices.x];
   const vec4 normal = vec4(normalize(center.xyz), 0.0f);
 
+  //const mat4 tans_view = transpose(camera.view);
+  //const vec4 cam_right =  vec4(camera_matrices.view[0][0], camera_matrices.view[1][0], camera_matrices.view[2][0], 0.0f);
+  const vec4 cam_up    = -vec4(camera_matrices.view[0][1], camera_matrices.view[1][1], camera_matrices.view[2][1], 0.0f);
+  //const vec4 cam_forw  = -vec4(camera_matrices.view[0][2], camera_matrices.view[1][2], camera_matrices.view[2][2], 0.0f);
+
   const uint heraldy_layer_index = additional_indices[tile_index].data[0].y;
   // const uint structure_index = tiles[tile_index].packed_data4.z & maximum_structure_types;
   // const world_structure_t structure_data = unpack(world_structures[structure_index]);
@@ -99,7 +104,7 @@ void main() {
   const float zoom = uintBitsToFloat(camera.dim.z);
   const float obj_scale = mix(0.5f, 1.0f, zoom); // размер один и тот же? вряд ли
   const float dist = mix(1.0f, 10.0f, zoom); // независимые государства повыше?
-  const vec4 point = center + normal * (dist + final_height * render_tile_height);
+  const vec4 point = center + normal * (final_height * render_tile_height) + cam_up * dist;
   const mat4 translaion = translate(mat4(1.0f), point);
   const mat3 rot = mat3(camera_matrices.invView);
   const mat4 rotation = mat4(rot);

@@ -1,5 +1,7 @@
 #include "lua_initialization.h"
 
+#include "globals.h"
+#include "systems.h"
 #include "input.h"
 #include "magic_enum.hpp"
 
@@ -38,16 +40,35 @@ namespace devils_engine {
 
         target.set_function("check_event", input::check_event);
         target.set_function("timed_check_event", input::timed_check_event);
-        target.set_function("input_event_state", input::input_event_state);
+        target.set_function("event_state", input::input_event_state);
         target.set_function("is_event_pressed", input::is_event_pressed);
         target.set_function("is_event_released", input::is_event_released);
-        target.set_function("get_event_key_name", input::get_event_key_name);
+        target.set_function("get_event_key_name", [] (const utils::id &id, const uint32_t &slot) -> const char* {
+          //if (slot >= input::event_key_slots) throw std::runtime_error();
+          auto core = global::get<systems::core_t>();
+          const auto* k = core->keys_mapping;
+          return input::get_event_key_name(player::states_count, k, id, slot);
+        });
         target.set_function("get_event", input::get_event);
+        target.set_function("frame_events", [] (const sol::function &func) {
+          size_t mem = 0;
+          auto ret = input::next_input_state(mem);
+          while (ret.id.valid()) {
+            auto local_ret = ret;
+            ret = input::next_input_state(mem);
+            
+            func(local_ret.id, local_ret.state);
+          }
+        });
         target.set_function("get_cursor_pos", input::get_cursor_pos);
         target.set_function("get_framebuffer_size", input::get_framebuffer_size);
         target.set_function("get_window_content_scale", input::get_window_content_scale);
         target.set_function("get_monitor_content_scale", input::get_monitor_content_scale);
         target.set_function("get_monitor_physical_size", input::get_monitor_physical_size);
+        // думаю что в луа это проверится быстро
+//         target.set_function("check_input_state", [] (const uint32_t state, const uint32_t &check_state) {
+//           return (state & check_state) != 0;
+//         });
         
 
         // тут добавятся несколько функций для того чтобы задать клавишу в настройках

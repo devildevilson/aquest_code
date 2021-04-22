@@ -74,7 +74,7 @@ namespace devils_engine {
       // этот контейнер должен быть в data и работать всегда,
       // но остальные вещи должны быть по своим кеймапам
       std::array<utils::id, container_size> container; // тут контейнер нужен был чтобы находить эвенты по кнопкам
-      uint32_t current_event_layer;
+      uint32_t current_event_layer; // больше ненужно? было бы неплохо гарантировать только одну проверку нажатия за кадр, или это плохя идея?
       uint32_t blocked;
       // если одна из этих кнопок нажата то эвент срабатывает
       // а что если у одной кнопки двойное нажатие, а другой длинное? скорее всего двойное нажатие или его отсутствие я спрячу
@@ -85,10 +85,12 @@ namespace devils_engine {
       phmap::flat_hash_map<utils::id, event_keys_container> events_map;
     };
 
+    // добавить сюда несколько кей мап? нужно добавить указатель и размер
     struct data {
       std::atomic_bool interface_focus;
       std::atomic_bool input_blocked;
 //       keys key_events;
+      // честно говоря лучше наверное пользоваться scancode кнопок
       std::array<key_data, container_size> container;
 
       float mouse_wheel;
@@ -100,10 +102,14 @@ namespace devils_engine {
       std::chrono::steady_clock::time_point double_click_time_point;
       glm::uvec2 click_pos;
       glm::vec2 fb_scale;
+      
+//       size_t mapping_size;
+//       keys* mapping_array;
 
       data();
     };
     
+    void set_menu_key_map(keys* k);
     void set_key_map(keys* k);
     keys* get_key_map();
     data* get_input_data();
@@ -114,6 +120,13 @@ namespace devils_engine {
     };
     input_event next_input_event(size_t &mem);
     input_event next_input_event(size_t &mem, const size_t &tolerancy);
+    
+    struct input_state {
+      utils::id id;
+      enum state state;
+    };
+    input_state next_input_state(size_t &mem);
+    input_state next_input_state(size_t &mem, const size_t &tolerancy);
 
     struct input_event_state {
       utils::id id;
@@ -132,8 +145,11 @@ namespace devils_engine {
     void increase_layer();
 
     void update_time(const size_t &time);
+    // было бы лучше если бы я использовал сканкоды, так я бы смог принимать любой ввод, 
+    // но в этом случае мне сложно понять какую кнопку я нажимаю
     const char* get_key_name(const uint32_t &key);
     const char* get_event_key_name(const utils::id &id, const uint8_t &slot);
+    const char* get_event_key_name(const size_t &input_array_size, keys* const* input_array, const utils::id &id, const uint8_t &slot);
     void set_key(const int &key, const utils::id &id, const uint8_t &slot = 0);
     utils::id get_event_data(const int &key);
     bool check_key(const int &key, const uint32_t &states);

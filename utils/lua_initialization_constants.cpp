@@ -16,15 +16,15 @@ namespace devils_engine {
     
     void setup_lua_constants(sol::state_view lua) {
       //auto constants = lua["constants"].get_or_create<sol::table>();
-      auto t1 = lua.create_table_with(
-        "creating_map", utils::progress_container::creating_map,
-        "loading_map", utils::progress_container::loading_map,
-        "loading_created_map", utils::progress_container::loading_created_map,
-        "loading_map_save", utils::progress_container::loading_map_save,
-        "loading_battle", utils::progress_container::loading_battle,
-        "loading_encounter", utils::progress_container::loading_encounter,
-        "back_to_menu", utils::progress_container::back_to_menu
-      );
+//       auto t1 = lua.create_table_with(
+//         "creating_map", utils::progress_container::creating_map,
+//         "loading_map", utils::progress_container::loading_map,
+//         "loading_created_map", utils::progress_container::loading_created_map,
+//         "loading_map_save", utils::progress_container::loading_map_save,
+//         "loading_battle", utils::progress_container::loading_battle,
+//         "loading_encounter", utils::progress_container::loading_encounter,
+//         "back_to_menu", utils::progress_container::back_to_menu
+//       );
 
       auto target = lua.create_table_with(
         "time_precision", TIME_PRECISION,
@@ -51,8 +51,8 @@ namespace devils_engine {
         "uint32_max", UINT32_MAX,
         "int32_max", INT32_MAX,
         "int32_min", INT32_MIN,
-        "max_safe_integer", MAX_SAFE_INTEGER,
-        "loading_type", t1
+        "max_safe_integer", MAX_SAFE_INTEGER
+//         "loading_type", t1
       );
 
       target.set_function("deg_to_rad", [] (const double &deg) { return DEG_TO_RAD(deg); });

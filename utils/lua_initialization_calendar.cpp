@@ -29,8 +29,8 @@ namespace devils_engine {
         global::get<utils::calendar>()->set_week_days_count(count);
       });
       
-      calendar.set_function("add_month_data", [] (const size_t &loc_index, const uint32_t &count) {
-        global::get<utils::calendar>()->add_month_data({loc_index, count});
+      calendar.set_function("add_month_data", [] (const std::string &name_id, const uint32_t &count) {
+        global::get<utils::calendar>()->add_month_data({name_id, count});
       });
       
       calendar.set_function("start_date", [] () {
@@ -67,6 +67,12 @@ namespace devils_engine {
       
       calendar.set_function("convert_date_to_days", [] (const struct utils::calendar::date &date) {
         return global::get<utils::calendar>()->convert_date_to_days(date);
+      });
+      
+      calendar.set_function("get_month_data", [] (const uint32_t index) -> std::tuple<std::string_view, uint32_t> {
+        auto cal = global::get<utils::calendar>();
+        if (index >= cal->m_months.size()) return std::make_tuple("", 0);
+        return std::make_tuple(std::string_view(cal->m_months[index].name_id), cal->m_months[index].days_count);
       });
     }
   }

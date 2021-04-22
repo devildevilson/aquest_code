@@ -26,6 +26,10 @@ namespace devils_engine {
     struct seasons;
   }
   
+  namespace game {
+    struct context;
+  }
+  
   namespace battle {
     struct map;
     struct lua_container;
@@ -75,6 +79,10 @@ namespace devils_engine {
     class battle_camera;
   }
   
+  namespace localization {
+    class container;
+  }
+  
   namespace systems {
     using devils_engine::ai::path_managment;
     class ai;
@@ -93,6 +101,7 @@ namespace devils_engine {
       interface::context* context;
       utils::interface* interface;
       utils::main_menu* menu;
+      game::context* game_ctx;
       utils::interface_container* interface_container;
 //       utils::data_string_container* string_container;
       utils::sequential_string_container* sequential_string_container;
@@ -100,7 +109,7 @@ namespace devils_engine {
       utils::progress_container* loading_progress;
       utils::objects_selector* objects_selector;
       struct path_managment* path_managment;
-      utils::localization* loc;
+      localization::container* loc;
       
       core_t();
       ~core_t();
@@ -125,6 +134,7 @@ namespace devils_engine {
       render::stage_container* optimizators_container;
       render::stage_container* render_container;
       
+      std::string load_world;
       std::string saved_data; // какие здесь данные? только часть мировая, названия и хеш мы заполняем извне
       // возможно нужно сделать standalone сохранения, нам тогда потребуются все данные ниже
       std::string world_name;

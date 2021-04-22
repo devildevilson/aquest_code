@@ -139,28 +139,28 @@ namespace devils_engine {
           }
         },
         "set_tiles_color", sol::overload(colorf1, colorf2),
-        "set_tiles_height", sol::overload(heightf1, heightf2),
-        "get_tile_biome", [] (const core::map* self, const uint32_t &index) -> std::string_view { 
-          auto container = global::get<utils::world_map_string_container>();
-          const size_t type = static_cast<size_t>(utils::world_map_strings::tile_biome_id);
-          if (container->get_strings(type).size() < self->tiles_count()) {
-            const size_t diff = self->tiles_count() - container->get_strings(type).size();
-            container->register_strings(type, diff);
-          }
-          
-          return container->get_strings(type)[FROM_LUA_INDEX(index)];
-        },
-        
-        "set_tile_biome", [] (const core::map* self, const uint32_t &index, const std::string &id) -> void { 
-          auto container = global::get<utils::world_map_string_container>();
-          const size_t type = static_cast<size_t>(utils::world_map_strings::tile_biome_id);
-          if (container->get_strings(type).size() < self->tiles_count()) {
-            const size_t diff = self->tiles_count() - container->get_strings(type).size();
-            container->register_strings(type, diff);
-          }
-          
-          container->set_string(type, FROM_LUA_INDEX(index), id);
-        }
+        "set_tiles_height", sol::overload(heightf1, heightf2)
+//         "get_tile_biome", [] (const core::map* self, const uint32_t &index) -> std::string_view { 
+//           auto container = global::get<utils::world_map_string_container>();
+//           const size_t type = static_cast<size_t>(utils::world_map_strings::tile_biome_id);
+//           if (container->get_strings(type).size() < self->tiles_count()) {
+//             const size_t diff = self->tiles_count() - container->get_strings(type).size();
+//             container->register_strings(type, diff);
+//           }
+//           
+//           return container->get_strings(type)[FROM_LUA_INDEX(index)];
+//         },
+//         
+//         "set_tile_biome", [] (const core::map* self, const uint32_t &index, const std::string &id) -> void { 
+//           auto container = global::get<utils::world_map_string_container>();
+//           const size_t type = static_cast<size_t>(utils::world_map_strings::tile_biome_id);
+//           if (container->get_strings(type).size() < self->tiles_count()) {
+//             const size_t diff = self->tiles_count() - container->get_strings(type).size();
+//             container->register_strings(type, diff);
+//           }
+//           
+//           container->set_string(type, FROM_LUA_INDEX(index), id);
+//         }
       );
     }
   }

@@ -8,13 +8,16 @@
 #include "table_container.h"
 #include "string_container.h"
 #include "progress_container.h"
-#include "interface_container.h"
+//#include "interface_container.h"
+#include "interface_container2.h"
 #include "main_menu.h"
 #include "lua_initialization.h"
 #include "settings.h"
 #include "astar_search.h"
 #include "battle_lua_states.h"
-#include "string_bank.h"
+//#include "string_bank.h"
+#include "localization_container.h"
+#include "game_context.h"
 
 #include "render/window.h"
 #include "render/render.h"
@@ -42,7 +45,7 @@
 #include "bin/map_creator.h"
 #include "bin/core_structures.h"
 #include "bin/core_context.h"
-#include "bin/interface2.h"
+// #include "bin/interface2.h"
 #include "bin/seasons.h"
 #include "bin/game_time.h"
 #include "bin/objects_selector.h"
@@ -73,8 +76,9 @@ namespace devils_engine {
         sizeof(render::image_container) +
         sizeof(render::image_controller) +
         sizeof(interface::context) +
-        sizeof(utils::interface) +
+//         sizeof(utils::interface) +
         sizeof(utils::main_menu) +
+        sizeof(game::context) + 
         sizeof(utils::interface_container) +
 //         sizeof(utils::data_string_container) +
         sizeof(utils::sequential_string_container) +
@@ -82,7 +86,8 @@ namespace devils_engine {
         sizeof(utils::progress_container) +
         sizeof(utils::objects_selector) +
         sizeof(struct path_managment) +
-        sizeof(utils::localization)
+        sizeof(localization::container)
+        //sizeof(utils::localization)
       ),
       //input_data(nullptr),
       keys_mapping{nullptr},
@@ -93,6 +98,7 @@ namespace devils_engine {
       context(nullptr),
       interface(nullptr),
       menu(nullptr),
+      game_ctx(nullptr),
       interface_container(nullptr),
 //       string_container(nullptr),
       sequential_string_container(nullptr),
@@ -115,8 +121,9 @@ namespace devils_engine {
         RELEASE_CONTAINER_DATA(keys_mapping[i])
       }
       RELEASE_CONTAINER_DATA(graphics_container)
-      RELEASE_CONTAINER_DATA(interface)
-      RELEASE_CONTAINER_DATA(menu)
+//       RELEASE_CONTAINER_DATA(interface)
+//       RELEASE_CONTAINER_DATA(menu)
+      RELEASE_CONTAINER_DATA(game_ctx)
       RELEASE_CONTAINER_DATA(interface_container)
 //       RELEASE_CONTAINER_DATA(string_container)
       RELEASE_CONTAINER_DATA(sequential_string_container)
@@ -146,12 +153,14 @@ namespace devils_engine {
       }
 //       global g;
 //       g.initialize_state(1);
+
+      input::set_menu_key_map(keys_mapping[player::in_menu]);
       
       loading_progress = container.create<utils::progress_container>();
       
       objects_selector = container.create<utils::objects_selector>();
       path_managment = container.create<struct path_managment>(std::thread::hardware_concurrency());
-      loc = container.create<utils::localization>();
+      //loc = container.create<utils::localization>();
       
       global::get(objects_selector);
       global::get(path_managment);
@@ -324,18 +333,23 @@ namespace devils_engine {
     }
     
     void core_t::create_interface() {
-      interface_container = container.create<utils::interface_container>();
-//       global::get(systems.interface);
-      interface_container->init_constants();
-      interface_container->init_input();
-      interface_container->init_types();
-      interface_container->init_game_logic();
-      utils::setup_lua_main_menu(interface_container->lua);
-      utils::setup_lua_settings(interface_container->lua);
-      utils::setup_lua_tile(interface_container->lua);
+      game_ctx = container.create<game::context>();
       
-      interface = container.create<utils::interface>(interface_container);
-      menu = container.create<utils::main_menu>(interface_container);
+      interface_container = container.create<utils::interface_container>(utils::interface_container::create_info{context, game_ctx});
+//       global::get(systems.interface);
+//       interface_container->init_constants();
+//       interface_container->init_input();
+//       interface_container->init_types();
+//       interface_container->init_game_logic();
+//       utils::setup_lua_main_menu(interface_container->lua);
+//       utils::setup_lua_settings(interface_container->lua);
+//       utils::setup_lua_tile(interface_container->lua);
+      
+      //interface = container.create<utils::interface>(interface_container);
+//       menu = container.create<utils::main_menu>(interface_container);
+      loc = container.create<localization::container>(interface_container->lua);
+      // это мы как то в настройках должны изменять + соответственно менять строчки меню и игры при смене локали
+      localization::container::set_current_locale(localization::container::locale("en"));
     }
     
     map_t::map_t() :
@@ -442,7 +456,7 @@ namespace devils_engine {
 //         auto ptr = global::get<core::seasons>();
 //         auto map = global::get<core::map>();
         for (size_t i = 0; i < core::map::hex_count_d(core::map::detail_level); ++i) {
-          const uint32_t biome_index = seasons->get_tile_biome(i);
+          const uint32_t biome_index = seasons->get_tile_biome(seasons->current_season, i);
           const auto &current_biome = seasons->biomes[biome_index];
           map->set_tile_color(i, current_biome.color);
           map->set_tile_texture(i, current_biome.texture);

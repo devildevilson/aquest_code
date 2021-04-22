@@ -1,6 +1,8 @@
 #include "localization_container.h"
 
 #include <array>
+#include <iostream>
+#include "shared_mathematical_constant.h"
 
 namespace std {
   template <>
@@ -50,9 +52,36 @@ namespace devils_engine {
       return first.container != second.container;
     }
     
+    void container::set_current_locale(const locale &l) {
+      current_locale = l;
+    }
+    
+    container::locale container::get_current_locale() {
+      return current_locale;
+    }
+    
+    container::locale container::get_fall_back_locale() {
+      return fall_back_locale;
+    }
+    
     container::container(sol::state_view v) : v(v) {}
+    void container::set_table(const locale &loc, const sol::table &t) {
+      const bool valid = is_valid_table(t);
+      if (!valid) throw std::runtime_error("Trying to set invalid table");
+      
+      auto itr = localization.find(loc);
+      if (itr == localization.end()) {
+        localization.emplace(loc, t);
+        return;
+      }
+      
+      sol::table base_table = itr->second;
+      set_table(base_table, t);
+    }
+    
     void container::set(const locale &loc, const std::string_view &key, const sol::object obj) {
       if (key.empty()) throw std::runtime_error("Empty key");
+      if (obj.get_type() == sol::type::table && !is_valid_table(obj.as<sol::table>())) throw std::runtime_error("Trying to set invalid table");
       
       auto itr = localization.find(loc);
       if (itr == localization.end()) {
@@ -93,6 +122,69 @@ namespace devils_engine {
       
       const auto &last_key = unpacked_keys.back();
       return base_table[last_key];
+    }
+    
+    void container::set_table(sol::table current_table, sol::table new_table) {
+      for (const auto &pair : new_table) {
+        auto proxy = current_table[pair.first];
+        if (!proxy.valid()) {
+          current_table[pair.first] = pair.second;
+          continue;
+        }
+        
+        if (proxy.get_type() == sol::type::table && pair.second.get_type() == sol::type::table) {
+          set_table(proxy.get<sol::table>(), pair.second.as<sol::table>());
+          continue;
+        }
+        
+        if (proxy.get_type() == pair.second.get_type()) {
+          if (proxy.get_type() == sol::type::string) {
+            if (proxy.get<std::string_view>() == pair.second.as<std::string_view>()) continue;
+          } else if (proxy.get_type() == sol::type::number) {
+            if (std::abs(proxy.get<double>() - pair.second.as<double>()) < EPSILON) continue;
+          }
+        }
+        
+        // мы должны заменить одну перменную на другую
+        if (pair.first.get_type() == sol::type::string) std::cout << "Shadowing value " << pair.first.as<std::string_view>() << "\n";
+        else if (pair.first.get_type() == sol::type::number) std::cout << "Shadowing value " << pair.first.as<double>() << "\n";
+        
+        current_table[pair.first] = pair.second;
+      }
+    }
+    
+    container::locale container::current_locale;
+    container::locale const container::fall_back_locale = locale("en");
+    
+    bool is_valid_locale(const std::string_view &key) {
+      return key.length() <= sizeof(size_t);
+    }
+    
+    bool is_valid_table(const size_t &current_layer, const sol::table &t) {
+      if (current_layer >= unpacked_array_size) return false;
+      
+      for (const auto &pair : t) {
+        const bool valid_key = pair.first.get_type() == sol::type::number || pair.first.get_type() == sol::type::string;
+        const bool valid_value = pair.second.get_type() == sol::type::number || pair.second.get_type() == sol::type::string || pair.second.get_type() == sol::type::table;
+        
+        if (!valid_key || !valid_value) return false;
+        if (pair.second.get_type() == sol::type::table && !is_valid_table(current_layer+1, pair.second.as<sol::table>())) return false;
+      }
+      
+      return true;
+    }
+    
+    bool is_valid_table(const sol::table &t) {
+      const size_t current_layer = 0;
+      for (const auto &pair : t) {
+        const bool valid_key = pair.first.get_type() == sol::type::number || pair.first.get_type() == sol::type::string;
+        const bool valid_value = pair.second.get_type() == sol::type::number || pair.second.get_type() == sol::type::string || pair.second.get_type() == sol::type::table;
+        
+        if (!valid_key || !valid_value) return false;
+        if (pair.second.get_type() == sol::type::table && !is_valid_table(current_layer+1, pair.second.as<sol::table>())) return false;
+      }
+      
+      return true;
     }
   }
 }

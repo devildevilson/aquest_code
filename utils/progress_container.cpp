@@ -3,18 +3,6 @@
 namespace devils_engine {
   namespace utils {
     progress_container::progress_container() : current_value(0), max_value(0) {}
-//     void progress_container::advance_progress() { ++progress; }
-//     int64_t progress_container::current_progress() const { return progress; }
-//     int64_t progress_container::steps_count() const { return hints.size(); }
-//     std::string_view progress_container::hint() const { return hints[progress]; }
-//     bool progress_container::is_finished() const { return progress == hints.size(); }
-//     void progress_container::set_progress(const int64_t &val) { progress = val; }
-//     void progress_container::reset() { progress = 0; }
-//     void progress_container::add(const std::string_view &str) { hints.push_back(std::string(str)); }
-//     void progress_container::add(std::string &&str) { hints.push_back(std::move(str)); }
-//     void progress_container::set(const std::vector<std::string> &hints) { this->hints = hints; }
-//     void progress_container::set(std::vector<std::string> &&hints) { this->hints = std::move(hints); }
-//     void progress_container::clear() { hints.clear(); reset(); }
     int64_t progress_container::get_value() const {
       std::unique_lock<std::mutex> lock(mutex);
       return current_value;
@@ -23,11 +11,6 @@ namespace devils_engine {
     int64_t progress_container::get_max_value() const {
       std::unique_lock<std::mutex> lock(mutex);
       return max_value;
-    }
-    
-    size_t progress_container::get_type() const {
-      std::unique_lock<std::mutex> lock(mutex);
-      return type;
     }
     
     std::string progress_container::get_hint1() const {
@@ -70,11 +53,6 @@ namespace devils_engine {
       max_value = val;
     }
     
-    void progress_container::set_type(const size_t &type) {
-      std::unique_lock<std::mutex> lock(mutex);
-      this->type = type;
-    }
-    
     void progress_container::set_hint1(const std::string_view &str) {
       std::unique_lock<std::mutex> lock(mutex);
       hint1 = str;
@@ -113,6 +91,14 @@ namespace devils_engine {
       hint1.clear();
       hint2.clear();
       hint3.clear();
+    }
+    
+    void update_progress_table(progress_container* p, sol::table t) {
+      t["current_step"] = p->get_value();
+      t["step_count"] = p->get_max_value();
+      t["hint1"] = p->get_hint1();
+      t["hint2"] = p->get_hint2();
+      t["hint3"] = p->get_hint3();
     }
   }
 }

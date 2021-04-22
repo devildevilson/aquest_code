@@ -13,20 +13,36 @@ namespace devils_engine {
     class quest_state {
     public:
       enum {
+//         main_menu,
+//         map_creation,
+//         world_map,
+//         battle,
+//         encounter,
+//         count
+        // тут понятно что будут использоваться менюшные хоткеи
+        main_menu_loading,
         main_menu,
-        map_creation,
+        world_map_generator_loading,
+        world_map_generator,
+        world_map_generating,
+        // здесь должны быть хоткеи карты + менюшные когда запустится меню
+        world_map_loading, // причем в лоадинге меню запускать ненужно
         world_map,
-        battle,
+        // хоткеи битвы + меню
+        battle_map_loading,
+        battle_map,
+        // хоткеи столкновения + меню
+        encounter_loading,
         encounter,
         count
       };
       
       inline quest_state(const uint32_t current_state) : m_current_state(current_state), m_next_state(UINT32_MAX) {}
       virtual ~quest_state() = default;
-      virtual void enter() = 0;  // создаем какие то вещи в главном треде (например создаем базовые структуры)
-      virtual bool load(quest_state* prev_state) = 0;   // запускаем функцию загрузки (предположительно асинхронно)
-      virtual void update(const size_t &time) = 0; // обновляем как нибудь состояние (наверное время пригодится)
-      virtual void clean() = 0;  // прежде чем войти в другое состояние, чистим это
+      virtual void enter(quest_state* prev_state) = 0;  // возможно здесь нужно почистить некоторые предыдущие стейт
+      //virtual bool load(quest_state* prev_state) = 0;   // запускаем функцию загрузки (предположительно асинхронно)
+      virtual uint32_t update(const size_t &time, quest_state* prev_state) = 0; // обновляем как нибудь состояние (наверное время пригодится)
+      virtual void clean(quest_state* next_state) = 0;  // прежде чем войти в другое состояние, чистим это
 //       virtual void mouse_input(const size_t &time, const uint32_t &tile_index) = 0;
 //       virtual void key_input(const size_t &time, const bool loading) = 0; // тут нужно учитывать инпут в меню
       // как давать понять когда переходить из состояния в состояние, в общем у нас каждое состояние может куда перейти

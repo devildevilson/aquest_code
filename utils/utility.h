@@ -27,6 +27,7 @@
 #define DELETE_ARR(arr) delete [] arr; arr = nullptr;
 #define STRINGIFY(a) #a
 #define CONCAT(a, b) a##b
+#define UNUSED_VARIABLE(var) ((void)var)
 
 constexpr size_t align_to(const size_t &memory, const size_t &aligment) {
   return (memory + aligment - 1) / aligment * aligment;

@@ -2,10 +2,16 @@
 
 #include "bin/generator_container.h"
 #include "bin/generator_context2.h"
+#include "bin/seasons.h"
 #include "random_engine.h"
 #include "FastNoise.h"
 #include "bin/map.h"
 #include "render/shared_render_utility.h"
+#include "globals.h"
+#include "serializator_helper.h"
+#include "bin/image_parser.h"
+#include "systems.h"
+#include "bin/map_creator.h"
 
 #include <iostream>
 #include <string>
@@ -13,14 +19,14 @@
 #include "shared_time_constant.h"
 #include "magic_enum.hpp"
 
-#define FROM_LUA_INDEX(index) (index-1)
-#define TO_LUA_INDEX(index) (index+1)
+#define FROM_LUA_INDEX(index) ((index)-1)
+#define TO_LUA_INDEX(index) ((index)+1)
 
 namespace devils_engine {
   typedef size_t(map::generator::container::*container_func)(const sol::table &);
   
   namespace utils {
-    double create_pair_u32f32(const uint32_t &u32, const float &f32) {
+    static double create_pair_u32f32(const uint32_t &u32, const float &f32) {
       union convert { uint64_t u; double d; };
       const uint32_t &data = glm::floatBitsToUint(f32);
       const uint64_t packed_data = (uint64_t(u32) << 32) | uint64_t(data);
@@ -29,7 +35,7 @@ namespace devils_engine {
       return c.d;
     }
     
-    std::tuple<uint32_t, float> unpack_pair_u32f32(const double &data) {
+    static std::tuple<uint32_t, float> unpack_pair_u32f32(const double &data) {
       union convert { uint64_t u; double d; };
       convert c;
       c.d = data;
@@ -45,16 +51,18 @@ namespace devils_engine {
       std::chrono::steady_clock::time_point tp;
       
       timer_t(const std::string &str) : str(str), tp(std::chrono::steady_clock::now()) {}
-      ~timer_t() {
-        auto end = std::chrono::steady_clock::now() - tp;
-        auto dur = std::chrono::duration_cast<CHRONO_TIME_TYPE>(end).count();
-        std::cout << str << " took " << dur << " " << TIME_STRING << "\n";
-      }
+      ~timer_t() {} // почему я не использую луа 5.4? муннаклир работает с 5.3, но вроде бы компилируется и для 5.4
       
       void checkpoint(const std::string_view &str) {
         auto end = std::chrono::steady_clock::now() - tp;
         auto dur = std::chrono::duration_cast<CHRONO_TIME_TYPE>(end).count();
         std::cout << str << " happen after " << dur << " " << TIME_STRING << " from timer creation\n";
+      }
+      
+      void end() {
+        auto end = std::chrono::steady_clock::now() - tp;
+        auto dur = std::chrono::duration_cast<CHRONO_TIME_TYPE>(end).count();
+        std::cout << str << " took " << dur << " " << TIME_STRING << "\n";
       }
     };
     
@@ -100,52 +108,6 @@ namespace devils_engine {
       );
       
       auto utils = lua[magic_enum::enum_name<reserved_lua::values>(reserved_lua::utils)].get_or_create<sol::table>();
-      utils.set_function("prng", render::prng);
-      utils.set_function("prng2", render::prng2);
-      utils.set_function("prng_normalize", render::prng_normalize);
-      utils.set_function("make_color", [] (const float r, const float g, const float b, const float a) {
-        const uint32_t ur = uint32_t(255.0f * glm::clamp(r, 0.0f, 1.0f));
-        const uint32_t ug = uint32_t(255.0f * glm::clamp(g, 0.0f, 1.0f));
-        const uint32_t ub = uint32_t(255.0f * glm::clamp(b, 0.0f, 1.0f));
-        const uint32_t ua = uint32_t(255.0f * glm::clamp(a, 0.0f, 1.0f));
-        const uint32_t c = (ur << 24) | (ug << 16) | (ub << 8) | (ua << 0);
-        return c;
-      });
-      utils.set_function("init_array", [] (const size_t &size, sol::object default_value, sol::this_state s) -> sol::table {
-        sol::state_view view(s);
-        auto t = view.create_table(size, 0);
-        if (default_value.is<sol::table>()) {
-          for (size_t i = 0; i < size; ++i) {
-            t.add(view.create_table(30, 0));
-          }
-        } else {
-//           if (default_value.is<bool>()) {
-//             const bool val = default_value.as<bool>();
-//             for (size_t i = 0; i < size; ++i) {
-//               t.add(val);
-//             }
-//           } else if (default_value.is<double>()) {
-//             const double val = default_value.as<double>();
-//             for (size_t i = 0; i < size; ++i) {
-//               t.add(val);
-//             }
-//           } else if (default_value.is<std::string>()) {
-//             throw std::runtime_error("bad default value");
-//           } else throw std::runtime_error("asfasfsfagsgsagg");
-          for (size_t i = 0; i < size; ++i) {
-            t.add(default_value);
-          }
-        }
-        return t;
-      });
-      utils.set_function("create_table", [] (sol::object arr_size, sol::object hash_size, sol::this_state s) -> sol::table {
-        sol::state_view view(s);
-        const uint32_t narr = arr_size.is<uint32_t>() ? arr_size.as<uint32_t>() : 100;
-        const uint32_t nhash = hash_size.is<uint32_t>() ? hash_size.as<uint32_t>() : 100;
-        return view.create_table(narr, nhash);
-      });
-      utils.set_function("create_pair_u32f32", &create_pair_u32f32);
-      utils.set_function("unpack_pair_u32f32", &unpack_pair_u32f32);
       utils.set_function("assign_distance_field", [] (map::generator::context* ctx, const sol::table type_indices, const sol::table seeds, const sol::table stops, sol::table distances) {
         const uint32_t edge_type = type_indices["edge_type"];
         const uint32_t edge_property_first_index = type_indices["edge_property_first_index"];
@@ -282,16 +244,49 @@ namespace devils_engine {
         }
       });
       
+      auto seasons = generator.new_usertype<core::seasons>("seasons", sol::no_constructor,
+        "get_tile_biome", [] (const core::seasons* self, const uint32_t &season_index, const uint32_t &tile_index) {
+          return self->get_tile_biome(FROM_LUA_INDEX(season_index), FROM_LUA_INDEX(tile_index));
+        },
+        "set_tile_biome", [] (core::seasons* self, const uint32_t &season_index, const uint32_t &tile_index, const uint32_t &biome_index) {
+          self->set_tile_biome(FROM_LUA_INDEX(season_index), FROM_LUA_INDEX(tile_index), FROM_LUA_INDEX(biome_index));
+        },
+        "add_biome", [] (sol::this_state s, core::seasons* self, const sol::table &biome) {
+          sol::state_view lua = s;
+          auto cont = global::get<utils::world_serializator>();
+          
+          const bool ret = utils::validate_biome(cont->get_data_count(utils::world_serializator::biome), biome);
+          if (!ret) throw std::runtime_error("Biome validation error");                                                 
+          auto creator = global::get<systems::map_t>()->map_creator;
+          const std::string str_t = creator->serialize_table(biome);
+          
+          const uint32_t cont_biome_index = cont->add_data(utils::world_serializator::biome, str_t);
+          const uint32_t biome_index = self->allocate_biome();
+          if (cont_biome_index != biome_index) throw std::runtime_error("Something completely wrong with biomes indices");
+          
+          return TO_LUA_INDEX(biome_index);
+        },
+        "allocate_season", [] (core::seasons* self) {
+          return TO_LUA_INDEX(self->allocate_season());
+        },
+        "seasons_count", sol::readonly_property(&core::seasons::seasons_count),
+        "biomes_count", sol::readonly_property(&core::seasons::biomes_count),
+        "max_seasons_count", sol::var(&core::seasons::maximum_seasons),
+        "max_biomes_count", sol::var(&core::seasons::maximum_biomes),
+        "invalid_biome", sol::var(&core::seasons::invalid_biome)
+      );
+      
       auto context = generator.new_usertype<map::generator::context>("context", sol::no_constructor,
         "container", sol::readonly(&map::generator::context::container),
         "random", sol::readonly(&map::generator::context::random),
         "noise", sol::readonly(&map::generator::context::noise),
-        "map", sol::readonly(&map::generator::context::map)
-        //"seasons", sol::readonly(&map::generator::context::seasons)
+        "map", sol::readonly(&map::generator::context::map),
+        "seasons", sol::readonly(&map::generator::context::seasons)
       );
       
       auto timer = generator.new_usertype<timer_t>("timer_t", sol::constructors<timer_t(const std::string &)>(),
-        "checkpoint", &timer_t::checkpoint
+        "checkpoint", &timer_t::checkpoint,
+        "finish", &timer_t::end
       );
       
       auto core = lua["core"].get_or_create<sol::table>();

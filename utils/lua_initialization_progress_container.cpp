@@ -10,7 +10,7 @@ namespace devils_engine {
       utils.new_usertype<utils::progress_container>("progress_container", sol::no_constructor,
         "current_step", &utils::progress_container::get_value,
         "step_count", &utils::progress_container::get_max_value,
-        "type", &utils::progress_container::get_type,
+        //"type", &utils::progress_container::get_type,
         "hint1", &utils::progress_container::get_hint1,
         "hint2", &utils::progress_container::get_hint2,
         "hint3", &utils::progress_container::get_hint3

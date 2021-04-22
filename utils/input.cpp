@@ -376,12 +376,19 @@ namespace devils_engine {
     event_data::event_data() {}
     event_data::event_data(const utils::id &id) : id(id) {}
     key_data::key_data() : event(release), state(state_initial), event_layer(UINT32_MAX), state_time(0) {}
-    data::data() : interface_focus(false), mouse_wheel(0.0f), current_text(0), last_frame_time(0) {
+    data::data() : interface_focus(false), mouse_wheel(0.0f), current_text(0), last_frame_time(0)
+    //mapping_size(0), mapping_array(nullptr) 
+    {
       memset(text, 0, sizeof(uint32_t)*text_memory_size);
     }
     
+    static keys* menu_keys_map = nullptr;
     static std::atomic<keys*> current_keys_map(nullptr);
     static data input_data;
+    
+    void set_menu_key_map(keys* k) {
+      menu_keys_map = k;
+    }
     
     void set_key_map(keys* k) {
       current_keys_map = k;
@@ -399,12 +406,23 @@ namespace devils_engine {
       const auto data = get_input_data();
       if (data->input_blocked) return {utils::id(), release};
       
+      ASSERT(menu_keys_map != nullptr);
+      const keys* input_array[] = {menu_keys_map, get_key_map()};
+      const size_t size = sizeof(input_array) / sizeof(input_array[0]);
+      static_assert(size == 2);
+      
       const auto &key_container = data->container;
-      const auto &key_event_map = get_key_map()->container;
-      for (size_t i = mem; i < container_size; ++i) {
-        if (key_event_map[i].valid() && key_container[i].event_time <= 5) { // первый кадр нажатия это 0
-          mem = i+1;
-          return {key_event_map[i], key_container[i].event};
+      for (size_t i = 0; i < size; ++i) {
+        auto key_map = input_array[i];
+        if (key_map == nullptr) continue;
+        // у нас может быть случай когда get_key_map() дает nullptr, когда мы в меню
+        
+        const auto &key_event_map = key_map->container;
+        for (size_t j = mem < container_size ? mem : mem-container_size; j < container_size; ++j) {
+          if (key_event_map[j].valid() && key_container[j].event_time <= 5) { // первый кадр нажатия это 0
+            mem = i*container_size + j+1;
+            return {key_event_map[j], key_container[j].event};
+          }
         }
       }
 
@@ -415,91 +433,194 @@ namespace devils_engine {
       const auto data = get_input_data();
       if (data->input_blocked) return {utils::id(), release};
       
+      ASSERT(menu_keys_map != nullptr);
+      const keys* input_array[] = {menu_keys_map, get_key_map()};
+      const size_t size = sizeof(input_array) / sizeof(input_array[0]);
+      static_assert(size == 2);
+      
       const auto &key_container = data->container;
-      const auto &key_event_map = get_key_map()->container;
-      for (size_t i = mem; i < container_size; ++i) {
-        const auto id = key_event_map[i];
+      for (size_t i = 0; i < size; ++i) {
+        auto key_map = input_array[i];
+        if (key_map == nullptr) continue;
+        // у нас может быть случай когда get_key_map() дает nullptr, когда мы в меню
+        
+        const auto &key_event_map = key_map->container;
+        for (size_t j = mem < container_size ? mem : mem-container_size; j < container_size; ++j) {
+          const auto id = key_event_map[j];
 
-        if (id.valid() && key_container[i].event_time <= tolerancy) {
-          mem = i+1;
-          return {id, key_container[i].event};
+          if (id.valid() && key_container[j].event_time <= tolerancy) {
+            mem = i*container_size + j+1;
+            return {id, key_container[j].event};
+          }
         }
       }
 
       return {utils::id(), release};
     }
     
-    std::tuple<type, size_t> input_event_state(const utils::id &id) {
+    input_state next_input_state(size_t &mem) {
       const auto data = get_input_data();
-      if (data->input_blocked) return { release, SIZE_MAX };
+      if (data->input_blocked) return {utils::id(), state_initial};
       
-      const auto container = get_key_map();
-      auto itr = container->events_map.find(id);
-      if (itr == container->events_map.end()) return { release, SIZE_MAX };
+      ASSERT(menu_keys_map != nullptr);
+      const keys* input_array[] = {menu_keys_map, get_key_map()};
+      const size_t size = sizeof(input_array) / sizeof(input_array[0]);
+      static_assert(size == 2);
       
       const auto &key_container = data->container;
-      const auto &found_event = itr->second;
-      int index = INT32_MAX;
-      {
-        const int index1 = found_event.keys[0];
-        const int index2 = found_event.keys[1];
-        const bool keys_set = index1 != INT32_MAX && index2 != INT32_MAX;
-        index = index1 == INT32_MAX ? index2 : index1;
-        index = keys_set ? (key_container[index1].state_time < key_container[index2].state_time ? index1 : index2) : index;
+      for (size_t i = 0; i < size; ++i) {
+        auto key_map = input_array[i];
+        if (key_map == nullptr) continue;
+        // у нас может быть случай когда get_key_map() дает nullptr, когда мы в меню
+        
+        const auto &key_event_map = key_map->container;
+        for (size_t j = mem < container_size ? mem : mem-container_size; j < container_size; ++j) {
+          if (key_event_map[j].valid() && key_container[j].event_time <= 5) { // первый кадр нажатия это 0
+            mem = i*container_size + j+1;
+            return {key_event_map[j], key_container[j].state};
+          }
+        }
       }
-      ASSERT(index != INT32_MAX);
+
+      return {utils::id(), state_initial};
+    }
+    
+    input_state next_input_state(size_t &mem, const size_t &tolerancy) {
+      const auto data = get_input_data();
+      if (data->input_blocked) return {utils::id(), state_initial};
       
-      return {key_container[index].event, key_container[index].event_time};
+      ASSERT(menu_keys_map != nullptr);
+      const keys* input_array[] = {menu_keys_map, get_key_map()};
+      const size_t size = sizeof(input_array) / sizeof(input_array[0]);
+      static_assert(size == 2);
+      
+      const auto &key_container = data->container;
+      for (size_t i = 0; i < size; ++i) {
+        auto key_map = input_array[i];
+        if (key_map == nullptr) continue;
+        // у нас может быть случай когда get_key_map() дает nullptr, когда мы в меню
+        
+        const auto &key_event_map = key_map->container;
+        for (size_t j = mem < container_size ? mem : mem-container_size; j < container_size; ++j) {
+          const auto id = key_event_map[j];
+
+          if (id.valid() && key_container[j].event_time <= tolerancy) {
+            mem = i*container_size + j+1;
+            return {id, key_container[j].state};
+          }
+        }
+      }
+
+      return {utils::id(), state_initial};
+    }
+    
+    std::tuple<type, size_t> input_event_state(const utils::id &id) {
+      const auto data = get_input_data();
+      if (data->input_blocked) return {release, SIZE_MAX};
+      
+      const keys* input_array[] = {menu_keys_map, get_key_map()};
+      const size_t size = sizeof(input_array) / sizeof(input_array[0]);
+      static_assert(size == 2);
+      
+      for (size_t i = 0; i < size; ++i) {
+        auto key_map = input_array[i];
+        if (key_map == nullptr) continue;
+        // у нас может быть случай когда get_key_map() дает nullptr, когда мы в меню
+      
+        const auto container = key_map;
+        auto itr = container->events_map.find(id);
+        if (itr == container->events_map.end()) continue;
+        
+        const auto &key_container = data->container;
+        const auto &found_event = itr->second;
+        int index = INT32_MAX;
+        {
+          const int index1 = found_event.keys[0];
+          const int index2 = found_event.keys[1];
+          const bool keys_set = index1 != INT32_MAX && index2 != INT32_MAX;
+          index = index1 == INT32_MAX ? index2 : index1;
+          index = keys_set ? (key_container[index1].state_time < key_container[index2].state_time ? index1 : index2) : index;
+        }
+        ASSERT(index != INT32_MAX);
+        
+        return {key_container[index].event, key_container[index].event_time};
+      }
+      
+      return {release, SIZE_MAX};
     }
 
     bool is_event_pressed(const utils::id &id) {
       const auto data = get_input_data();
       if (data->input_blocked) return false;
       
-      const auto container = get_key_map();
+      const keys* input_array[] = {menu_keys_map, get_key_map()};
+      const size_t size = sizeof(input_array) / sizeof(input_array[0]);
+      static_assert(size == 2);
       
-      auto itr = container->events_map.find(id);
-      if (itr == container->events_map.end()) return false;
-      
-      const auto &key_container = data->container;
-      const auto &found_event = itr->second;
-      if (found_event.keys[1] == INT32_MAX) {
-        const int index = found_event.keys[0];
+      for (size_t i = 0; i < size; ++i) {
+        auto key_map = input_array[i];
+        if (key_map == nullptr) continue;
+        // у нас может быть случай когда get_key_map() дает nullptr, например когда мы в меню
+        
+        const auto container = key_map;
+        
+        auto itr = container->events_map.find(id);
+        if (itr == container->events_map.end()) continue;
+        
+        const auto &key_container = data->container;
+        const auto &found_event = itr->second;
+        if (found_event.keys[1] == INT32_MAX) {
+          const int index = found_event.keys[0];
+          return key_container[index].event != release;
+        }
+        
+        if (key_container[found_event.keys[0]].event_time < key_container[found_event.keys[1]].event_time) {
+          const int index = found_event.keys[0];
+          return key_container[index].event != release;
+        }
+        
+        const int index = found_event.keys[1];
         return key_container[index].event != release;
       }
       
-      if (key_container[found_event.keys[0]].event_time < key_container[found_event.keys[1]].event_time) {
-        const int index = found_event.keys[0];
-        return key_container[index].event != release;
-      }
-      
-      const int index = found_event.keys[1];
-      return key_container[index].event != release;
+      return false;
     }
 
     bool is_event_released(const utils::id &id) {
       const auto data = get_input_data();
       if (data->input_blocked) return true;
       
-      const auto container = get_key_map();
+      const keys* input_array[] = {menu_keys_map, get_key_map()};
+      const size_t size = sizeof(input_array) / sizeof(input_array[0]);
+      static_assert(size == 2);
       
-      auto itr = container->events_map.find(id);
-      if (itr == container->events_map.end()) return false;
+      for (size_t i = 0; i < size; ++i) {
+        auto key_map = input_array[i];
+        if (key_map == nullptr) continue;
+        // у нас может быть случай когда get_key_map() дает nullptr, например когда мы в меню
       
-      const auto &key_container = data->container;
-      const auto& found_event = itr->second;
-      if (found_event.keys[1] == INT32_MAX) {
-        const int index = found_event.keys[0];
+        const auto container = key_map;
+        
+        auto itr = container->events_map.find(id);
+        if (itr == container->events_map.end()) continue;
+        
+        const auto &key_container = data->container;
+        const auto& found_event = itr->second;
+        if (found_event.keys[1] == INT32_MAX) {
+          const int index = found_event.keys[0];
+          return key_container[index].event == release;
+        }
+        
+        if (key_container[found_event.keys[0]].event_time < key_container[found_event.keys[1]].event_time) {
+          const int index = found_event.keys[0];
+          return key_container[index].event == release;
+        }
+        
+        const int index = found_event.keys[1];
         return key_container[index].event == release;
       }
       
-      if (key_container[found_event.keys[0]].event_time < key_container[found_event.keys[1]].event_time) {
-        const int index = found_event.keys[0];
-        return key_container[index].event == release;
-      }
-      
-      const int index = found_event.keys[1];
-      return key_container[index].event == release;
+      return true;
     }
 
     void update_time(const size_t &time) {
@@ -507,7 +628,8 @@ namespace devils_engine {
       const auto key_event_container = get_key_map();
       auto &container = data->container;
       
-      key_event_container->current_event_layer = 0;
+      if (key_event_container != nullptr) key_event_container->current_event_layer = 0; // ненужно видимо уже
+      menu_keys_map->current_event_layer = 0;
       data->last_frame_time = time;
       
       for (size_t i = 0; i < key_count; ++i) {
@@ -594,34 +716,80 @@ namespace devils_engine {
 
     const char* get_key_name(const uint32_t &key) {
       if (key >= key_count) return nullptr;
-      return key_names[key];
+      auto name = key_names[key];
+      return name != nullptr ? name : "";
     }
     
     const char* get_event_key_name(const utils::id &id, const uint8_t &slot) {
       auto data = get_input_data();
       if (data->input_blocked) return nullptr;
       
-      const auto container = get_key_map();
+      const keys* input_array[] = {menu_keys_map, get_key_map()};
+      const size_t size = sizeof(input_array) / sizeof(input_array[0]);
+      static_assert(size == 2);
       
-      assert(slot < event_key_slots);
-      auto itr = container->events_map.find(id);
-      if (itr == container->events_map.end()) return nullptr;
+      for (size_t i = 0; i < size; ++i) {
+        auto key_map = input_array[i];
+        if (key_map == nullptr) continue;
+        // у нас может быть случай когда get_key_map() дает nullptr, например когда мы в меню
+      
+        const auto container = key_map;
+        
+        assert(slot < event_key_slots);
+        auto itr = container->events_map.find(id);
+        if (itr == container->events_map.end()) continue;
 
-      const auto& found_event = itr->second;
-      const int key = found_event.keys[slot];
-      return get_key_name(key);
+        const auto& found_event = itr->second;
+        const int key = found_event.keys[slot];
+        return get_key_name(key);
+      }
+      
+      return nullptr;
+    }
+    
+    const char* get_event_key_name(const size_t &input_array_size, keys* const* input_array, const utils::id &id, const uint8_t &slot) {
+      auto data = get_input_data();
+      if (data->input_blocked) return nullptr;
+      
+      for (size_t i = 0; i < input_array_size; ++i) {
+        auto key_map = input_array[i];
+        if (key_map == nullptr) continue;
+        // у нас может быть случай когда get_key_map() дает nullptr, например когда мы в меню
+      
+        const auto container = key_map;
+        
+        assert(slot < event_key_slots);
+        auto itr = container->events_map.find(id);
+        if (itr == container->events_map.end()) continue;
+
+        const auto& found_event = itr->second;
+        const int key = found_event.keys[slot];
+        return get_key_name(key);
+      }
+      
+      return nullptr;
     }
 
     std::pair<utils::id, size_t> pressed_event(size_t &mem) {
       auto data = get_input_data();
       if (data->input_blocked) return std::make_pair(utils::id(), SIZE_MAX);
       
+      const keys* input_array[] = {menu_keys_map, get_key_map()};
+      const size_t size = sizeof(input_array) / sizeof(input_array[0]);
+      static_assert(size == 2);
+      
       const auto &key_container = data->container;
-      const auto &key_event_map = get_key_map()->container;
-      for (size_t i = mem; i < container_size; ++i) {
-        if (key_event_map[i].valid() && key_container[i].event != release) {
-          mem = i+1;
-          return std::make_pair(key_event_map[i], key_container[i].event_time);
+      for (size_t i = 0; i < size; ++i) {
+        auto key_map = input_array[i];
+        if (key_map == nullptr) continue;
+        // у нас может быть случай когда get_key_map() дает nullptr, например когда мы в меню
+      
+        const auto &key_event_map = key_map->container;
+        for (size_t j = mem < container_size ? mem : mem-container_size; j < container_size; ++j) {
+          if (key_event_map[j].valid() && key_container[j].event != release) {
+            mem = i*container_size + j+1;
+            return std::make_pair(key_event_map[j], key_container[j].event_time);
+          }
         }
       }
 
@@ -681,7 +849,7 @@ namespace devils_engine {
       if (event_key_cont.keys[0] == key) event_key_cont.keys[0] = INT32_MAX;
       if (event_key_cont.keys[1] == key) event_key_cont.keys[1] = INT32_MAX;
       
-      // надо бы здесь вернуть что то по чему можено сделать вывод что перезаписалось
+      // надо бы здесь вернуть что то по чему можно сделать вывод что перезаписалось
     }
 
     utils::id get_event_data(const int &key) {
@@ -690,6 +858,16 @@ namespace devils_engine {
       
       if (uint32_t(key) >= container_size) return utils::id();
       const auto container = get_key_map();
+      return container->container[key];
+    }
+    
+    utils::id get_menu_event_data(const int &key) {
+      auto data = get_input_data();
+      if (data->input_blocked) return utils::id();
+      
+      if (uint32_t(key) >= container_size) return utils::id();
+      const auto container = menu_keys_map;
+      ASSERT(container != nullptr);
       return container->container[key];
     }
     
@@ -721,64 +899,100 @@ namespace devils_engine {
       auto data = get_input_data();
       if (data->input_blocked) return false;
       
-      // ищем эвент
-      auto container = get_key_map();
-      auto itr = container->events_map.find(event);
-      if (itr == container->events_map.end()) return false;
-      const auto& found_event = itr->second;
+      const keys* input_array[] = {menu_keys_map, get_key_map()};
+      const size_t size = sizeof(input_array) / sizeof(input_array[0]);
+      static_assert(size == 2);
       
-      auto &key_container = data->container;
-      int index = INT32_MAX;
-      {
-        const int index1 = found_event.keys[0];
-        const int index2 = found_event.keys[1];
-        const bool keys_set = index1 != INT32_MAX && index2 != INT32_MAX;
-        index = index1 == INT32_MAX ? index2 : index1;
-        index = keys_set ? (key_container[index1].state_time < key_container[index2].state_time ? index1 : index2) : index;
+      for (size_t i = 0; i < size; ++i) {
+        auto key_map = input_array[i];
+        if (key_map == nullptr) continue;
+        // у нас может быть случай когда get_key_map() дает nullptr, например когда мы в меню
+        
+        // ищем эвент
+        auto container = key_map;
+        auto itr = container->events_map.find(event);
+        if (itr == container->events_map.end()) continue;
+        const auto& found_event = itr->second;
+        
+        // могут ли одинаковые эвенты быть в нескольких контейнерах? строго говоря скорее всего да,
+        // одинаковый эвент для всех 3 стейтов игры (например переключение хода), но честно говоря
+        // лучше чтобы нет, тому что непонятно как что задавать вообще в этом случае
+        // тогда может быть мне здесь заблокировать какой то инпут в зависимости от стейта?
+        // ну короч опять пришли к тому с чего начинали
+  //       for (size_t i = 0; i < data->mapping_size; ++i) {
+  //         auto container = &data->mapping_array[i];
+  //         auto itr = container->events_map.find(event);
+  //         if (itr == container->events_map.end()) continue;
+  //         const auto& found_event = itr->second;
+  //       }
+        
+        auto &key_container = data->container;
+        int index = INT32_MAX;
+        {
+          const int index1 = found_event.keys[0];
+          const int index2 = found_event.keys[1];
+          const bool keys_set = index1 != INT32_MAX && index2 != INT32_MAX;
+          index = index1 == INT32_MAX ? index2 : index1;
+          index = keys_set ? (key_container[index1].state_time < key_container[index2].state_time ? index1 : index2) : index;
+        }
+        if (index == INT32_MAX) continue;
+        
+        // задаем слой, наверное теперь не нужно
+//         if (key_container[index].event_layer == UINT32_MAX) key_container[index].event_layer = container->current_event_layer;
+//         if (key_container[index].event_layer != container->current_event_layer) return false;
+        
+        // проверяем условие
+        const uint32_t final_state = key_container[index].state == state_click && key_container[index].state_time != 0 ? state_initial : key_container[index].state;
+        return (final_state & states) != 0;
       }
-      if (index == INT32_MAX) return false;
       
-      // задаем слой
-      if (key_container[index].event_layer == UINT32_MAX) key_container[index].event_layer = container->current_event_layer;
-      if (key_container[index].event_layer != container->current_event_layer) return false;
-      
-      // проверяем условие
-      const uint32_t final_state = key_container[index].state == state_click && key_container[index].state_time != 0 ? state_initial : key_container[index].state;
-      return (final_state & states) != 0;
+      return false;
     }
     
     bool timed_check_event(const utils::id &event, const uint32_t &states, const size_t &wait, const size_t &period) {
       auto data = get_input_data();
       if (data->input_blocked) return false;
       
-      // ищем эвент
-      auto container = get_key_map();
-      auto itr = container->events_map.find(event);
-      if (itr == container->events_map.end()) return false;
-      const auto& found_event = itr->second;
+      const keys* input_array[] = {menu_keys_map, get_key_map()};
+      const size_t size = sizeof(input_array) / sizeof(input_array[0]);
+      static_assert(size == 2);
       
-      const size_t last_frame_time = data->last_frame_time;
+      for (size_t i = 0; i < size; ++i) {
+        auto key_map = input_array[i];
+        if (key_map == nullptr) continue;
+        // у нас может быть случай когда get_key_map() дает nullptr, например когда мы в меню
       
-      auto &key_container = data->container;
-      int index = INT32_MAX;
-      {
-        const int index1 = found_event.keys[0];
-        const int index2 = found_event.keys[1];
-        const bool keys_set = index1 != INT32_MAX && index2 != INT32_MAX;
-        index = index1 == INT32_MAX ? index2 : index1;
-        index = keys_set ? (key_container[index1].state_time < key_container[index2].state_time ? index1 : index2) : index;
+        // ищем эвент
+        auto container = key_map;
+        auto itr = container->events_map.find(event);
+        if (itr == container->events_map.end()) continue;
+        const auto& found_event = itr->second;
+        
+        const size_t last_frame_time = data->last_frame_time;
+        
+        auto &key_container = data->container;
+        int index = INT32_MAX;
+        {
+          const int index1 = found_event.keys[0];
+          const int index2 = found_event.keys[1];
+          const bool keys_set = index1 != INT32_MAX && index2 != INT32_MAX;
+          index = index1 == INT32_MAX ? index2 : index1;
+          index = keys_set ? (key_container[index1].state_time < key_container[index2].state_time ? index1 : index2) : index;
+        }
+        if (index == INT32_MAX) continue;
+        
+        // задаем слой, наверное теперь не нужно
+//         if (key_container[index].event_layer == UINT32_MAX) key_container[index].event_layer = container->current_event_layer;
+//         if (key_container[index].event_layer != container->current_event_layer) return false;
+        
+        // проверяем условие
+        if (key_container[index].event_time < wait) return false;
+        if (key_container[index].event_time % period >= last_frame_time) return false;
+        const uint32_t final_state = key_container[index].state == state_click && key_container[index].state_time != 0 ? state_initial : key_container[index].state;
+        return (final_state & states) != 0;
       }
-      if (index == INT32_MAX) return false;
       
-      // задаем слой
-      if (key_container[index].event_layer == UINT32_MAX) key_container[index].event_layer = container->current_event_layer;
-      if (key_container[index].event_layer != container->current_event_layer) return false;
-      
-      // проверяем условие
-      if (key_container[index].event_time < wait) return false;
-      if (key_container[index].event_time % period >= last_frame_time) return false;
-      const uint32_t final_state = key_container[index].state == state_click && key_container[index].state_time != 0 ? state_initial : key_container[index].state;
-      return (final_state & states) != 0;
+      return false;
     }
     
     std::tuple<double, double> get_cursor_pos() {

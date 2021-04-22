@@ -6,27 +6,15 @@
 #include <cstdint>
 #include <atomic>
 #include <mutex>
+#include "sol.h"
 
 namespace devils_engine {
   namespace utils {
     class progress_container {
     public:
-      enum type {
-        creating_map,
-        
-        loading_map, // загрузка карты после создания?
-        loading_created_map,
-        loading_map_save,
-        loading_battle,
-        loading_encounter,
-        
-        back_to_menu,
-      };
-      
       progress_container();
       int64_t get_value() const;
       int64_t get_max_value() const;
-      size_t get_type() const;
       std::string get_hint1() const;
       std::string get_hint2() const;
       std::string get_hint3() const;
@@ -36,7 +24,6 @@ namespace devils_engine {
       
       void set_value(const int64_t &val);
       void set_max_value(const int64_t &val);
-      void set_type(const size_t &type);
       void set_hint1(const std::string_view &str);
       void set_hint2(const std::string_view &str);
       void set_hint3(const std::string_view &str);
@@ -48,11 +35,12 @@ namespace devils_engine {
       mutable std::mutex mutex;
       int64_t current_value;
       int64_t max_value;
-      size_t type;
       std::string hint1;
       std::string hint2;
       std::string hint3;
     };
+    
+    void update_progress_table(progress_container* p, sol::table t);
   }
 }
 

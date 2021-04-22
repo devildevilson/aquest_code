@@ -122,21 +122,32 @@ namespace devils_engine {
         float height;
         uint32_t biome;
       };
+      
+      struct seasons_data {
+        uint32_t current_season;
+        uint32_t seasons_count;
+        //uint32_t biomes_count;
+        data::vector<uint8_t> tiles_seasons;
+      };
 
 //       data::string world_name;
 //       data::string technical_name;
 //       data::string world_settings;
       uint64_t rand_seed;
       uint32_t noise_seed;
-      uint32_t current_season;
       data::array<data::array<float, 4>, 4> matrix;
 
-      data::array<data::vector<data::string>, static_cast<size_t>(core::structure::count)> data_array;
-      data::array<render::biome_data_t, core::seasons::maximum_biomes> biomes;
-      data::vector<data::string> image_data;
-      data::vector<data::string> heraldy_data;
-      data::vector<tile_data> tiles_array; //  world_serializator::tiles_count
-      data::vector<uint8_t> tiles_seasons;
+      data::array<data::vector<data::string>, world_serializator::count> data_array;
+//       data::array<render::biome_data_t, core::seasons::maximum_biomes> biomes;
+      data::vector<tile_data> tiles_array;
+      
+      // тут должен быть массив с локализациями
+      // что он из себя представляет?
+      //data::vector<data::pair<uint64_t, data::string>> localizations;
+      // список конфигов локализации, локализация при загрузке должна соединять таблицы, а не перезаписывать их
+      data::vector<data::string> localizations;
+      
+      struct seasons_data seasons_data;
     };
 
     world_serializator::world_serializator() : ptr(new cista_serializator) { ptr->tiles_array.resize(world_serializator::tiles_count);  }
@@ -149,30 +160,50 @@ namespace devils_engine {
     void world_serializator::set_settings(std::string &&name) { world_settings = std::move(name); }
     void world_serializator::set_rand_seed(const uint64_t &seed) { ptr->rand_seed = seed; }
     void world_serializator::set_noise_seed(const uint32_t &seed) { ptr->noise_seed = seed; }
-    void world_serializator::add_data(const core::structure &type, const std::string &data) {
-      const uint32_t index = static_cast<uint32_t>(type);
-      ptr->data_array[index].push_back(data);
+    size_t world_serializator::resize_data(const uint32_t &type, const size_t &size) {
+      assert(type < count);
+      const size_t old_size = ptr->data_array[type].size();
+      const size_t final_size = old_size + size;
+      ptr->data_array[type].resize(final_size);
+      return final_size;
+    }
+    
+    void world_serializator::set_data(const uint32_t &type, const size_t &index, const std::string &data) {
+      assert(type < count);
+      assert(index < ptr->data_array[type].size());
+      ptr->data_array[type][index] = data;
+    }
+    
+    size_t world_serializator::add_data(const uint32_t &type, const std::string &data) {
+      assert(type < count);
+      ptr->data_array[type].push_back(data);
+      return ptr->data_array[type].size()-1;
     }
 
-    void world_serializator::add_data(const core::structure &type, std::string &&data) {
-      const uint32_t index = static_cast<uint32_t>(type);
-      ptr->data_array[index].emplace_back(std::move(data));
+    size_t world_serializator::add_data(const uint32_t &type, std::string &&data) {
+      assert(type < count);
+      ptr->data_array[type].emplace_back(std::move(data));
+      return ptr->data_array[type].size()-1;
     }
     
-    void world_serializator::add_image_data(const std::string &data) {
-      ptr->image_data.push_back(data);
-    }
-    
-    void world_serializator::add_image_data(std::string &&data) {
-      ptr->image_data.emplace_back(std::move(data));
-    }
-    
-    void world_serializator::add_heraldy_data(const std::string &data) {
-      ptr->heraldy_data.push_back(data);
-    }
-    
-    void world_serializator::add_heraldy_data(std::string &&data) {
-      ptr->heraldy_data.emplace_back(std::move(data));
+//     void world_serializator::add_image_data(const std::string &data) {
+//       ptr->image_data.push_back(data);
+//     }
+//     
+//     void world_serializator::add_image_data(std::string &&data) {
+//       ptr->image_data.emplace_back(std::move(data));
+//     }
+//     
+//     void world_serializator::add_heraldy_data(const std::string &data) {
+//       ptr->heraldy_data.push_back(data);
+//     }
+//     
+//     void world_serializator::add_heraldy_data(std::string &&data) {
+//       ptr->heraldy_data.emplace_back(std::move(data));
+//     }
+
+    void world_serializator::add_localization(std::string &&data) {
+      ptr->localizations.emplace_back(std::move(data));
     }
 
     void world_serializator::set_world_matrix(const glm::mat4 &mat) {
@@ -191,10 +222,13 @@ namespace devils_engine {
     }
 
     void world_serializator::copy_seasons(core::seasons* s) {
-      ptr->current_season = s->current_season;
-      ptr->tiles_seasons.resize(core::seasons::data_count);
-      memcpy(ptr->tiles_seasons.data(), s->data, core::seasons::data_count);
-      memcpy(ptr->biomes.data(), s->biomes, sizeof(s->biomes[0]) * core::seasons::maximum_biomes);
+      ptr->seasons_data.current_season = s->current_season;
+      ptr->seasons_data.seasons_count = s->seasons_count;
+      const size_t seasons_data_size = s->seasons_count * core::map::hex_count_d(core::map::detail_level);
+      ptr->seasons_data.tiles_seasons.resize(seasons_data_size); // core::seasons::data_count
+      memcpy(ptr->seasons_data.tiles_seasons.data(), s->data, seasons_data_size);
+      //memcpy(ptr->biomes.data(), s->biomes, sizeof(s->biomes[0]) * core::seasons::maximum_biomes);
+      // биомы парстся заново при загрузке, а для чего? хороший вопрос, потом придумаю для чего
     }
 
     using array = std::array<world_serializator::container, static_cast<size_t>(core::structure::count)>;
@@ -208,7 +242,7 @@ namespace devils_engine {
 // //       arr[index].data.clear();
 //     }
 
-    void fill_encryptor_data(size_t* key, size_t* iv) {
+    inline static void fill_encryptor_data(size_t* key, size_t* iv) {
       const splitmix64::state s = {0x32a665c};
       splitmix64::state states[5];
       states[0] = splitmix64::rng(s);
@@ -668,39 +702,46 @@ namespace devils_engine {
       return world_settings;
     }
 
-    uint32_t world_serializator::get_rand_seed() const { return ptr->noise_seed; }
-    uint32_t world_serializator::get_noise_seed() const { return ptr->rand_seed; }
+    uint64_t world_serializator::get_rand_seed() const { return ptr->rand_seed; }
+    uint32_t world_serializator::get_noise_seed() const { return ptr->noise_seed; }
 
-    uint32_t world_serializator::get_data_count(const core::structure &type) const {
-      const uint32_t index = static_cast<uint32_t>(type);
-      ASSERT(type < core::structure::count);
-      return ptr->data_array[index].size();
+    uint32_t world_serializator::get_data_count(const uint32_t &type) const {
+      ASSERT(type < count);
+      return ptr->data_array[type].size();
     }
 
-    std::string_view world_serializator::get_data(const core::structure &type, const uint32_t &index) const {
-      const uint32_t data_index = static_cast<uint32_t>(type);
-      ASSERT(type < core::structure::count);
-      const auto &arr = ptr->data_array[data_index];
+    std::string_view world_serializator::get_data(const uint32_t &type, const uint32_t &index) const {
+      ASSERT(type < count);
+      const auto &arr = ptr->data_array[type];
       if (index >= arr.size()) throw std::runtime_error("Bad data index");
       return arr[index];
     }
     
-    uint32_t world_serializator::get_images_count() const {
-      return ptr->image_data.size();
+//     uint32_t world_serializator::get_images_count() const {
+//       return ptr->image_data.size();
+//     }
+//     
+//     std::string_view world_serializator::get_image_data(const uint32_t &index) const {
+//       if (index >= ptr->image_data.size()) throw std::runtime_error("Bad image index");
+//       return ptr->image_data[index];
+//     }
+//     
+//     uint32_t world_serializator::get_heraldies_count() const {
+//       return ptr->heraldy_data.size();
+//     }
+//     
+//     std::string_view world_serializator::get_heraldy_data(const uint32_t &index) const {
+//       if (index >= ptr->heraldy_data.size()) throw std::runtime_error("Bad heraldy layer index");
+//       return ptr->heraldy_data[index];
+//     }
+
+    size_t world_serializator::get_localization_size() const {
+      return ptr->localizations.size();
     }
     
-    std::string_view world_serializator::get_image_data(const uint32_t &index) const {
-      if (index >= ptr->image_data.size()) throw std::runtime_error("Bad image index");
-      return ptr->image_data[index];
-    }
-    
-    uint32_t world_serializator::get_heraldies_count() const {
-      return ptr->heraldy_data.size();
-    }
-    
-    std::string_view world_serializator::get_heraldy_data(const uint32_t &index) const {
-      if (index >= ptr->heraldy_data.size()) throw std::runtime_error("Bad heraldy layer index");
-      return ptr->heraldy_data[index];
+    std::string_view world_serializator::get_localization(const size_t &index) const {
+      ASSERT(index < ptr->localizations.size());
+      return ptr->localizations[index];
     }
 
     glm::mat4 world_serializator::get_world_matrix() const {
@@ -721,11 +762,13 @@ namespace devils_engine {
     }
 
     void world_serializator::fill_seasons(core::seasons* s) const {
-      s->current_season = ptr->current_season;
-      //ptr->tiles_seasons.resize(core::seasons::data_count);
-      ASSERT(ptr->tiles_seasons.size() == core::seasons::data_count);
-      memcpy(s->data, ptr->tiles_seasons.data(), core::seasons::data_count);
-      memcpy(s->biomes, ptr->biomes.data(), sizeof(s->biomes[0]) * core::seasons::maximum_biomes);
+      s->current_season = ptr->seasons_data.current_season;
+      s->seasons_count = ptr->seasons_data.seasons_count;
+      ASSERT(ptr->seasons_data.seasons_count != 0);
+      const size_t seasons_data_size = s->seasons_count * core::map::hex_count_d(core::map::detail_level);
+      ASSERT(ptr->seasons_data.tiles_seasons.size() == seasons_data_size);
+      memcpy(s->data, ptr->seasons_data.tiles_seasons.data(), seasons_data_size);
+      //memcpy(s->biomes, ptr->biomes.data(), sizeof(s->biomes[0]) * core::seasons::maximum_biomes);
     }
 
     const uint8_t* world_serializator::get_hash() const {

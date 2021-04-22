@@ -13,6 +13,18 @@ namespace devils_engine {
     struct seasons;
   }
   
+  namespace serialize {
+    namespace world {
+      struct province;
+      struct title;
+      struct heraldy_layer;
+      struct character;
+      struct building_type;
+      struct city;
+      struct city_type;
+    }
+  }
+  
   namespace utils {
     struct cista_serializator;
     
@@ -28,6 +40,31 @@ namespace devils_engine {
     public:
       static const size_t tiles_count = core::map::hex_count_d(core::map::detail_level);
       static const size_t hash_size = 32;
+      
+      enum types {
+        image,
+        heraldy_layer,
+        biome,
+        
+        province,
+        building_type,
+        city_type,
+        city,
+        trait,
+        modificator,
+        troop_type,
+        decision,
+        religion_group,
+        religion,
+        culture,
+        law,
+        event,
+        title,
+        character,
+        dynasty,
+        
+        count
+      };
       
       struct tile_data {
         float height;
@@ -53,12 +90,15 @@ namespace devils_engine {
       void set_settings(std::string &&name);
       void set_rand_seed(const uint64_t &seed);
       void set_noise_seed(const uint32_t &seed);
-      void add_data(const core::structure &type, const std::string &data);
-      void add_data(const core::structure &type, std::string &&data);
-      void add_image_data(const std::string &data); // нужно видимо и с картинками примерно так же сделать как с основными данными
-      void add_image_data(std::string &&data);      // то есть распределить их по типам 
-      void add_heraldy_data(const std::string &data);
-      void add_heraldy_data(std::string &&data);
+      size_t resize_data(const uint32_t &type, const size_t &size);
+      void set_data(const uint32_t &type, const size_t &index, const std::string &data);
+      size_t add_data(const uint32_t &type, const std::string &data);
+      size_t add_data(const uint32_t &type, std::string &&data);
+//       void add_image_data(const std::string &data); // нужно видимо и с картинками примерно так же сделать как с основными данными
+//       void add_image_data(std::string &&data);      // то есть распределить их по типам 
+//       void add_heraldy_data(const std::string &data);
+//       void add_heraldy_data(std::string &&data);
+      void add_localization(std::string &&data);
       void set_world_matrix(const glm::mat4 &mat);
       void set_tile_data(const uint32_t &index, const tile_data &data);
       void copy_seasons(core::seasons* s);
@@ -68,14 +108,16 @@ namespace devils_engine {
       std::string_view get_name() const;
       std::string_view get_technical_name() const;
       std::string_view get_settings() const;
-      uint32_t get_rand_seed() const;
+      uint64_t get_rand_seed() const;
       uint32_t get_noise_seed() const;
-      uint32_t get_data_count(const core::structure &type) const;
-      std::string_view get_data(const core::structure &type, const uint32_t &index) const;
-      uint32_t get_images_count() const;
-      std::string_view get_image_data(const uint32_t &index) const;
-      uint32_t get_heraldies_count() const;
-      std::string_view get_heraldy_data(const uint32_t &index) const;
+      uint32_t get_data_count(const uint32_t &type) const;
+      std::string_view get_data(const uint32_t &type, const uint32_t &index) const;
+//       uint32_t get_images_count() const;
+//       std::string_view get_image_data(const uint32_t &index) const;
+//       uint32_t get_heraldies_count() const;
+//       std::string_view get_heraldy_data(const uint32_t &index) const;
+      size_t get_localization_size() const;
+      std::string_view get_localization(const size_t &index) const;
       glm::mat4 get_world_matrix() const;
       tile_data get_tile_data(const uint32_t &index) const;
       void fill_seasons(core::seasons* s) const;

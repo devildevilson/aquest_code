@@ -17,7 +17,20 @@
 -- в io нужно убрать почти все функции
 --local valuable_module = require("apates_quest/module")
 
--- возвращаем список таблиц
+-- local function load_biomes(seasons)
+--   -- мы можем прямо в сезонах валидировать и создать биом
+--   -- тогда мы вернем индекс
+--   local b_index = seasons:add_biome({})
+--   -- затем нам нужен сезон в который мы как раз должны положить биом
+--   local s_index = seasons:allocate_season()
+--   -- кладем биомы в сезоны, но так мы можем сделать только при генерации
+--   -- какой другой вариант? писать какие то костыли? лучше наверное оставить так
+--   for i = 1, tiles_count do
+--     seasons:set_biome(i, s_index, b_index)
+--   end
+-- end
+
+-- возвращаем список таблиц, в таблицах теперь не нужен id (???)
 return {
   {
     id = "biome_ocean", -- не забыть id, нужно ли к id добавлять "неймспейс" apates_quest/ ?

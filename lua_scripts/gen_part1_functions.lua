@@ -115,6 +115,7 @@ function setup_generator(ctx, local_table)
   --print("setup_generator")
 
   -- долго считает, нужно придумать возможно толи 'map' функцию
+  function_timer:finish()
 end
 
 local function mix_val(x, y, val)
@@ -174,7 +175,7 @@ function generate_plates(ctx, local_table)
 
         success = true
         tile_plate[rand_index] = index
-        --plate_tiles[i][#plate_tiles[i]+1] = rand_index
+        --table.insert(plate_tiles[i], rand_index)
         for j = 1, tile.n_count do
           local n_index = tile:get_neighbor_index(j)
           local pair = make_index_pair(index, n_index)
@@ -232,11 +233,11 @@ function generate_plates(ctx, local_table)
     --     success = true
     --     unique_tiles[rand_index] = true
     --     tile_plate[rand_index] = i
-    --     --plate_tiles[i][#plate_tiles[i]+1] = rand_index
+    --     --table.insert(plate_tiles[i], rand_index)
     --     for j = 1, tile.n_count do
     --       local n_index = tile:get_neighbor_index(j)
     --       local pair = make_index_pair(i, n_index)
-    --       active_tile_indices[#active_tile_indices+1] = pair
+    --       table.insert(active_tile_indices, pair)
     --     end
     --   until true
     --   until success or attempts >= 100
@@ -255,7 +256,7 @@ function generate_plates(ctx, local_table)
     --   if tile_plate[tile_index] ~= -1 then break end
     --
     --   tile_plate[tile_index] = plate_index
-    --   --plate_tiles[plate_index][#plate_tiles[plate_index]+1] = tile_index
+    --   --table.insert(plate_tiles[plate_index], tile_index)
     --   unique_tiles[tile_index] = true
     --
     --   -- возвращаем константный указатель
@@ -264,7 +265,7 @@ function generate_plates(ctx, local_table)
     --   for j = 1, tile.n_count do
     --     local n_index = tile:get_neighbor_index(j)
     --     if not unique_tiles[n_index] then
-    --       active_tile_indices[#active_tile_indices+1] = make_index_pair(plate_index, n_index)
+    --       table.insert(active_tile_indices, make_index_pair(plate_index, n_index))
     --     end
     --   end
     -- until true
@@ -274,7 +275,7 @@ function generate_plates(ctx, local_table)
     for i = 1, tiles_count do
       local plate_index = tile_plate[i]
       assert(plate_index >= 1 and plate_index <= plates_count)
-      plate_tiles[plate_index][#plate_tiles[plate_index]+1] = i
+      table.insert(plate_tiles[plate_index], i)
     end
 
     --unique_tiles = nil
@@ -308,7 +309,7 @@ function generate_plates(ctx, local_table)
 
       if plate1 ~= plate2 and unique_edges[tile_indices_pair] == nil then
         unique_edges[tile_indices_pair] = true
-        tiles_edges[#tiles_edges+1] = tile_indices_pair
+        table.insert(tiles_edges, tile_indices_pair)
       end
     end)
     -- for i = 1, tiles_count do
@@ -324,7 +325,7 @@ function generate_plates(ctx, local_table)
     --
     --     if plate1 ~= plate2 and unique_edges[tile_indices_pair] == nil then
     --       unique_edges[tile_indices_pair] = true
-    --       tiles_edges[#tiles_edges+1] = tile_indices_pair
+    --       table.insert(tiles_edges, tile_indices_pair)
     --     end
     --   end
     -- end
@@ -437,8 +438,8 @@ function generate_plates(ctx, local_table)
       end
 
       local function append_table(table1, table2)
-        for i,value in ipairs(table2) do
-          table1[#table1+1] = value
+        for _,value in ipairs(table2) do
+          table.insert(table1, value)
         end
       end
 
@@ -477,10 +478,10 @@ function generate_plates(ctx, local_table)
 
   local united_plates = 0
   local plate_tiles_local = {}
-  for i, value in ipairs(plate_tiles) do
+  for _, value in ipairs(plate_tiles) do
     local tiles_count = #value
     if tiles_count > 1 then
-      plate_tiles_local[#plate_tiles_local+1] = value
+      table.insert(plate_tiles_local, value)
     else
       --print("small plate index " .. (i-1))
       --print("small plate tile  " .. value[1]-1)
@@ -532,6 +533,7 @@ function generate_plates(ctx, local_table)
   plate_tiles = nil
   active_tile_indices = nil
   unique_tiles = nil
+  function_timer:finish()
 end -- generate_plates
 
 -- выполняется примерно за 71 мс, более менее терпимо
@@ -649,13 +651,13 @@ function generate_plate_datas(ctx, local_table)
 
     -- рандомное число из предыдущего значения (период 2^32)
     -- не используем ctx.random
-    assert(i >= 0 and i <= constants.uint32_max) -- valid range for utils.prng
-    local rand_num1 = utils.prng(i)
-    local rand_num2 = utils.prng(rand_num1)
-    local rand_num3 = utils.prng(rand_num2)
-    local color_r = utils.prng_normalize(rand_num1)
-    local color_g = utils.prng_normalize(rand_num2)
-    local color_b = utils.prng_normalize(rand_num3)
+    assert(i >= 0 and i <= constants.uint32_max) -- valid range for utils.prng32
+    local rand_num1 = utils.prng32(i)
+    local rand_num2 = utils.prng32(rand_num1)
+    local rand_num3 = utils.prng32(rand_num2)
+    local color_r = utils.prng_normalize32(rand_num1)
+    local color_g = utils.prng_normalize32(rand_num2)
+    local color_b = utils.prng_normalize32(rand_num3)
     local color = utils.make_color(color_r, color_b, color_g, 1.0)
     -- применяем сразу ко всем тайлам плиты
     -- к сожалению это наверное единственно место где очевидно применение childs
@@ -668,4 +670,5 @@ function generate_plate_datas(ctx, local_table)
   tectonic_plate_props = nil
   local_plates_indices = nil
   -- тяжело переписывать 6к строк =(
+  function_timer:finish()
 end -- generate_plate_datas

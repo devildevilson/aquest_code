@@ -26,7 +26,18 @@ return {
       -- понятное дело прежде всего мы уберем юзердату, поток, функцию
       -- и оставим только таблицу, строку или число
       -- + должен быть способ указать таблицу имен для культуры
-      jan = "january"
+      jan = "january",
+      feb = "february",
+      mar = "march",
+      apr = "april",
+      may = "may",
+      jun = "june",
+      jul = "july",
+      aug = "august",
+      sep = "september",
+      oct = "october",
+      nov = "november",
+      dec = "december"
     }
   }
 }

@@ -68,7 +68,7 @@ local function update_container(tiles_count, tile_province, province_tiles)
   for i = 1, tiles_count do
     local prov_index, _ = get_index_pair(tile_province[i])
     if prov_index ~= constants.uint32_max then
-      province_tiles[prov_index][#province_tiles[prov_index]+1] = i
+      table.insert(province_tiles[prov_index], i)
     end
   end
 end
@@ -96,7 +96,7 @@ local function unite_small_provinces(ctx, province_tiles_min, province_tiles_avg
 
       if prov_index1 ~= prov_index2 and unique_edges[tile_indices_pair] == nil then
         unique_edges[tile_indices_pair] = true
-        provinces_edges[#provinces_edges+1] = tile_indices_pair
+        table.insert(provinces_edges, tile_indices_pair)
       end
     end)
     unique_edges = nil
@@ -181,7 +181,7 @@ local function unite_small_provinces(ctx, province_tiles_min, province_tiles_avg
 
       local function append_table(table1, table2)
         for _,value in ipairs(table2) do
-          table1[#table1+1] = value
+          table.insert(table1, value)
         end
       end
 
@@ -209,16 +209,16 @@ local function unite_small_provinces(ctx, province_tiles_min, province_tiles_avg
 end
 
 local function gen_title_color(title_table, index)
-  local val1 = utils.prng(index)
-  local val2 = utils.prng(val1)
-  local val3 = utils.prng(val2)
-  local val4 = utils.prng(val3)
-  local val5 = utils.prng(val4)
-  local f1 = utils.prng_normalize(val1);
-  local f2 = utils.prng_normalize(val2);
-  local f3 = utils.prng_normalize(val3);
-  local f4 = utils.prng_normalize(val4);
-  local f5 = utils.prng_normalize(val5);
+  local val1 = utils.prng32(index)
+  local val2 = utils.prng32(val1)
+  local val3 = utils.prng32(val2)
+  local val4 = utils.prng32(val3)
+  local val5 = utils.prng32(val4)
+  local f1 = utils.prng_normalize32(val1);
+  local f2 = utils.prng_normalize32(val2);
+  local f3 = utils.prng_normalize32(val3);
+  local f4 = utils.prng_normalize32(val4);
+  local f5 = utils.prng_normalize32(val5);
   title_table.main_color = utils.make_color(f1, f2, f3, 1.0)
   title_table.border_color1 = utils.make_color(f2, f3, f4, 1.0)
   title_table.border_color2 = utils.make_color(f3, f4, f5, 1.0)
@@ -267,7 +267,7 @@ function generate_provinces(ctx, local_table)
   for i = 1, tiles_count do
     local pool_index = tile_pool[i]
     if pool_index ~= -1 then
-      ground_pools[pool_index][#ground_pools[pool_index]+1] = i
+      table.insert(ground_pools[pool_index], i)
     end
   end
 
@@ -393,7 +393,7 @@ function generate_provinces(ctx, local_table)
 
     queue_push(tile_index)
     tile_province[tile_index] = make_index_pair(index, 0)
-    --province_tiles[i][province_tiles[i]+1] = tile_index
+    --table.insert(province_tiles[i], tile_index)
   end, function(current_tile, queue_push)
     local province_index, dist = get_index_pair(tile_province[current_tile])
     local tile = ctx.map:get_tile(current_tile)
@@ -408,7 +408,7 @@ function generate_provinces(ctx, local_table)
       if n_dist ~= constants.uint32_max then break end
 
       tile_province[n_index] = make_index_pair(province_index, dist + 1)
-      --province_tiles[i][province_tiles[i]+1] = n_index
+      --table.insert(province_tiles[i], n_index)
 
       queue_push(n_index)
     until true
@@ -498,7 +498,7 @@ function generate_provinces(ctx, local_table)
       if index == 1 then
         tile_province[tile_index] = make_index_pair(i, 0)
       else
-        province_tiles[#province_tiles+1] = {}
+        table.insert(province_tiles, {})
         local new_province_index = #province_tiles
         tile_province[tile_index] = make_index_pair(new_province_index, 0)
       end
@@ -532,7 +532,7 @@ function generate_provinces(ctx, local_table)
         if n_province_index ~= constants.uint32_max then break end
 
         tile_province[n_index] = make_index_pair(province_index, dist + 1)
-        --province_tiles[province_index][#province_tiles[province_index]+1] = n_index
+        --table.insert(province_tiles[province_index], n_index)
 
         queue_push(n_index)
       until true
@@ -575,7 +575,7 @@ function generate_provinces(ctx, local_table)
         local n_index = tile:get_neighbor_index(k)
         local province_index2,_ = get_index_pair(tile_province[n_index])
         if province_index2 ~= constants.uint32_max and province_index1 ~= province_index2 then
-          border[#border+1] = make_index_pair(current_tile_index, n_index)
+          table.insert(border, make_index_pair(current_tile_index, n_index))
         end
       end
     end
@@ -603,7 +603,7 @@ function generate_provinces(ctx, local_table)
       remove_from_array(province_tiles[opposite_index], choosen_tile_index)
 
       -- добавляем тайл
-      province_tiles[i][#province_tiles[i]+1] = choosen_tile_index
+      table.insert(province_tiles[i], choosen_tile_index)
       do
         local _, old_b = get_index_pair(tile_province[choosen_tile_index])
         tile_province[choosen_tile_index] = make_index_pair(i, old_b)
@@ -614,7 +614,7 @@ function generate_provinces(ctx, local_table)
         local n_index = tile:get_neighbor_index(j)
         local province_index2, _ = get_index_pair(tile_province[n_index])
         if province_index2 ~= constants.uint32_max and i ~= province_index2 then
-          border[#border+1] = make_index_pair(choosen_tile_index, n_index)
+          table.insert(border, make_index_pair(choosen_tile_index, n_index))
         end
       end
     until true
@@ -708,6 +708,7 @@ function generate_provinces(ctx, local_table)
   print("less_min_avg      " .. accum_min / count_less_min)
   print("final_avg         " .. accum_tiles_count / count)
 
+  function_timer:finish()
   function_timer = nil -- luacheck: ignore function_timer
 end -- generate_provinces
 
@@ -744,9 +745,9 @@ function province_postprocessing(ctx, _)
       unique_tiles[current_tile_index] = true
       tiles_queue:push_right(make_index_pair(current_free_area, current_tile_index))
 
-      tile_free_area[#tile_free_area+1] = make_index_pair(current_free_area, current_tile_index)
+      table.insert(tile_free_area, make_index_pair(current_free_area, current_tile_index))
       free_area_tile[current_free_area] = utils.create_table(100, 0)
-      free_area_tile[current_free_area][#free_area_tile[current_free_area]+1] = current_tile_index
+      table.insert(free_area_tile[current_free_area], current_tile_index)
     end
 
     while not tiles_queue:is_empty() do
@@ -763,8 +764,8 @@ function province_postprocessing(ctx, _)
         local prov_index = ctx.container:get_data_u32(types.entities.tile, n_index, types.properties.tile.province_index) -- luacheck: ignore prov_index
         assert(prov_index == constants.uint32_max) -- это 100%? я в этом сомневаюсь
 
-        free_area_tile[current_free_area][#free_area_tile[current_free_area]+1] = n_index
-        tile_free_area[#tile_free_area+1] = make_index_pair(current_free_area, n_index)
+        table.insert(free_area_tile[current_free_area], n_index)
+        table.insert(tile_free_area, make_index_pair(current_free_area, n_index))
         unique_tiles[n_index] = true
         tiles_queue:push_right(make_index_pair(current_free_area, n_index))
       until true
@@ -920,6 +921,7 @@ function province_postprocessing(ctx, _)
   print("less_min_avg      " .. accum_min / count_less_min)
   print("final_avg         " .. accum_tiles_count / count)
 
+  function_timer:finish()
   function_timer = nil
 end -- province_postprocessing
 
@@ -1019,25 +1021,26 @@ function calculating_province_neighbors(ctx, _)
     local province = {
       max_cities_count = 1,
       title = "baron" .. i .. "_title",
-      neighbours = {},
+      neighbors = {},
       tiles = {}
     }
 
     local province_neighbors = ctx.container:get_childs(types.entities.province_neighbors, i)
     for _,index in ipairs(province_neighbors) do
       local n = unpack_n_index(index)
-      province.neighbours[#province.neighbours+1] = math.abs(n)
+      table.insert(province.neighbors, math.abs(n))
     end
 
     local province_tiles = ctx.container:get_childs(types.entities.province, i)
     for _,index in ipairs(province_tiles) do
-      province.tiles[#province.tiles+1] = index
+      table.insert(province.tiles, index)
     end
 
     -- врядли стоит провинции создавать тут
     utils.add_province(province)
   end
 
+  function_timer:finish()
   function_timer = nil
 end -- calculating_province_neighbors
 
@@ -1117,7 +1120,7 @@ function generate_cultures(ctx, _)
       tile_index = current_tile_index
       queue_push(tile_index)
       tiles_culture[tile_index] = index
-      culture_tiles[index][#culture_tiles[index]+1] = tile_index
+      table.insert(culture_tiles[index], tile_index)
       unique_tiles[tile_index] = true
       for j = 1, tile.n_count do
         local n_index = tile:get_neighbor_index(j)
@@ -1134,7 +1137,7 @@ function generate_cultures(ctx, _)
       local n_index = tile:get_neighbor_index(j)
       if tiles_culture[n_index] == -1 then
         tiles_culture[n_index] = current_culture_index
-        culture_tiles[current_culture_index][#culture_tiles[current_culture_index]+1] = n_index
+        table.insert(culture_tiles[current_culture_index], n_index)
         queue_push(n_index)
       end
     end
@@ -1152,6 +1155,7 @@ function generate_cultures(ctx, _)
     end
   end
 
+  function_timer:finish()
   function_timer = nil
 end -- generate_cultures
 
@@ -1175,7 +1179,7 @@ function generate_countries(ctx, local_table)
   local development = utils.init_array(provinces_count, 0.0)
   for i = 1, #province_country do
     province_country[i] = i
-    country_province[i][#country_province[i]+1] = i
+    table.insert(country_province[i], i)
     luckness[i] = ctx.random:closed(0.1, 0.8)
     development[i] = ctx.random:closed(0.1, 0.8)
   end
@@ -1251,7 +1255,7 @@ function generate_countries(ctx, local_table)
 
             assert(found)
 
-            country_province[country_index][#country_province[country_index]+1] = n_index
+            table.insert(country_province[country_index], n_index)
             province_country[n_index] = country_index
           until true
           end -- for
@@ -1281,7 +1285,7 @@ function generate_countries(ctx, local_table)
           -- нужно добавить все страны (провинции?)
           if history[index].t == history_step.type.becoming_empire then
             for k = 1, #country_province[country_index] do
-              history[index].country_provinces[#history[index].country_provinces+1] = country_province[country_index][k]
+              table.insert(history[index].country_provinces, country_province[country_index][k])
             end
           end
         end -- if
@@ -1373,7 +1377,7 @@ function generate_countries(ctx, local_table)
 
         assert(province_index ~= -1)
 
-        country_province[province_index][#country_province[province_index]+1] = province_index
+        table.insert(country_province[province_index], province_index)
         province_country[province_index] = province_index;
         queue_push(make_index_pair(province_index, province_index))
         unique_provinces[province_index] = true
@@ -1391,7 +1395,7 @@ function generate_countries(ctx, local_table)
           queue_push(make_index_pair(current_index, n_index))
           unique_provinces[n_index] = true
           province_country[n_index] = current_index
-          country_province[current_index][#country_province[current_index]+1] = n_index
+          table.insert(country_province[current_index], n_index)
         until true
         end
       end)
@@ -1424,7 +1428,7 @@ function generate_countries(ctx, local_table)
         end
 
         assert(#country_province[prov_index] == 0)
-        country_province[prov_index][#country_province[prov_index]+1] = prov_index
+        table.insert(country_province[prov_index], prov_index)
         province_country[prov_index] = prov_index;
 
         --luckness[prov_index] = ctx.random:norm()
@@ -1526,7 +1530,7 @@ function generate_countries(ctx, local_table)
       -- нет прямого доступа к провинции
       -- это значит что эта провинция (и все возможные соседи)
       -- должны быть другим государством
-      new_countries[#new_countries+1] = province_index
+      table.insert(new_countries, province_index)
     until true
     end -- for
   until true
@@ -1561,7 +1565,7 @@ function generate_countries(ctx, local_table)
     local new_country_provinces = {}
     unique_provinces[province_index] = true
     provinces_queue:push_right(province_index)
-    new_country_provinces[#new_country_provinces+1] = province_index
+    table.insert(new_country_provinces, province_index)
 
     while not provinces_queue:is_empty() do
       local current_province_index = provinces_queue:pop_left()
@@ -1573,7 +1577,7 @@ function generate_countries(ctx, local_table)
         if province_country[n_index] == constants.uint32_max and unique_provinces[n_index] == nil then
           unique_provinces[n_index] = true
           provinces_queue:push_right(n_index)
-          new_country_provinces[#new_country_provinces+1] = n_index
+          table.insert(new_country_provinces, n_index)
         end
       end -- for
     end -- while
@@ -1697,7 +1701,7 @@ function generate_countries(ctx, local_table)
     if #country_province[country_index] < 2 then
       local first_province = country_province[country_index][1]
       province_country[first_province] = opposing_country
-      country_province[opposing_country][#country_province[opposing_country]+1] = first_province
+      table.insert(country_province[opposing_country], first_province)
       country_province[country_index] = {}
     else
       -- если провинций больше
@@ -1728,7 +1732,7 @@ function generate_countries(ctx, local_table)
         province_country[province_index] = country_index
         remove_from_array(country_province[index], province_index)
 
-        country_province[country_index][#country_province[country_index]+1] = province_index
+        table.insert(country_province[country_index], province_index)
 
         local neighbours = ctx.container:get_childs(types.entities.province_neighbors, province_index)
         for j = 1, #neighbours do
@@ -1807,8 +1811,11 @@ function generate_countries(ctx, local_table)
   for i = 1, #country_province do
     local childs_count = ctx.container:get_childs_count(types.entities.country, i)
     assert(childs_count == 0)
-    for j = 1, #country_province[i] do
-      ctx.container:add_child(types.entities.country, i, country_province[i][j])
+
+    if #country_province[i] ~= 0 then
+      for j = 1, #country_province[i] do
+        ctx.container:add_child(types.entities.country, i, country_province[i][j])
+      end
       new_country_counter = new_country_counter + 1
     end
   end
@@ -1816,12 +1823,12 @@ function generate_countries(ctx, local_table)
   local tiles_count_color = ctx.container:entities_count(types.entities.tile)
   for i = 1, tiles_count_color do
     local country_index = ctx.container:get_data_u32(types.entities.tile, i, types.properties.tile.country_index)
-    local rand_num1 = utils.prng(country_index)
-    local rand_num2 = utils.prng(rand_num1)
-    local rand_num3 = utils.prng(rand_num2)
-    local color_r = utils.prng_normalize(rand_num1)
-    local color_g = utils.prng_normalize(rand_num2)
-    local color_b = utils.prng_normalize(rand_num3)
+    local rand_num1 = utils.prng32(country_index)
+    local rand_num2 = utils.prng32(rand_num1)
+    local rand_num3 = utils.prng32(rand_num2)
+    local color_r = utils.prng_normalize32(rand_num1)
+    local color_g = utils.prng_normalize32(rand_num2)
+    local color_b = utils.prng_normalize32(rand_num3)
     ctx.container:set_data_u32(types.entities.tile, i, types.properties.tile.color, utils.make_color(color_r, color_b, color_g, 1.0))
   end
 
@@ -1864,6 +1871,7 @@ function generate_countries(ctx, local_table)
 
   -- нужно создать где то рядом персонажей и раздать им титулы
 
+  function_timer:finish()
   function_timer = nil
 end -- generate_countries
 
@@ -1872,12 +1880,13 @@ function generate_heraldy(ctx, local_table)
 
   utils.load_heraldy_layers("apates_quest/scripts/heraldies_config.lua")
 
+  function_timer:finish()
   function_timer = nil
 end -- generate_heraldy
 
 local function append_table(table1, table2)
   for _,v in ipairs(table2) do
-    table1[#table1+1] = v
+    table.insert(table1, v)
   end
 end
 
@@ -2029,7 +2038,7 @@ function generate_titles(ctx, local_table)
     local duchie_index = #duchies+1
     queue_push(make_index_pair(duchie_index, province_index))
     duchies[duchie_index] = utils.create_table(10, 0)
-    duchies[duchie_index][#duchies[duchie_index]+1]  = province_index
+    table.insert(duchies[duchie_index], province_index)
   end, function(data, queue_push)
     local duchie_index, province_index = get_index_pair(data)
     local neighbours = ctx.container:get_childs(types.entities.province_neighbors, province_index)
@@ -2062,7 +2071,7 @@ function generate_titles(ctx, local_table)
       -- тут наверное нужно опять просмотреть соседей текущего
       -- то, что соседи могут "закнчится" и у текущей провинции и у соседней, кажется равновероятным
       queue_push(make_index_pair(duchie_index, province_index))
-      duchies[duchie_index][#duchies[duchie_index]+1] = province_index
+      table.insert(duchies[duchie_index], province_index)
     else
       for i = 1, #neighbours do
         local breakb = false
@@ -2090,7 +2099,7 @@ function generate_titles(ctx, local_table)
 
         unique_indices[absf(n_province_index)] = true
         queue_push(make_index_pair(duchie_index, absf(n_province_index)))
-        duchies[duchie_index][#duchies[duchie_index]+1] = absf(n_province_index)
+        table.insert(duchies[duchie_index], absf(n_province_index))
         breakb = true
       until true
         if breakb then break end
@@ -2129,7 +2138,7 @@ function generate_titles(ctx, local_table)
         if unique_indices[absf(n_province_index)] ~= nil then break end
 
         unique_indices[absf(n_province_index)] = true
-        duchies[i][#duchies[i]+1] = absf(n_province_index)
+        table.insert(duchies[i], absf(n_province_index))
       until true
       end -- for
     end -- for
@@ -2145,7 +2154,7 @@ function generate_titles(ctx, local_table)
   local current_duchies_count = #duchies
   for province_index = 1, provinces_count do
     if unique_indices[province_index] == nil then
-      duchies[#duchies+1] = {province_index}
+      table.insert(duchies, {province_index})
       unique_indices[province_index] = true
     end
   end
@@ -2186,7 +2195,7 @@ function generate_titles(ctx, local_table)
       unique_indices[duchy_index] = true
       remove_from_array(duchies[duchy_index], absf(n_province_index))
 
-      duchies[i][#duchies[i]+1] = absf(n_province_index)
+      table.insert(duchies[i], absf(n_province_index))
       province_duchy[absf(n_province_index)] = i
     until true
     end -- for
@@ -2314,7 +2323,7 @@ function generate_titles(ctx, local_table)
     local duchies_copy = {}
     for i = 1, #duchies do
       if #duchies[i] ~= 0 then
-        duchies_copy[#duchies_copy+1] = duchies[i]
+        table.insert(duchies_copy, duchies[i])
       end
     end
 
@@ -2486,7 +2495,7 @@ function generate_titles(ctx, local_table)
           end
 
           found = true
-          kingdoms[king_index][#kingdoms[king_index]+1] = index
+          table.insert(kingdoms[king_index], index)
           assert(duchy_kingdom[index] == -1)
           duchy_kingdom[index] = king_index
         end
@@ -2515,7 +2524,7 @@ function generate_titles(ctx, local_table)
 
     unique_duchies[duchy_index] = true
     king_queue:push_right({i, 1, 1})
-    kingdoms[i][#kingdoms[i]+1] = duchy_index
+    table.insert(kingdoms[i], duchy_index)
     duchy_kingdom[duchy_index] = i
 
     for j = 1, #duchies_neighbours[duchy_index] do
@@ -2535,7 +2544,7 @@ function generate_titles(ctx, local_table)
     local k_index = #kingdoms+1
     duchy_kingdom[i] = k_index
     kingdoms[k_index] = utils.create_table(10, 0)
-    kingdoms[k_index][#kingdoms[k_index]+1] = i
+    table.insert(kingdoms[k_index], i)
     king_queue:push_right({duchy_kingdom[i], 1, 1})
   until true
   end
@@ -2567,7 +2576,7 @@ function generate_titles(ctx, local_table)
     local k_index = #kingdoms+1
     duchy_kingdom[i] = k_index
     kingdoms[k_index] = utils.create_table(10, 0)
-    kingdoms[k_index][#kingdoms[k_index]+1] = i
+    table.insert(kingdoms[k_index], i)
     king_queue:push_right({duchy_kingdom[i], 1, 1})
   until true
   end -- for
@@ -2804,7 +2813,7 @@ function generate_titles(ctx, local_table)
 
   for kingdom_index = 1, #kingdom_empire do
   repeat
-    if kingdom_empire[i] ~= constants.uint32_max then break end
+    if kingdom_empire[kingdom_index] ~= constants.uint32_max then break end
 
     local found = 0
     for j = 1, #kingdoms_neighbours[kingdom_index] do
@@ -2819,13 +2828,13 @@ function generate_titles(ctx, local_table)
 
     local new_emp = #empires+1
     empires[new_emp] = utils.create_table(10, 0)
-    empires[new_emp][#empires[new_emp]+1] = kingdom_index
+    table.insert(empires[new_emp], kingdom_index)
     kingdom_empire[kingdom_index] = new_emp
     emperor_queue:push_right({new_emp, 1, 1})
     for j = 1, #kingdoms_neighbours[kingdom_index] do
       local n_kingdom_index, _ = get_index_pair(kingdoms_neighbours[kingdom_index][j])
       if kingdom_empire[n_kingdom_index] == constants.uint32_max then
-        empires[new_emp][#empires[new_emp]+1] = n_kingdom_index
+        table.insert(empires[new_emp], n_kingdom_index)
         kingdom_empire[n_kingdom_index] = new_emp
       end
     end
@@ -2838,7 +2847,7 @@ function generate_titles(ctx, local_table)
     local empires_copy = utils.create_table(#empires, 0)
     for i = 1, #empires do
       if #empires[i] > 0 then
-        empires_copy[#empires_copy+1] = empires[i]
+        table.insert(empires_copy, empires[i])
       end
     end
 
@@ -2940,6 +2949,7 @@ function generate_titles(ctx, local_table)
   local king_offset = emp_offset + #empires
   local duchy_offset = king_offset + #kingdoms
   local baron_offset = duchy_offset + #duchies
+  ctx.container:clear_entities(types.entities.title)
   ctx.container:set_entity_count(types.entities.title, titles_counter)
 
   local_table.emp_offset = emp_offset
@@ -3027,7 +3037,7 @@ function generate_titles(ctx, local_table)
         utils.add_title(duchy_title)
 
         ctx.container:set_data_u32(types.entities.title, duchy_offset + duchy_index, types.properties.title.parent, king_offset + kingdom_index)
-        ctx.container:set_data_u32(types.entities.title, duchy_offset + duchy_index, types.properties.title.owner, UINT32_MAX)
+        ctx.container:set_data_u32(types.entities.title, duchy_offset + duchy_index, types.properties.title.owner, constants.uint32_max)
 
         for c = 1, #duchies[duchy_index] do
           local baron_index = duchies[duchy_index][c] -- по всей видимости я где то теряю провинцию, странно кажется я проверял
@@ -3047,7 +3057,7 @@ function generate_titles(ctx, local_table)
           -- при 5000 провинций получится около 6000 титулов (в общем минус оперативная память)
 
           ctx.container:set_data_u32(types.entities.title, baron_offset + baron_index, types.properties.title.parent, duchy_offset + duchy_index)
-          ctx.container:set_data_u32(types.entities.title, baron_offset + baron_index, types.properties.title.owner, UINT32_MAX)
+          ctx.container:set_data_u32(types.entities.title, baron_offset + baron_index, types.properties.title.owner, constants.uint32_max)
         end -- for baron
       end -- for duke
     end -- for king
@@ -3191,13 +3201,14 @@ function generate_titles(ctx, local_table)
   -- удобно при генерации городов сгенерировать и титул заодно (причем титул во многом будет "технический")
   -- (то есть там будут храниться названия городов)
 
-  error("generate_titles end")
-
+  function_timer:finish()
   function_timer = nil
 end -- generate_titles
 
 function generate_characters(ctx, local_table)
   local function_timer = generator.timer_t.new("characters generation")
+
+  local absf = math.abs
 
   -- для каждого государства мы создаем по персонажу
   -- затем внутри каждого государства мы должны распределить провинции на вассалов
@@ -3242,11 +3253,13 @@ function generate_characters(ctx, local_table)
   for country_index = 1, country_count do -- некоторые страны пустые, почему то я не очистил их
   repeat
     local childs = ctx.container:get_childs(types.entities.country, country_index)
-    assert(#childs ~= 0)
+    --assert(#childs ~= 0)
     if #childs == 0 then break end
 
     local real_country_index = country_index_counter
-    for i,province_index in ipairs(childs) do
+    country_index_counter = country_index_counter + 1
+
+    for _,province_index in ipairs(childs) do
     repeat
       local baron_index = baron_offset + province_index
       local baron_val = owners[real_country_index][baron_index]
@@ -3269,9 +3282,13 @@ function generate_characters(ctx, local_table)
     until true
     end
 
-    country_index_counter = country_index_counter + 1
+    if country_index == country_count then
+      assert(real_country_index == real_country_count, "real index " .. real_country_index .. " real count " .. real_country_count)
+    end
   until true
   end
+
+  function_timer:checkpoint("Title owners")
 
   -- у меня остаются пустые страны после генерации
 
@@ -3303,7 +3320,7 @@ function generate_characters(ctx, local_table)
       local tmp = ctx.container:get_data_u32(types.entities.title, j, types.properties.title.owner)
       assert(tmp == constants.uint32_max)
       --local baron_index = j - baron_offset -- так у меня нет информации о том что это за титул
-      titles[real_country_index][#titles[real_country_index]+1] = j
+      table.insert(titles[real_country_index], j)
       ctx.container:set_data_u32(types.entities.title, j, types.properties.title.owner, real_country_index)
     until true
     end
@@ -3321,7 +3338,7 @@ function generate_characters(ctx, local_table)
       for j = duchy_offset+1, baron_offset do
       repeat
         local duchy_index = j - duchy_offset
-        local tmp = ctx.container:set_data_u32(types.entities.title, duchy_offset + duchy_index, types.properties.title.owner)
+        local tmp = ctx.container:get_data_u32(types.entities.title, duchy_offset + duchy_index, types.properties.title.owner)
         if tmp ~= constants.uint32_max then break end
 
         if title_owned[j] ~= nil and max_prov < title_owned[j] then
@@ -3333,7 +3350,7 @@ function generate_characters(ctx, local_table)
 
       -- один титул?
       ctx.container:set_data_u32(types.entities.title, duchy_offset + index, types.properties.title.owner, real_country_index)
-      titles[real_country_index][#titles[real_country_index]+1] = duchy_offset + index
+      table.insert(titles[real_country_index], duchy_offset + index)
 
       break -- continue
     end -- if
@@ -3344,7 +3361,7 @@ function generate_characters(ctx, local_table)
       for j = king_offset+1, duchy_offset do
       repeat
         local king_index = j - king_offset
-        local tmp = ctx.container:set_data_u32(types.entities.title, king_offset + king_index, types.properties.title.owner)
+        local tmp = ctx.container:get_data_u32(types.entities.title, king_offset + king_index, types.properties.title.owner)
         if tmp ~= constants.uint32_max then break end
 
         if title_owned[j] ~= nil and max_prov < title_owned[j] then
@@ -3356,7 +3373,7 @@ function generate_characters(ctx, local_table)
 
       -- один титул?
       ctx.container:set_data_u32(types.entities.title, king_offset + index, types.properties.title.owner, real_country_index)
-      titles[real_country_index][#titles[real_country_index]+1] = king_offset + index
+      table.insert(titles[real_country_index], king_offset + index)
     end -- if
 
     if #childs >= emp_start then
@@ -3365,7 +3382,7 @@ function generate_characters(ctx, local_table)
       for j = emp_offset+1, king_offset do
       repeat
         local emp_index = j - emp_offset
-        local tmp = ctx.container:set_data_u32(types.entities.title, emp_offset + emp_index, types.properties.title.owner)
+        local tmp = ctx.container:get_data_u32(types.entities.title, emp_offset + emp_index, types.properties.title.owner)
         if tmp ~= constants.uint32_max then break end
 
         if title_owned[j] ~= nil and max_prov < title_owned[j] then
@@ -3383,7 +3400,7 @@ function generate_characters(ctx, local_table)
       -- но пока так
 
       ctx.container:set_data_u32(types.entities.title, emp_offset + index, types.properties.title.owner, real_country_index)
-      titles[real_country_index][#titles[real_country_index]+1] = emp_offset + index
+      table.insert(titles[real_country_index], emp_offset + index)
     end
 
     -- че с герцогствами? случайно их раскидать? выглядит идея еще ничего
@@ -3404,7 +3421,7 @@ function generate_characters(ctx, local_table)
       local prob = ctx.random:probability(final)
       if not prob then break end
 
-      titles[real_country_index][#titles[real_country_index]+1] = j
+      table.insert(titles[real_country_index], j)
       ctx.container:set_data_u32(types.entities.title, j, types.properties.title.owner, real_country_index)
     until true
     end
@@ -3428,8 +3445,11 @@ function generate_characters(ctx, local_table)
     -- наверное просто сохраню в таблице все титулы
 
     assert(#childs ~= 0)
+    if country_index == country_count then assert(real_country_index == real_country_count, "real index " .. real_country_index .. " real count " .. real_country_count) end
   until true
   end
+
+  function_timer:checkpoint("Goverment titles")
 
   -- как вообще в принципе раздать сгенерированные титулы сгенерированным персонажам?
   -- возможно даже сразу сгенерировать персонажей к титулам лучше чем генерировать сейчас отдельно
@@ -3438,19 +3458,25 @@ function generate_characters(ctx, local_table)
   -- раскидывать нужно пока не кончатся провинции, отдавать в одни руки числом до герцогского (то есть от 1 до 6)
   -- (но 5-6 очень редко)
   for country_index = 1, real_country_count do
+  --repeat
     -- сначало нужно посчитать что имеем
     local owned_titles = titles[country_index]
+    assert(#owned_titles ~= 0)
+    --if #owned_titles == 0 then break end -- continue
+
     local baron_titles = utils.create_table(0, #owned_titles)
     local duchy_titles = utils.create_table(20, 0)
     local king_titles = utils.create_table(10, 0)
     local emp_titles = utils.create_table(10, 0)
-    for i,title_index in ipairs(owned_titles) do
-      if title_index > baron_offset then baron_titles[title_index] = true
-      elseif title_index > duchy_offset then duchy_titles[#duchy_titles+1] = title_index
-      elseif title_index > king_offset then king_titles[#king_titles+1] = title_index
-      elseif title_index > emp_offset then emp_titles[#emp_titles+1] = title_index end
+    local baron_titles_debug_counter = 0
+    for _,title_index in ipairs(owned_titles) do
+      if title_index > baron_offset then baron_titles[title_index] = true; baron_titles_debug_counter = baron_titles_debug_counter + 1
+      elseif title_index > duchy_offset then table.insert(duchy_titles, title_index)
+      elseif title_index > king_offset then table.insert(king_titles, title_index)
+      elseif title_index > emp_offset then table.insert(emp_titles, title_index) end
     end
 
+    assert(baron_titles_debug_counter ~= 0)
     assert(#king_titles + #emp_titles < 2)
 
     -- первым делаем господина, у господина должны быть все самые высокие титулы и покрайней мере одно герцогство
@@ -3469,7 +3495,7 @@ function generate_characters(ctx, local_table)
         -- герцогство выбираем случайно (герцогств может и не быть)
         local rand_index = ctx.random:index(#duchy_titles)
         local duchy_index = duchy_titles[rand_index]
-        final_titles[#final_titles+1] = duchy_index
+        table.insert(final_titles, duchy_index)
         duchy_titles[rand_index] = duchy_titles[#duchy_titles]
         duchy_titles[#duchy_titles] = nil
 
@@ -3479,8 +3505,10 @@ function generate_characters(ctx, local_table)
         local duchy_childs = ctx.container:get_childs(types.entities.title, duchy_index)
         -- нам бы раздать случайные (?) соседние провки,
 
-        while choosen_baron_index == -1 do
+        local attemps = 0
+        while choosen_baron_index == -1 and attemps < 100 do
         repeat
+          attemps = attemps + 1
           local rand_index = ctx.random:index(#duchy_childs)
           local baron_title_index = duchy_childs[rand_index]
           local tmp = ctx.container:get_data_u32(types.entities.title, baron_title_index, types.properties.title.owner)
@@ -3492,7 +3520,9 @@ function generate_characters(ctx, local_table)
         until true
         end
       else
-        while choosen_baron_index == -1 do
+        local attemps = 0
+        while choosen_baron_index == -1 and attemps < 100 do
+          attemps = attemps + 1
           -- оригинально я тут брал бесконечно первый титул среди баронских
           -- это работало так как, когда беру титул, я удалю его из baron_titles
           -- хотя может быть лучше путь будет в цикле
@@ -3507,15 +3537,15 @@ function generate_characters(ctx, local_table)
         end
       end
 
-      assert(choosen_baron_index ~= -1)
-      final_titles[#final_titles+1] = choosen_baron_index
+      assert(choosen_baron_index ~= -1, "Could not find proper baron title. Duchies count " .. #duchy_titles .. " baron count " .. baron_titles_debug_counter)
+      table.insert(final_titles, choosen_baron_index)
       counter = counter + 1
 
       local last_title = choosen_baron_index
       while counter < baron_titles_count do
         local province_index = last_title - baron_offset -- по идее должно дать хороший луа индекс
         assert(province_index >= 1)
-        local neighbours = ctx.container:get_childs(types.entities.province_neighbours, province_index)
+        local neighbours = ctx.container:get_childs(types.entities.province_neighbors, province_index)
         local index = 1
         while counter < baron_titles_count and index <= #neighbours do
         repeat
@@ -3526,7 +3556,7 @@ function generate_characters(ctx, local_table)
           if tmp ~= country_index then break end -- continue
           if baron_titles[baron_index] == nil then break end -- continue
 
-          final_titles[#final_titles+1] = baron_index
+          table.insert(final_titles, baron_index)
           baron_titles[baron_index] = nil
           counter = counter + 1
         until true
@@ -3535,9 +3565,10 @@ function generate_characters(ctx, local_table)
         -- если не добрали то че делаем
         -- у нас может быть ситуация когда у государства очень мало провинций
         -- тогда нужно выходить, че делать то
-        if last_title == final_titles[#final_titles] then break end
+        assert(#final_titles ~= 0)
+        if last_title == final_titles[#final_titles] then break end -- break
         last_title = final_titles[#final_titles]
-      end
+      end -- while counter < baron_titles_count do
 
       local character_table = {
         family = {},
@@ -3571,6 +3602,9 @@ function generate_characters(ctx, local_table)
       liege_index = utils.add_character(character_table)
     end
 
+    assert(liege_index ~= -1)
+    --function_timer:checkpoint("Country " .. country_index .. " owner generation")
+
     -- тут может быть что соседние вассалы разобрали все баронские титулы у текущего герцогства
     -- что делать в этом случае? 2 варианта: либо мы считаем что это герцогство не создано
     -- либо мы гарантируем каждому владельцу титула что у него будет баронство
@@ -3578,6 +3612,7 @@ function generate_characters(ctx, local_table)
     -- теперь делаем вассалов, у них либо герцогство либо несколько просто владений
     -- поэтому сначало раздаем герцогства, так то у этих челиков могут быть свои вассалы
     -- возможно нужно взять больше баронских титулов
+    --local vassal_counter = 0
     while #duchy_titles ~= 0 do
     repeat
       local rand_index = ctx.random:index(#duchy_titles)
@@ -3612,7 +3647,7 @@ function generate_characters(ctx, local_table)
       local choosen_baron_index = -1
       while choosen_baron_index == -1 do
       repeat
-        local rand_index = ctx.random:index(#duchy_childs)
+        local rand_index = ctx.random:index(#duchy_childs) -- luacheck: ignore rand_index
         local baron_title_index = duchy_childs[rand_index]
         local tmp = ctx.container:get_data_u32(types.entities.title, baron_title_index, types.properties.title.owner)
         if tmp ~= country_index then break end
@@ -3630,7 +3665,7 @@ function generate_characters(ctx, local_table)
       local last_title = choosen_baron_index
       --while counter < baron_titles_count do
         local province_index = last_title - baron_offset
-        local neighbours = ctx.container:get_childs(types.entities.province_neighbours, province_index)
+        local neighbours = ctx.container:get_childs(types.entities.province_neighbors, province_index)
         local index = 1
         while counter < baron_titles_count and index <= #neighbours do
         repeat
@@ -3675,6 +3710,8 @@ function generate_characters(ctx, local_table)
       end
 
       utils.add_character(character_table)
+      --vassal_counter = vassal_counter + 1
+      --function_timer:checkpoint("Country " .. country_index .. " main vassal " .. vassal_counter .. " generation")
     until true
     end -- while #duchy_titles ~= 0 do
 
@@ -3692,7 +3729,7 @@ function generate_characters(ctx, local_table)
       local last_title = choosen_baron_index
       --while (counter < baron_titles_count) {
         local province_index = last_title - baron_offset
-        local neighbours = ctx.container:get_childs(types.entities.province_neighbours, province_index)
+        local neighbours = ctx.container:get_childs(types.entities.province_neighbors, province_index)
         local index = 1
         while counter < baron_titles_count and index <= #neighbours do
         repeat
@@ -3734,7 +3771,12 @@ function generate_characters(ctx, local_table)
       end
 
       utils.add_character(character_table)
+      --vassal_counter = vassal_counter + 1
+      --function_timer:checkpoint("Country " .. country_index .. " remain vassal " .. vassal_counter .. " generation")
     end -- while next(baron_titles) ~= nil do
+
+    --function_timer:checkpoint("Country " .. country_index .. " end. Country count " .. real_country_count)
+  --until true
   end -- for country_index = 1, real_country_count do
 
   -- как то раскидали титулы по персонажам
@@ -3755,6 +3797,7 @@ function generate_characters(ctx, local_table)
   -- как то так раздали титулы правителю и вассалам
   -- нужно сделать еще города
 
+  function_timer:finish()
   function_timer = nil
 end -- generate_characters
 
@@ -3782,6 +3825,7 @@ function generate_tech_level(ctx, local_table)
   -- как техи будут передавать свои бонусы? особые бонусы делать сложно
   -- особые бонусы это что?
 
+  function_timer:finish()
   function_timer = nil
 end -- generate_tech_level
 
@@ -3790,13 +3834,15 @@ function generate_cities(ctx, local_table)
 
   do
     local building = { id = "test_building1", time = 4 }
-    utils.add_building(building)
+    utils.add_building_type(building)
   end
 
   do
     local building = { id = "test_building2", time = 4 }
-    utils.add_building(building)
+    utils.add_building_type(building)
   end
+
+  utils.load_city_types("apates_quest/scripts/city_types_config.lua")
 
   local provinces_creation_count = ctx.container:entities_count(types.entities.province)
   for i = 1, provinces_creation_count do
@@ -3823,6 +3869,8 @@ function generate_cities(ctx, local_table)
 
     gen_title_color(city_title, i)
     utils.add_title(city_title)
+
+    --print("city " .. i .. " added")
   end
 
   -- тут же настраивался календарь, как его лучше всего сделать?
@@ -3833,17 +3881,17 @@ function generate_cities(ctx, local_table)
   calendar.set_start_date(865, 3, 25)
   calendar.set_current_date(865, 3, 25)
   calendar.add_month_data("month.jan", 31) -- январь
-  calendar.add_month_data(-1, 29)
-  calendar.add_month_data(-1, 31)
-  calendar.add_month_data(-1, 30)
-  calendar.add_month_data(-1, 31) -- май
-  calendar.add_month_data(-1, 30)
-  calendar.add_month_data(-1, 31)
-  calendar.add_month_data(-1, 31)
-  calendar.add_month_data(-1, 30) -- сентябрь
-  calendar.add_month_data(-1, 31)
-  calendar.add_month_data(-1, 30)
-  calendar.add_month_data(-1, 31)
+  calendar.add_month_data("month.feb", 29)
+  calendar.add_month_data("month.mar", 31)
+  calendar.add_month_data("month.apr", 30)
+  calendar.add_month_data("month.may", 31) -- май
+  calendar.add_month_data("month.jun", 30)
+  calendar.add_month_data("month.jul", 31)
+  calendar.add_month_data("month.aug", 31)
+  calendar.add_month_data("month.sep", 30) -- сентябрь
+  calendar.add_month_data("month.oct", 31)
+  calendar.add_month_data("month.nov", 30)
+  calendar.add_month_data("month.dec", 31)
 
   -- что делать с локализацией? локализация в моем случае - это набор строк
   -- значащих одно и тоже в разных языках, локализация обычно представляет из себя
@@ -3852,8 +3900,11 @@ function generate_cities(ctx, local_table)
   -- честно говоря в моем случае мне скорее нужны просто "raw" строки
   -- строки мне еще нужно будет "компилировать" при получении
 
-  utils.add_localization_table()
-  utils.load_localization_table()
+  --utils.add_localization_table() -- наверное будет только второй вариант
+  utils.load_localization_table("apates_quest/scripts/localization_config.lua")
 
+  --error("generate_cities end")
+
+  function_timer:finish()
   function_timer = nil
 end -- generate_cities

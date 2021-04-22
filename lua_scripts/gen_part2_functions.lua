@@ -107,6 +107,7 @@ function compute_boundary_edges(ctx, local_table)
   end
 
   pairs_set = nil
+  function_timer:finish()
   function_timer = nil
 end -- compute_boundary_edges
 
@@ -194,6 +195,7 @@ function compute_plate_boundary_stress(ctx, local_table)
     ctx.container:set_data_vec3(types.entities.edge, i, types.properties.edge.plate1_movement, boundary_stresses[i].plate_movement1:unpack())
   end
 
+  function_timer:finish()
   function_timer = nil
 end -- compute_plate_boundary_stress
 
@@ -233,8 +235,8 @@ local function assign_distance_field(ctx, seeds, stops, distances)
   --   assert(k <= edges_count)
   --   local first_tile  = ctx.container:get_data_u32(types.entities.edge, k, types.properties.edge.first_tile)
   --   local second_tile = ctx.container:get_data_u32(types.entities.edge, k, types.properties.edge.second_tile)
-  --   index_queue[#index_queue+1] = first_tile
-  --   index_queue[#index_queue+1] = second_tile
+  --   table.insert(index_queue, first_tile)
+  --   table.insert(index_queue, second_tile)
   --   distances[first_tile] = utils.create_pair_u32f32(k, 0)
   --   distances[second_tile] = utils.create_pair_u32f32(k, 0)
   -- end
@@ -255,7 +257,7 @@ local function assign_distance_field(ctx, seeds, stops, distances)
   --       local id, n_dist = utils.unpack_pair_u32f32(distances[n_index])
   --       if n_dist == 100000.0 and not stops[n_index] then
   --         distances[n_index] = utils.create_pair_u32f32(current_edge, dist + 1.0)
-  --         index_queue[#index_queue+1] = n_index
+  --         table.insert(index_queue, n_index)
   --       end
   --     end
   --   end
@@ -572,6 +574,8 @@ function compute_plate_boundary_distances(ctx, local_table)
   mountain_dist = nil
   ocean_dist = nil
   coastline_dist = nil
+
+  function_timer:finish()
   function_timer = nil
 end -- compute_plate_boundary_distances
 
@@ -752,6 +756,7 @@ function calculate_vertex_elevation(ctx, local_table)
   end
 
   ctx.map:set_tiles_height(ctx.container, types.properties.tile.elevation)
+  function_timer:finish()
 end
 
 function blur_tile_elevation(ctx, local_table)
@@ -813,6 +818,7 @@ function blur_tile_elevation(ctx, local_table)
 
   print("oceanic tiles after recompute " .. water_counter)
   print("oceanic tiles k               " .. (water_counter / ctx.map:tiles_count()))
+  function_timer:finish()
 end
 
 function normalize_fractional_values(ctx, local_table, entity_id, property_id)
@@ -844,6 +850,8 @@ function normalize_fractional_values(ctx, local_table, entity_id, property_id)
 
     ctx.container:set_data_f32(entity_id, i, property_id, data)
   end
+
+  function_timer:finish()
 end
 
 function normalize_tile_elevation(ctx, local_table)
@@ -908,6 +916,8 @@ function compute_tile_heat(ctx, local_table)
   for i = 1, tiles_count do
     ctx.container:set_data_f32(types.entities.tile, i, types.properties.tile.heat, tile_heat[i])
   end
+
+  function_timer:finish()
 end
 
 function compute_tile_distances(ctx, local_table, predicate, index_property_id, dist_property_id)
@@ -943,6 +953,8 @@ function compute_tile_distances(ctx, local_table, predicate, index_property_id, 
     ctx.container:set_data_u32(types.entities.tile, i, index_property_id, index)
     ctx.container:set_data_u32(types.entities.tile, i, dist_property_id,  dist)
   end
+
+  function_timer:finish()
 end
 
 function compute_tile_water_distances(ctx, local_table)
@@ -988,6 +1000,8 @@ function compute_tile_moisture(ctx, local_table)
   for i = 1, tiles_count do
     ctx.container:set_data_f32(types.entities.tile, i, types.properties.tile.moisture, wetness[i])
   end
+
+  function_timer:finish()
 end
 
 local function calcutate_biome(elevation, temperature, wetness)
@@ -1029,13 +1043,15 @@ local function calcutate_biome(elevation, temperature, wetness)
   return nil
 end
 
-local function setup_table(t)
+local function setup_table(t, seasons)
   for i = 1, #biomes_config do
+    local index = seasons:add_biome(biomes_config[i])
+
     if t[biomes_config[i].id] ~= nil then
       error("Biome id collision " .. biomes_config[i].id)
     end
 
-    t[biomes_config[i].id] = biomes_config[i]
+    t[biomes_config[i].id] = {t = biomes_config[i], index = index}
   end
 end
 
@@ -1051,11 +1067,12 @@ function create_biomes(ctx, local_table)
   -- должен ли этот скрипт иметь возможность работать с файловой системой?
   -- (думаю, что только через require, который должен быть сильно модифицирован)
   utils.load_images("apates_quest/scripts/images_config.lua") -- добавляет скрипт, который вернет пачку таблиц
-  utils.load_biomes("apates_quest/scripts/biomes_config.lua") -- вместо add_biome мы можем сделать load_biomes
+  --utils.load_biomes("apates_quest/scripts/biomes_config.lua") -- вместо add_biome мы можем сделать load_biomes
   -- в эту функцию будем передавать путь до луа скрипта на загрузку
 
   local biome_table = {}
-  setup_table(biome_table)
+  setup_table(biome_table, ctx.seasons)
+  local season_index = ctx.seasons:allocate_season()
 
   local tiles_count = ctx.map:tiles_count()
   for i = 1, tiles_count do
@@ -1064,12 +1081,13 @@ function create_biomes(ctx, local_table)
     local wetness = ctx.container:get_data_f32(types.entities.tile, i, types.properties.tile.moisture)
     local biome_id = calcutate_biome(elevation, temperature, wetness)
     assert(biome_id ~= nil)
-    -- как задать биом тайла? как в битве?
-    ctx.map:set_tile_biome(i, biome_id)
+
+    --ctx.map:set_tile_biome(i, biome_id) -- к сожалению от этого придется отказаться
 
     local biome_data = biome_table[biome_id]
-    if biome_data == nil then error("Could not find biome " .. id) end
-    ctx.container:set_data_u32(types.entities.tile, i, types.properties.tile.color, biome_data.color)
+    if biome_data == nil then error("Could not find biome " .. biome_id) end
+    ctx.seasons:set_tile_biome(season_index, i, biome_data.index)
+    ctx.container:set_data_u32(types.entities.tile, i, types.properties.tile.color, biome_data.t.color)
   end
 
   -- сразу цвета задать?
@@ -1081,4 +1099,20 @@ function create_biomes(ctx, local_table)
   --   if biome_data == nil then error("Could not find biome " .. id) end
   --   ctx.map:set_tile_color(i, biome_data.color)
   -- end
+
+  function_timer:finish()
 end
+
+-- как задать биом тайла? как в битве?
+-- биом задается в сезонах, сезоны - это что? массив байтов для каждого тайла по 64 раза
+-- 500к * 64 * строку - это смерть по памяти, в этом случае: либо смена сезона
+-- будет происходить по коллбеку в котором мы собственно обойдем все 500к тайлов да зададим новые биомы
+-- либо смена сезона будет происходить по таблице как я хотел сделать раньше
+-- в чем проблема 1): информация о тепле и влажности и возможно других вещах будет недоступна в игре
+-- в чем проблема 2): у меня нет понимания в каком порядке будут загружены биомы, а значит я не могу
+-- взять индексы биомов
+-- можно зафорсить здесь функцию add_biome, она дает валидный индекс, но тогда каждое изменение биомов
+-- потребует перегенерацию мира
+-- каждый дополнительный тип информации для тайла требует 2мб памяти
+-- биомы по провинциям? возможно
+-- запретить добавлять биомы после заполения сезонов?

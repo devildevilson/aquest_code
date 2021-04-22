@@ -286,11 +286,18 @@ set(SRC_LIST
   utils/lua_initialization_world_map.cpp
   utils/lua_initialization_world_map_generator_functions.cpp
   utils/lua_initialization_calendar.cpp
+  utils/lua_initialization_safe_utils.cpp
+  utils/lua_initialization_game_context.cpp
+  utils/lua_initialization_localization.cpp
+  utils/lua_initialization_core_loading.cpp
+  utils/lua_environment.cpp
   utils/string_container.cpp
   utils/string_bank.cpp
   utils/progress_container.cpp
-  utils/interface_container.cpp
-  utils/main_menu.cpp
+  #utils/interface_container.cpp
+  utils/interface_container2.cpp
+  utils/localization_container.cpp
+  #utils/main_menu.cpp
   utils/demiurge.cpp
   utils/settings.cpp
   bin/interface2.cpp
@@ -332,11 +339,14 @@ set(HDR_LIST
   utils/traits_modifier_attribs.h
   utils/lua_initialization.h
   utils/lua_initialization_internal.h
+  utils/lua_environment.h
   utils/string_container.h
   utils/string_bank.h
   utils/progress_container.h
-  utils/interface_container.h
-  utils/main_menu.h
+  #utils/interface_container.h
+  utils/interface_container2.h
+  utils/localization_container.h
+  #utils/main_menu.h
   utils/demiurge.h
   utils/settings.h
   bin/interface2.h
@@ -535,16 +545,39 @@ endif()
 
 # кажется работает
 make_directory(${PROJECT_DIR}/scripts)
+#make_directory(${PROJECT_DIR}/scripts/interface)
 file(GLOB LUA_SCRIPTS
   "lua_scripts/*.lua"
 )
-#file(COPY ${LUA_SCRIPTS} DESTINATION "${PROJECT_DIR}/scripts/")
 add_custom_target(copy_scripts ALL
   COMMAND      ${CMAKE_COMMAND} -E copy_if_different
                ${LUA_SCRIPTS}
                "${PROJECT_DIR}/scripts/"
 )
 add_dependencies(${TARGET_NAME} copy_scripts)
+
+macro(configure_scripts folders)
+  message(STATUS "Configuring scripts ${folders}")
+
+  foreach(folder ${folders})
+    if (NOT ${folder} EQUAL "")
+      make_directory(${PROJECT_DIR}/scripts/${folder})
+      file(GLOB LUA_SCRIPTS "lua_scripts/${folder}/*.lua")
+      
+      add_custom_target(copy_scripts.${folder} ALL
+        COMMAND   ${CMAKE_COMMAND} -E copy_if_different
+                  ${LUA_SCRIPTS}
+                  "${PROJECT_DIR}/scripts/${folder}/"
+      )
+      add_dependencies(${TARGET_NAME} copy_scripts.${folder})
+    endif(NOT ${folder} EQUAL "")
+    
+    message(STATUS "Configuring folder ${folder}")
+  endforeach(folder ${folders})
+endmacro(configure_scripts)
+
+set(f "interface")
+configure_scripts(${f})
 
 #make_directory(${PROJECT_DIR}/textures)
 #file(GLOB_RECURSE PROJECT_TEXTURES LIST_DIRECTORIES true

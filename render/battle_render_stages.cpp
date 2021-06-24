@@ -84,6 +84,15 @@ namespace devils_engine {
         device->destroy(pipe);
       }
       
+      static const utils::frustum default_fru{
+        glm::vec4(0.0f, 0.0f, 0.0f, 0.0f), 
+        glm::vec4(0.0f, 0.0f, 0.0f, 0.0f), 
+        glm::vec4(0.0f, 0.0f, 0.0f, 0.0f), 
+        glm::vec4(0.0f, 0.0f, 0.0f, 0.0f), 
+        glm::vec4(0.0f, 0.0f, 0.0f, 0.0f), 
+        glm::vec4(0.0f, 0.0f, 0.0f, 0.0f)
+      };
+      
       void tile_optimizer::begin() {
         auto buffers = global::get<render::buffers>();
         
@@ -147,7 +156,10 @@ namespace devils_engine {
         task->dispatch(count, 1, 1);
       }
       
-      void tile_optimizer::clear() {}
+      void tile_optimizer::clear() {
+        auto indirect_data = reinterpret_cast<indirect_buffer_data*>(indirect_buffer->ptr());
+        indirect_data->selection_frustum = default_fru;
+      }
       
       yavf::Buffer* tile_optimizer::get_indirect_buffer() const { return indirect_buffer; }
       yavf::Buffer* tile_optimizer::get_tiles_indices() const { return tiles_indices; }

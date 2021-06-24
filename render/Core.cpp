@@ -1272,6 +1272,11 @@ namespace yavf {
     this->nonCoherentAtomSize = props.limits.nonCoherentAtomSize;
 
     {
+//       const VmaRecordSettings record{
+//         0,
+//         "vma_buffer_recordings.csv"
+//       };
+      
       const VmaAllocatorCreateInfo allocInfo{
 //        VMA_ALLOCATOR_CREATE_EXTERNALLY_SYNCHRONIZED_BIT,
   0,
@@ -1284,6 +1289,7 @@ namespace yavf {
         nullptr,
         nullptr,
         nullptr,
+        //&record,
         inst->handle(),
         VK_MAKE_VERSION(1, 0, 0)
       };
@@ -1293,6 +1299,11 @@ namespace yavf {
     }
 
     {
+//       const VmaRecordSettings record{
+//         0,
+//         "vma_image_recordings.csv"
+//       };
+      
       const VmaAllocatorCreateInfo allocInfo{
 //        VMA_ALLOCATOR_CREATE_EXTERNALLY_SYNCHRONIZED_BIT,
         0,
@@ -1305,6 +1316,7 @@ namespace yavf {
         nullptr,
         nullptr,
         nullptr,
+        //&record,
         inst->handle(),
         VK_MAKE_VERSION(1, 0, 0)
       };

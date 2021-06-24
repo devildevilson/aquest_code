@@ -65,10 +65,16 @@ namespace devils_engine {
 #endif
 
 #define GPU_UINT_MAX 0xffffffff
+#define GPU_INT_MAX  0x7fffffff
 #define PACKED_INDEX_COEF 4
 #define PACKED_TILE_INDEX_COEF 6
 #define MAX_BIOMES_COUNT 0xff
 #define WORLD_RADIUS_CONSTANT 500.0f
+    
+#define IMAGE_TYPE_DEFAULT 0 // просто картинка из общего пула
+#define IMAGE_TYPE_HERALDY 1 // геральдика уже как то рисуется
+#define IMAGE_TYPE_FACE 2    // лицо будет рисоваться очень похожим на геральдику способом
+// что тут может еще добавиться?
     
 const uint biome_ocean            = 0;
 const uint biome_ocean_glacier    = 1;

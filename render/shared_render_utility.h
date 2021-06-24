@@ -72,7 +72,7 @@ INLINE uint prng2(const uint s0, const uint s1) { // по идее должно 
 INLINE float prng_normalize(const uint state) {
   // float32 - 1 бит знак, 8 бит экспонента и 23 мантисса
   const uint float_mask = 0x7f << 23;
-  const uint float_val = float_mask | (state >> 9); // зачем двигать?
+  const uint float_val = float_mask | (state >> 9); // зачем двигать? первые несколько бит обладают плохой энтропией
   return uintBitsToFloat(float_val) - 1.0f;
 }
 
@@ -98,7 +98,7 @@ INLINE bool frustum_test(const frustum_t frustum, const vec4 center, const float
   bool result = true;
   for (uint i = 0; i < 6; ++i) {
     const float d = dot(center, frustum.planes[i]);
-    const bool res = !(d <= -radius);
+    const bool res = !(d <= -(radius * radius));
     result = bool(min(uint(result), uint(res)));
   }
   

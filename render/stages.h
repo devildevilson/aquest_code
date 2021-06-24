@@ -77,14 +77,14 @@ namespace devils_engine {
         uint32_t padding1[3];
         VkDrawIndexedIndirectCommand hex_tiles_command;
         uint32_t padding_hex[3];
-        VkDrawIndexedIndirectCommand borders_command;
-        uint32_t padding2[3];
-        VkDrawIndexedIndirectCommand walls_command;
-        uint32_t padding3[3];
-        VkDrawIndexedIndirectCommand structures_command;
-        uint32_t padding4[3];
-        VkDrawIndexedIndirectCommand heraldies_command;
-        uint32_t padding5[3];
+        VkDrawIndirectCommand borders_command;
+        uint32_t padding2[4];
+        VkDrawIndirectCommand walls_command;
+        uint32_t padding3[4];
+        VkDrawIndirectCommand structures_command;
+        uint32_t padding4[4];
+        VkDrawIndirectCommand heraldies_command;
+        uint32_t padding5[4];
         glm::uvec4 dispatch_indirect_command;
         
         utils::frustum frustum;
@@ -128,6 +128,11 @@ namespace devils_engine {
       
       void set_selection_box(const aabb_t &box);
       void set_selection_frustum(const utils::frustum &frustum);
+      
+      uint32_t get_borders_indices_count() const;
+      uint32_t get_connections_indices_count() const;
+      uint32_t get_structures_indices_count() const;
+      uint32_t get_heraldies_indices_count() const;
     private:
       yavf::Device* device;
       yavf::Buffer* indirect;
@@ -139,6 +144,13 @@ namespace devils_engine {
       yavf::Buffer* heraldy_indices;
       yavf::DescriptorSet* set;
       yavf::Pipeline pipe;
+      
+      uint32_t borders_indices_count;
+      uint32_t connections_indices_count;
+      uint32_t structures_indices_count;
+      uint32_t heraldies_indices_count;
+      
+      bool render_borders;
     };
     
     class tile_objects_optimizer : public stage {

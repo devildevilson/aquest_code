@@ -999,7 +999,9 @@ namespace yavf {
                              //alignMemorySize(device->getNonCoherentAtomSize(), newSize);
                              newSize;
 
-    const size_t copySize = std::min(parameters.size, finalSize);
+    // не знаю нужно ли оставить копирование?
+                             
+    //const size_t copySize = std::min(parameters.size, finalSize);
     parameters.size = finalSize;
 
     const VmaAllocationCreateInfo alloc{
@@ -1009,14 +1011,15 @@ namespace yavf {
     };
 
     VmaAllocationInfo data;
+    
+    vmaDestroyBuffer(allocator, obj, RAIIType4::allocation);
 
     VkBuffer buffer = VK_NULL_HANDLE;
     VmaAllocation allocation = VK_NULL_HANDLE;
     vmaCreateBuffer(allocator, &parameters._info, &alloc, &buffer, &allocation, &data);
 
-    if (pointer != nullptr) memcpy(data.pMappedData, pointer, copySize);
+    //if (pointer != nullptr) memcpy(data.pMappedData, pointer, copySize);
 
-    vmaDestroyBuffer(allocator, obj, RAIIType4::allocation);
     obj = buffer;
     RAIIType4::allocation = allocation;
     pointer = data.pMappedData;

@@ -69,7 +69,7 @@ namespace devils_engine {
       ~world_map_buffers();
       
       void recreate(const uint32_t &width, const uint32_t &height) override;
-      void set_structure_data(const uint32_t &size, core::city_type* data); 
+      //void set_structure_data(const uint32_t &size, core::city_type* data); 
       // скопировать наверное нужно отдельно, нам потребуется скорпировать еще и данные структур
     };
   }

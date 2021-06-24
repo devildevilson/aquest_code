@@ -18,7 +18,7 @@ static const std::vector<const char*> instanceLayers = {
 
 namespace devils_engine {
   namespace render {
-    container::container() : mem(sizeof(yavf::Instance) + sizeof(struct window) + sizeof(render::stage_container)), instance(nullptr), device(nullptr), window(nullptr), render(nullptr) {}
+    container::container() : mem(sizeof(yavf::Instance) + sizeof(struct window) + sizeof(render::stage_container)), instance(nullptr), device(nullptr), window(nullptr), render(nullptr), tasks(0) {}
     container::~container() {
       device->wait();
       for (size_t i = 0 ; i < tasks.size(); ++i) {
@@ -192,27 +192,22 @@ namespace devils_engine {
     }
 
     yavf::TaskInterface* container::interface() const {
-//       return tasks[window->swapchain.image_index];
       return tasks[window->current_frame];
     }
 
     yavf::CombinedTask* container::combined() const {
-//       return tasks[window->swapchain.image_index];
       return tasks[window->current_frame];
     }
 
     yavf::ComputeTask* container::compute() const {
-//       return tasks[window->swapchain.image_index];
       return tasks[window->current_frame];
     }
 
-    yavf::GraphicTask* container::graphics() const {
-//       return tasks[window->swapchain.image_index];  
+    yavf::GraphicTask* container::graphics() const {  
       return tasks[window->current_frame];
     }
 
     yavf::TransferTask* container::transfer() const {
-      //return tasks[window->current_frame];
       return nullptr;
     }
   }

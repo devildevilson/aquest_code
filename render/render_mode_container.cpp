@@ -2,7 +2,7 @@
 #include "utils/globals.h"
 #include "utils/assert.h"
 #include <stdexcept>
-#include "bin/stats.h"
+#include "core/stats.h"
 #include "utils/systems.h"
 #include <atomic>
 #include <iostream>

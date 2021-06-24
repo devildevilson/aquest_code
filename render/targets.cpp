@@ -8,7 +8,7 @@
 
 namespace devils_engine {
   namespace render {
-    buffers::buffers(yavf::Device* device) : device(device) {
+    buffers::buffers(yavf::Device* device) : device(device), uniform(nullptr), matrices(nullptr), heraldy(nullptr) {
 //       const size_t tri_count = map::tri_count_d(detail_level_acc_struct);
 //       biomes  = device->create(yavf::BufferCreateInfo::buffer(sizeof(packed_biom_data_t) * 20,  VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT), VMA_MEMORY_USAGE_CPU_ONLY);
 //       tiles   = device->create(yavf::BufferCreateInfo::buffer(sizeof(light_map_tile_t) * map->tiles.size(),  VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT), VMA_MEMORY_USAGE_CPU_ONLY);
@@ -133,7 +133,7 @@ namespace devils_engine {
     buffers::~buffers() {
       device->destroy(uniform);
       device->destroy(matrices);
-      device->destroy(heraldy);
+//       device->destroy(heraldy);
     }
 
 //     void buffers::update_matrix(const glm::mat4 &matrix) {
@@ -271,10 +271,10 @@ namespace devils_engine {
     
 #define WORLD_MAP_DESCRIPTOR_POOL "world_map_descriptor_pool"
     
-    world_map_buffers::world_map_buffers(yavf::Device* device) : device(device), structure_buffer(nullptr) {
+    world_map_buffers::world_map_buffers(yavf::Device* device) : device(device), border_buffer(nullptr), border_types(nullptr), tiles_connections(nullptr), structure_buffer(nullptr) {
       border_buffer = device->create(yavf::BufferCreateInfo::buffer(sizeof(glm::vec4)*4, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT), VMA_MEMORY_USAGE_CPU_ONLY);
       border_types = device->create(yavf::BufferCreateInfo::buffer(sizeof(glm::vec4)*4, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT), VMA_MEMORY_USAGE_CPU_ONLY);
-      tiles_connections = device->create(yavf::BufferCreateInfo::buffer(sizeof(glm::uvec4)*4, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT), VMA_MEMORY_USAGE_CPU_ONLY);
+      //tiles_connections = device->create(yavf::BufferCreateInfo::buffer(sizeof(glm::uvec4)*4, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT), VMA_MEMORY_USAGE_CPU_ONLY);
       //structure_buffer = device->create(yavf::BufferCreateInfo::buffer(sizeof(glm::uvec4)*4, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT), VMA_MEMORY_USAGE_GPU_ONLY);
       
       //auto pool = device->descriptorPool(DEFAULT_DESCRIPTOR_POOL_NAME);
@@ -301,18 +301,18 @@ namespace devils_engine {
         border_types->setDescriptor(desc, index);
       }
       
-      {
-        yavf::DescriptorMaker dm(device);
-        auto desc = dm.layout(storage_layout).create(pool)[0];
-        size_t index = desc->add({tiles_connections, 0, tiles_connections->info().size, 0, 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER});
-        tiles_connections->setDescriptor(desc, index);
-      }
+//       {
+//         yavf::DescriptorMaker dm(device);
+//         auto desc = dm.layout(storage_layout).create(pool)[0];
+//         size_t index = desc->add({tiles_connections, 0, tiles_connections->info().size, 0, 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER});
+//         tiles_connections->setDescriptor(desc, index);
+//       }
     }
     
     world_map_buffers::~world_map_buffers() {
       device->destroy(border_buffer);
       device->destroy(border_types);
-      device->destroy(tiles_connections);
+//       device->destroy(tiles_connections);
       //if (structure_buffer != nullptr) 
 //       device->destroy(structure_buffer);
       device->destroyDescriptorPool(WORLD_MAP_DESCRIPTOR_POOL);
@@ -323,29 +323,29 @@ namespace devils_engine {
       (void)height;
     }
     
-    void world_map_buffers::set_structure_data(const uint32_t &size, core::city_type* data) {
-      if (structure_buffer == nullptr) {
-        structure_buffer = device->create(yavf::BufferCreateInfo::buffer(size*sizeof(render::world_structure_t), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT), VMA_MEMORY_USAGE_GPU_ONLY);
-      }
-      
-      yavf::Buffer buf(device, yavf::BufferCreateInfo::buffer(size*sizeof(render::world_structure_t), VK_BUFFER_USAGE_TRANSFER_SRC_BIT), VMA_MEMORY_USAGE_CPU_ONLY);
-      auto buffer_ptr = reinterpret_cast<render::world_structure_t*>(buf.ptr());
-      for (size_t i = 0; i < size; ++i) {
-        buffer_ptr[i].city_image_face = data[i].city_image_face;
-        buffer_ptr[i].city_image_top = data[i].city_image_top;
-        buffer_ptr[i].scale = data[i].scale;
-      }
-      
-      auto task = device->allocateTransferTask();
-      
-      task->begin();
-      task->copy(&buf, structure_buffer);
-      task->end();
-      
-      task->start();
-      task->wait();
-      
-      device->deallocate(task);
-    }
+//     void world_map_buffers::set_structure_data(const uint32_t &size, core::city_type* data) {
+//       if (structure_buffer == nullptr) {
+//         structure_buffer = device->create(yavf::BufferCreateInfo::buffer(size*sizeof(render::world_structure_t), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT), VMA_MEMORY_USAGE_GPU_ONLY);
+//       }
+//       
+//       yavf::Buffer buf(device, yavf::BufferCreateInfo::buffer(size*sizeof(render::world_structure_t), VK_BUFFER_USAGE_TRANSFER_SRC_BIT), VMA_MEMORY_USAGE_CPU_ONLY);
+//       auto buffer_ptr = reinterpret_cast<render::world_structure_t*>(buf.ptr());
+//       for (size_t i = 0; i < size; ++i) {
+//         buffer_ptr[i].city_image_face = data[i].city_image_face;
+//         buffer_ptr[i].city_image_top = data[i].city_image_top;
+//         buffer_ptr[i].scale = data[i].scale;
+//       }
+//       
+//       auto task = device->allocateTransferTask();
+//       
+//       task->begin();
+//       task->copy(&buf, structure_buffer);
+//       task->end();
+//       
+//       task->start();
+//       task->wait();
+//       
+//       device->deallocate(task);
+//     }
   }
 }

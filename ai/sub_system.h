@@ -17,7 +17,7 @@
 #include <cstdint>
 #include "utils/bit_field.h"
 // #include "utils/utility.h"
-#include "bin/declare_structures.h"
+#include "core/declare_structures.h"
 
 #define SUB_SYSTEM_SKIP UINT32_MAX
 

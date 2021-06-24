@@ -1,5 +1,5 @@
 #include "build_subsystem.h"
-#include "bin/core_structures.h"
+#include "core/structures_header.h"
 #include <iostream>
 
 namespace devils_engine {
@@ -39,7 +39,7 @@ namespace devils_engine {
       // и либо начать строительство либо не найти подходящее здание
 
       std::vector<core::city*> cities;
-      auto current_title = c->factions[core::character::self]->titles;
+      auto current_title = c->realms[core::character::self]->titles;
       while (current_title != nullptr) {
         if (current_title->type == core::titulus::type::city) cities.push_back(current_title->get_city());
         current_title = current_title->next;

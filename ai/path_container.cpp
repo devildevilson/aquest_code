@@ -3,7 +3,8 @@
 #include "utils/assert.h"
 #include <cstring>
 #include "utils/astar_search.h"
-#include "bin/core_structures.h"
+#include "core/army.h"
+#include "core/hero_troop.h"
 
 #include "utils/thread_pool.h"
 #include "utils/globals.h"
@@ -51,12 +52,14 @@ namespace devils_engine {
       // как интересно это сделано в других играх? мы если статус переносим в армии, то нам ни к чему атомик_бул
       // мы просто обойдем все объекты и поставим там стоп
       
-//       current_status = status::finding_path;
+      if (army->has_path()) free_path(army->path);
       army->path = nullptr;
       army->start_tile = start;
       army->end_tile = end;
+      army->path_size = 0;
       pool->submitbase([this, army, start, end] () {
-        const size_t local_task_id = task_id.fetch_add(1);
+        size_t local_task_id = task_id.fetch_add(1);
+        if (local_task_id == 0) local_task_id = task_id.fetch_add(1);
         
         // ставим максимум идентификатор в армии
         // если идентификаторы не совпадают, то выходим
@@ -64,31 +67,15 @@ namespace devils_engine {
         
         utils::atomic_max(army->path_task, local_task_id);
         
-//         if (army->path_state == core::path_finding_state::stop) { 
-//           army->path_state = core::path_finding_state::idle;
-//           return; 
-//         }
-//         
-//         army->path_state = core::path_finding_state::stop;
-//         while (army->path_state == core::path_finding_state::get_task || 
-//                army->path_state == core::path_finding_state::finding_path ||
-//                army->path_state == core::path_finding_state::stop) {
-//           std::this_thread::sleep_for(std::chrono::microseconds(1)); // ждем, по идее у нас 
-//         }
-//         
-//         army->path_state = core::path_finding_state::finding_path;
-        
-//         PRINT_VAR("army->path_task", army->path_task)
-//         PRINT_VAR("local_task_id  ", local_task_id)
-        
         if (army->path_task != local_task_id) return;
                        
         PRINT("find army path")
         
         size_t path_size = 0;
-        auto path = find_path_raw(&army->path_task, start, end, local_task_id, path_size); // я могу получить 
+        auto path = find_path_raw(&army->path_task, start, end, local_task_id, path_size);
         if (army->path_task != local_task_id) return;
-                       
+        army->path_task = 0;
+        
         path = path == nullptr ? reinterpret_cast<decltype(path)>(SIZE_MAX) : path;
         
         // как посчитать? добавить еще переменных в путь?
@@ -199,6 +186,7 @@ namespace devils_engine {
           counter = 0;
         }
         
+        // тут желательно сохранять не g, а стоимость с тайла на тайл
         tmp->tile_path[counter].cost = solution_array[i]->g;
         tmp->tile_path[counter].tile = solution_array[i]->tile_index;
       }

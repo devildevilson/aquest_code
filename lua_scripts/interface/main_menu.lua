@@ -9,6 +9,7 @@ local menu_stack = queue.new()
 -- меню состоит из двух частей: изображение на заднем фоне + непосредтсвенно меню
 -- тут мы должны создать стек меню, как заполнить?
 local function init_menu(add_core)
+  if not menu_stack:is_empty() then return end
   if add_core then menu_stack:push_right(menu_table.core_menu)
   else menu_stack:push_right(menu_table.map_menu) end
 end

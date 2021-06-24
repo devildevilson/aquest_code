@@ -2046,32 +2046,32 @@ function generate_titles(ctx, local_table)
     if #duchies[duchie_index] > 5 then return end
     assert(#duchies[duchie_index] > 0)
     if #duchies[duchie_index] == 1 then
-      local province_index = -1 -- luacheck: ignore province_index
+      local new_province_index = -1
       local attempts = 0
-      while province_index == -1 and attempts < 15 do
+      while new_province_index == -1 and attempts < 15 do
       repeat
         attempts = attempts + 1
         local rand_index = ctx.random:index(#neighbours)
         local _, border_size = get_index_pair(neighbours_border_size[province_index][rand_index])
-        if border_size.second < border_size_const then break end
+        if border_size < border_size_const then break end
         local n_province_index = unpack_n_index(neighbours[rand_index])
         if n_province_index < 0 then break end -- across_water
         if unique_indices[absf(n_province_index)] ~= nil then break end
 
-        province_index = absf(n_province_index)
+        new_province_index = absf(n_province_index)
       until true
       end
 
       -- вообще ситуация возможна при которой мы не сможем взять рандомного соседа
       -- это герцогство тогда должно пойти в состав другого, или позаимствовать
 
-      if province_index == -1 then return end
+      if new_province_index == -1 then return end
 
-      unique_indices[province_index] = true
+      unique_indices[new_province_index] = true
       -- тут наверное нужно опять просмотреть соседей текущего
       -- то, что соседи могут "закнчится" и у текущей провинции и у соседней, кажется равновероятным
-      queue_push(make_index_pair(duchie_index, province_index))
-      table.insert(duchies[duchie_index], province_index)
+      queue_push(make_index_pair(duchie_index, new_province_index))
+      table.insert(duchies[duchie_index], new_province_index)
     else
       for i = 1, #neighbours do
         local breakb = false
@@ -2095,12 +2095,12 @@ function generate_titles(ctx, local_table)
         until true
         end
 
-        if not found then break end
+        if not found then break end -- continue
 
         unique_indices[absf(n_province_index)] = true
         queue_push(make_index_pair(duchie_index, absf(n_province_index)))
         table.insert(duchies[duchie_index], absf(n_province_index))
-        breakb = true
+        breakb = true -- break
       until true
         if breakb then break end
       end -- for

@@ -168,7 +168,8 @@ local function core_main_menu(ctx, game_ctx, timer, local_table, menu_stack, ent
     return
   end
 
-  if main_menu_next == "quit_game_window" then game_ctx:quit_game()
+  if main_menu_next == "back_to_main_menu" then game_ctx:main_menu()
+  elseif main_menu_next == "quit_game_window" then game_ctx:quit_game()
   elseif main_menu_next ~= "main_menu" then
     -- как теперь добавляем меню? раньше я добавлял строку, а теперь наверное нужно добавлять фукнкцию
     -- я думаю, нужно ли таблицу создавать для разных нужд?

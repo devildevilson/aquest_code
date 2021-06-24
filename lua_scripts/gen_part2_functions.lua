@@ -725,7 +725,7 @@ function calculate_vertex_elevation(ctx, local_table)
     -- тут нужно учесть текущий подъем везде
     if a_index == constants.uint32_max and b_index == constants.uint32_max then
       local edge_index = c_index
-      print("edge_index " .. edge_index)
+      --print("edge_index " .. edge_index)
       local first_tile  = ctx.container:get_data_u32(types.entities.edge, edge_index, types.properties.edge.first_tile)
       local second_tile = ctx.container:get_data_u32(types.entities.edge, edge_index, types.properties.edge.second_tile)
       local plate0 = ctx.container:get_data_u32(types.entities.tile, first_tile,  types.properties.tile.plate_index)

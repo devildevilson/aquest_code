@@ -14,6 +14,7 @@ namespace devils_engine {
       void setup_lua_titulus(sol::state_view lua);
       void setup_lua_character(sol::state_view lua);
       void setup_lua_faction(sol::state_view lua);
+      void setup_lua_army(sol::state_view lua);
     }
   }
 }

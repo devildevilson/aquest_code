@@ -12,6 +12,7 @@
 #include "bin/image_parser.h"
 #include "systems.h"
 #include "bin/map_creator.h"
+#include "core/titulus.h"
 
 #include <iostream>
 #include <string>
@@ -107,7 +108,7 @@ namespace devils_engine {
         }
       );
       
-      auto utils = lua[magic_enum::enum_name<reserved_lua::values>(reserved_lua::utils)].get_or_create<sol::table>();
+      auto utils = lua[magic_enum::enum_name(reserved_lua::utils)].get_or_create<sol::table>();
       utils.set_function("assign_distance_field", [] (map::generator::context* ctx, const sol::table type_indices, const sol::table seeds, const sol::table stops, sol::table distances) {
         const uint32_t edge_type = type_indices["edge_type"];
         const uint32_t edge_property_first_index = type_indices["edge_property_first_index"];

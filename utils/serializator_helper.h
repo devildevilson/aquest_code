@@ -4,7 +4,7 @@
 #include <vector>
 #include <array>
 #include <string>
-#include "bin/declare_structures.h"
+#include "core/declare_structures.h"
 #include "utility.h"
 #include "bin/map.h"
 
@@ -122,6 +122,8 @@ namespace devils_engine {
       tile_data get_tile_data(const uint32_t &index) const;
       void fill_seasons(core::seasons* s) const;
       const uint8_t* get_hash() const;
+      
+      size_t count_memory() const;
     private:
       std::string world_name; // этот и параметр ниже должны по идее показываться игроку
       std::string technical_name;

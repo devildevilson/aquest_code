@@ -52,6 +52,21 @@ namespace devils_engine {
         target.set_function("get_event", input::get_event);
         target.set_function("frame_events", [] (const sol::function &func) {
           size_t mem = 0;
+          auto ret = input::next_input_event(mem);
+          while (ret.id.valid()) {
+            auto local_ret = ret;
+            ret = input::next_input_event(mem);
+            
+            const auto ret = func(local_ret.id, local_ret.event);
+            if (!ret.valid()) {
+              sol::error err = ret;
+              std::cout << err.what();
+              throw std::runtime_error("There is sol errors");
+            }
+          }
+        });
+        target.set_function("frame_states", [] (const sol::function &func) {
+          size_t mem = 0;
           auto ret = input::next_input_state(mem);
           while (ret.id.valid()) {
             auto local_ret = ret;

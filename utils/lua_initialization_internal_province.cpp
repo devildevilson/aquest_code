@@ -1,6 +1,10 @@
 #include "lua_initialization_internal.h"
 
-#include "bin/core_structures.h"
+#include "core/province.h"
+#include "core/titulus.h"
+#include "core/city.h"
+#include "core/modificator.h"
+#include "core/event.h"
 #include "lua_initialization.h"
 #include "magic_enum.hpp"
 
@@ -20,9 +24,9 @@ namespace devils_engine {
           "modificators", sol::readonly(&core::province::modificators),
           "events", sol::readonly(&core::province::events),
           "flags", sol::readonly(&core::province::flags),
-          "modificators_container_size", sol::var(core::province::modificators_container_size),
-          "events_container_size", sol::var(core::province::events_container_size),
-          "flags_container_size", sol::var(core::province::flags_container_size),
+//           "modificators_container_size", sol::var(core::province::modificators_container_size),
+//           "events_container_size", sol::var(core::province::events_container_size),
+//           "flags_container_size", sol::var(core::province::flags_container_size),
           "cities_max_game_count", sol::var(core::province::cities_max_game_count)
         );
       }

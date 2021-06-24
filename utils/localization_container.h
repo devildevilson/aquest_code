@@ -36,6 +36,11 @@ namespace devils_engine {
       void set_table(const locale &loc, const sol::table &t);
       void set(const locale &loc, const std::string_view &key, const sol::object obj); 
       sol::object get(const locale &loc, const std::string_view &key);
+      
+      void clear();
+      
+      std::string serialize(const std::function<std::string(const sol::table &)> &f);
+      void deserialize(const std::string &data);
     private:
       sol::state_view v;
       phmap::flat_hash_map<locale, sol::table> localization;

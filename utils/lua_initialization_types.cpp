@@ -12,6 +12,7 @@ namespace devils_engine {
       internal::setup_lua_titulus(lua);
       internal::setup_lua_character(lua);
       internal::setup_lua_faction(lua);
+      internal::setup_lua_army(lua);
 
   //     // теперь по идее нужно задать основные типы объектов
   //     {

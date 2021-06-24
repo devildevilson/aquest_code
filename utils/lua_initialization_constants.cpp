@@ -57,6 +57,7 @@ namespace devils_engine {
 
       target.set_function("deg_to_rad", [] (const double &deg) { return DEG_TO_RAD(deg); });
       target.set_function("rad_to_deg", [] (const double &rad) { return RAD_TO_DEG(rad); });
+      target.set_function("to_seconds", [] (const size_t &time) { return MCS_TO_SEC(time); });
 
       sol::table x = lua.create_table_with(sol::meta_function::new_index, sol::detail::fail_on_newindex, sol::meta_function::index, target);
       lua[magic_enum::enum_name<reserved_lua::values>(reserved_lua::constants)] = lua.create_table(0, 0, sol::metatable_key, x);

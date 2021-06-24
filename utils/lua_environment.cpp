@@ -1,8 +1,10 @@
 #include "lua_environment.h"
 
+#include <filesystem>
+#include <iostream>
+
 #include "magic_enum.hpp"
 #include "lua_initialization.h"
-#include <filesystem>
 #include "assert.h"
 #include "globals.h"
 

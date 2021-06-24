@@ -1,7 +1,7 @@
 #include "lua_initialization.h"
 
+#include "magic_enum_header.h"
 #include "bin/logic.h"
-#include "magic_enum.hpp"
 
 namespace devils_engine {
   namespace utils {

@@ -3,6 +3,7 @@
 #include <array>
 #include <iostream>
 #include "shared_mathematical_constant.h"
+#include "assert.h"
 
 namespace std {
   template <>
@@ -124,6 +125,43 @@ namespace devils_engine {
       return base_table[last_key];
     }
     
+    void container::clear() {
+      
+    }
+    
+    std::string container::serialize(const std::function<std::string(const sol::table &)> &f) {
+      std::string container = "return {";
+      for (const auto &pair : localization) {
+        const std::string loc_key = std::string(pair.first.str());
+        const std::string table = f(pair.second);
+        container += loc_key + "=" + table;
+      }
+      
+      container += "}";
+      return container;
+    }
+    
+    void container::deserialize(const std::string &data) {
+      const auto ret = v.safe_script(data);
+      if (!ret.valid()) {
+        sol::error err = ret;
+        std::cout << err.what();
+        throw std::runtime_error("There is lua error");
+      }
+      
+      const sol::table t = ret;
+      for (const auto &pair : t) {
+        ASSERT(pair.first.get_type() == sol::type::string);
+        ASSERT(pair.second.get_type() == sol::type::table);
+        
+        const std::string_view loc_key = pair.first.as<std::string_view>();
+        container::locale loc(loc_key);
+        const sol::table t = pair.second.as<sol::table>();
+        ASSERT(localization.find(loc) == localization.end());
+        localization.insert(std::make_pair(loc, t));
+      }
+    }
+    
     void container::set_table(sol::table current_table, sol::table new_table) {
       for (const auto &pair : new_table) {
         auto proxy = current_table[pair.first];
@@ -137,13 +175,13 @@ namespace devils_engine {
           continue;
         }
         
-        if (proxy.get_type() == pair.second.get_type()) {
-          if (proxy.get_type() == sol::type::string) {
-            if (proxy.get<std::string_view>() == pair.second.as<std::string_view>()) continue;
-          } else if (proxy.get_type() == sol::type::number) {
-            if (std::abs(proxy.get<double>() - pair.second.as<double>()) < EPSILON) continue;
-          }
-        }
+//         if (proxy.get_type() == pair.second.get_type()) {
+//           if (proxy.get_type() == sol::type::string) {
+//             if (proxy.get<std::string_view>() == pair.second.as<std::string_view>()) continue;
+//           } else if (proxy.get_type() == sol::type::number) {
+//             if (std::abs(proxy.get<double>() - pair.second.as<double>()) < EPSILON) continue;
+//           }
+//         }
         
         // мы должны заменить одну перменную на другую
         if (pair.first.get_type() == sol::type::string) std::cout << "Shadowing value " << pair.first.as<std::string_view>() << "\n";

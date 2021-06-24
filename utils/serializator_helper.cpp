@@ -774,5 +774,29 @@ namespace devils_engine {
     const uint8_t* world_serializator::get_hash() const {
       return hash;
     }
+    
+    size_t world_serializator::count_memory() const {
+      size_t counter = 0;
+      
+      for (size_t i = 0; i < ptr->data_array.size(); ++i) {
+        for (size_t j = 0; j < ptr->data_array[i].size(); ++j) {
+          counter += sizeof(ptr->data_array[i][j]) + ptr->data_array[i][j].size() * sizeof(ptr->data_array[i][j][0]);
+        }
+        
+        counter += sizeof(ptr->data_array[i]);
+      }
+      
+      counter += ptr->tiles_array.size() * sizeof(ptr->tiles_array[0]);
+      
+      for (size_t i = 0; i < ptr->localizations.size(); ++i) {
+        counter += sizeof(ptr->localizations[i]) + ptr->localizations[i].size() * sizeof(ptr->localizations[i][0]);
+      }
+      
+      counter += ptr->seasons_data.tiles_seasons.size() * sizeof(ptr->seasons_data.tiles_seasons[0]);
+      
+      counter += sizeof(*ptr);
+      
+      return counter;
+    }
   }
 }

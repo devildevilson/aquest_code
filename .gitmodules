@@ -58,3 +58,6 @@
 [submodule "include/lua-fmt"]
 	path = include/lua-fmt
 	url = https://github.com/starwing/lua-fmt.git
+[submodule "include/re2"]
+	path = include/re2
+	url = https://github.com/google/re2.git

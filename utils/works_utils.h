@@ -3,6 +3,7 @@
 
 #include <cmath>
 #include "thread_pool.h"
+#include "assert.h"
 
 namespace devils_engine {
   namespace utils {

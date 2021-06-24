@@ -19,8 +19,7 @@
   #define UINT32_MAX 0xFFFFFFFF
 #endif
 
-//#ifdef __cplusplus
-//
-//#endif
+#define MINIMUM_FRUSTUM_DIST 150.0
+#define MAXIMUM_FRUSTUM_DIST 256.0
 
 #endif

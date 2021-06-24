@@ -1,8 +1,14 @@
 #include "lua_initialization_internal.h"
 
-#include "bin/core_structures.h"
+#include "core/city.h"
+#include "core/province.h"
+#include "core/titulus.h"
+#include "core/modificator.h"
 #include "lua_initialization.h"
 #include "magic_enum.hpp"
+
+#define TO_LUA_INDEX(index) ((index)+1)
+#define FROM_LUA_INDEX(index) ((index)-1)
 
 namespace devils_engine {
   namespace utils {
@@ -19,7 +25,7 @@ namespace devils_engine {
           "complited_buildings", sol::readonly(&core::city::complited_buildings),
           "start_building", sol::readonly(&core::city::start_building),
           "building_index", sol::readonly(&core::city::building_index),
-          "tile_index", sol::readonly(&core::city::tile_index),
+          "tile_index", sol::readonly_property([] (const core::city* self) { return TO_LUA_INDEX(self->tile_index); }),
           "current_stats", sol::readonly_property([] (const core::city* self) { return std::ref(self->current_stats); }),
           "modificators", sol::readonly(&core::city::modificators),
           "modificators_container_size", sol::var(core::city::modificators_container_size),

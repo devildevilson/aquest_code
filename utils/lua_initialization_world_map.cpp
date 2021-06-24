@@ -1,7 +1,7 @@
 #include "lua_initialization.h"
 
 #include "bin/map.h"
-#include "magic_enum.hpp"
+#include "magic_enum_header.h"
 #include "bin/generator_container.h"
 #include "globals.h"
 #include "battle_map_enum.h"

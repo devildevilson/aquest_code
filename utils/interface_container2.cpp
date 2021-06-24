@@ -46,6 +46,10 @@ namespace devils_engine {
       utils::setup_lua_game_context(lua);
       utils::setup_lua_localization(lua);
       utils::setup_lua_main_menu(lua);
+      utils::setup_lua_interface_utils(lua);
+      utils::setup_lua_types(lua);
+      utils::setup_lua_camera(lua);
+      utils::setup_lua_selection(lua);
       
       auto utils = lua["utils"].get_or_create<sol::table>();
       utils.new_usertype<timer>("frame_timer", sol::no_constructor,
@@ -158,6 +162,14 @@ namespace devils_engine {
     
     sol::object interface_container::get_serializable_table() const {
       return local_table["serializable_table"];
+    }
+    
+    sol::object interface_container::get_persistent_table() const {
+      return local_table["persistent_table"];
+    }
+    
+    void interface_container::set_persistent_table(const sol::table &t) {
+      local_table["persistent_table"] = t;
     }
     
     sol::object interface_container::get_generator_table() const {

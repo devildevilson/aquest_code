@@ -7,6 +7,7 @@
 #include "game_enums.h"
 #include <string>
 #include <atomic>
+#include <memory>
 
 class FastNoise;
 
@@ -45,7 +46,7 @@ namespace devils_engine {
     class sequential_string_container;
     struct calendar;
     class progress_container;
-    struct objects_selector;
+    struct objects_selection;
     struct random_engine_st;
     class localization;
   }
@@ -88,6 +89,11 @@ namespace devils_engine {
     class ai;
     
     struct core_t {
+      struct selection_containers {
+        utils::objects_selection* primary;
+        utils::objects_selection* secondary;
+      };
+      
       utils::typeless_container container;
       
       // нужно сделать несколько контейнеров с клавишами, где?
@@ -102,14 +108,18 @@ namespace devils_engine {
       utils::interface* interface;
       utils::main_menu* menu;
       game::context* game_ctx;
-      utils::interface_container* interface_container;
 //       utils::data_string_container* string_container;
-      utils::sequential_string_container* sequential_string_container;
-      utils::calendar* game_calendar;
+      utils::sequential_string_container* sequential_string_container; // ???
+      utils::calendar* game_calendar; // не чистится при перезагрузках
       utils::progress_container* loading_progress;
-      utils::objects_selector* objects_selector;
+      //utils::objects_selector* objects_selector;
+      selection_containers selection;
       struct path_managment* path_managment;
-      localization::container* loc;
+      //localization::container* loc; // не чистится при перезагрузках, но перезаписывается
+      
+      //utils::interface_container* interface_container;
+      std::unique_ptr<utils::interface_container> interface_container;
+      std::unique_ptr<localization::container> loc;
       
       core_t();
       ~core_t();
@@ -117,6 +127,8 @@ namespace devils_engine {
       void create_render_system(const char** ext, const uint32_t &count);
       void create_render_stages();
       void create_interface();
+      void reload_interface();
+      void load_interface_config(const std::string &config_path);
       
       // нужно создать стейджи общие (интерфейс, буферы)
     };

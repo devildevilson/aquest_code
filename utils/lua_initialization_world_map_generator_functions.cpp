@@ -3,7 +3,7 @@
 #include "bin/image_parser.h"
 #include "bin/data_parser.h"
 #include "bin/heraldy_parser.h"
-#include "magic_enum.hpp"
+#include "magic_enum_header.h"
 #include "serializator_helper.h"
 #include "systems.h"
 #include "bin/map_creator.h"
@@ -98,7 +98,7 @@ namespace devils_engine {
 //     LOAD_FUNC(dynasty)
     
     void setup_lua_utility_map_generator_functions(sol::state_view lua) {
-      auto utils = lua[magic_enum::enum_name<reserved_lua::values>(reserved_lua::utils)].get_or_create<sol::table>();
+      auto utils = lua[magic_enum::enum_name(reserved_lua::utils)].get_or_create<sol::table>();
 //       utils.set_function("add_image", &add_image);
 //       utils.set_function("load_images", [] (sol::this_state s, const std::string_view &path) {
 //         sol::state_view lua = s;

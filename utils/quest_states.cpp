@@ -20,7 +20,7 @@ namespace devils_engine {
     void update_interface() {
       auto base = global::get<systems::core_t>();
       auto prog = base->loading_progress;
-      auto inter = base->interface_container;
+      auto inter = base->interface_container.get();
       
       // обновляем таблицу
       if (!inter->loading_table_tmp.valid()) {
@@ -219,7 +219,7 @@ namespace devils_engine {
     
     void map_creation_loading_state::clean(quest_state* next_state) {
       auto base = global::get<systems::core_t>();
-      auto inter = base->interface_container;
+      auto inter = base->interface_container.get();
       inter->loading_table_tmp = sol::make_object(inter->lua, sol::nil);
       inter->lua.collect_garbage();
       
@@ -316,7 +316,7 @@ namespace devils_engine {
       
       if (map_systems->map_creator->advancing()) {
         auto base = global::get<systems::core_t>();
-        auto inter = base->interface_container;
+        auto inter = base->interface_container.get();
         auto t = inter->get_generator_table();
         const auto &str = inter->serialize_table(t);
         const auto t1 = map_systems->map_creator->deserialize_table(str);
@@ -336,12 +336,16 @@ namespace devils_engine {
 
     void map_creation_state::clean(quest_state* next_state) {
       auto base = global::get<systems::core_t>();
-      auto inter = base->interface_container;
+      auto inter = base->interface_container.get();
+      auto map_systems = global::get<systems::map_t>();
+      
       inter->clear_map_generator_functions();
+      
+      //if (next_state->current_state() != quest_state::world_map_generating) 
+      //map_systems->destroy_map_generator();
       
       // чистим ресурсы у map_creator'a мы в загрузке карты (!)
       if (next_state->current_state() == quest_state::main_menu_loading) {
-        auto map_systems = global::get<systems::map_t>();
         map_systems->stop_rendering();
         map_systems->destroy_map_generator();
         map_systems->release_container();
@@ -379,7 +383,7 @@ namespace devils_engine {
       
       auto base = global::get<systems::core_t>();
       auto prog = base->loading_progress;
-      auto inter = base->interface_container;
+      auto inter = base->interface_container.get();
       
       update_interface();
       
@@ -406,7 +410,7 @@ namespace devils_engine {
     
     void map_creation_generation_state::clean(quest_state* next_state) {
       auto base = global::get<systems::core_t>();
-      auto inter = base->interface_container;
+      auto inter = base->interface_container.get();
       inter->loading_table_tmp = sol::make_object(inter->lua, sol::nil);
       inter->lua.collect_garbage();
       
@@ -478,6 +482,7 @@ namespace devils_engine {
       update_interface();
 
       if (prog->finished()) {
+        //base->game_ctx;
         auto pool = global::get<dt::thread_pool>();
         pool->wait();
         base->interface_container->lua.collect_garbage();
@@ -491,7 +496,7 @@ namespace devils_engine {
     
     void world_map_loading_state::clean(quest_state* next_state) {
       auto base = global::get<systems::core_t>();
-      auto inter = base->interface_container;
+      auto inter = base->interface_container.get();
       inter->loading_table_tmp = sol::make_object(inter->lua, sol::nil);
       inter->lua.collect_garbage();
       
@@ -788,7 +793,7 @@ namespace devils_engine {
     
     void battle_loading_state::clean(quest_state* next_state) { 
       auto base = global::get<systems::core_t>();
-      auto inter = base->interface_container;
+      auto inter = base->interface_container.get();
       inter->loading_table_tmp = sol::make_object(inter->lua, sol::nil);
       inter->lua.collect_garbage();
       

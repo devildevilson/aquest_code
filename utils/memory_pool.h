@@ -86,19 +86,43 @@ namespace devils_engine {
         last_memory = nullptr;
         free_memory = nullptr;
       }
+      
+      size_t blocks_allocated() const {
+        size_t counter = 0;
+        char* old_mem = memory;
+        while (old_mem != nullptr) {
+          auto ptr_mem = reinterpret_cast<char**>(old_mem);
+          char* tmp = ptr_mem[0];
+          
+          ++counter;
+          old_mem = tmp;
+        }
+        
+        return counter;
+      }
+      
+      size_t block_size() const {
+        return final_block_size();
+      }
     private:
       char* memory;
       char* current_memory;
       char* last_memory;
       char* free_memory;
       
+      constexpr static size_t align_to(const size_t &mem, const size_t &align) {
+        return (mem + align - 1) / align * align;
+      }
+      
       constexpr size_t ptr_align() const {
-        return std::max(alignof(T), alignof(T*));
+        return std::max(alignof(T), alignof(char*));
       }
       
       size_t final_block_size() const {
-        const size_t count = N / sizeof(T);
-        const size_t mem = count * sizeof(T);
+        const size_t elem_size = std::max(sizeof(T), sizeof(char*));
+        const size_t elem_align = std::max(alignof(T), alignof(char*));
+        const size_t count = N / elem_size;
+        const size_t mem = align_to(count * elem_size, elem_align);
         const size_t diff = N - mem;
         const size_t align_ptr = ptr_align();
         return diff < align_ptr ? N + align_ptr : N;

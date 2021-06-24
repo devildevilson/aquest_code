@@ -16,7 +16,7 @@ namespace devils_engine {
       second_ptr ptr3 = &battle::unit::random;
       set_state_ptr ptr4 = &battle::unit::set_state;
       
-      auto battle = lua[magic_enum::enum_name<reserved_lua::values>(reserved_lua::battle)].get_or_create<sol::table>();
+      auto battle = lua[magic_enum::enum_name(reserved_lua::battle)].get_or_create<sol::table>();
       auto type = battle.new_usertype<battle::unit>("unit", sol::no_constructor,
         "set_state", ptr4,
         "reset_timer", &battle::unit::reset_timer,
@@ -27,7 +27,7 @@ namespace devils_engine {
         "status", sol::readonly_property([] (const battle::unit* unit) { return unit->status; })
       );
       
-      auto core = lua[magic_enum::enum_name<reserved_lua::values>(reserved_lua::core)].get_or_create<sol::table>();
+      auto core = lua[magic_enum::enum_name(reserved_lua::core)].get_or_create<sol::table>();
       core.new_enum("unit_status",
         "idle", battle::unit::status::idle,
         "marching", battle::unit::status::marching,

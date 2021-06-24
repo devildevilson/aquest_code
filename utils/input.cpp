@@ -813,6 +813,7 @@ namespace devils_engine {
       if (data->input_blocked) throw std::runtime_error("Set keys to blocked input");
       
       auto container = get_key_map();
+      ASSERT(container != nullptr);
       auto itr = container->events_map.find(id);
       if (itr == container->events_map.end()) {
         itr = container->events_map.emplace(id, keys::event_keys_container{INT32_MAX, INT32_MAX}).first;

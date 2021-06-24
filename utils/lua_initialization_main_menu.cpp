@@ -24,7 +24,7 @@ namespace devils_engine {
 //       );
 
       auto demiurge = utils.new_usertype<utils::demiurge>("demiurge", sol::initializers([] (void* mem) {
-          auto cont = global::get<systems::core_t>()->interface_container;
+          auto cont = global::get<systems::core_t>()->interface_container.get();
           new (mem) utils::demiurge(cont);
         }),
         "create_new_world", [] (utils::demiurge* self) {

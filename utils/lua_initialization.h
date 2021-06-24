@@ -17,6 +17,9 @@ namespace devils_engine {
         constants,
         calendar,
         localization,
+        interface,
+        camera,
+        selection,
         
         count
       };
@@ -40,11 +43,15 @@ namespace devils_engine {
     void setup_lua_utility_battle_generator_functions(sol::state_view lua);
     void setup_lua_utility_encounter_generator_functions(sol::state_view lua);
     void setup_lua_safe_utils(sol::state_view lua);
+    void setup_lua_interface_utils(sol::state_view lua);
+    void setup_lua_selection(sol::state_view lua);
     void setup_lua_battle_unit(sol::state_view lua);
     void setup_lua_loading_functions(sol::state_view lua);
     void setup_lua_calendar(sol::state_view lua);
     void setup_lua_localization(sol::state_view lua);
     void setup_lua_game_context(sol::state_view lua);
+    void setup_lua_camera(sol::state_view lua);
+    void setup_lua_script_utils(sol::state_view lua);
   }
 }
 

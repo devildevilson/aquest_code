@@ -1,6 +1,10 @@
 #include "lua_initialization_internal.h"
 
-#include "bin/core_structures.h"
+#include "core/titulus.h"
+#include "core/realm.h"
+#include "core/event.h"
+#include "core/province.h"
+#include "core/city.h"
 #include "lua_initialization.h"
 #include "magic_enum.hpp"
 
@@ -8,19 +12,19 @@ namespace devils_engine {
   namespace utils {
     namespace internal {
       void setup_lua_titulus(sol::state_view lua) {
-        auto t = lua.create_table_with(
-          "city", core::titulus::type::city,
-          "baron", core::titulus::type::baron,
-          "duke", core::titulus::type::duke,
-          "king", core::titulus::type::king,
-          "imperial", core::titulus::type::imperial
-        );
+//         auto t = lua.create_table_with(
+//           "city", core::titulus::type::city,
+//           "baron", core::titulus::type::baron,
+//           "duke", core::titulus::type::duke,
+//           "king", core::titulus::type::king,
+//           "imperial", core::titulus::type::imperial
+//         );
         
         auto core = lua[magic_enum::enum_name<reserved_lua::core>()].get_or_create<sol::table>();
         sol::usertype<core::titulus> title_type = core.new_usertype<core::titulus>("titulus",
           sol::no_constructor,
           "id", sol::readonly(&core::titulus::id),
-          "type", sol::readonly(&core::titulus::type),
+          "type", sol::readonly_property([] (const core::titulus* self) { return static_cast<size_t>(self->type)+1; }),
           "count", sol::readonly(&core::titulus::count),
           "parent", sol::readonly(&core::titulus::parent),
           "owner", sol::readonly(&core::titulus::owner),
@@ -35,11 +39,20 @@ namespace devils_engine {
   //           "set_child", &core::titulus::set_child,
           "get_child", &core::titulus::get_child,
           "get_province", &core::titulus::get_province,
-          "get_city", &core::titulus::get_city,
-          "events_container_size", sol::var(core::titulus::events_container_size),
-          "flags_container_size", sol::var(core::titulus::flags_container_size),
+          "get_city", &core::titulus::get_city
+          //"events_container_size", sol::var(core::titulus::events_container_size),
+          //"flags_container_size", sol::var(core::titulus::flags_container_size),
           // наименования
-          "types", t
+          //"type", t
+        );
+        
+        //core["titulus_type"] = t;
+        core.new_enum("titulus_type",
+          "city",     static_cast<size_t>(core::titulus::type::city)+1,
+          "baron",    static_cast<size_t>(core::titulus::type::baron)+1,
+          "duke",     static_cast<size_t>(core::titulus::type::duke)+1,
+          "king",     static_cast<size_t>(core::titulus::type::king)+1,
+          "imperial", static_cast<size_t>(core::titulus::type::imperial)+1
         );
 
         //auto title_type_table = core["titulus"].get_or_create<sol::table>();

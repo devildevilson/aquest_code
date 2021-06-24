@@ -1,6 +1,6 @@
 #include "lua_initialization_internal.h"
 
-#include "bin/core_structures.h"
+#include "core/building_type.h"
 #include "lua_initialization.h"
 #include "magic_enum.hpp"
 
@@ -14,8 +14,8 @@ namespace devils_engine {
           "id", sol::readonly(&core::building_type::id),
           "name_id", sol::readonly(&core::building_type::name_id),
           "desc_id", sol::readonly(&core::building_type::desc_id),
-          "potential", sol::readonly(&core::building_type::potential),
-          "conditions", sol::readonly(&core::building_type::conditions),
+//           "potential", sol::readonly(&core::building_type::potential),
+//           "conditions", sol::readonly(&core::building_type::conditions),
           "prev_buildings", sol::readonly_property([] (const core::building_type* self) { return std::ref(self->prev_buildings); }),
           "limit_buildings", sol::readonly_property([] (const core::building_type* self) { return std::ref(self->limit_buildings); }),
           "replaced", sol::readonly(&core::building_type::replaced),

@@ -43,16 +43,18 @@
 #include "bin/generator_context2.h"
 #include "bin/interface_context.h"
 #include "bin/map_creator.h"
-#include "bin/core_structures.h"
-#include "bin/core_context.h"
 // #include "bin/interface2.h"
 #include "bin/seasons.h"
 #include "bin/game_time.h"
-#include "bin/objects_selector.h"
 #include "bin/battle_map.h"
 #include "bin/camera.h"
 #include "bin/battle_unit_states_container.h"
 #include "bin/battle_context.h"
+#include "bin/objects_selection.h"
+
+#include "core/context.h"
+
+#include <filesystem>
 
 #define OPTIMIZATOR_STAGE_SLOT 2
 #define RENDER_STAGE_SLOT 7
@@ -84,7 +86,7 @@ namespace devils_engine {
         sizeof(utils::sequential_string_container) +
         sizeof(utils::calendar) +
         sizeof(utils::progress_container) +
-        sizeof(utils::objects_selector) +
+        sizeof(utils::objects_selection)*2 +
         sizeof(struct path_managment) +
         sizeof(localization::container)
         //sizeof(utils::localization)
@@ -99,13 +101,13 @@ namespace devils_engine {
       interface(nullptr),
       menu(nullptr),
       game_ctx(nullptr),
-      interface_container(nullptr),
 //       string_container(nullptr),
       sequential_string_container(nullptr),
       game_calendar(nullptr),
       loading_progress(nullptr),
-      objects_selector(nullptr),
+      selection{nullptr, nullptr},
       path_managment(nullptr),
+      interface_container(nullptr),
       loc(nullptr)
     {
       ASSERT(keys_mapping[1] == nullptr);
@@ -124,14 +126,16 @@ namespace devils_engine {
 //       RELEASE_CONTAINER_DATA(interface)
 //       RELEASE_CONTAINER_DATA(menu)
       RELEASE_CONTAINER_DATA(game_ctx)
-      RELEASE_CONTAINER_DATA(interface_container)
 //       RELEASE_CONTAINER_DATA(string_container)
       RELEASE_CONTAINER_DATA(sequential_string_container)
       RELEASE_CONTAINER_DATA(game_calendar)
       RELEASE_CONTAINER_DATA(loading_progress)
-      RELEASE_CONTAINER_DATA(objects_selector)
+      RELEASE_CONTAINER_DATA(selection.primary)
+      RELEASE_CONTAINER_DATA(selection.secondary)
       RELEASE_CONTAINER_DATA(path_managment)
-      RELEASE_CONTAINER_DATA(loc)
+      
+      //RELEASE_CONTAINER_DATA(loc)
+      //RELEASE_CONTAINER_DATA(interface_container)
     }
     
     void core_t::create_utility_systems() {
@@ -158,12 +162,16 @@ namespace devils_engine {
       
       loading_progress = container.create<utils::progress_container>();
       
-      objects_selector = container.create<utils::objects_selector>();
+      //objects_selector = container.create<utils::objects_selector>();
       path_managment = container.create<struct path_managment>(std::thread::hardware_concurrency());
       //loc = container.create<utils::localization>();
       
-      global::get(objects_selector);
+      //global::get(objects_selector);
       global::get(path_managment);
+      
+      game_ctx = container.create<game::context>();
+      selection.primary = container.create<utils::objects_selection>();
+      selection.secondary = container.create<utils::objects_selection>();
     }
     
     void core_t::create_render_system(const char** ext, const uint32_t &count) {
@@ -333,23 +341,135 @@ namespace devils_engine {
     }
     
     void core_t::create_interface() {
-      game_ctx = container.create<game::context>();
+      //interface_container = container.create<utils::interface_container>(utils::interface_container::create_info{context, game_ctx});
+      interface_container = std::make_unique<utils::interface_container>(utils::interface_container::create_info{context, game_ctx});
       
-      interface_container = container.create<utils::interface_container>(utils::interface_container::create_info{context, game_ctx});
-//       global::get(systems.interface);
-//       interface_container->init_constants();
-//       interface_container->init_input();
-//       interface_container->init_types();
-//       interface_container->init_game_logic();
-//       utils::setup_lua_main_menu(interface_container->lua);
-//       utils::setup_lua_settings(interface_container->lua);
-//       utils::setup_lua_tile(interface_container->lua);
-      
-      //interface = container.create<utils::interface>(interface_container);
-//       menu = container.create<utils::main_menu>(interface_container);
-      loc = container.create<localization::container>(interface_container->lua);
+      //loc = container.create<localization::container>(interface_container->lua);
+      loc = std::make_unique<localization::container>(interface_container->lua);
       // это мы как то в настройках должны изменять + соответственно менять строчки меню и игры при смене локали
       localization::container::set_current_locale(localization::container::locale("en"));
+    }
+    
+    void core_t::reload_interface() {
+      std::string table_container;
+      const auto table = interface_container->get_persistent_table();
+      if (table.get_type() == sol::type::table) {
+        table_container = interface_container->serialize_table(table);
+      }
+      
+      auto inter = interface_container.get();
+      const auto loc_data = loc->serialize([inter] (const sol::table &t) {
+        return inter->serialize_table(t);
+      });
+      
+      loc.reset(nullptr);
+      interface_container.reset(nullptr);
+      
+      create_interface();
+      
+      loc->deserialize(loc_data);
+      if (!table_container.empty()) {
+        const auto t = interface_container->deserialize_table(table_container);
+        interface_container->set_persistent_table(t);
+      }
+      
+      auto map_creator = global::get<systems::map_t>()->map_creator;
+      if (map_creator != nullptr) {
+        map_creator->setup_map_generator_functions(interface_container.get());
+      }
+    }
+    
+    std::string mod_path_to_absolute(const std::string &path) {
+      std::filesystem::path p(path);
+      auto itr = p.begin();
+      ASSERT(*itr == "apates_quest");
+      std::string final_path = global::root_directory();
+      for (++itr; itr != p.end(); ++itr) {
+        final_path += "/" + std::string(*itr);
+      }
+      
+      return final_path;
+    }
+    
+    void core_t::load_interface_config(const std::string &config_path) {
+      const auto ret = interface_container->lua.safe_script_file(config_path, interface_container->env, sol::load_mode::text);
+      if (!ret.valid()) {
+        sol::error err = ret;
+        std::cout << err.what();
+        throw std::runtime_error("There is lua errors");
+      }
+      
+      if (ret.get_type() != sol::type::table) throw std::runtime_error("Bad interface config");
+      
+      const sol::table config = ret;
+      
+      if (auto proxy = config["interface_func"]; proxy.valid() && proxy.get_type() == sol::type::string) {
+        const std::string path = proxy.get<std::string>();
+        
+        // функция преобразования пути должна быть глобальной
+        // она должна возвращать что? укзатель на мод + путь? 
+        // а это значит придется делать контейнер модификаций
+        // он нинужен пока что (2021.05.19)
+        const auto final_path = mod_path_to_absolute(path);
+        interface_container->load_interface_file(final_path);
+      }
+      
+      if (auto proxy = config["string_container"]; proxy.valid() && proxy.get_type() == sol::type::table) {
+        const sol::table t = proxy.get<sol::table>();
+        for (const auto &pair : t) {
+          if (!pair.first.is<std::string>()) continue;
+          if (!pair.second.is<std::string>()) continue;
+          
+          // нужно придумать где будет контейнер
+        }
+      }
+      
+      if (auto proxy = config["localization"]; proxy.valid() && proxy.get_type() == sol::type::table) {
+        const sol::table t = proxy.get<sol::table>();
+        for (const auto &pair : t) {
+          if (!pair.second.is<std::string>()) continue;
+          
+          const std::string path = pair.second.as<std::string>();
+          const auto final_path = mod_path_to_absolute(path);
+          const auto ret = interface_container->lua.safe_script_file(final_path, interface_container->env, sol::load_mode::text);
+          if (!ret.valid()) {
+            sol::error err = ret;
+            std::cout << err.what();
+            throw std::runtime_error("There is lua errors");
+          }
+          
+          if (ret.get_type() != sol::type::table) throw std::runtime_error("Bad localization data");
+          
+          const sol::table t = ret;
+          for (const auto &pair : t) {
+            if (!pair.first.is<std::string>()) continue;
+            if (!pair.second.is<sol::table>()) continue;
+            
+            const auto loc_key = pair.first.as<std::string_view>();
+            localization::container::locale locale(loc_key);
+            const auto t = pair.second.as<sol::table>();
+            loc->set_table(locale, t);
+          }
+        }
+      }
+      
+      if (auto proxy = config["images"]; proxy.valid() && proxy.get_type() == sol::type::table) {
+        const sol::table t = proxy.get<sol::table>();
+        for (const auto &pair : t) {
+          if (!pair.second.is<std::string>()) continue;
+          
+          // грузим картинки
+        }
+      }
+      
+      if (auto proxy = config["sounds"]; proxy.valid() && proxy.get_type() == sol::type::table) {
+        const sol::table t = proxy.get<sol::table>();
+        for (const auto &pair : t) {
+          if (!pair.second.is<std::string>()) continue;
+          
+          // грузим звуки
+        }
+      }
     }
     
     map_t::map_t() :
@@ -755,7 +875,7 @@ namespace devils_engine {
       
       auto tiles   = render_container->add_stage<render::tile_render>(render::tile_render::create_info{device, opt1});
       auto borders = render_container->add_stage<render::tile_border_render>(render::tile_border_render::create_info{device, opt1, buffers});
-      auto walls   = render_container->add_stage<render::tile_connections_render>(render::tile_connections_render::create_info{device, opt1, buffers});
+//       auto walls   = render_container->add_stage<render::tile_connections_render>(render::tile_connections_render::create_info{device, opt1, buffers});
                      render_container->add_stage<render::tile_object_render>(render::tile_object_render::create_info{device, opt1, buffers});
       auto thl     = render_container->add_stage<render::tile_highlights_render>(render::tile_highlights_render::create_info{device, buffers});
                      render_container->add_stage<render::render_pass_end>();
@@ -769,7 +889,7 @@ namespace devils_engine {
 //       systems->render_slots->set_stage(7, render_container);
       
       global::get(tiles);
-      global::get(walls);
+//       global::get(walls);
       global::get(opt1);
       global::get(thl);
 //       global::get(world_buffers);
@@ -822,7 +942,8 @@ namespace devils_engine {
       //ASSERT(map_creator == nullptr);
       if (map_creator != nullptr) return;
       auto systems = global::get<core_t>();
-      map_creator = container.create<map::creator, 5>(systems->interface_container, map, seasons, systems->loc); // map::creator занимает 5 кб
+      map_creator = container.create<map::creator, 5>(map, seasons); // map::creator занимает 5 кб
+      map_creator->setup_map_generator_functions(systems->interface_container.get());
       //map_creator = new map::creator(systems->interface);
     }
     

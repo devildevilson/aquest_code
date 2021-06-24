@@ -4,11 +4,12 @@
 #include "quest_state.h"
 #include <cstddef>
 #include <cstdint>
+#include <atomic>
 
 namespace devils_engine {
   namespace core {
     struct character;
-    struct faction;
+    struct realm;
   }
   
   namespace game {
@@ -25,17 +26,23 @@ namespace devils_engine {
       // тут еще будет состояние хода
       uint32_t turn_state;
       
+      float traced_tile_dist;
+      uint32_t traced_tile_index; // тоже +1
+      float traced_heraldy_dist;
+      uint32_t traced_heraldy_tile_index;
+      
       core::character* player_character; // хотя может быть тут даже доступ к фракции
-      core::faction* player_faction; // игрок не может без фракции, геймовер или ошибка?
+      core::realm* player_faction; // игрок не может без фракции, геймовер или ошибка?
       // быстрый доступ к столице
       // быстрый доступ к войскам
       // быстрый доступ к героям
       // какие то еще данные карты мира, карты битвы и столкновения
       // тут на самом деле не очень много всего
       
-      bool quit_game_var;
+      std::atomic_bool quit_game_var;
+      bool reload_interface;
       
-      inline context() : player_character(nullptr), player_faction(nullptr), quit_game_var(false) {}
+      inline context() : traced_tile_index(UINT32_MAX), player_character(nullptr), player_faction(nullptr), quit_game_var(false), reload_interface(false) {}
 //       inline bool state_eq() const { return state == new_state; }
       inline bool is_loading() const { 
         return state == utils::quest_state::main_menu_loading || 
@@ -50,9 +57,8 @@ namespace devils_engine {
         if (state != utils::quest_state::main_menu) state = utils::quest_state::main_menu_loading;
       }
       
-      inline void quit_game() {
-        quit_game_var = true;
-      }
+      inline void quit_game() { quit_game_var = true; }
+      inline bool quit_state() { return quit_game_var; }
       
 //       inline void advance_state() { state = new_state; } // обновляем стейт
     };

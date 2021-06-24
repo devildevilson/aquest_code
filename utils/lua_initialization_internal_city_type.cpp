@@ -1,6 +1,7 @@
 #include "lua_initialization_internal.h"
 
-#include "bin/core_structures.h"
+#include "core/city_type.h"
+#include "core/building_type.h"
 #include "lua_initialization.h"
 #include "magic_enum.hpp"
 

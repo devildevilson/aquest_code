@@ -1,5 +1,6 @@
 #include "lua_initialization.h"
 
+#include "globals.h"
 #include "settings.h"
 #include "magic_enum.hpp"
 
@@ -39,11 +40,16 @@ namespace devils_engine {
         "get_next_event", &utils::settings::keys::get_next_event
       );
       
-      auto settings = utils.new_usertype<utils::settings>("settings",
+      auto settings = utils.new_usertype<utils::settings>("settings_type",
         "graphics", &utils::settings::graphics,
         "game", &utils::settings::game,
         "keys", &utils::settings::keys
       );
+      
+      utils.set("get_settings", [] (const sol::object &self) {
+        (void)self;
+        return global::get<utils::settings>();
+      });
     }
   }
 }

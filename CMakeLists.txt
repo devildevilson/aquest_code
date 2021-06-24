@@ -69,6 +69,7 @@ include_directories(
   include/parallel-hashmap/
   include/Nuklear/
   include/stb/
+  include/re2/
 )
 link_directories(
   ${CMAKE_CURRENT_BINARY_DIR}
@@ -158,7 +159,7 @@ if (CMAKE_BUILD_TYPE MATCHES "Debug")
   if (MSVC)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /std:c++17 /ZI /MTd /GR- /permissive- /bigobj") #/W3
   else()
-    # -fsanitize=address -fsanitize=pointer-compare -fsanitize=pointer-subtract -fsanitize=undefined
+    #-fsanitize=address -fsanitize=pointer-compare -fsanitize=pointer-subtract -fsanitize=undefined -fno-omit-frame-pointer
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -msse4.2 -std=c++17 -Wall -Wextra -g -fno-rtti -pthread -Wl,-rpath=./")
   endif()
 else()
@@ -276,6 +277,7 @@ set(SRC_LIST
   utils/lua_initialization_internal_faction.cpp
   utils/lua_initialization_internal_province.cpp
   utils/lua_initialization_internal_titulus.cpp
+  utils/lua_initialization_internal_army.cpp
   utils/lua_initialization_battle_map.cpp
   utils/lua_initialization_generator_container.cpp
   utils/lua_initialization_noiser.cpp
@@ -287,9 +289,14 @@ set(SRC_LIST
   utils/lua_initialization_world_map_generator_functions.cpp
   utils/lua_initialization_calendar.cpp
   utils/lua_initialization_safe_utils.cpp
+  utils/lua_initialization_interface_utils.cpp
   utils/lua_initialization_game_context.cpp
   utils/lua_initialization_localization.cpp
   utils/lua_initialization_core_loading.cpp
+  utils/lua_initialization_camera.cpp
+  utils/lua_initialization_selection.cpp
+  utils/lua_initialization_script_utils.cpp
+  utils/deferred_tasks.cpp
   utils/lua_environment.cpp
   utils/string_container.cpp
   utils/string_bank.cpp
@@ -302,11 +309,13 @@ set(SRC_LIST
   utils/settings.cpp
   bin/interface2.cpp
   utils/frustum.cpp
-  bin/objects_selector.cpp
+  #bin/objects_selector.cpp
+  bin/objects_selection.cpp
   utils/astar_search.cpp
   utils/battle_lua_states.cpp
   bin/battle_context.cpp
   bin/battle_structures.cpp
+  utils/structures_utils.cpp
   include/FastNoise/FastNoise.cpp
   include/whereami/src/whereami.c
   include/fmt/src/format.cc
@@ -339,6 +348,7 @@ set(HDR_LIST
   utils/traits_modifier_attribs.h
   utils/lua_initialization.h
   utils/lua_initialization_internal.h
+  utils/deferred_tasks.h
   utils/lua_environment.h
   utils/string_container.h
   utils/string_bank.h
@@ -351,11 +361,13 @@ set(HDR_LIST
   utils/settings.h
   bin/interface2.h
   utils/frustum.h
-  bin/objects_selector.h
+  #bin/objects_selector.h
+  bin/objects_selection.h
   utils/astar_search.h
   utils/battle_lua_states.h
   bin/battle_context.h
   bin/battle_structures.h
+  utils/structures_utils.h
   include/FastNoise/FastNoise.h
   include/whereami/src/whereami.h
 )
@@ -388,6 +400,7 @@ set(SRC_LIST
   render/persistent_resources.cpp
   render/slots.cpp
   render/battle_render_stages.cpp
+  render/utils.cpp
 )
 
 set(HDR_LIST
@@ -416,6 +429,7 @@ set(HDR_LIST
   render/slots.h
   render/shared_battle_structures.h
   render/battle_render_stages.h
+  render/utils.h
 )
 
 add_library(render ${SRC_LIST} ${HDR_LIST})
@@ -424,16 +438,38 @@ target_link_libraries(render utils ${VULKAN_LIB_NAME} ${GLFW3_LIBRARIES})
 set(SRC_LIST
   ai/build_subsystem.cpp
   ai/path_container.cpp
+  ai/path_finding_data.cpp
 )
 
 set(HDR_LIST
   ai/sub_system.h
   ai/build_subsystem.h
   ai/path_container.h
+  ai/path_finding_data.h
 )
 
 add_library(ai ${SRC_LIST} ${HDR_LIST})
 target_link_libraries(ai utils)
+
+set(SRC_LIST
+  script/condition_functions.cpp
+  script/action_functions.cpp
+  script/script_block_functions.cpp
+  script/script_header.cpp
+)
+
+set(HDR_LIST
+  script/condition_functions.h
+  script/action_functions.h
+  script/script_block_functions.h
+  script/script_header.h
+  script/condition_commands_macro.h
+  script/action_commands_macro.h
+  script/script_block_commands_macro.h
+)
+
+add_library(script ${SRC_LIST} ${HDR_LIST})
+target_link_libraries(script utils re2)
 
 set(SRC_LIST
   utils/systems.cpp
@@ -451,9 +487,60 @@ add_library(systems ${SRC_LIST} ${HDR_LIST})
 target_link_libraries(systems render utils)
 
 set(SRC_LIST
+  core/decision.cpp
+  core/army.cpp
+  core/building_type.cpp
+  core/character.cpp
+  core/city_type.cpp
+  core/city.cpp
+  core/culture.cpp
+  core/event.cpp
+  core/hero_troop.cpp
+  core/law.cpp
+  core/modificator.cpp
+  core/province.cpp
+  core/realm.cpp
+  core/religion.cpp
+  core/tile.cpp
+  core/titulus.cpp
+  core/trait.cpp
+  core/troop_type.cpp
+  core/troop.cpp
+  core/context.cpp
+)
+
+set(HDR_LIST
+  core/casus_belli.h
+  core/war.h
+  core/decision.h
+  core/army.h
+  core/building_type.h
+  core/character.h
+  core/city_type.h
+  core/city.h
+  core/culture.h
+  core/event.h
+  core/hero_troop.h
+  core/law.h
+  core/modificator.h
+  core/province.h
+  core/realm.h
+  core/religion.h
+  core/tile.h
+  core/titulus.h
+  core/trait.h
+  core/troop_type.h
+  core/troop.h
+  core/context.h
+)
+
+add_library(core ${SRC_LIST} ${HDR_LIST})
+target_link_libraries(core systems utils)
+
+set(SRC_LIST
   bin/interface_context.cpp
   #bin/interfaces.cpp
-  bin/overlay.cpp
+  #bin/overlay.cpp
   bin/figures.cpp
   bin/main.cpp
   bin/helper.cpp
@@ -465,9 +552,8 @@ set(SRC_LIST
   #include/lanes/src/deep.c
   #include/lanes/src/universe.c
   #include/lanes/src/compat.c
-  bin/character.cpp
+  #bin/character.cpp
   bin/map_creator.cpp
-  bin/core_context.cpp
   bin/titulus_data_parser.cpp
   bin/province_data_parser.cpp
   bin/city_type_data_parser.cpp
@@ -498,12 +584,11 @@ set(HDR_LIST
   bin/generator_context2.h
   bin/generator_container.h
   bin/map_generator.h
-  bin/character.h
+  #bin/character.h
   bin/core_structures.h
-  bin/declare_structures.h
+  #bin/declare_structures.h
   bin/map_creator.h
-  bin/core_context.h
-  bin/stats.h
+  #bin/stats.h
   bin/data_parser.h
   bin/image_parser.h
   bin/heraldy_parser.h
@@ -517,7 +602,7 @@ set(HDR_LIST
   bin/battle_unit_state_parser.h
 )
 add_executable(${TARGET_NAME} ${SRC_LIST} ${HDR_LIST})
-target_link_libraries(${TARGET_NAME} systems ai render utils serialization)
+target_link_libraries(${TARGET_NAME} systems core script ai render utils serialization)
 add_dependencies(${TARGET_NAME} shaders)
 
 if (MSVC)
@@ -550,7 +635,7 @@ file(GLOB LUA_SCRIPTS
   "lua_scripts/*.lua"
 )
 add_custom_target(copy_scripts ALL
-  COMMAND      ${CMAKE_COMMAND} -E copy_if_different
+  COMMAND      ${CMAKE_COMMAND} -E copy
                ${LUA_SCRIPTS}
                "${PROJECT_DIR}/scripts/"
 )
@@ -565,7 +650,7 @@ macro(configure_scripts folders)
       file(GLOB LUA_SCRIPTS "lua_scripts/${folder}/*.lua")
       
       add_custom_target(copy_scripts.${folder} ALL
-        COMMAND   ${CMAKE_COMMAND} -E copy_if_different
+        COMMAND   ${CMAKE_COMMAND} -E copy
                   ${LUA_SCRIPTS}
                   "${PROJECT_DIR}/scripts/${folder}/"
       )

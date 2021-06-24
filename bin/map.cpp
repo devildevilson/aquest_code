@@ -262,7 +262,7 @@ namespace devils_engine {
     }
     
 #define MAX_VALUE 1000000.0f
-    uint32_t map::cast_ray(const utils::ray &ray) const {
+    uint32_t map::cast_ray(const utils::ray &ray, float &ray_dist) const {
       static const std::function<uint32_t(const utils::ray &ray, const uint32_t &tri_index, float &distance)> reck = [this] (const utils::ray &ray, const uint32_t &tri_index, float &distance) {
         const bool ret = intersect_container(tri_index, ray);
         if (!ret) return UINT32_MAX;
@@ -302,6 +302,8 @@ namespace devils_engine {
             for (uint32_t j = 0; j < p_count; ++j) {
               const uint32_t b_index = j;
               const uint32_t c_index = (j+1)%p_count;
+              
+              ASSERT(c_index < p_count);
               
               float dist = MAX_VALUE;
 //               const bool ret = intersect_tri(get_point(point_a_index), get_point(point_b_index), get_point(point_c_index), ray, dist);
@@ -387,6 +389,7 @@ namespace devils_engine {
         }
       }
       
+      ray_dist = dist;
       return final_tile;
       
 //       //ASSERT(current_tri_index != UINT32_MAX); // по идее это условие всегда должно выполняться

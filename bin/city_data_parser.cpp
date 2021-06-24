@@ -1,11 +1,14 @@
 #include "data_parser.h"
+
 #include "utils/globals.h"
-#include "core_structures.h"
 #include "utils/table_container.h"
 #include "utils/string_container.h"
-#include "core_context.h"
 #include "utils/serializator_helper.h"
+
+#include "core/context.h"
+
 #include "map_creator.h"
+
 #include <iostream>
 
 #define TO_LUA_INDEX(index) ((index)+1)

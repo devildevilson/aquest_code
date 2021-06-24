@@ -1,10 +1,11 @@
 #include "data_parser.h"
 #include "utils/globals.h"
-#include "core_structures.h"
 #include "utils/table_container.h"
 #include "utils/string_container.h"
-#include "core_context.h"
 #include "utils/serializator_helper.h"
+
+#include "core/context.h"
+
 #include "map_creator.h"
 
 // наверное чтобы не мучиться лучше какой нибудь список задать
@@ -381,7 +382,7 @@ namespace devils_engine {
             continue;
           }
           
-          if (auto val = magic_enum::enum_cast<core::faction_stats::values>(stat); val.has_value()) {
+          if (auto val = magic_enum::enum_cast<core::realm_stats::values>(stat); val.has_value()) {
             building_type->mods[current_stat].type = core::unit_type::faction;
             building_type->mods[current_stat].stat = val.value();
             building_type->mods[current_stat].mod.fval = value;

@@ -25,6 +25,8 @@
 #include "utils/settings.h"
 #include "utils/astar_search.h"
 #include "utils/game_context.h"
+#include "utils/deferred_tasks.h"
+#include "utils/lua_initialization.h"
 //#include "utils/perlin.h"
 #include "FastNoise.h"
 
@@ -40,11 +42,17 @@
 #include "render/shared_battle_structures.h"
 #include "render/battle_render_stages.h"
 #include "render/image_controller.h"
+#include "render/utils.h"
 
 #include "ai/sub_system.h"
 #include "ai/build_subsystem.h"
 #include "ai/ai_system.h"
 #include "ai/path_container.h"
+
+#include "script/script_header.h"
+
+#include "core/context.h"
+#include "core/structures_header.h"
 
 #include "figures.h"
 #include "camera.h"
@@ -60,17 +68,18 @@
 #include "interface_context.h"
 #include "overlay.h"
 #include "map_creator.h"
-#include "core_structures.h"
-#include "core_context.h"
+// #include "core_structures.h"
+// #include "core_context.h"
 #include "interface2.h"
 #include "game_time.h"
 #include "logic.h"
 #include "seasons.h"
 #include "tiles_funcs.h"
-#include "objects_selector.h"
+//#include "objects_selector.h"
 #include "battle_map.h"
 #include "battle_context.h"
 #include "battle_structures.h"
+#include "objects_selection.h"
 
 #include <set>
 #include <vector>
@@ -102,7 +111,7 @@ namespace devils_engine {
   void key_input(const size_t &time, const uint32_t &current_state, const bool loading);
   void zoom_input(components::camera* camera);
   glm::vec4 get_cursor_dir(render::buffers* buffers, render::window* window, const double xpos, const double ypos);
-  uint32_t cast_mouse_ray();
+  uint32_t cast_mouse_ray(float &ray_dist);
   uint32_t get_casted_battle_map_tile();
 //   void draw_tooltip(const uint32_t &index, const sol::function &tile_func);
   void next_nk_frame(const size_t &time);
@@ -131,17 +140,15 @@ namespace devils_engine {
   
   void check_tile(const map::container* map, const uint32_t &tile_index);
   
-  void draw_army_path();
+  void test_decision(core::character* c);
+  
+//   void draw_army_path();
   
   void advance_army(core::army* army);
   
   std::mutex* get_map_mutex();
   void lock_rendering();
   void unlock_rendering();
-  
-  bool is_interface_hovered(nk_context* ctx, const std::string_view &except);
-  
-  components::camera* get_camera();
 
   void callback(int error, const char* description);
   int lua_panic(lua_State* s);

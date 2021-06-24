@@ -10,7 +10,7 @@
 #include <unordered_set>
 #include <any>
 #include <stack>
-#include "declare_structures.h"
+#include "core/declare_structures.h"
 
 #define UINT_VALUE_NOT_FOUND SIZE_MAX
 #define UINT_VALUE_NOT_VALID (UINT_VALUE_NOT_FOUND-1)

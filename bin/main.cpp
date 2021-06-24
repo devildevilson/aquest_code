@@ -16,6 +16,8 @@ int main(int argc, char const *argv[]) {
   const uint32_t thread_pool_size = std::max(std::thread::hardware_concurrency()-1, uint32_t(1));
   dt::thread_pool pool(thread_pool_size);
   global::get(&pool);
+  utils::deffered_tasks tasks;
+  global::get(&tasks);
 
   systems::core_t base_systems;
   systems::map_t map_systems;
@@ -240,6 +242,16 @@ int main(int argc, char const *argv[]) {
   // просто тупа все эвенты чтобы в интерфейсе можно было поймать, 
   // единственное разраничение что на одну кнопку можно несколько эвентов повесить 
   // по состояниям приложения
+  
+  // инпут в луа, что может пойти не так? логику реально проще в луа накатать, ко всему прочему
+  // функция будет вызвана лишь один раз за кадр, значит не сильно ударит по производительности
+  // что нужно в качестве инпута? кнопки мыши, выделение, передвижение камеры на при прикосновении к краям,
+  // передвижение камеры по кнопке, скорость передвижения камеры вообще регулируется из настроек
+  // и было бы неплохо не давать эту возможность в луа, еще нужно сделать работу с выделением:
+  // отменить выделение (ну и перевыделить), задать путь, пройти по пути, выбрать отряд или строение
+  // (появится окошко с интерфейсом), просмотреть выделение (хотя может быть вообще работа с выделением)
+  // (то есть по шифту добавить, по ктрл убрать и проч)
+  // где сделать доступ к индексу тайла?
 
   const std::array<utils::quest_state*, utils::quest_state::count> game_states = {
     &main_menu_loading_state,
@@ -281,7 +293,7 @@ int main(int argc, char const *argv[]) {
 //   std::future<void> rendering_future;
   global::get<render::window>()->show();
   utils::frame_time frame_time;
-  while (!global::get<render::window>()->close() && !game_ctx->quit_game_var) { // !base_systems.menu->m_quit_game
+  while (!global::get<render::window>()->close() && !game_ctx->quit_state()) {
     frame_time.start();
     const size_t time = frame_time.get();
     input::update_time(time);
@@ -290,179 +302,44 @@ int main(int argc, char const *argv[]) {
     
     manage_states(game_states, &current_game_state, &previous_game_state, game_ctx, time);
     
-    if (!loading && current_game_state == &world_map_state) {
-//       static bool first = true;
-//       if (first) {
-//         const size_t city_count = map_systems.core_context->get_entity_count<core::city>();
-//         for (size_t i = 0; i < city_count; ++i) {
-//           const auto city = map_systems.core_context->get_entity<core::city>(i);
-//           const auto &tile_data = render::unpack_data(map_systems.map->get_tile(city->tile_index));
-//           const glm::vec4 pos = map_systems.map->get_point(tile_data.center);
-//           union convert {
-//             void* user_data;
-//             core::map::user_data data;
-//           };
-//           convert c;
-//           c.data.index = i;
-//           c.data.type = core::map::user_data::type::city;
-//           
-//           const core::map::object obj{
-//             {
-//               pos,
-//               glm::vec4(1.0f, 1.0f, 1.0f, 0.0f)
-//             },
-//             c.user_data
-//           };
-//           
-//           const size_t add_ret = map_systems.map->add_object(obj);
-//           ASSERT(add_ret != SIZE_MAX);
-//         }
-//         first = false;
-//       }
-//       
-//       const auto buffers = global::get<render::buffers>();
-//       const auto &mat = buffers->get_matrix();
-//       const auto frustum = utils::compute_frustum(mat);
-//       {
-//         utils::time_log tl("frustum culling");
-//         const int32_t ret = map_systems.map->frustum_culling(frustum, map_buffer);
-//         if (ret < 0) {
-//           // нехвататет памяти в буффере
-//           throw std::runtime_error("increase buffer");
-//         }
-//       }
-//       
-//       //PRINT_VAR("frustum culling res", ret)
-//       
-//       const auto opt = global::get<render::tile_optimizer>();
-//       const auto tile_buffer = opt->tiles_index_buffer();
-//       const auto indirect_buffer = opt->indirect_buffer();
-//       auto device = global::get<systems::core_t>()->graphics_container->device;
-//       yavf::Buffer staging(device, yavf::BufferCreateInfo::buffer(tile_buffer->info().size, VK_BUFFER_USAGE_TRANSFER_DST_BIT), VMA_MEMORY_USAGE_CPU_ONLY);
-//       
-//       auto task = device->allocateTransferTask();
-//       task->begin();
-//       task->copy(tile_buffer, &staging); // копировать буфер понятное дело лучше не здесь
-//       task->end();
-//       task->start();
-//       task->wait();
-//       
-//       auto index_arr = reinterpret_cast<uint32_t*>(staging.ptr());
-//       auto indirect_data = reinterpret_cast<struct render::tile_optimizer::indirect_buffer*>(indirect_buffer->ptr());
-      
-      // в общем это рабочий вариант, но прикол в том что я могу делать это в гпу
-      // но мне нужно наверное все же делать это в отдельном шейдере с другим набором данных
-      // мне нужно решить несколько проблем: посчитать рейкастинг, сделать выделение
-      // данные какие? мне нужно нарисовать города, структуры, гербы, 
-      // то есть нужно создать еще один буффер с тайлами, в этих тайлах 
-      // указать индекс стуктур, индекс герба, дороги, 
-//       const uint32_t tiles_count = indirect_data->tiles_command.indexCount;
-//       PRINT_VAR("tiles count", tiles_count / (PACKED_TILE_INDEX_COEF+1))
-//       for (uint32_t i = 0; i < tiles_count; i += PACKED_TILE_INDEX_COEF+1) {
-//         const uint32_t tile_index = index_arr[i] / PACKED_TILE_INDEX_COEF;
-//         auto city = core::get_tile_city(tile_index);
-//       }
-      
-      // кажется работает, можно сделать примерно тоже самое для городов (хотя нужно ли, мы можем работать с городами через тайл)
-      // и для армий с героями (с ними таже история, зачем находить пересечение с ними если тайл очень близко)
-      // теперь когда у нас есть вменяемые выделения, мне нужно делать всякие интерфейсы с инфой о вещах которые я выделяю
-      // интерфейс города, интерфейс героя и армии, интерфейс персонажа (скорее всего немного интерфейса мы спиздим у цк2)
-      // героям и армиям нужно будет делать поиск пути, а значит нужно хранить путь, путь это набор индексов тайлов
-      // то есть по идее это множество массивов с индексами, массивы скорее всего будут не очень большими (100-200 размер)
-      // но нужно быть готовым к тому что нужно будет выделать много памяти для этогоНаверное будет неплохо выделять 
-      // память кусками для пути (то есть struct { uint32_t path_part[200]; void* next; }, как то так)
-      
-      const auto opt = global::get<render::tile_optimizer>();
-      const auto indirect_buffer = opt->indirect_buffer();
-      auto indirect_data = reinterpret_cast<struct render::tile_optimizer::indirect_buffer*>(indirect_buffer->ptr());
-      // это не работает так как я хочу, спинлок вылетает в шейдерах
-//       if (indirect_data->padding2[2] != UINT32_MAX) {
-//         PRINT_VAR("heraldy dist ", glm::uintBitsToFloat(indirect_data->padding1[2]))
-//         PRINT_VAR("heraldy index", indirect_data->padding2[2])
-//       }
-      
-      // кажется работает, если строить фрустум получается гораздо точнее, 
-      // но слишком много вычислений (?), у меня дополнительно должна быть логика 
-      // замены выделения, по идее это означает что я должен как то дать понять игроку что он выделяет
-      // но при этом не снимать старого выделения, как быть если выделение есть но при этом не выделено ничего?
-      // по идее нужно чистить выделение, верно? или чистить выделение только при клике? для мобилок
-      // нормально будет если мы будем чистить при клике (неплохо было бы иметь возможность поменять поведение выделения)
-      // в этот селектион должны попадать еще строения (?), после чего мне его нужно обойти 
-      // и выбрать только то с чем я могу взаимодействовать, игрок может выбрать все свои армии и героев,
-      // но только по одной штуке города (армии противника неплохо было бы выделять все чтобы посмотреть сколько всего сил)
-      // свои армии и армии противника нельзя выделить одновременно, свои армии в приоритете
-      // (неплохо было бы иметь возможность поменять приоритеты в настройках)
-      // довольно легко добавить индексы умноженные на некий коэффициент + тип того что выделили,
-      // надеюсь что это будет работать быстро, нужно подсократить количество условий
-      // как подсветить выделяемые вещи лучем? хороший вопрос, кажется достаточно добавить бит к индексу
-      // было бы неплохо запихнуть как можно больше разных вещей в один шейдер, об этом позже
-      
-      // серьезно можно умножить индекс на количество типов + непосредственно тип и так хранить
-      // типов сколько? армия+герой, структура, ??? (неплохо было бы разделить друг от друга эти вещи)
-      // с некоторыми структурами взаимодействовать нельзя
-      
-      float min_dist = 10000.0f;
-      uint32_t min_dist_heraldy_index = UINT32_MAX;
-      
-      const uint32_t selection_count = indirect_data->heraldies_command.indexCount;
-      const auto selection_buffer = opt->structures_index_buffer();
-      const auto selection_data = reinterpret_cast<uint32_t*>(selection_buffer->ptr());
-//       if (selection_count != 0) {
-//         PRINT_VAR("selection_count", selection_count)
-        for (uint32_t i = 0 ; i < selection_count; ++i) {
-          if (selection_data[i] > INT32_MAX) {
-            const float tmp = -glm::uintBitsToFloat(selection_data[i]);
-            if (tmp < min_dist) {
-              min_dist = tmp;
-              min_dist_heraldy_index = selection_data[i+1];
-            }
-            
-            ++i;
-            continue;
-          }
-          
-          PRINT_VAR(std::to_string(i), selection_data[i])
-  //         const uint32_t army_gpu_index = selection_data[i];
-          // тут по идее нужно использовать unordered_map, в который мы положим индексы армии и указатели на армию
-          global::get<utils::objects_selector>()->add(utils::objects_selector::unit::type::army, selection_data[i]);
-          // хотя лучше просто армии по слотам расположить
-          // вот у нас селектион, перемещение камеры по карте нужно сделать тогда приближением к краям + нужно сделать рендер курсора?
-          // хотя наверное можно обойтись просто ограничением мышки
-        }
-        
-        //PRINT_VAR("count", global::get<utils::objects_selector>()->count)
-//       }
-      
-      if (min_dist_heraldy_index != UINT32_MAX) {
-        PRINT_VAR("heraldy dist ", min_dist)
-        PRINT_VAR("heraldy index", min_dist_heraldy_index)
-      }
-      
-      // в моей игре еще нужно будет сделать видимость на карте, это довольно несложно сделать с помощью битового массива
-      // не просто видимость, 3 типа: территория не разведана, территория разведана, территория видима
-      // как сделать правильно? у меня есть с этим небольшая проблема, заключается в том что мне нужно нарисовать стенки тайлов
-      // неплохо было бы рисовать динамические стенки, для этого нужно проверять соседей у всех видимых тайлов 
-      // либо собрать все ребра на карте (по идее их столько же сколько точек), и дополнительно вычислить еще и ребра
-      // динамические стенки у меня например в боеваой карте, там получилось неплохо, по идее если я так же сделаю 
-      // в ворлд мапе потери производительности не должно быть + ко всему я избавлюсь от лишней мороки
-    }
-    
     // нужно сделать управление для разных типов карт, по идее лучше переопределить функцию у quest_state
-    auto camera = get_camera();
-    const uint32_t tile_index = cast_mouse_ray();
+    auto camera = camera::get_camera();
+    float ray_tile_dist = 100000.0f;
+    const uint32_t tile_index = cast_mouse_ray(ray_tile_dist);
     const uint32_t battle_tile_index = get_casted_battle_map_tile();
-    mouse_input(camera, time, tile_index);
-    key_input(time, 0, loading);
+    //mouse_input(camera, time, tile_index);
+    //key_input(time, 0, loading);
     zoom_input(camera);
     next_nk_frame(time);
     camera::strategic(camera);
+    game_ctx->traced_tile_dist = ray_tile_dist;
+    game_ctx->traced_tile_index = tile_index;
+    
+    render::update_selection();
     
     if (camera != nullptr) camera->update(time);
     
 //     PRINT_VEC3("camera pos", camera->current_pos())
     
     //base_systems.interface_container->draw(time);
-    base_systems.interface_container->update(time);
+    {
+      //utils::time_log log("Interface updation");
+      base_systems.interface_container->update(time);
+    }
+    
+    update(time);
+    tasks.update(time);
+    
+    if (game_ctx->reload_interface) {
+      base_systems.reload_interface();
+      basic_interface_functions(base_systems);
+      game_ctx->reload_interface = false;
+    }
+    
+    if (game_ctx->state == utils::quest_state::world_map) {
+      auto c = game_ctx->player_character;
+      test_decision(c);
+    }
     
     // в текущем виде занимает в среднем от 20-50 мкс, 
     // я так подозреваю что проблемы начнутся только от 1000 юнитов
@@ -565,54 +442,17 @@ int main(int argc, char const *argv[]) {
 //       }
     }
     
-    // сделал, теперь наконец алгортим учитывает все нововведения
-    // все остальное зависит от того где мы применяем функцию
-    // теперь нужно вывести какую нибудь инфу
-    // инфу о тайле через интерфейс как ее получить? 
-    // на самом деле у тайла инфа только о высоте и биоме остальная инфа у провинции
-    // мне нужно не делать рейкастинг если я задеваю какое нибудь окно
-    // но при этом мне нужно рейкастить сквозь окно инфы о тайле (можно ли как то так сделать?)
-    // не понятно как сделать вызов функции, то ли вызывать стандартным способом то ли вызывать отдельную функцию каждый кадр
-    // функция каждый кадр - удобнее, но для этого придется придумать особый загрузчик для такой функции
-    // в общем так или иначе мне нужно делать особую функцию
-    if (tile_index != UINT32_MAX) {
-      global::get<render::tile_highlights_render>()->add(tile_index, render::make_color(0.9f, 0.9f, 0.0f, 0.5f));
-      if (current_game_state == &world_map_state && !loading) {
-        auto nuklear_ctx = &global::get<interface::context>()->ctx;
-        // нужно проверить чтобы не было пересчения с окнами
-        // перечение с тултипом, как его избежать? нужно проверить пересечение со всеми окнами ДО ЭТОГО
-        // нужно тогда самостоятельно задать название окна
-        //const bool condition = !nk_window_is_any_hovered(nuklear_ctx) || nk_window_is_active(nuklear_ctx, "tile_window");
-        const bool condition = !is_interface_hovered(nuklear_ctx, "tile_window");
-        if (condition) tile_func(base_systems.interface_container->moonnuklear_ctx, tile_index);
-      }
-    }
-    
-    draw_army_path();
-     
-    // к сожалению интерфейс можно рисовать только после вызова nk_clear 
-    // + почему то рендер вызывается 2 раза между созданием задачи и вызовом фьючера
-    // хотя я походу знаю почему: в потоке загрузки вызывается копирование буферов
-    // а в потоке отрисовщика вызывается собственно отрисовка, и получается коллизия
-    // 
-    //rendering_future = pool.submit(lambda);
-    //if (thread_pool_size < 2) pool.compute();
-
-    // ошибки с отрисовкой непосредственно тайлов могут быть связаны с недостаточным буфером для индексов (исправил)
-    // еще меня беспокоит то что игра занимает уже 270 мб оперативы
-    // (примерно 100 мб занимает вся информация о игровой карте (размер контейнера и размер данных в кор::мап))
-    // (еще мегобайт 100 занимает луа (похоже что с этим бороться будет крайне сложно))
-    // нужно каким то образом это сократить (по итогу все это дело занимает сейчас 500 мб, и 1 гб при генерации)
-    //lock_rendering();
-    //base_systems.render_slots->update(global::get<render::container>());
+    // существует какая то утечка (около 100 мб), которая не регистрируется санитизиром
+    // она появляется при перезагрузке карты (то есть игра загружает 100 мб, перезагружаем карту, игра отдает примерно 40-60 мб, и снова загружает 100 мб)
+    // (и так каждую перезагрузку, с чем связано не понимаю, но кажется что игра правильно выгружает эти лишние аллокации при закрытии приложения)
     const size_t sync_time = global::get<render::window>()->flags.vsync() ? global::get<render::window>()->refresh_rate_mcs() : 0;
     sync(frame_time, sync_time); // rendering_future
   }
   
-  // нужно тут отправлять флажок для завершения генерации + сделать более простые функции
+  game_ctx->quit_game();
+  
   pool.compute();
   pool.wait();
-//   pool.stop_works();
 
   return 0;
 }

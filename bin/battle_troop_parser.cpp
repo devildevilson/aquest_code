@@ -1,12 +1,14 @@
 #include "battle_troop_parser.h"
 
+#include "utils/globals.h"
+#include "utils/string_container.h"
+
+#include "core/stats.h"
+
 #include "data_parser.h"
 #include "battle_context.h"
-#include "utils/globals.h"
 #include "map_creator.h"
 #include "battle_structures.h"
-#include "utils/string_container.h"
-#include "stats.h"
 
 namespace devils_engine {
   namespace utils {

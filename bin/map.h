@@ -151,7 +151,7 @@ namespace devils_engine {
       map(const create_info &info);
       ~map();
       
-      uint32_t cast_ray(const utils::ray &ray) const;
+      uint32_t cast_ray(const utils::ray &ray, float &ray_dist) const;
       bool intersect_container(const uint32_t &tri_index, const utils::ray &ray) const;
       bool intersect_tri(const glm::vec4 &v0, const glm::vec4 &v1, const glm::vec4 &v2, const utils::ray &ray, float &t) const;
       bool intersect_tile(const uint32_t &tile_index, const utils::ray &ray) const;

@@ -6,15 +6,20 @@
 #include "render/image_container_constants.h"
 #include "render/shared_structures.h"
 #include "render/shared_battle_structures.h"
+
 #include "utils/globals.h"
 #include "utils/table_container.h"
 #include "utils/serializator_helper.h"
 #include "utils/systems.h"
+
+#include "core/context.h"
+
+#include "data_parser.h"
 #include "map.h"
 #include "map_creator.h"
 #include "battle_map.h"
-#include "core_context.h"
 #include "seasons.h"
+
 #include <filesystem>
 
 #ifdef _WIN32

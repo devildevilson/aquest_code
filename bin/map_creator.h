@@ -120,7 +120,7 @@ namespace devils_engine {
     public:
       using table_container_t = utils::table_container<static_cast<size_t>(utils::generator_table_container::additional_data::count)>;
       
-      creator(utils::interface_container* interface, core::map* map, core::seasons* seasons, localization::container* loc);
+      creator(core::map* map, core::seasons* seasons);
       ~creator();
 //       step* create(const bool first, const size_t &container_size, const std::string &name, const std::vector<map::generator_pair> &pairs, const std::string &rendering_mode);
       //step* create(const std::string_view &interface_name, const std::vector<map::generator_pair> &pairs); //const bool first, 
@@ -158,6 +158,8 @@ namespace devils_engine {
       sol::object get_post_generation_table() const;
       
       sol::function get_serpent_line() const;
+      
+      void setup_map_generator_functions(utils::interface_container* interface);
     private:
       sol::state lua;
       sol::environment env_lua;

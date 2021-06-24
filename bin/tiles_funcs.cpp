@@ -2,9 +2,10 @@
 
 #include "utils/globals.h"
 #include "utils/systems.h"
+
+#include "core/context.h"
+
 #include "map.h"
-#include "core_structures.h"
-#include "core_context.h"
 
 namespace devils_engine {
   namespace core {

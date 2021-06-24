@@ -1,11 +1,16 @@
 #include "logic.h"
+
 #include "utils/thread_pool.h"
 #include "utils/globals.h"
-#include "core_context.h"
 #include "utils/works_utils.h"
-#include "game_time.h"
-#include "ai/ai_system.h"
 #include "utils/systems.h"
+#include "utils/game_context.h"
+
+#include "core/context.h" 
+
+#include "ai/ai_system.h"
+
+#include "game_time.h"
 
 #include <stdexcept>
 
@@ -18,13 +23,15 @@ namespace devils_engine {
       next_player,
     };
     
-    static core::character* player = nullptr;
+    //static core::character* player = nullptr;
     void update_player(core::character* c) {
-      player = c;
+      auto game_ctx = global::get<systems::core_t>()->game_ctx;
+      game_ctx->player_character = c;
     }
     
     core::character* get_player() {
-      return player;
+      auto game_ctx = global::get<systems::core_t>()->game_ctx;
+      return game_ctx->player_character;
     }
     
     static std::atomic<gameplay_state> new_state = gameplay_state::turn_advancing;
@@ -43,7 +50,8 @@ namespace devils_engine {
       // наверное нужно запилить функцию дополнительной проверки
       // передавать игрока из интерфейса не нужно
       // как тогда получить игрока? должен быть список игроков и текущий игрок
-      ASSERT(player != nullptr);
+      auto game_ctx = global::get<systems::core_t>()->game_ctx;
+      ASSERT(game_ctx->player_character != nullptr);
       
       player_has_ended_turn();
       return true;

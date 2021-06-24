@@ -3,42 +3,43 @@
 #include "utils/utility.h"
 #include "utils/thread_pool.h"
 #include "utils/globals.h"
-#include "map.h"
-#include "seasons.h"
-#include "battle_map.h"
-#include "figures.h"
 #include "utils/works_utils.h"
 #include "utils/serializator_helper.h"
-#include "core_context.h"
 #include "utils/systems.h"
 #include "utils/string_container.h"
 #include "utils/progress_container.h"
-#include "logic.h"
-#include "map_creator.h"
-#include "utils/main_menu.h"
+#include "utils/lua_initialization.h"
+#include "utils/battle_map_enum.h"
+#include "utils/lua_environment.h"
+#include "utils/localization_container.h"
+#include "utils/interface_container2.h"
+
 #include "render/container.h"
 #include "render/targets.h"
 #include "render/stages.h"
 #include "render/yavf.h"
+#include "render/image_container.h"
+#include "render/image_controller.h"
+#include "render/shared_battle_structures.h"
+#include "render/battle_render_stages.h"
+
+#include "map.h"
+#include "seasons.h"
+#include "battle_map.h"
+#include "figures.h"
+#include "logic.h"
+#include "map_creator.h"
 #include "game_time.h"
 #include "image_parser.h"
+#include "data_parser.h"
 #include "battle_structures_enum.h"
 #include "battle_troop_parser.h"
 #include "battle_troop_type_parser.h"
 #include "battle_unit_state_parser.h"
 #include "heraldy_parser.h"
 #include "battle_context.h"
-#include "utils/lua_initialization.h"
-#include "utils/battle_map_enum.h"
-#include "utils/lua_environment.h"
-#include "utils/localization_container.h"
 
-#include "utils/interface_container2.h"
-
-#include "render/image_container.h"
-#include "render/image_controller.h"
-#include "render/shared_battle_structures.h"
-#include "render/battle_render_stages.h"
+#include "core/context.h"
 
 namespace devils_engine {
   namespace systems {
@@ -239,7 +240,7 @@ namespace devils_engine {
     c->make_player();
     game::update_player(c);
     
-    auto title = c->factions[core::character::self]->titles;
+    auto title = c->realms[core::character::self]->titles;
     core::city* city = nullptr;
     while (title != nullptr) {
       title->heraldy = 1;
@@ -751,7 +752,7 @@ namespace devils_engine {
           continue;
         }
 
-        std::unordered_set<core::faction*> factions;
+        std::unordered_set<core::realm*> factions;
         auto liege1 = province->title->owner;
         while (liege1 != nullptr) {
           factions.insert(liege1);
@@ -1042,8 +1043,8 @@ namespace devils_engine {
 
       {
         const size_t count = ctx->characters_count();
-        std::unordered_map<core::faction*, std::vector<core::faction*>> vassals;
-        std::unordered_map<core::faction*, std::vector<core::character*>> prisoners;
+        std::unordered_map<core::realm*, std::vector<core::realm*>> vassals;
+        std::unordered_map<core::realm*, std::vector<core::character*>> prisoners;
         std::unordered_map<core::character*, std::vector<core::character*>> court;
         std::unordered_map<core::character*, std::vector<core::character*>> concubines;
         std::unordered_map<core::character*, std::vector<core::character*>> children;
@@ -1051,8 +1052,8 @@ namespace devils_engine {
           auto character = ctx->get_character(i);
           if (character->suzerain != nullptr) court[character->suzerain].push_back(character);
           if (character->imprisoner != nullptr) prisoners[character->imprisoner].push_back(character);
-          if (character->factions[core::character::self] != nullptr && character->factions[core::character::self]->liege != nullptr) {
-            vassals[character->factions[core::character::self]->liege].push_back(character->factions[core::character::self]);
+          if (character->realms[core::character::self] != nullptr && character->realms[core::character::self]->liege != nullptr) {
+            vassals[character->realms[core::character::self]->liege].push_back(character->realms[core::character::self]);
           }
           if (character->family.owner != nullptr) concubines[character->family.owner].push_back(character);
           // братья сестры, нужно выбрать кого то из родителей и положить туда? как быть с полуродственниками?
@@ -1063,8 +1064,8 @@ namespace devils_engine {
           const bool has_parent2 = character->family.parents[1] != nullptr;
           core::character* parent = nullptr;
           if (has_parent1 || has_parent2) {
-            if (parent == nullptr) parent = has_parent1 && has_parent2 && character->family.parents[0]->factions[core::character::self] != nullptr ? character->family.parents[0] : nullptr;
-            if (parent == nullptr) parent = has_parent1 && has_parent2 && character->family.parents[1]->factions[core::character::self] != nullptr ? character->family.parents[1] : nullptr;
+            if (parent == nullptr) parent = has_parent1 && has_parent2 && character->family.parents[0]->realms[core::character::self] != nullptr ? character->family.parents[0] : nullptr;
+            if (parent == nullptr) parent = has_parent1 && has_parent2 && character->family.parents[1]->realms[core::character::self] != nullptr ? character->family.parents[1] : nullptr;
             if (parent == nullptr) parent = has_parent1 ? character->family.parents[0] : nullptr;
             if (parent == nullptr) parent = has_parent2 ? character->family.parents[1] : nullptr;
           }
@@ -1126,7 +1127,7 @@ namespace devils_engine {
         for (size_t i = 0; i < count; ++i) {
           auto character = ctx->get_character(i);
           // у персонажа может быть другая форма правления (но наверное в этом случае персонажи не будут считаться за вассалов)
-          auto faction = character->factions[core::character::self];
+          auto faction = character->realms[core::character::self];
           if (faction == nullptr) continue;
           auto itr = vassals.find(faction);
           if (itr == vassals.end()) continue;
@@ -1138,7 +1139,7 @@ namespace devils_engine {
 
         for (size_t i = 0; i < count; ++i) {
           auto character = ctx->get_character(i);
-          auto faction = character->factions[core::character::self];
+          auto faction = character->realms[core::character::self];
           if (faction == nullptr) continue;
           auto itr = prisoners.find(faction);
           if (itr == prisoners.end()) continue;
@@ -1182,6 +1183,13 @@ namespace devils_engine {
             ASSERT(character->family.consort->family.children == nullptr);
             character->family.consort->family.children = character->family.children;
           }
+        }
+        
+        for (size_t i = 0; i < count; ++i) {
+          auto character = ctx->get_character(i);
+          auto faction = character->realms[core::character::self];
+          if (faction == nullptr) continue;
+          faction->sort_titles();
         }
       }
     }
@@ -2025,8 +2033,8 @@ namespace devils_engine {
       
       {
         //load_localization(world_data, lua, global::get<systems::core_t>()->loc);
-        auto inter = global::get<systems::core_t>()->interface_container;
-        load_localization(world_data, inter->lua, inter->env, global::get<systems::core_t>()->loc);
+        auto inter = global::get<systems::core_t>()->interface_container.get();
+        load_localization(world_data, inter->lua, inter->env, global::get<systems::core_t>()->loc.get());
       }
 
       advance_progress(prog, "creating entities"); // 4
@@ -2105,6 +2113,9 @@ namespace devils_engine {
       //generate_tile_connections(map_systems->map, global::get<dt::thread_pool>()); // это теперь не нужно
       advance_progress(prog, "creating borders"); // 8
       find_border_points(map_systems->map, map_systems->core_context); // после генерации нужно сделать много вещей
+      
+      const size_t mem = map_systems->core_context->compute_data_memory();
+      std::cout << "game data takes " << mem << " bytes (" << ((double(mem) / 1024.0) / 1024.0) << " mb)" << "\n";
     }
 
     void from_menu_to_create_map(utils::progress_container* prog) {
@@ -2147,14 +2158,17 @@ namespace devils_engine {
   //     map_systems->setup_map_generator();
   //     advance_progress(prog, "creating tools for demiurge");
   //     setup_map_generator(*map_systems);
-      auto t = global::get<render::tile_optimizer>();
-      t->set_border_rendering(false);
+      //auto t = global::get<render::tile_optimizer>();
+      //t->set_border_rendering(false);
       
       //ASSERT(!base_systems->menu->loading_path.empty())
       ASSERT(!map_systems->load_world.empty());
       
       utils::world_serializator world_data;
       world_data.deserialize(map_systems->load_world);
+      
+      const size_t mem = world_data.count_memory();
+      std::cout << "world data takes " << mem << " bytes (" << ((double(mem) / 1024.0) / 1024.0) << " mb)" << "\n";
       
       world_data.fill_seasons(map_systems->seasons);
       // мы должны выбрать: либо загрузка мира, либо загрузка сохранения (там загрузка мира тоже будет)

@@ -30,6 +30,7 @@ namespace devils_engine {
   namespace camera {
     //void strategic(yacs::entity* ent);
     void strategic(components::camera* camera);
+    components::camera* get_camera();
   }
   
   namespace components {

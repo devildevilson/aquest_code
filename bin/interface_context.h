@@ -5,6 +5,7 @@
 #include "render/shared_structures.h"
 #include <vector>
 #include <cstdint>
+#include <string>
 // #include "utils/sol.h"
 
 namespace yavf {
@@ -14,9 +15,16 @@ namespace yavf {
 }
 
 namespace devils_engine {
+  struct image_handle_data {
+    uint32_t type;
+    uint32_t data;
+  };
+  
   nk_handle nk_handle_image(const render::image_t &img);
   render::image_t image_nk_handle(const nk_handle &handle);
   struct nk_image image_to_nk_image(const render::image_t &img);
+  nk_handle image_data_to_nk_handle(const image_handle_data &data);
+  image_handle_data nk_handle_to_image_data(const nk_handle &handle);
   
   namespace render {
     struct window;
@@ -95,6 +103,8 @@ namespace devils_engine {
       ~context();
       void remake_font_atlas(const uint32_t &window_width, const uint32_t &window_height);
     };
+    
+    bool is_interface_hovered(nk_context* ctx, const std::string_view &except);
     
     namespace style {
       struct borders {

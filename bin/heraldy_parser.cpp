@@ -1,14 +1,16 @@
 #include "heraldy_parser.h"
 
-#include "data_parser.h"
 #include "render/yavf.h"
 #include "render/image_controller.h"
+#include "render/heraldy.h"
+
 #include "utils/globals.h"
 #include "utils/table_container.h"
 #include "utils/serializator_helper.h"
 #include "utils/systems.h"
-#include "render/heraldy.h"
 #include "utils/string_container.h"
+
+#include "data_parser.h"
 #include "map.h"
 #include "map_creator.h"
 
@@ -113,6 +115,8 @@ namespace devils_engine {
     
     void load_heraldy_layers(render::image_controller* controller, const std::vector<sol::table> &heraldy_tables, yavf::Buffer* buffer) {
       auto to_data = global::get<utils::numeric_string_container>();
+//       utils::numeric_string_container local_container;
+//       auto to_data = &local_container;
       
       // нам нужно еще в другом месте получить индекс (в титулах)
       // как это наиболее адекватно сделать? по идее мне это нужно
@@ -126,7 +130,7 @@ namespace devils_engine {
       
       // тут нужно получить доступ к буферу
       const size_t heraldy_buffer_size = heraldy_tables.size() * sizeof(render::packed_heraldy_layer_t);
-      const size_t aligned = (heraldy_buffer_size + 16 - 1) / 16 * 16;
+      const size_t aligned = align_to(heraldy_buffer_size, 16);
       buffer->resize(aligned);
       
       auto arr = reinterpret_cast<render::packed_heraldy_layer_t*>(buffer->ptr());

@@ -87,6 +87,20 @@ namespace devils_engine {
     return nk_image_handle(nk_handle_image(img));
   }
   
+  nk_handle image_data_to_nk_handle(const image_handle_data &data) {
+    static_assert(sizeof(nk_handle) == sizeof(image_handle_data));
+    nk_handle hndl;
+    memcpy(&hndl, &data, sizeof(data));
+    return hndl;
+  }
+  
+  image_handle_data nk_handle_to_image_data(const nk_handle &handle) {
+    static_assert(sizeof(nk_handle) == sizeof(image_handle_data));
+    image_handle_data data;
+    memcpy(&data, &handle, sizeof(handle));
+    return data;
+  }
+  
   namespace interface {
     void load_font_settings(const nlohmann::json &json, std::vector<fonts_settings2> &fonts) {
       for (auto itr = json.begin(); itr != json.end(); ++itr) {
@@ -151,7 +165,8 @@ namespace devils_engine {
       std::vector<fonts_settings2> fonts_data(fonts::count);
       load_font_settings(j, fonts_data);
       
-      null.texture = nk_handle_image(render::image_t{GPU_UINT_MAX});
+      //null.texture = nk_handle_image(render::image_t{GPU_UINT_MAX});
+      null.texture = image_data_to_nk_handle({GPU_UINT_MAX, GPU_UINT_MAX});
       null.uv = {0.0f, 0.0f};
 
       nk_buffer_init_default(&cmds);
@@ -280,7 +295,8 @@ namespace devils_engine {
         }
 
         //nk_font_atlas_end(&atlas, nk_handle_ptr(view), &null);
-        nk_font_atlas_end(&atlas, nk_handle_image(font_atlas_image), &null);
+        //nk_font_atlas_end(&atlas, nk_handle_image(font_atlas_image), &null);
+        nk_font_atlas_end(&atlas, image_data_to_nk_handle({IMAGE_TYPE_DEFAULT, font_atlas_image.container}), &null);
       }
 
       nk_init_default(&ctx, &fonts[fonts::technical]->handle);
@@ -301,7 +317,8 @@ namespace devils_engine {
       //device->destroy(view->image());
       container->destroy_pool(0);
       memset(fonts, 0, sizeof(fonts[0]) * fonts::count);
-      null.texture = nk_handle_image(render::image_t{GPU_UINT_MAX});
+      //null.texture = nk_handle_image(render::image_t{GPU_UINT_MAX});
+      null.texture = image_data_to_nk_handle({GPU_UINT_MAX, GPU_UINT_MAX});
       
       // нужно определиться к каким размерам экрана подгонять размер шрифта
       static const float data_window_height = 720.0f;
@@ -401,12 +418,40 @@ namespace devils_engine {
         }
 
         //nk_font_atlas_end(&atlas, nk_handle_ptr(view), &null);
-        nk_font_atlas_end(&atlas, nk_handle_image(font_atlas_image), &null);
+        //nk_font_atlas_end(&atlas, nk_handle_image(font_atlas_image), &null);
+        nk_font_atlas_end(&atlas, image_data_to_nk_handle({IMAGE_TYPE_DEFAULT, font_atlas_image.container}), &null);
       }
       
       nk_style_set_font(&ctx, &fonts[fonts::technical]->handle);
       
       (void)window_width;
+    }
+    
+    bool is_interface_hovered(nk_context* ctx, const std::string_view &except) {
+      struct nk_window* iter;
+      assert(ctx);
+      if (!ctx) return 0;
+      
+      iter = ctx->begin;
+      while (iter) {
+        struct nk_window* local_iter = iter;
+        iter = iter->next;
+        
+        /* check if window is being hovered */
+        if(local_iter->flags & NK_WINDOW_HIDDEN) continue;
+        if (except == std::string_view(local_iter->name_string)) continue;
+        
+        /* check if window popup is being hovered */
+        if (local_iter->popup.active && local_iter->popup.win && nk_input_is_mouse_hovering_rect(&ctx->input, local_iter->popup.win->bounds)) return true;
+
+        if (local_iter->flags & NK_WINDOW_MINIMIZED) {
+          struct nk_rect header = local_iter->bounds;
+          header.h = ctx->style.font->height + 2 * ctx->style.window.header.padding.y;
+          if (nk_input_is_mouse_hovering_rect(&ctx->input, header)) return true;
+        } else if (nk_input_is_mouse_hovering_rect(&ctx->input, local_iter->bounds)) return true;
+      }
+      
+      return false;
     }
     
     namespace style {

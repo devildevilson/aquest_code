@@ -211,7 +211,7 @@ namespace devils_engine {
       size_t courtiers;
       size_t prisoners;
       
-      data::array<uint32_t, core::faction_stats::count> stats;
+      data::array<uint32_t, core::realm_stats::count> stats;
       data::array<uint32_t, utils::realm_mechanics::bit_container_size> laws_container;
     };
     

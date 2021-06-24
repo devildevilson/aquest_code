@@ -440,8 +440,9 @@ namespace devils_engine {
 //         env[name] = t;
 //       }
 //     }
-
-    creator::creator(utils::interface_container* interface, core::map* map, core::seasons* seasons, localization::container* loc) :
+    
+    //utils::interface_container* interface, 
+    creator::creator(core::map* map, core::seasons* seasons) :
       lua(),
       env_lua(lua, sol::create),
       table(lua.create_table()),
@@ -456,12 +457,10 @@ namespace devils_engine {
       advance_gen(false),
       advance_gen_all(false)
     {
-      UNUSED_VARIABLE(loc);
       lua.open_libraries(sol::lib::base, sol::lib::table, sol::lib::math, sol::lib::package, sol::lib::string, sol::lib::utf8, sol::lib::coroutine);
       ctx.container = &temp_container;
       ctx.map = map;
       ctx.seasons = seasons;
-//       ctx.loc = loc;
       ctx.noise = &noise;
       ctx.random = &random;
       ctx.pool = global::get<dt::thread_pool>();
@@ -505,111 +504,6 @@ namespace devils_engine {
       utils::add_io_lines(lua, env_lua);
       utils::add_require(lua, env_lua);
       
-      // мне нужно расшарить несколько функций для интерфейса по которым 
-      // я задам сид и название мира, но при этом я не очень хочу
-      // функции в таком виде использовать, преждде всего потому что нужно 
-      // будет убедиться что this еще существует к этому моменту
-      // хотя по идее это не так сложно проверить, как передать эти функции в интерфейс?
-      // опять завести таблицу? видимо
-
-      // нужно тут создать интерфейс тоже, только по всей видимости почти без данных
-      // все таки придется сериализовать таблицу
-      
-      auto t = interface->lua.create_table();
-      t.set_function("setup_random_seed", [this] (const std::string_view &str_seed) {
-        if (global::get<systems::map_t>()->map_creator == nullptr) throw std::runtime_error("Map generator does not exist");
-        
-        const uint64_t seed = get_seed_from_string(str_seed);
-        
-        this->rand_seed = seed;
-        this->random.set_seed(seed);
-      });
-
-      t.set_function("setup_noise_seed", [this] (const std::string_view &str_seed) {
-        if (global::get<systems::map_t>()->map_creator == nullptr) throw std::runtime_error("Map generator does not exist");
-        
-        const uint64_t seed = get_seed_from_string(str_seed);
-        
-        // может заменить на более мелкое число? хотя если дать нижние регистры заполнять, 
-        // можно сделать какую нибудь другие способы задания сида
-        //this->noise_seed = uint32_t(seed >> 32);
-        this->noise_seed = seed;
-        this->noise.SetSeed(*reinterpret_cast<const int*>(&this->noise_seed));
-      });
-
-      t.set_function("get_random_number", [] () -> std::string {
-        if (global::get<systems::map_t>()->map_creator == nullptr) throw std::runtime_error("Map generator does not exist");
-        
-        std::random_device dev;
-        static_assert(sizeof(std::random_device::result_type) == sizeof(uint32_t));
-        const uint64_t tmp = (uint64_t(dev()) << 32) | uint64_t(dev());
-        
-        // тут нужно бы составить строку размером 16 вида: deadbeafdeadbeaf
-        const auto &str = get_string_from_seed(tmp);
-        return str;
-      });
-
-      t.set_function("set_world_name", [this] (const std::string_view &str) {
-        if (global::get<systems::map_t>()->map_creator == nullptr) throw std::runtime_error("Map generator does not exist");
-        
-        if (str.empty()) throw std::runtime_error("Bad world name string");
-        world_name = std::string(str);
-      });
-
-      t.set_function("set_folder_name", [this] (const std::string_view &str) {
-        if (global::get<systems::map_t>()->map_creator == nullptr) throw std::runtime_error("Map generator does not exist");
-        
-        if (str.empty()) throw std::runtime_error("Bad world folder name string");
-        const std::regex folder_name_regex("^[a-zA-Z0-9_.]+$", std::regex_constants::icase);
-        if (!std::regex_match(str.begin(), str.end(), folder_name_regex)) throw std::runtime_error("Folder name must match ^[a-zA-Z0-9_.]+$ expression");
-        folder_name = std::string(str);
-      });
-
-      t.set_function("check_world_existance", [] (const std::string_view &str) {
-        if (global::get<systems::map_t>()->map_creator == nullptr) throw std::runtime_error("Map generator does not exist");
-        
-        if (str.empty()) return 0;
-        const std::regex folder_name_regex("^[a-zA-Z0-9_.]+$", std::regex_constants::icase);
-        if (!std::regex_match(str.begin(), str.end(), folder_name_regex)) return 1;
-        const std::filesystem::path p = global::root_directory() + "/saves/" + std::string(str) + "/world_data";
-        const std::filesystem::directory_entry e(p);
-        if (e.exists()) return 2;
-        return 3;
-      });
-      
-      t.set_function("advance", [this] () {
-        if (global::get<systems::map_t>()->map_creator == nullptr) throw std::runtime_error("Map generator does not exist");
-        advance();
-      });
-      
-      t.set_function("prev_step", [this] () {
-        if (global::get<systems::map_t>()->map_creator == nullptr) throw std::runtime_error("Map generator does not exist");
-        prev_step();
-      });
-      
-      t.set_function("step", [this] () -> int32_t { // sol::readonly_property(
-        if (global::get<systems::map_t>()->map_creator == nullptr) throw std::runtime_error("Map generator does not exist");
-        return current_step +1; // приведем к луа индексам
-      });
-      
-      t.set_function("steps_count", [this] () -> uint32_t { // sol::readonly_property(
-        if (global::get<systems::map_t>()->map_creator == nullptr) throw std::runtime_error("Map generator does not exist");
-        return steps.size();
-      });
-      
-      t.set_function("step_name", [this] () -> std::string {
-        if (global::get<systems::map_t>()->map_creator == nullptr) throw std::runtime_error("Map generator does not exist");
-        if (current_step < 0 || size_t(current_step) >= steps.size()) return "";
-        return steps[current_step]->step_name();
-      });
-      
-      t.set_function("is_finished", [this] () -> bool { // sol::readonly_property(
-        if (global::get<systems::map_t>()->map_creator == nullptr) throw std::runtime_error("Map generator does not exist");
-        return finished();
-      });
-      
-      interface->setup_map_generator_functions(t);
-      
       global::get(&string_container);
       global::get(&serializator);
       const size_t type = static_cast<size_t>(utils::world_map_strings::tile_biome_id);
@@ -621,6 +515,7 @@ namespace devils_engine {
         steps_pool.destroy(p);
       }
       steps.clear();
+      steps.shrink_to_fit();
 
       //global::get<table_container_t>(reinterpret_cast<table_container_t*>(SIZE_MAX));
       global::get<utils::world_serializator>(reinterpret_cast<utils::world_serializator*>(SIZE_MAX));
@@ -990,6 +885,113 @@ namespace devils_engine {
     
     sol::function creator::get_serpent_line() const {
       return serpent_line;
+    }
+    
+    void creator::setup_map_generator_functions(utils::interface_container* interface) {
+      // мне нужно расшарить несколько функций для интерфейса по которым 
+      // я задам сид и название мира, но при этом я не очень хочу
+      // функции в таком виде использовать, преждде всего потому что нужно 
+      // будет убедиться что this еще существует к этому моменту
+      // хотя по идее это не так сложно проверить, как передать эти функции в интерфейс?
+      // опять завести таблицу? видимо
+
+      // нужно тут создать интерфейс тоже, только по всей видимости почти без данных
+      // все таки придется сериализовать таблицу
+      
+      auto t = interface->lua.create_table();
+      t.set_function("setup_random_seed", [this] (const std::string_view &str_seed) {
+        if (global::get<systems::map_t>()->map_creator == nullptr) throw std::runtime_error("Map generator does not exist");
+        
+        const uint64_t seed = get_seed_from_string(str_seed);
+        
+        this->rand_seed = seed;
+        this->random.set_seed(seed);
+      });
+
+      t.set_function("setup_noise_seed", [this] (const std::string_view &str_seed) {
+        if (global::get<systems::map_t>()->map_creator == nullptr) throw std::runtime_error("Map generator does not exist");
+        
+        const uint64_t seed = get_seed_from_string(str_seed);
+        
+        // может заменить на более мелкое число? хотя если дать нижние регистры заполнять, 
+        // можно сделать какую нибудь другие способы задания сида
+        //this->noise_seed = uint32_t(seed >> 32);
+        this->noise_seed = seed;
+        this->noise.SetSeed(*reinterpret_cast<const int*>(&this->noise_seed));
+      });
+
+      t.set_function("get_random_number", [] () -> std::string {
+        if (global::get<systems::map_t>()->map_creator == nullptr) throw std::runtime_error("Map generator does not exist");
+        
+        std::random_device dev;
+        static_assert(sizeof(std::random_device::result_type) == sizeof(uint32_t));
+        const uint64_t tmp = (uint64_t(dev()) << 32) | uint64_t(dev());
+        
+        // тут нужно бы составить строку размером 16 вида: deadbeafdeadbeaf
+        const auto &str = get_string_from_seed(tmp);
+        return str;
+      });
+
+      t.set_function("set_world_name", [this] (const std::string_view &str) {
+        if (global::get<systems::map_t>()->map_creator == nullptr) throw std::runtime_error("Map generator does not exist");
+        
+        if (str.empty()) throw std::runtime_error("Bad world name string");
+        world_name = std::string(str);
+      });
+
+      t.set_function("set_folder_name", [this] (const std::string_view &str) {
+        if (global::get<systems::map_t>()->map_creator == nullptr) throw std::runtime_error("Map generator does not exist");
+        
+        if (str.empty()) throw std::runtime_error("Bad world folder name string");
+        const std::regex folder_name_regex("^[a-zA-Z0-9_.]+$", std::regex_constants::icase);
+        if (!std::regex_match(str.begin(), str.end(), folder_name_regex)) throw std::runtime_error("Folder name must match ^[a-zA-Z0-9_.]+$ expression");
+        folder_name = std::string(str);
+      });
+
+      t.set_function("check_world_existance", [] (const std::string_view &str) {
+        if (global::get<systems::map_t>()->map_creator == nullptr) throw std::runtime_error("Map generator does not exist");
+        
+        if (str.empty()) return 0;
+        const std::regex folder_name_regex("^[a-zA-Z0-9_.]+$", std::regex_constants::icase);
+        if (!std::regex_match(str.begin(), str.end(), folder_name_regex)) return 1;
+        const std::filesystem::path p = global::root_directory() + "/saves/" + std::string(str) + "/world_data";
+        const std::filesystem::directory_entry e(p);
+        if (e.exists()) return 2;
+        return 3;
+      });
+      
+      t.set_function("advance", [this] () {
+        if (global::get<systems::map_t>()->map_creator == nullptr) throw std::runtime_error("Map generator does not exist");
+        advance();
+      });
+      
+      t.set_function("prev_step", [this] () {
+        if (global::get<systems::map_t>()->map_creator == nullptr) throw std::runtime_error("Map generator does not exist");
+        prev_step();
+      });
+      
+      t.set_function("step", [this] () -> int32_t { // sol::readonly_property(
+        if (global::get<systems::map_t>()->map_creator == nullptr) throw std::runtime_error("Map generator does not exist");
+        return current_step +1; // приведем к луа индексам
+      });
+      
+      t.set_function("steps_count", [this] () -> uint32_t { // sol::readonly_property(
+        if (global::get<systems::map_t>()->map_creator == nullptr) throw std::runtime_error("Map generator does not exist");
+        return steps.size();
+      });
+      
+      t.set_function("step_name", [this] () -> std::string {
+        if (global::get<systems::map_t>()->map_creator == nullptr) throw std::runtime_error("Map generator does not exist");
+        if (current_step < 0 || size_t(current_step) >= steps.size()) return "";
+        return steps[current_step]->step_name();
+      });
+      
+      t.set_function("is_finished", [this] () -> bool { // sol::readonly_property(
+        if (global::get<systems::map_t>()->map_creator == nullptr) throw std::runtime_error("Map generator does not exist");
+        return finished();
+      });
+      
+      interface->setup_map_generator_functions(t);
     }
   }
 }

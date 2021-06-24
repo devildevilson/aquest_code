@@ -6,7 +6,7 @@
 #include <cstddef>
 #include <functional>
 #include "utils/linear_rng.h"
-#include "stats.h"
+#include "core/stats.h"
 #include "state.h"
 #include "battle_structures_enum.h"
 

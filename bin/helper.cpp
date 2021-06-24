@@ -229,13 +229,13 @@ namespace devils_engine {
   }
   
   static const utils::frustum default_fru{
-      glm::vec4(0.0f, 0.0f, 0.0f, 0.0f), 
-      glm::vec4(0.0f, 0.0f, 0.0f, 0.0f), 
-      glm::vec4(0.0f, 0.0f, 0.0f, 0.0f), 
-      glm::vec4(0.0f, 0.0f, 0.0f, 0.0f), 
-      glm::vec4(0.0f, 0.0f, 0.0f, 0.0f), 
-      glm::vec4(0.0f, 0.0f, 0.0f, 0.0f)
-    };
+    glm::vec4(0.0f, 0.0f, 0.0f, 0.0f), 
+    glm::vec4(0.0f, 0.0f, 0.0f, 0.0f), 
+    glm::vec4(0.0f, 0.0f, 0.0f, 0.0f), 
+    glm::vec4(0.0f, 0.0f, 0.0f, 0.0f), 
+    glm::vec4(0.0f, 0.0f, 0.0f, 0.0f), 
+    glm::vec4(0.0f, 0.0f, 0.0f, 0.0f)
+  };
   
   bool map_selection(components::camera* camera, const size_t &time, const double &xpos, const double &ypos) {
     auto ctx = global::get<interface::context>();
@@ -256,9 +256,6 @@ namespace devils_engine {
     //const bool current_pressed = input::check_event(activate_click, input::state_press | input::state_double_press | input::state_long_press);
     const bool current_pressed = input::is_event_pressed(activate_click);
     
-    if (battle_opt != nullptr) battle_opt->update_selection_frustum(default_fru);
-    if (opt != nullptr) opt->set_selection_box({glm::vec4(0.0f, 0.0f, 0.0f, 1.0f), glm::vec4(0.0f, 0.0f, 0.0f, 1.0f)});
-    if (opt != nullptr) opt->set_selection_frustum(default_fru);
     if (!was_pressed && !current_pressed) return false;
     
     if (!was_pressed && current_pressed) {
@@ -272,7 +269,7 @@ namespace devils_engine {
       prev_ypos = ypos;
       was_pressed = current_pressed;
       
-      global::get<utils::objects_selector>()->clear();
+//       global::get<utils::objects_selector>()->clear();
       
       return true;
     }
@@ -316,14 +313,14 @@ namespace devils_engine {
     const glm::dvec2 final_screen_max = screen_min + min_size;
     
     const glm::vec4 dirs[] = {
-      get_cursor_dir(buffers, window, screen_min.x, screen_min.y),
-      get_cursor_dir(buffers, window, final_screen_max.x, screen_min.y),
-      get_cursor_dir(buffers, window, screen_min.x, final_screen_max.y),
-      get_cursor_dir(buffers, window, final_screen_max.x, final_screen_max.y)
+      render::get_cursor_dir(buffers, window, screen_min.x, screen_min.y),
+      render::get_cursor_dir(buffers, window, final_screen_max.x, screen_min.y),
+      render::get_cursor_dir(buffers, window, screen_min.x, final_screen_max.y),
+      render::get_cursor_dir(buffers, window, final_screen_max.x, final_screen_max.y)
     };
     
-    const float minimum_dist = 100.0f;
-    const float maximum_dist = 256.0f;
+    const float minimum_dist = MINIMUM_FRUSTUM_DIST;
+    const float maximum_dist = MAXIMUM_FRUSTUM_DIST;
     
     const float raw_zoom = camera->zoom();
     const float zoom_norm = (raw_zoom - camera->min_zoom()) / (camera->max_zoom() - camera->min_zoom());
@@ -379,7 +376,7 @@ namespace devils_engine {
     if (battle_opt != nullptr) battle_opt->update_selection_frustum(fru);
     if (opt != nullptr) opt->set_selection_frustum(fru);
     
-    global::get<utils::objects_selector>()->clear();
+//     global::get<utils::objects_selector>()->clear();
     
 //     render::frustum_t test_fru;
 //     memcpy(test_fru.planes, fru.planes, sizeof(test_fru));
@@ -417,102 +414,103 @@ namespace devils_engine {
   }
   
   bool map_action(const uint32_t &casted_tile_index) {
-    // тут нужно получить тайл рейкастингом
-    auto selector = global::get<systems::core_t>()->objects_selector; // селектора поди будет два
-    auto ctx = global::get<systems::map_t>()->core_context;
-    auto map = global::get<systems::map_t>()->map;
-    auto path_seaker = global::get<systems::core_t>()->path_managment;
-    auto pool = global::get<dt::thread_pool>();
-    
-    static bool was_pressed = false;
-    
-    static const utils::id control_click = utils::id::get("control_click");
-    const bool current_pressed = input::is_event_pressed(control_click);
-    const bool is_clicked = was_pressed && !current_pressed;
-    const bool is_not_pressed = !was_pressed && !current_pressed;
-    was_pressed = current_pressed;
-    
-    if (is_not_pressed) return false;
-    
-    static uint32_t end_tile = UINT32_MAX;
-    const bool new_tile = end_tile != casted_tile_index;
-    end_tile = casted_tile_index;
-    
-    // так же нам нужно сделать перемещение армий по второму клику
-    // перемещение армии добавляет некоторых проблем, например несколько армий не могут находиться в одном тайле
-    // для этого видимо нужно проверить все тайлы вокруг? + ко всему выделение не должно поменяться
-    // нужно разделить два клика, первый клик стартует задачу поиска, второй клик по тому же тайлу с тем же выделением
-    // мы должны переместить армии на выбранный тайл 
-    // (причем на мобиле отличается тем что нужно выбрать тайл не отрывая палец от экрана, а затем еще раз кликнуть по тайлу) 
-    // (хотя с другой стороны есть еще несколько способов огранизовать все это дело (например выбрать, по клику выбирать тайл, а отменять выбор по интерфейсу))
-    
-    if (selector->count != 0) {
-      // тут нужно найти тех для кого мы ищем путь
-      if (selector->count == 1 && selector->units[0].type == utils::objects_selector::unit::type::city) {
-        // мы не можем ничего найти для города
-        return false;
-      }
-      
-      if (new_tile) {
-        const auto& tile_data = render::unpack_data(map->get_tile(casted_tile_index));
-        if (tile_data.height < 0.0f) return current_pressed;
-        if (tile_data.height > 0.5f) return current_pressed;
-
-        for (uint32_t i = 0; i < selector->count; ++i) {
-          const auto &unit = selector->units[i];
-          if (unit.type == utils::objects_selector::unit::type::army) {
-            core::army* army = ctx->get_army(unit.index);
-            path_seaker->find_path(army, army->tile_index, casted_tile_index);
-          } else {
-            
-          }
-        }
-        
-        selector->clicks = 0;
-      }
-      
-      selector->clicks += uint32_t(is_clicked);
-      
-      if (selector->clicks == 2) {
-        // перемещаем войска на дальность хода по пути, но пока у меня нет никаких ходов...
-        // нужно еще как то выделить дальность хода, + сделать так чтобы при кончине хода я обходил армии игрока и двигал их если путь найден
-        // тут бы сделать какой нибудь интерфейс который подойдет для всех, тут нужен какой то интерфейс для анимаций
-        // а пока можно просто сделать функцию
-//         std::vector<utils::objects_selector::unit> copy;
-//         selector->copy(copy);
-        
-        pool->compute();
-        pool->wait();
-        
-//         pool->submitbase([copy = selector->copy(), ctx] () {
-        const auto copy = selector->copy();
-          for (uint32_t i = 0; i < copy.size(); ++i) {
-            const auto &unit = copy[i];
-            if (unit.type == utils::objects_selector::unit::type::army) {
-              core::army* army = ctx->get_army(unit.index);
-              advance_army(army);
-            } else {
-              
-            }
-          }
-//         });
-        
+    return false;
+//     // тут нужно получить тайл рейкастингом
+//     auto selector = global::get<systems::core_t>()->objects_selector; // селектора поди будет два
+//     auto ctx = global::get<systems::map_t>()->core_context;
+//     auto map = global::get<systems::map_t>()->map;
+//     auto path_seaker = global::get<systems::core_t>()->path_managment;
+//     auto pool = global::get<dt::thread_pool>();
+//     
+//     static bool was_pressed = false;
+//     
+//     static const utils::id control_click = utils::id::get("control_click");
+//     const bool current_pressed = input::is_event_pressed(control_click);
+//     const bool is_clicked = was_pressed && !current_pressed;
+//     const bool is_not_pressed = !was_pressed && !current_pressed;
+//     was_pressed = current_pressed;
+//     
+//     if (is_not_pressed) return false;
+//     
+//     static uint32_t end_tile = UINT32_MAX;
+//     const bool new_tile = end_tile != casted_tile_index;
+//     end_tile = casted_tile_index;
+//     
+//     // так же нам нужно сделать перемещение армий по второму клику
+//     // перемещение армии добавляет некоторых проблем, например несколько армий не могут находиться в одном тайле
+//     // для этого видимо нужно проверить все тайлы вокруг? + ко всему выделение не должно поменяться
+//     // нужно разделить два клика, первый клик стартует задачу поиска, второй клик по тому же тайлу с тем же выделением
+//     // мы должны переместить армии на выбранный тайл 
+//     // (причем на мобиле отличается тем что нужно выбрать тайл не отрывая палец от экрана, а затем еще раз кликнуть по тайлу) 
+//     // (хотя с другой стороны есть еще несколько способов огранизовать все это дело (например выбрать, по клику выбирать тайл, а отменять выбор по интерфейсу))
+//     
+//     if (selector->count != 0) {
+//       // тут нужно найти тех для кого мы ищем путь
+//       if (selector->count == 1 && selector->units[0].type == utils::objects_selector::unit::type::city) {
+//         // мы не можем ничего найти для города
+//         return false;
+//       }
+//       
+//       if (new_tile) {
+//         const auto& tile_data = render::unpack_data(map->get_tile(casted_tile_index));
+//         if (tile_data.height < 0.0f) return current_pressed;
+//         if (tile_data.height > 0.5f) return current_pressed;
+// 
 //         for (uint32_t i = 0; i < selector->count; ++i) {
 //           const auto &unit = selector->units[i];
 //           if (unit.type == utils::objects_selector::unit::type::army) {
 //             core::army* army = ctx->get_army(unit.index);
-//             advance_army(army);
+//             path_seaker->find_path(army, army->tile_index, casted_tile_index);
 //           } else {
 //             
 //           }
 //         }
-      }
-      
-      return current_pressed;
-    }
-    
-    // тут нужно вызвать какое то действие, тип например открыть дипломатию или еще что
-    return current_pressed;
+//         
+//         selector->clicks = 0;
+//       }
+//       
+//       selector->clicks += uint32_t(is_clicked);
+//       
+//       if (selector->clicks == 2) {
+//         // перемещаем войска на дальность хода по пути, но пока у меня нет никаких ходов...
+//         // нужно еще как то выделить дальность хода, + сделать так чтобы при кончине хода я обходил армии игрока и двигал их если путь найден
+//         // тут бы сделать какой нибудь интерфейс который подойдет для всех, тут нужен какой то интерфейс для анимаций
+//         // а пока можно просто сделать функцию
+// //         std::vector<utils::objects_selector::unit> copy;
+// //         selector->copy(copy);
+//         
+//         pool->compute();
+//         pool->wait();
+//         
+// //         pool->submitbase([copy = selector->copy(), ctx] () {
+//         const auto copy = selector->copy();
+//           for (uint32_t i = 0; i < copy.size(); ++i) {
+//             const auto &unit = copy[i];
+//             if (unit.type == utils::objects_selector::unit::type::army) {
+//               core::army* army = ctx->get_army(unit.index);
+//               advance_army(army);
+//             } else {
+//               
+//             }
+//           }
+// //         });
+//         
+// //         for (uint32_t i = 0; i < selector->count; ++i) {
+// //           const auto &unit = selector->units[i];
+// //           if (unit.type == utils::objects_selector::unit::type::army) {
+// //             core::army* army = ctx->get_army(unit.index);
+// //             advance_army(army);
+// //           } else {
+// //             
+// //           }
+// //         }
+//       }
+//       
+//       return current_pressed;
+//     }
+//     
+//     // тут нужно вызвать какое то действие, тип например открыть дипломатию или еще что
+//     return current_pressed;
   }
   
   void classic_strategic_camera_movement(components::camera* camera, const size_t &time, const double &xpos, const double &ypos) {
@@ -585,7 +583,7 @@ namespace devils_engine {
       xpos = glm::max(glm::min(xpos, double(size.width)),  0.0);
       ypos = glm::max(glm::min(ypos, double(size.height)), 0.0);
       glfwSetCursorPos(window->handle, xpos, ypos);
-      
+      //glfwSetWindowAttrib(window->handle, GLFW);
     }
     
     // на пару пикселей выходит за пределы окна
@@ -665,11 +663,11 @@ namespace devils_engine {
           if (local_copy.id == go_to_capital) {
 //             PRINT(local_copy.id.name())
             //auto camera = global::get<components::camera>();
-            auto camera = get_camera();
+            auto camera = camera::get_camera();
             auto p = game::get_player();
             ASSERT(p != nullptr);
             //if (p == nullptr) continue;
-            auto title = p->factions[core::character::self]->titles;
+            auto title = p->realms[core::character::self]->titles;
             while (title != nullptr) {
               if (title->type == core::titulus::type::city) break;
               title = title->next;
@@ -752,7 +750,7 @@ namespace devils_engine {
     return dir;
   }
 
-  uint32_t cast_mouse_ray() {
+  uint32_t cast_mouse_ray(float &ray_dist) {
     auto window = global::get<render::window>();
     auto buffers = global::get<render::buffers>();
 
@@ -768,7 +766,7 @@ namespace devils_engine {
     if (ypos < 0.0) return UINT32_MAX;
 
     const glm::vec4 camera_pos = buffers->get_pos();
-    const glm::vec4 final_dir = get_cursor_dir(buffers, window, xpos, ypos);
+    const glm::vec4 final_dir = render::get_cursor_dir(buffers, window, xpos, ypos);
     
     buffers->update_cursor_dir(final_dir);
 
@@ -794,7 +792,7 @@ namespace devils_engine {
     auto map_system = global::get<systems::map_t>();
     if (!map_system->is_init()) return UINT32_MAX;
     if (map_system->map->status() != core::map::status::valid) return UINT32_MAX;
-    const uint32_t tile_index_local1 = map_system->map->cast_ray(intersect_sphere);
+    const uint32_t tile_index_local1 = map_system->map->cast_ray(intersect_sphere, ray_dist);
 
     return tile_index_local1;
   }
@@ -1085,7 +1083,8 @@ namespace devils_engine {
 //     const auto proxy = base_systems.interface_container->lua["tile_window"];
 //     if (proxy.get_type() != sol::type::function) throw std::runtime_error("Bad tile interface function");
 //     return proxy.get<sol::function>();
-    base_systems.interface_container->load_interface_file(global::root_directory() + "scripts/interface/main.lua");
+    //base_systems.interface_container->load_interface_file(global::root_directory() + "scripts/interface/main.lua");
+    base_systems.load_interface_config(global::root_directory() + "scripts/interface_config.lua");
     return sol::nil;
   }
 
@@ -1166,8 +1165,14 @@ namespace devils_engine {
     // то есть ход будет начинаться не от игрока, нужно это для того чтобы подчеркнуть очередность хода
     // ну и на мой взгляд так будет интереснее (правда от этого пострадает мультитрединг)
     //
-    UNUSED_VARIABLE(time);
-    game::advance_state();
+    
+    auto map_system = global::get<systems::map_t>();
+    if (map_system->is_init()) {
+      ASSERT(map_system->core_context != nullptr);
+      map_system->core_context->update_armies(time);
+    }
+    
+    //game::advance_state();
 
     // как мы теперь интерфейс запускаем? запускаем при загрузке?
     // именно в загрузке мы переходим от одного состояния к другому,
@@ -1284,46 +1289,250 @@ namespace devils_engine {
     PRINT("\n")
   }
   
-  void draw_army_path() {
-    auto selector = global::get<systems::core_t>()->objects_selector;
-    auto ctx = global::get<systems::map_t>()->core_context;
-    if (selector->count == 0) return;
-    if (selector->units[0].type != utils::objects_selector::unit::type::army && selector->units[0].type != utils::objects_selector::unit::type::hero) return;
-    
-    auto highlighter = global::get<render::tile_highlights_render>();
-    
-    size_t current_path = SIZE_MAX;
-    size_t current_path_size = 0;
-    ai::path_container* path = nullptr;
-    float max_cost = 124414.0f;
-    for (uint32_t i = 0; i < selector->count; ++i) {
-      const auto &unit = selector->units[i];
-      if (unit.type == utils::objects_selector::unit::type::army) {
-        core::army* army = ctx->get_army(unit.index);
-        if (army->path == nullptr || army->path == reinterpret_cast<void*>(SIZE_MAX)) continue;
-        
-        current_path = army->current_path;
-        current_path_size = army->path_size;
-        path = army->path;
-      } else {
-        
+  const std::string_view lua_func = R"C0L0N(
+return function(command_name, target, value, compare_type, additional_data_type, result)
+  print(command_name)
+end
+)C0L0N";
+  
+  void test_decision(core::character* c) {
+    {
+      sol::state lua;
+      lua.open_libraries(sol::lib::base, sol::lib::math, sol::lib::package, sol::lib::string, sol::lib::table, sol::lib::utf8, sol::lib::coroutine);
+      utils::setup_lua_script_utils(lua);
+      
+      const auto ret = lua.script_file(global::root_directory() + "scripts/decision_thoughts.lua");
+      if (!ret.valid()) {
+        sol::error err = ret;
+        std::cout << err.what() << "\n";
+        throw std::runtime_error("There is lua errors");
       }
       
-      for (; current_path < current_path_size; ++current_path) {
-        const uint32_t container = current_path / ai::path_container::container_size;
-        const uint32_t index     = current_path % ai::path_container::container_size;
-        const auto current_container = ai::advance_container(path, container);
-        const uint32_t tile_index = current_container->tile_path[index].tile;
-        const float tile_cost = current_container->tile_path[index].cost;
-
-        ASSERT(tile_index < core::map::hex_count_d(core::map::detail_level));
-
-        // сравниваем
-        const auto color = max_cost > tile_cost ? render::make_color(0.0f, 0.7f, 0.0f, 0.5f) : render::make_color(0.7f, 0.0f, 0.0f, 0.5f);
-        highlighter->add(tile_index, color);
+      const sol::table t = ret;
+      core::decision d;
+      d.id = t["id"];
+      d.name_id = t["name"];
+      d.description_id = t["description"];
+      const auto input_t = t["input"].get<sol::table>();
+      for (const auto &pair : input_t) {
+        if (pair.first.get_type() != sol::type::number) continue;
+        if (pair.second.get_type() != sol::type::number) continue;
+        
+        const uint32_t type = pair.second.as<uint32_t>();
+        switch (type) {
+          case core::target_type::character: {
+            const size_t current_index = d.input_count;
+            ++d.input_count;
+            d.input_array[current_index].command_type = script::command_type::invalid;
+            d.input_array[current_index].number_type = script::number_type::object;
+            d.input_array[current_index].helper2 = static_cast<uint32_t>(core::character::s_type);
+            break;
+          }
+          
+          case core::target_type::army: {
+            const size_t current_index = d.input_count;
+            ++d.input_count;
+            d.input_array[current_index].command_type = script::command_type::invalid;
+            d.input_array[current_index].number_type = script::number_type::object;
+            d.input_array[current_index].helper2 = static_cast<uint32_t>(core::army::s_type);
+            break;
+          }
+          
+          case core::target_type::city: {
+            const size_t current_index = d.input_count;
+            ++d.input_count;
+            d.input_array[current_index].command_type = script::command_type::invalid;
+            d.input_array[current_index].number_type = script::number_type::object;
+            d.input_array[current_index].helper2 = static_cast<uint32_t>(core::city::s_type);
+            break;
+          }
+          
+          case core::target_type::culture: {
+            const size_t current_index = d.input_count;
+            ++d.input_count;
+            d.input_array[current_index].command_type = script::command_type::invalid;
+            d.input_array[current_index].number_type = script::number_type::object;
+            d.input_array[current_index].helper2 = static_cast<uint32_t>(core::culture::s_type);
+            break;
+          }
+          
+          case core::target_type::dynasty: {
+  //           const size_t current_index = d.input_count;
+  //           ++d.input_count;
+  //           d.input_array[current_index].command_type = script::command_type::invalid;
+  //           d.input_array[current_index].number_type = script::number_type::object;
+  //           d.input_array[current_index].helper1 = static_cast<uint32_t>(core::dynasty::s_type);
+            assert(false);
+            break;
+          }
+          
+          case core::target_type::hero_troop: {
+            const size_t current_index = d.input_count;
+            ++d.input_count;
+            d.input_array[current_index].command_type = script::command_type::invalid;
+            d.input_array[current_index].number_type = script::number_type::object;
+            d.input_array[current_index].helper2 = static_cast<uint32_t>(core::hero_troop::s_type);
+            break;
+          }
+          
+          case core::target_type::province: {
+            const size_t current_index = d.input_count;
+            ++d.input_count;
+            d.input_array[current_index].command_type = script::command_type::invalid;
+            d.input_array[current_index].number_type = script::number_type::object;
+            d.input_array[current_index].helper2 = static_cast<uint32_t>(core::province::s_type);
+            break;
+          }
+          
+          case core::target_type::realm: {
+            const size_t current_index = d.input_count;
+            ++d.input_count;
+            d.input_array[current_index].command_type = script::command_type::invalid;
+            d.input_array[current_index].number_type = script::number_type::object;
+            d.input_array[current_index].helper2 = static_cast<uint32_t>(core::realm::s_type);
+            break;
+          }
+          
+          case core::target_type::religion: {
+            const size_t current_index = d.input_count;
+            ++d.input_count;
+            d.input_array[current_index].command_type = script::command_type::invalid;
+            d.input_array[current_index].number_type = script::number_type::object;
+            d.input_array[current_index].helper2 = static_cast<uint32_t>(core::religion::s_type);
+            break;
+          }
+          
+          case core::target_type::title: {
+            const size_t current_index = d.input_count;
+            ++d.input_count;
+            d.input_array[current_index].command_type = script::command_type::invalid;
+            d.input_array[current_index].number_type = script::number_type::object;
+            d.input_array[current_index].helper2 = static_cast<uint32_t>(core::titulus::s_type);
+            break;
+          }
+          
+          case core::target_type::boolean: {
+            const size_t current_index = d.input_count;
+            ++d.input_count;
+            d.input_array[current_index].command_type = script::command_type::invalid;
+            d.input_array[current_index].number_type = script::number_type::boolean;
+            break;
+          }
+          
+          case core::target_type::number: {
+            const size_t current_index = d.input_count;
+            ++d.input_count;
+            d.input_array[current_index].command_type = script::command_type::invalid;
+            d.input_array[current_index].number_type = script::number_type::number;
+            break;
+          }
+          
+          case core::target_type::string: {
+            const size_t current_index = d.input_count;
+            ++d.input_count;
+            d.input_array[current_index].command_type = script::command_type::invalid;
+            d.input_array[current_index].number_type = script::number_type::string;
+            break;
+          }
+        }
       }
+
+      {
+        const auto potential_t = t["potential"].get<sol::table>();
+        const auto func = script::condition_block_init_functions[script::condition_block_function::condition];
+        func(d.input_array[0].helper2, potential_t, &d.potential);
+      }
+      
+      {
+        const auto condition_t = t["conditions"].get<sol::table>();
+        const auto func = script::condition_block_init_functions[script::condition_block_function::condition];
+        func(d.input_array[0].helper2, condition_t, &d.condition);
+      }
+      
+      {
+        const auto effect_t = t["effects"].get<sol::table>();
+        const auto func = script::action_block_init_functions[script::action_block_function::action];
+        func(d.input_array[0].helper2, effect_t, &d.effect);
+      }
+      
+      // теперь у нас есть десижон d что мы можем попробовать сделать?
+      // собрать контекст и что нибудь попробовать запустить
+      // для этого нам потребуется персонаж
+      
+      // вообще нужно наверное разделить данные от запускаемых функций, но с другой стороны
+      // это реально не очень много чего освободит
+      // вот что правда нужно сделать так это расположить все функции в определенном порядке
+      // то бишь нужно завести огромный массив со всеми возможными функциями
+      // ну эт несложно если разделить списки на несколько и работать с ними отдельно
+      // в принципе нужно будет разделить списки хотя бы на типы таргетов с которыми они работают
+      
+      const auto lua_ret = lua.script(lua_func);
+      if (!lua_ret.valid()) {
+        sol::error err = lua_ret;
+        std::cout << err.what();
+        throw std::runtime_error("There is lua errors");
+      }
+      
+      // нужно передать сюда персонажа
+      script::context ctx;
+      sol::function f = lua_ret;
+      ctx.itr_func = &f;
+      ctx.array_data.emplace_back(script::target{static_cast<uint32_t>(core::character::s_type), c});
+      d.iterate_conditions(ctx);
+      d.iterate_actions(ctx);
+      
+      ctx.itr_func = nullptr;
+      const float before_money = c->stat(core::character_stats::money);
+      d.run(ctx);
+      const float after_money = c->stat(core::character_stats::money);
+      
+      PRINT_VAR("before_money", before_money)
+      PRINT_VAR("after_money ", after_money)
     }
+    
+    assert(false);
   }
+  
+//   void draw_army_path() {
+// //     auto selector = global::get<systems::core_t>()->objects_selector;
+// //     auto ctx = global::get<systems::map_t>()->core_context;
+// //     if (selector->count == 0) return;
+// //     if (selector->units[0].type != utils::objects_selector::unit::type::army && selector->units[0].type != utils::objects_selector::unit::type::hero) return;
+// //     
+// //     auto highlighter = global::get<render::tile_highlights_render>();
+// //     
+// //     size_t current_path = SIZE_MAX;
+// //     size_t current_path_size = 0;
+// //     ai::path_container* path = nullptr;
+// //     float max_cost = 124414.0f;
+// //     for (uint32_t i = 0; i < selector->count; ++i) {
+// //       const auto &unit = selector->units[i];
+// //       if (unit.type == utils::objects_selector::unit::type::army) {
+// //         core::army* army = ctx->get_army(unit.index);
+// //         if (army->path == nullptr || army->path == reinterpret_cast<void*>(SIZE_MAX)) continue;
+// //         
+// //         current_path = army->current_path;
+// //         current_path_size = army->path_size;
+// //         path = army->path;
+// //       } else {
+// //         
+// //       }
+// //       
+// //       for (; current_path < current_path_size; ++current_path) {
+// //         const uint32_t container = current_path / ai::path_container::container_size;
+// //         const uint32_t index     = current_path % ai::path_container::container_size;
+// //         const auto current_container = ai::advance_container(path, container);
+// //         const uint32_t tile_index = current_container->tile_path[index].tile;
+// //         const float tile_cost = current_container->tile_path[index].cost;
+// // 
+// //         ASSERT(tile_index < core::map::hex_count_d(core::map::detail_level));
+// // 
+// //         // сравниваем
+// //         const auto color = max_cost > tile_cost ? render::make_color(0.0f, 0.7f, 0.0f, 0.5f) : render::make_color(0.7f, 0.0f, 0.0f, 0.5f);
+// //         highlighter->add(tile_index, color);
+// //       }
+// //     }
+//   }
   
   void recompute_army_pos(core::army* army) {
     auto map = global::get<systems::map_t>()->map;
@@ -1531,38 +1740,6 @@ namespace devils_engine {
   void unlock_rendering() {
     global::get<systems::map_t>()->unlock_map();
     global::get<systems::battle_t>()->unlock_map();
-  }
-  
-  bool is_interface_hovered(nk_context* ctx, const std::string_view &except) {
-    struct nk_window* iter;
-    assert(ctx);
-    if (!ctx) return 0;
-    
-    iter = ctx->begin;
-    while (iter) {
-      struct nk_window* local_iter = iter;
-      iter = iter->next;
-      /* check if window is being hovered */
-      if(!(local_iter->flags & NK_WINDOW_HIDDEN)) continue;
-      if (except == std::string_view(local_iter->name_string)) continue;
-      
-      /* check if window popup is being hovered */
-      if (local_iter->popup.active && local_iter->popup.win && nk_input_is_mouse_hovering_rect(&ctx->input, local_iter->popup.win->bounds)) return true;
-
-      if (local_iter->flags & NK_WINDOW_MINIMIZED) {
-        struct nk_rect header = local_iter->bounds;
-        header.h = ctx->style.font->height + 2 * ctx->style.window.header.padding.y;
-        if (nk_input_is_mouse_hovering_rect(&ctx->input, header)) return true;
-      } else if (nk_input_is_mouse_hovering_rect(&ctx->input, local_iter->bounds)) return true;
-    }
-    
-    return false;
-  }
-  
-  components::camera* get_camera() {
-    if (auto map = global::get<systems::map_t>(); map->is_init()) return map->camera;
-    if (auto battle = global::get<systems::battle_t>(); battle->is_init()) return battle->camera;
-    return nullptr;
   }
 
   void callback(int error, const char* description) {

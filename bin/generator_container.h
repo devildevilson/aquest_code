@@ -7,7 +7,7 @@
 #include "utils/id.h"
 #include "utils/block_allocator.h"
 #include "utils/memory_pool.h"
-#include "character.h"
+//#include "character.h"
 #include "utils/sol.h"
 // нам где то нужно еще хранить названия сгенерированых сущностей
 // то есть тут полный список данных которые нужно положить для сущностей
@@ -32,14 +32,14 @@
 // но и локализовать их
 // локализация конечно интересная штука для генератора
 
-namespace std {
-  template <>
-  struct hash<std::pair<devils_engine::core::character*, uint32_t>> {
-    size_t operator() (const std::pair<devils_engine::core::character*, uint32_t> &a) const {
-      return hash<devils_engine::core::character*>()(a.first);
-    }
-  };
-}
+// namespace std {
+//   template <>
+//   struct hash<std::pair<devils_engine::core::character*, uint32_t>> {
+//     size_t operator() (const std::pair<devils_engine::core::character*, uint32_t> &a) const {
+//       return hash<devils_engine::core::character*>()(a.first);
+//     }
+//   };
+// }
 
 namespace devils_engine {
   namespace map {

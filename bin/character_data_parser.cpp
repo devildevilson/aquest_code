@@ -1,10 +1,12 @@
 #include "data_parser.h"
+
 #include "utils/globals.h"
-#include "core_structures.h"
 #include "utils/table_container.h"
 #include "utils/string_container.h"
-#include "core_context.h"
 #include "utils/serializator_helper.h"
+
+#include "core/context.h"
+
 #include "map_creator.h"
 
 #define TO_LUA_INDEX(index) ((index)+1)
@@ -125,7 +127,7 @@ namespace devils_engine {
           {
             STATS_ARRAY,
             check_table_value::type::int_t,
-            core::offsets::character_stats, core::offsets::faction_stats + core::faction_stats::count, {}
+            core::offsets::character_stats, core::offsets::faction_stats + core::realm_stats::count, {}
           }
         }
       },
@@ -198,6 +200,32 @@ namespace devils_engine {
       auto ctx = global::get<core::context>();
       
       // откуда брать персонажей то и династии
+      
+      if (auto t = table["name"]; t.valid() && t.get_type() == sol::type::table) {
+        const auto id = t[1];
+        const auto index = t[2];
+        if (!id.valid() || id.get_type() != sol::type::string) throw std::runtime_error("Bad name table id value");
+        
+        character->name_table_id = id.get<std::string>();
+        if (index.valid()) {
+          if (index.get_type() != sol::type::number) throw std::runtime_error("Bad name table index value");
+          
+          character->name_index = index.get<uint32_t>();
+        }
+      }
+      
+      if (auto t = table["nickname"]; t.valid() && t.get_type() == sol::type::table) {
+        const auto id = t[1];
+        const auto index = t[2];
+        if (!id.valid() || id.get_type() != sol::type::string) throw std::runtime_error("Bad name table id value");
+        
+        character->nickname_table_id = id.get<std::string>();
+        if (index.valid()) {
+          if (index.get_type() != sol::type::number) throw std::runtime_error("Bad name table index value");
+          
+          character->nickname_index = index.get<uint32_t>();
+        }
+      }
       
       {
         const auto &family_table = table.get<sol::table>("family");
@@ -370,7 +398,7 @@ namespace devils_engine {
       if (const auto &suzerain = table["suzerain"]; suzerain.valid()) {
         const auto &index = FROM_LUA_INDEX(suzerain.get<size_t>());
         auto c = ctx->get_character(index);
-        ASSERT(c->factions[core::character::self] != nullptr);
+        ASSERT(c->realms[core::character::self] != nullptr);
         character->suzerain = c;
       }
       
@@ -378,8 +406,8 @@ namespace devils_engine {
       if (const auto &imprisoner = table["imprisoner"]; imprisoner.valid()) {
         const auto &index = FROM_LUA_INDEX(imprisoner.get<size_t>());
         auto c = ctx->get_character(index);
-        ASSERT(c->factions[core::character::self] != nullptr);
-        character->imprisoner = c->factions[core::character::self];
+        ASSERT(c->realms[core::character::self] != nullptr);
+        character->imprisoner = c->realms[core::character::self];
       }
       
       {
@@ -393,6 +421,7 @@ namespace devils_engine {
           
           if (const auto &val = magic_enum::enum_cast<core::character_stats::values>(stat); val.has_value()) {
             const size_t stat_id = val.value();
+            ASSERT(stat_id < core::character_stats::count);
             switch (core::character_stats::types[stat_id]) {
               case core::stat_type::float_t: character->stats[stat_id].fval = value; break;
               case core::stat_type::uint_t:  character->stats[stat_id].uval = value; break;
@@ -403,28 +432,41 @@ namespace devils_engine {
           }
           
           // статы элективной фракции? скорее всего здесь укажем статы именно персонажа
-          if (const auto &val = magic_enum::enum_cast<core::faction_stats::values>(stat); val.has_value()) {
-            if (character->factions[core::character::self] == nullptr) character->factions[core::character::self] = ctx->create_faction();
+          if (const auto &val = magic_enum::enum_cast<core::realm_stats::values>(stat); val.has_value()) {
+            if (character->realms[core::character::self] == nullptr) { 
+              character->realms[core::character::self] = ctx->create_faction(); 
+              character->realms[core::character::self]->leader = character;
+            }
             const size_t stat_id = val.value();
-            character->factions[core::character::self]->stats[stat_id].fval = value;
+            character->realms[core::character::self]->stats[stat_id].fval = value;
             continue;
           }
         }
       }
 
       if (const auto &liege = table["liege"]; liege.valid()) {
-        if (character->factions[core::character::self] == nullptr) character->factions[core::character::self] = ctx->create_faction();
+        if (character->realms[core::character::self] == nullptr) { 
+          character->realms[core::character::self] = ctx->create_faction(); 
+          character->realms[core::character::self]->leader = character;
+        }
         
         const size_t index = FROM_LUA_INDEX(liege.get<size_t>());
         auto c = ctx->get_character(index);
-        if (c->factions[core::character::self] == nullptr) c->factions[core::character::self] = ctx->create_faction();
-        character->factions[core::character::self]->liege = c->factions[core::character::self]; // наверное нужно указать государство
+        if (c->realms[core::character::self] == nullptr) { 
+          c->realms[core::character::self] = ctx->create_faction();
+          c->realms[core::character::self]->leader = c;
+        }
+        
+        character->realms[core::character::self]->liege = c->realms[core::character::self]; // наверное нужно указать государство
         // я так понимаю нужно разделить фракцию и стейт, хотя наверное нет
         // мы создаем форму правления для персонажей, нужно разделять парсер?
       }
       
       if (const auto &titles = table["titles"]; titles.valid()) {
-        if (character->factions[core::character::self] == nullptr) character->factions[core::character::self] = ctx->create_faction();
+        if (character->realms[core::character::self] == nullptr) {
+          character->realms[core::character::self] = ctx->create_faction();
+          character->realms[core::character::self]->leader = character;
+        }
         
         std::vector<core::titulus*> character_titles;
         const auto &table = titles.get<sol::table>();
@@ -441,11 +483,16 @@ namespace devils_engine {
         ASSERT(!character_titles.empty());
         
         // некоторые титулы будут принадлежать государству (титулы максимального ранга)
-        auto char_faction = character->factions[core::character::self];
+        auto char_faction = character->realms[core::character::self];
         for (auto title : character_titles) {
 //           title->owner = char_faction;
           char_faction->add_title(title);
         }
+        
+        // видимо у меня спавнится совсем мало челиков с титулами выше герцога 
+        // (ну то есть их реально мало, но наверное все же побольше нужно заспавнить)
+        //static size_t tmp_123 = 0;
+        //if (char_faction->main_title->type > core::titulus::type::duke) PRINT_VAR("character more duke", tmp_123++);
       }
     }
   }

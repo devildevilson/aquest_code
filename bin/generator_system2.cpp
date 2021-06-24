@@ -3,6 +3,7 @@
 #include "utils/globals.h"
 #include "utils/systems.h"
 #include "utils/progress_container.h"
+#include "utils/game_context.h"
 
 namespace devils_engine {
   namespace systems {
@@ -19,14 +20,18 @@ namespace devils_engine {
       // и нарисовать во время генерации прогресс бар
       auto prog = global::get<systems::core_t>()->loading_progress;
       prog->set_max_value(generators.size());
+      auto game_ctx = global::get<systems::core_t>()->game_ctx;
       
       current_step = 0;
       for (const auto &pair : generators) {
         prog->set_value(current_step);
-        prog->set_hint2(generators[current_step].first);
+        //prog->set_hint2(generators[current_step].first);
+        prog->set_hint2(pair.first);
         
         pair.second(ctx, table);
         ++current_step;
+        
+        if (game_ctx->quit_state()) break;
       }
       
       prog->set_value(current_step);

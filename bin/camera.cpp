@@ -7,6 +7,7 @@
 #include "render/shared_structures.h"
 #include "map.h"
 #include "utils/shared_time_constant.h"
+#include "utils/systems.h"
 
 glm::vec3 from_decard_to_spherical(const glm::vec3 &vec) {
 //   const bool x_less_zero = vec.x < 0.0f;
@@ -36,8 +37,8 @@ namespace devils_engine {
       auto window = global::get<render::window>();
       auto buffers = global::get<render::buffers>();
       
-      const float minimum_dist = 150.0f;
-      const float maximum_dist = 256.0f;
+      const float minimum_dist = MINIMUM_FRUSTUM_DIST;
+      const float maximum_dist = MAXIMUM_FRUSTUM_DIST;
       
       const float raw_zoom = camera->zoom();
       const float zoom_norm = (raw_zoom - camera->min_zoom()) / (camera->max_zoom() - camera->min_zoom());
@@ -66,6 +67,12 @@ namespace devils_engine {
       buffers->update_dir(dir);
       buffers->update_zoom(zoom_norm);
       buffers->update_dimensions(window->surface.extent.width, window->surface.extent.height);
+    }
+    
+    components::camera* get_camera() {
+      if (auto map = global::get<systems::map_t>(); map->is_init()) return map->camera;
+      if (auto battle = global::get<systems::battle_t>(); battle->is_init()) return battle->camera;
+      return nullptr;
     }
   }
   

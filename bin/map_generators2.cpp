@@ -1,25 +1,30 @@
 #include "map_generators2.h"
 
-#include "utils/logging.h"
-#include "figures.h"
-#include "utils/works_utils.h"
-#include "utils/concurrent_vector.h"
-#include "generator_context2.h"
 #include <atomic>
 #include <set>
+
+#include "utils/globals.h"
+#include "utils/logging.h"
+#include "utils/concurrent_vector.h"
+#include "utils/works_utils.h"
+
+#include "render/shared_structures.h"
+#include "render/shared_render_utility.h"
+#include "render/yavf.h"
+
+#include "figures.h"
+#include "generator_context2.h"
 #include "generator_container.h"
 #include "map.h"
 #include "FastNoise.h"
 #include "data_parser.h"
-#include "utils/globals.h"
-#include "stats.h"
 #include "game_time.h"
 #include "seasons.h"
-#include "render/shared_structures.h"
-#include "render/shared_render_utility.h"
 #include "image_parser.h"
 #include "heraldy_parser.h"
-#include "render/yavf.h"
+
+#include "core/stats.h"
+#include "core/structures_header.h"
 
 namespace devils_engine {
   namespace map {

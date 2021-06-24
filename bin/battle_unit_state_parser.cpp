@@ -1,15 +1,17 @@
 #include "battle_unit_state_parser.h"
 
-#include "data_parser.h"
-#include "battle_context.h"
 #include "utils/globals.h"
-#include "map_creator.h"
-#include "battle_structures.h"
 #include "utils/string_container.h"
 #include "utils/systems.h"
 #include "utils/battle_lua_states.h"
+
 #include "render/image_controller.h"
+
+#include "data_parser.h"
+#include "battle_context.h"
+#include "map_creator.h"
 #include "battle_map.h"
+#include "battle_structures.h"
 
 namespace devils_engine {
   namespace utils {

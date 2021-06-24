@@ -4,11 +4,18 @@
 #include "../render/shared_structures.h"
 #include "../utils/shared_mathematical_constant.h"
 
+// const vec4 object_points[] = {
+//   vec4(-1.0f, 1.0f, 0.0f, 1.0f),
+//   vec4( 1.0f, 1.0f, 0.0f, 1.0f),
+//   vec4(-1.0f,-1.0f, 0.0f, 1.0f),
+//   vec4( 1.0f,-1.0f, 0.0f, 1.0f)
+// };
+
 const vec4 object_points[] = {
-  vec4(-1.0f, 1.0f, 0.0f, 1.0f),
-  vec4( 1.0f, 1.0f, 0.0f, 1.0f),
-  vec4(-1.0f,-1.0f, 0.0f, 1.0f),
-  vec4( 1.0f,-1.0f, 0.0f, 1.0f)
+  vec4(-1.0f, 2.0f, 0.0f, 1.0f),
+  vec4( 1.0f, 2.0f, 0.0f, 1.0f),
+  vec4(-1.0f, 0.0f, 0.0f, 1.0f),
+  vec4( 1.0f, 0.0f, 0.0f, 1.0f)
 };
 
 const vec2 object_uv[] = {
@@ -61,6 +68,7 @@ out gl_PerVertex {
   vec4 gl_Position;
 };
 
+layout(location = 0) in uint current_index;
 layout(location = 0) out flat image_t out_biom_texture;
 layout(location = 1) out flat color_t out_biom_color;
 layout(location = 2) out vec2 out_uv;
@@ -72,8 +80,10 @@ mat4 scale(const mat4 mat, const vec4 vec);
 world_structure_t unpack(const uvec4 data);
 
 void main() {
-  const uint tile_index  = gl_VertexIndex / PACKED_INDEX_COEF;
-  const uint point_index = gl_VertexIndex % PACKED_INDEX_COEF;
+  const uint tile_index  = current_index;
+  const uint point_index = gl_VertexIndex; // [0, 3]
+  //const uint tile_index  = gl_VertexIndex / PACKED_INDEX_COEF;
+  //const uint point_index = gl_VertexIndex % PACKED_INDEX_COEF; // [0, 3]
 
   const vec4 center = tile_points[tiles[tile_index].tile_indices.x];
   const vec4 normal = vec4(normalize(center.xyz), 0.0f);
@@ -85,15 +95,15 @@ void main() {
   const uint structure_index = additional_indices[tile_index].data[0].x;
   //const uint structure_index = tiles[tile_index].packed_data4[2] & maximum_structure_types;
   const world_structure_t structure = unpack(world_structures[structure_index]);
-  const float obj_scale = structure.scale;
-  //const float obj_scale = 1.2f; // приходит неправильный скейл
+  const float obj_scale = structure.scale; // плохое изображение
+  //const float obj_scale = 2.0f; // приходит неправильный скейл
 
   // все что тут нужно сделать это:
   // вспомнить как сделать дум спрайты
   // сделать пару матриц
   const float zoom = uintBitsToFloat(camera.dim[2]);
 
-  const vec4 point = center + normal * (final_height * render_tile_height + obj_scale/2.0f);
+  const vec4 point = center + normal * (final_height * render_tile_height); //  + obj_scale/2.0f
   const mat4 translaion = translate(mat4(1.0f), point);
   // константа по которой делим приближение?
     const mat3 rot = mat3(camera_matrices.invView);

@@ -66,6 +66,7 @@ out gl_PerVertex {
   vec4 gl_Position;
 };
 
+layout(location = 0) in uint current_index;
 layout(location = 0) out flat uint out_layer_index;
 layout(location = 1) out vec2 out_uv;
 
@@ -75,8 +76,10 @@ mat4 scale(const mat4 mat, const vec4 vec);
 world_structure_t unpack(const uvec4 data);
 
 void main() {
-  const uint tile_index  = gl_VertexIndex / PACKED_INDEX_COEF;
-  const uint point_index = gl_VertexIndex % PACKED_INDEX_COEF;
+  const uint tile_index  = current_index;
+  const uint point_index = gl_VertexIndex; // [0,3]
+  //const uint tile_index  = gl_VertexIndex / PACKED_INDEX_COEF;
+  //const uint point_index = gl_VertexIndex % PACKED_INDEX_COEF; // [0,3]
 
   const light_map_tile_t tile = tiles[tile_index];
   const float tile_height = uintBitsToFloat(tile.tile_indices.w);

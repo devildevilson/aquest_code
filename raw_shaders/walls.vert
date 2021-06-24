@@ -31,7 +31,7 @@ layout(std140, set = 3, binding = 2) readonly buffer tile_points_buffer {
 };
 
 // наверное из вершинного буфера приходят индексы
-//layout(location = 0) in uint current_index;
+layout(location = 0) in uint current_index;
 //layout(location = 0) out flat uint out_biom_index;
 layout(location = 0) out flat image_t out_biom_texture;
 layout(location = 1) out flat color_t out_biom_color;
@@ -43,8 +43,10 @@ out gl_PerVertex {
 };
 
 void main() {
-  const uint wall_index = gl_VertexIndex / PACKED_INDEX_COEF;
-  const uint index_wall = gl_VertexIndex % PACKED_INDEX_COEF; // [0,5]
+  const uint wall_index = current_index;
+  const uint index_wall = gl_VertexIndex; // [0,3]
+  //const uint wall_index = gl_VertexIndex / PACKED_INDEX_COEF;
+  //const uint index_wall = gl_VertexIndex % PACKED_INDEX_COEF; // [0,3]
   const uvec4 wall_data = datas[wall_index];
   const uint tile1_index = wall_data[0];
   const uint tile2_index = wall_data[1];

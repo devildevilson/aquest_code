@@ -2,16 +2,13 @@
 
 #extension GL_GOOGLE_include_directive : enable
 #include "../render/shared_structures.h"
-#include "../render/heraldy.h"
 #include "../utils/shared_mathematical_constant.h"
 #include "../render/image_container_constants.h"
 
+const uint heraldy_layers_set_index = 3;
+
 layout(set = 1, binding = 0) uniform texture2DArray textures[IMAGE_CONTAINER_SLOT_SIZE];
 layout(set = 1, binding = 1) uniform sampler samplers[IMAGE_SAMPLERS_COUNT];
-
-layout(set = 3, binding = 0) buffer readonly layers_buffer {
-  packed_heraldy_layer_t layers[];
-};
 
 layout(location = 0) in flat uint in_layer_index;
 layout(location = 1) in vec2 in_uv; // сначало проверяем с coords, а потом переводим в tex_coords

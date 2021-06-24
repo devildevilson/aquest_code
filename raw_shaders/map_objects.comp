@@ -120,10 +120,10 @@ layout(local_size_x = WORK_GROUP, local_size_y = 1, local_size_z = 1) in;
 // причем не все 12 слотов заняты, остальные после 12 индексы заняты полностью
 
 void main() {
-  const uint local_index = gl_GlobalInvocationID.x;
-  const uint final_index = local_index; // * (PACKED_TILE_INDEX_COEF+1)
-  if (final_index >= hex_tiles_indirect.y + pen_tiles_indirect.y) return;
+  const uint local_index = gl_GlobalInvocationID.x; // * (PACKED_TILE_INDEX_COEF+1)
+  if (local_index >= hex_tiles_indirect.y + pen_tiles_indirect.y) return;
 
+  const uint final_index = local_index >= pen_tiles_indirect.y ? local_index + 12 : local_index;
   const uint inst_index = final_index / 4;
   const uint vec_index  = final_index % 4;
   const uint tile_index = tiles_indices[inst_index].index[vec_index]; //  / PACKED_TILE_INDEX_COEF
@@ -136,18 +136,31 @@ void main() {
   // но было бы неплохо посчитать выделение герба, кстати для этого нужно просто сделать бокс
   //
 
+  const bool valid_frustum = dot(selection_frustum.planes[0], selection_frustum.planes[0]) != 0.0f;
+  //const bool valid_frustum = dot(frustum.planes[0], frustum.planes[0]) != 0.0f;
+
   const light_map_tile_t tile = tiles[tile_index];
+
+  const uint point_index = tile.tile_indices.x;
+  const vec4 point = tile_points[point_index];
+  const bool ret = frustum_test(selection_frustum, point, 1.0f);
+  if (valid_frustum && ret) {
+    const uint offset = atomicAdd(heraldies_indirect.y, 1);
+    const uint vec_index = offset / 4;
+    const uint slot_index = offset % 4;
+    structures_indices[vec_index].index[slot_index] = tile_index;
+  }
 
   const additional_data_t additional_tile_data = additional_indices[tile_index];
   const uint structure_index = additional_tile_data.data[0].x;
   if (structure_index != GPU_UINT_MAX) {
-    const uint offset = atomicAdd(borders_indirect.x, PACKED_INDEX_COEF+1);
+    const uint offset = atomicAdd(borders_indirect.y, 1); // PACKED_INDEX_COEF+1
     set_indices_borders_buffer(tile_index, offset);
   }
 
   const uint heraldy_index = additional_tile_data.data[0].y;
   if (heraldy_index != GPU_UINT_MAX) {
-    const uint offset = atomicAdd(walls_indirect.x, PACKED_INDEX_COEF+1);
+    const uint offset = atomicAdd(walls_indirect.y, 1); // PACKED_INDEX_COEF+1
     set_indices_walls_buffer(tile_index, offset);
 
     if (dot(camera.cursor_dir, camera.cursor_dir) > 0.0f) {
@@ -195,7 +208,7 @@ void main() {
 
         // спинмьютекс невозможно сделать в шейдерах, так как в шейдерах как то непоследовательно выполняются команды
         // а значит нужно добавлять все данные в основные буферы, в принципе у меня и так и сяк в один буфер пойдет много данных
-        const uint offset = atomicAdd(heraldies_indirect.x, 2);
+        const uint offset = atomicAdd(heraldies_indirect.y, 2);
         {
           const uint vec_index = offset / 4;
           const uint slot_index = offset % 4;
@@ -266,86 +279,84 @@ void main() {
   // с другой стороны у армий у меня есть данные о позиции, а значит необязательно тащить
   // индексы тайлов
 
-  const bool valid_frustum = dot(selection_frustum.planes[0], selection_frustum.planes[0]) != 0.0f;
-  //const bool valid_frustum = dot(frustum.planes[0], frustum.planes[0]) != 0.0f;
-
   for (uint i = 0; i < 3; ++i) {
     if (army_indices_arr[i] == GPU_UINT_MAX) continue;
-    const uint offset = atomicAdd(structures_indirect.x, PACKED_INDEX_COEF+1);
+    const uint offset = atomicAdd(structures_indirect.y, 1); // PACKED_INDEX_COEF+1
     set_indices_armies_buffer(army_indices_arr[i], offset);
 
-    if (!valid_frustum) continue;
-
-    // тут нам как раз нужно проверить выделение
-    const army_data_t army = army_datas[army_indices_arr[i]];
-    const vec4 pos = vec4(army.data.xyz, 1.0f);
-    const vec4 extent = vec4(1.0f, 1.0f, 1.0f, 0.0f);
-
-    // aabb_t box;
-    // box.min = pos - extent;
-    // box.max = pos + extent;
-
-    // размер объектов на карте - скорее всего какая то константа
-    // как ее подобрать?
-
-    //const bool ret = intersect(box, selection_box);
-    //const int ret = frustum_test(selection_frustum, pos, extent);
-    const bool ret = frustum_test(selection_frustum, pos, 1.0f);
-    //const int ret = frustum_test(frustum, pos, extent);
-    //const bool ret = frustum_test(frustum, pos, 1.0f);
-    if (ret) {
-      // нужно добавить индекс в цпу буффер
-      const uint offset = atomicAdd(heraldies_indirect.x, 1);
-      const uint vec_index = offset / 4;
-      const uint slot_index = offset % 4;
-      structures_indices[vec_index].index[slot_index] = army_indices_arr[i];
-    }
+  //   if (!valid_frustum) continue;
+  //
+  //   // тут нам как раз нужно проверить выделение
+  //   const army_data_t army = army_datas[army_indices_arr[i]];
+  //   const vec4 pos = vec4(army.data.xyz, 1.0f);
+  //   const vec4 extent = vec4(1.0f, 1.0f, 1.0f, 0.0f);
+  //
+  //   // aabb_t box;
+  //   // box.min = pos - extent;
+  //   // box.max = pos + extent;
+  //
+  //   // размер объектов на карте - скорее всего какая то константа
+  //   // как ее подобрать?
+  //
+  //   //const bool ret = intersect(box, selection_box);
+  //   //const int ret = frustum_test(selection_frustum, pos, extent);
+  //   const bool ret = frustum_test(selection_frustum, pos, 1.0f);
+  //   //const int ret = frustum_test(frustum, pos, extent);
+  //   //const bool ret = frustum_test(frustum, pos, 1.0f);
+  //   if (ret) {
+  //     // нужно добавить индекс в цпу буффер
+  //     const uint offset = atomicAdd(heraldies_indirect.y, 1);
+  //     const uint vec_index = offset / 4;
+  //     const uint slot_index = offset % 4;
+  //     //structures_indices[vec_index].index[slot_index] = army_indices_arr[i];
+  //     structures_indices[vec_index].index[slot_index] = tile_index;
+  //   }
   }
 }
 
 void set_indices_borders_buffer(const uint index, const uint offset) {
-  const uint packed_tile_index = index * PACKED_INDEX_COEF;
-  for (uint j = 0; j < PACKED_INDEX_COEF; ++j) {
-    const uint final_index = offset + j;
+  const uint packed_tile_index = index; //  * PACKED_INDEX_COEF
+  //for (uint j = 0; j < PACKED_INDEX_COEF; ++j) {
+    const uint final_index = offset; // + j
     const uint vec_index = final_index / 4;
     const uint slot_index = final_index % 4;
-    borders_indices[vec_index].index[slot_index] = packed_tile_index + j;
-  }
+    borders_indices[vec_index].index[slot_index] = packed_tile_index; // + j
+  //}
 
-  const uint final_index = offset + PACKED_INDEX_COEF;
-  const uint vec_index = final_index / 4;
-  const uint slot_index = final_index % 4;
-  borders_indices[vec_index].index[slot_index] = GPU_UINT_MAX;
+  // const uint final_index = offset + PACKED_INDEX_COEF;
+  // const uint vec_index = final_index / 4;
+  // const uint slot_index = final_index % 4;
+  // borders_indices[vec_index].index[slot_index] = GPU_UINT_MAX;
 }
 
 void set_indices_walls_buffer(const uint index, const uint offset) {
-  const uint packed_tile_index = index * PACKED_INDEX_COEF;
-  for (uint j = 0; j < PACKED_INDEX_COEF; ++j) {
-    const uint final_index = offset + j;
+  const uint packed_tile_index = index; //  * PACKED_INDEX_COEF
+  //for (uint j = 0; j < PACKED_INDEX_COEF; ++j) {
+    const uint final_index = offset; // + j
     const uint vec_index = final_index / 4;
     const uint slot_index = final_index % 4;
-    walls_indices[vec_index].index[slot_index] = packed_tile_index + j;
-  }
+    walls_indices[vec_index].index[slot_index] = packed_tile_index; // + j
+  //}
 
-  const uint final_index = offset + PACKED_INDEX_COEF;
-  const uint vec_index = final_index / 4;
-  const uint slot_index = final_index % 4;
-  walls_indices[vec_index].index[slot_index] = GPU_UINT_MAX;
+  // const uint final_index = offset + PACKED_INDEX_COEF;
+  // const uint vec_index = final_index / 4;
+  // const uint slot_index = final_index % 4;
+  // walls_indices[vec_index].index[slot_index] = GPU_UINT_MAX;
 }
 
 void set_indices_armies_buffer(const uint index, const uint offset) {
-  const uint packed_tile_index = index * PACKED_INDEX_COEF;
-  for (uint j = 0; j < PACKED_INDEX_COEF; ++j) {
-    const uint final_index = offset + j;
+  const uint packed_tile_index = index; // * PACKED_INDEX_COEF
+  //for (uint j = 0; j < PACKED_INDEX_COEF; ++j) {
+    const uint final_index = offset; // + j
     const uint vec_index = final_index / 4;
     const uint slot_index = final_index % 4;
-    objects_indices[vec_index].index[slot_index] = packed_tile_index + j;
-  }
+    objects_indices[vec_index].index[slot_index] = packed_tile_index; // + j
+  //}
 
-  const uint final_index = offset + PACKED_INDEX_COEF;
-  const uint vec_index = final_index / 4;
-  const uint slot_index = final_index % 4;
-  objects_indices[vec_index].index[slot_index] = GPU_UINT_MAX;
+  // const uint final_index = offset + PACKED_INDEX_COEF;
+  // const uint vec_index = final_index / 4;
+  // const uint slot_index = final_index % 4;
+  // objects_indices[vec_index].index[slot_index] = GPU_UINT_MAX;
 }
 
 bool test_ray_aabb(const vec4 ray_pos, const vec4 ray_dir, const vec4 box_center, const vec4 box_extents, inout float dist) {

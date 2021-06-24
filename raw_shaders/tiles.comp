@@ -192,7 +192,7 @@ void main() {
   // }
 
   // borders_data.z должно указывать нужно ли пропускать рендер границ
-  if (!(bool(borders_data[2]) || borders_indices_count == 0)) {
+  if (bool(borders_data[2]) && borders_indices_count != 0) {
     for (uint i = 0; i < triangle.data[1]; ++i) {
       const uint tile_index = get_accel_triangle_tile_index(triangle.data[0] + i);
       const uint borders_data = tiles[tile_index].packed_data4[0];
@@ -200,23 +200,23 @@ void main() {
 
       const uint size = (borders_data >> 28) & border_size_mask;
       const uint offset = borders_data & border_offset_mask;
-      const uint index_offset = atomicAdd(borders_indirect.x, size*(PACKED_INDEX_COEF+1));
+      const uint index_offset = atomicAdd(borders_indirect.y, size); // *(PACKED_INDEX_COEF+1)
 
       for (uint j = 0; j < size; ++j) { // каждую границу добавляем отдельно
-        const uint index = index_offset + j*(PACKED_INDEX_COEF+1);
+        const uint index = index_offset + j; // *(PACKED_INDEX_COEF+1)
         const uint border_index = offset + j;
-        const uint packed_index = border_index * PACKED_INDEX_COEF;
-        for (uint k = 0; k < PACKED_INDEX_COEF; ++k) {
-          const uint final_index = index + k;
+        const uint packed_index = border_index; // * PACKED_INDEX_COEF
+        //for (uint k = 0; k < PACKED_INDEX_COEF; ++k) {
+          const uint final_index = index;
           const uint vec_index = final_index / 4;
           const uint slot_index = final_index % 4;
-          borders_indices[vec_index].index[slot_index] = packed_index + k;
-        }
+          borders_indices[vec_index].index[slot_index] = packed_index;
+        //}
 
-        const uint final_index = index + PACKED_INDEX_COEF;
-        const uint vec_index = final_index / 4;
-        const uint slot_index = final_index % 4;
-        borders_indices[vec_index].index[slot_index] = GPU_UINT_MAX;
+        // const uint final_index = index + PACKED_INDEX_COEF;
+        // const uint vec_index = final_index / 4;
+        // const uint slot_index = final_index % 4;
+        // borders_indices[vec_index].index[slot_index] = GPU_UINT_MAX;
       }
     }
   }

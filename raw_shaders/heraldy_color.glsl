@@ -1,3 +1,9 @@
+#include "../render/heraldy.h"
+
+layout(set = heraldy_layers_set_index, binding = 0) buffer readonly layers_buffer {
+  packed_heraldy_layer_t layers[];
+};
+
 bool point_in_box(const vec2 point, const vec4 box);
 vec4 get_color(const color_t color, const float alpha);
 vec3 get_color(const color_t color);
@@ -92,12 +98,12 @@ bool point_in_box(const vec2 point, const vec4 box) {
 }
 
 vec4 get_color(const color_t color, const float alpha) {
-  vec4 ret;
-  ret.x = get_color_r(color);
-  ret.y = get_color_g(color);
-  ret.z = get_color_b(color);
-  ret.w = alpha;
-  return ret;
+  return vec4(
+    get_color_r(color),
+    get_color_g(color),
+    get_color_b(color),
+    alpha
+  );
 }
 
 vec3 get_color(const color_t color) {

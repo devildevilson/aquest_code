@@ -15,7 +15,9 @@ layout(set = 0, binding = 0) uniform UniformBufferObject {
 } ubo;
 
 layout(push_constant) uniform uPushConstant {
-  image_t texture;
+  uint texture_type;
+  //image_t texture;
+  uint data;
 } pc;
 
 layout(location = 0) in vec2 in_pos;
@@ -24,8 +26,9 @@ layout(location = 2) in uvec4 in_color;
 
 layout(location = 0) out flat uvec4 out_color;
 layout(location = 1) out vec2 out_uv;
-layout(location = 2) out vec2 out_square_uv;
-layout(location = 3) out flat image_t out_texture;
+//layout(location = 2) out vec2 out_square_uv;
+layout(location = 2) out flat uint texture_type;
+layout(location = 3) out flat uint out_data;
 
 out gl_PerVertex {
   vec4 gl_Position;
@@ -34,9 +37,12 @@ out gl_PerVertex {
 void main() {
   out_color = in_color;
   out_uv = in_uv;
-  out_square_uv = default_uv[gl_VertexIndex % 4];
+  //out_square_uv = default_uv[gl_VertexIndex % 4];
   //out_texture_indices = uvec2(pc.texture.imageIndex, pc.texture.layerIndex);
-  out_texture = pc.texture;
+  //texture_type = IMAGE_TYPE_DEFAULT;
+  texture_type = pc.texture_type;
+  //out_texture = pc.texture;
+  out_data = pc.data;
   gl_Position = ubo.proj * vec4(in_pos, 0.0f, 1.0f);
 }
 

@@ -43,7 +43,7 @@ layout(std140, set = 3, binding = 0) readonly buffer tiles_buffer {
 };
 
 // наверное из вершинного буфера приходят индексы
-//layout(location = 0) in uint current_index;
+layout(location = 0) in uint current_index;
 // тип границы?
 //layout(location = 0) out vec4 out_vert;
 
@@ -54,10 +54,10 @@ out gl_PerVertex {
 //const float thickness = 0.2f;
 
 void main() {
-  // const uint border_index = current_index / 6;
-  // const uint index_border = current_index % 6; // [0,5]
-  const uint border_index = gl_VertexIndex / PACKED_INDEX_COEF;
-  const uint index_border = gl_VertexIndex % PACKED_INDEX_COEF; // [0,5]
+  const uint border_index = current_index;
+  const uint index_border = gl_VertexIndex; // [0,3]
+  //const uint border_index = gl_VertexIndex / PACKED_INDEX_COEF;
+  //const uint index_border = gl_VertexIndex % PACKED_INDEX_COEF; // [0,3]
   border_data current_data = datas[border_index];
   const uint type_index = floatBitsToUint(current_data.dirs[1].w); // так прячем тип границы
   const border_type type = types[type_index];

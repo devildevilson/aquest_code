@@ -5,10 +5,10 @@
 #include "../utils/shared_mathematical_constant.h"
 
 const vec4 object_points[] = {
-  vec4(-1.0f, 1.0f, 0.0f, 1.0f),
-  vec4( 1.0f, 1.0f, 0.0f, 1.0f),
-  vec4(-1.0f,-1.0f, 0.0f, 1.0f),
-  vec4( 1.0f,-1.0f, 0.0f, 1.0f)
+  vec4(-1.0f, 2.0f, 0.0f, 1.0f),
+  vec4( 1.0f, 2.0f, 0.0f, 1.0f),
+  vec4(-1.0f, 0.0f, 0.0f, 1.0f),
+  vec4( 1.0f, 0.0f, 0.0f, 1.0f)
 };
 
 const vec2 object_uv[] = {
@@ -70,6 +70,7 @@ out gl_PerVertex {
   vec4 gl_Position;
 };
 
+layout(location = 0) in uint current_index;
 layout(location = 0) out flat image_t out_image;
 layout(location = 1) out flat color_t in_biom_color;
 layout(location = 2) out vec2 out_uv;
@@ -80,8 +81,10 @@ mat4 rotate(const mat4 mat, const float angle, const vec4 normal);
 mat4 scale(const mat4 mat, const vec4 vec);
 
 void main() {
-  const uint army_index  = gl_VertexIndex / PACKED_INDEX_COEF;
-  const uint point_index = gl_VertexIndex % PACKED_INDEX_COEF;
+  const uint army_index  = current_index;
+  const uint point_index = gl_VertexIndex; // [0,3]
+  //const uint army_index  = gl_VertexIndex / PACKED_INDEX_COEF;
+  //const uint point_index = gl_VertexIndex % PACKED_INDEX_COEF; // [0,3]
 
   const army_data_t army = army_datas[army_index];
   const vec4 pos = vec4(army.data.xyz, 1.0f);

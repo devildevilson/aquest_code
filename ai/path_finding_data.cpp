@@ -86,7 +86,7 @@ namespace devils_engine {
     template <>
     size_t maximum_unit_advance(const core::army* unit, const size_t &start) {
       ASSERT(unit != nullptr);
-      const uint32_t speed = unit->computed_stats[core::army_stats::speed].uval;
+      const uint32_t speed = unit->stats.get(core::army_stats::speed);
       return unit_advance(unit, start, speed);
     }
   }

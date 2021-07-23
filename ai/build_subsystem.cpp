@@ -19,7 +19,7 @@ namespace devils_engine {
 
       // должны быть какие то игровые переменные которые позволят быстро ограничить строительство
       // например минимальная сумма денег
-      if (c->current_stats[core::character_stats::money].fval < 200.0f) return SUB_SYSTEM_SKIP;
+      if (c->resources.get(core::character_resources::money) < 200.0f) return SUB_SYSTEM_SKIP;
 
       // получаем новое случайное число примерно так
       const double val = utils::rng_normalize(c->get_random());
@@ -48,7 +48,7 @@ namespace devils_engine {
       std::vector<double[core::city_type::maximum_buildings]> probabilities(cities.size());
       memset(probabilities.data(), 0, sizeof(double) * core::city_type::maximum_buildings * probabilities.size());
 
-      const float money = c->current_stats[core::character_stats::money].fval;
+      const float money = c->resources.get(core::character_resources::money);
 
       // вот у нас есть список городов, доступность зданий мы можем считать здесь
       // с другой стороны доступность возможно нужно пересчитать отдельно, для каждого города можно задать переменную которая будет отслеживать изменение остояния провинции
@@ -77,7 +77,7 @@ namespace devils_engine {
           float cost = 0.0f;
           for (size_t j = 0; j < core::building_type::maximum_stat_modifiers; ++j) {
             if (building->mods[j].type != core::unit_type::character) continue;
-            if (building->mods[j].stat != core::character_stats::money) continue; // думаю что нужно вытащить стоимость
+            if (building->mods[j].stat != core::character_resources::money) continue; // думаю что нужно вытащить стоимость
             cost = building->mods[j].mod.fval;
             break;
           }

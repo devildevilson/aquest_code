@@ -54,41 +54,42 @@
   CONDITION_COMMAND_FUNC(realm_has_enacted_law) \
   CONDITION_COMMAND_FUNC(realm_has_law_mechanic) \
   CONDITION_COMMAND_FUNC(is_among_most_powerful_vassals) \
-  CONDITION_COMMAND_FUNC(age) \
-  CONDITION_COMMAND_FUNC(money) \
-  CONDITION_COMMAND_FUNC(military) \
-  CONDITION_COMMAND_FUNC(managment) \
-  CONDITION_COMMAND_FUNC(diplomacy) \
-  CONDITION_COMMAND_FUNC(health) \
-  CONDITION_COMMAND_FUNC(fertility) \
-  CONDITION_COMMAND_FUNC(strength) \
-  CONDITION_COMMAND_FUNC(agility) \
-  CONDITION_COMMAND_FUNC(intellect) \
-  CONDITION_COMMAND_FUNC(military_penalty)   \
-  CONDITION_COMMAND_FUNC(managment_penalty)  \
-  CONDITION_COMMAND_FUNC(diplomacy_penalty)  \
-  CONDITION_COMMAND_FUNC(health_penalty)     \
-  CONDITION_COMMAND_FUNC(fertility_penalty)  \
-  CONDITION_COMMAND_FUNC(strength_penalty)   \
-  CONDITION_COMMAND_FUNC(agility_penalty)    \
-  CONDITION_COMMAND_FUNC(intellect_penalty)  \
-  CONDITION_COMMAND_FUNC(demesne_size)             \
-  CONDITION_COMMAND_FUNC(ai_rationality)           \
-  CONDITION_COMMAND_FUNC(ai_zeal)                  \
-  CONDITION_COMMAND_FUNC(ai_greed)                 \
-  CONDITION_COMMAND_FUNC(ai_honor)                 \
-  CONDITION_COMMAND_FUNC(ai_ambition)              \
-  CONDITION_COMMAND_FUNC(authority_income_mod)     \
-  CONDITION_COMMAND_FUNC(esteem_income_mod)        \
-  CONDITION_COMMAND_FUNC(influence_income_mod)     \
-  CONDITION_COMMAND_FUNC(income_mod)               \
-  CONDITION_COMMAND_FUNC(authority_income)         \
-  CONDITION_COMMAND_FUNC(esteem_income)            \
-  CONDITION_COMMAND_FUNC(influence_income)         \
-  CONDITION_COMMAND_FUNC(income)                   \
-  CONDITION_COMMAND_FUNC(authority)                \
-  CONDITION_COMMAND_FUNC(esteem)                   \
-  CONDITION_COMMAND_FUNC(influence)                \
+  CONDITION_COMMAND_FUNC(age)
+  
+//   CONDITION_COMMAND_FUNC(money)
+//   CONDITION_COMMAND_FUNC(military)
+//   CONDITION_COMMAND_FUNC(managment)
+//   CONDITION_COMMAND_FUNC(diplomacy)
+//   CONDITION_COMMAND_FUNC(health)
+//   CONDITION_COMMAND_FUNC(fertility)
+//   CONDITION_COMMAND_FUNC(strength)
+//   CONDITION_COMMAND_FUNC(agility)
+//   CONDITION_COMMAND_FUNC(intellect)
+//   CONDITION_COMMAND_FUNC(military_penalty)
+//   CONDITION_COMMAND_FUNC(managment_penalty)
+//   CONDITION_COMMAND_FUNC(diplomacy_penalty)
+//   CONDITION_COMMAND_FUNC(health_penalty)
+//   CONDITION_COMMAND_FUNC(fertility_penalty)  
+//   CONDITION_COMMAND_FUNC(strength_penalty)   
+//   CONDITION_COMMAND_FUNC(agility_penalty)    
+//   CONDITION_COMMAND_FUNC(intellect_penalty)  
+//   CONDITION_COMMAND_FUNC(demesne_size)             
+//   CONDITION_COMMAND_FUNC(ai_rationality)           
+//   CONDITION_COMMAND_FUNC(ai_zeal)                  
+//   CONDITION_COMMAND_FUNC(ai_greed)                 
+//   CONDITION_COMMAND_FUNC(ai_honor)                 
+//   CONDITION_COMMAND_FUNC(ai_ambition)              
+//   CONDITION_COMMAND_FUNC(authority_income_mod)     
+//   CONDITION_COMMAND_FUNC(esteem_income_mod)        
+//   CONDITION_COMMAND_FUNC(influence_income_mod)     
+//   CONDITION_COMMAND_FUNC(income_mod)               
+//   CONDITION_COMMAND_FUNC(authority_income)         
+//   CONDITION_COMMAND_FUNC(esteem_income)            
+//   CONDITION_COMMAND_FUNC(influence_income)         
+//   CONDITION_COMMAND_FUNC(income)                   
+//   CONDITION_COMMAND_FUNC(authority)                
+//   CONDITION_COMMAND_FUNC(esteem)                   
+//   CONDITION_COMMAND_FUNC(influence)                
 
   // пока не очень понятно что с этим делать
 //   CONDITION_COMMAND_FUNC(culture_flex),            

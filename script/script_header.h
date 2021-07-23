@@ -3,92 +3,41 @@
 
 #include <cstdint>
 #include <string>
-#include "utils/assert.h"
-#include <vector>
-#include "parallel_hashmap/phmap.h"
 #include <array>
 #include <functional>
+#include <vector>
+
+#include "utils/assert.h"
+#include "core/stats.h"
+#include "parallel_hashmap/phmap.h"
 #include "condition_commands_macro.h"
 #include "action_commands_macro.h"
 #include "script_block_commands_macro.h"
 #include "utils/linear_rng.h"
 #include "utils/sol.h"
+#include "target.h"
+
+#define FALSE_BLOCK 0
+#define TRUE_BLOCK 1
+#define IGNORE_BLOCK 2
 
 namespace devils_engine {
+  namespace core {
+    struct decision;
+  }
+  
   namespace script {
-    // это всегда должна быть конкретная игровая сущность
-    // на вход подавать script_data?
-    struct target {
-      uint32_t type;
-      void* data;
-    };
-    
-    // по идее в какой то такой структуре должны содержаться и команды и данные
-    struct script_data {
-//       union {
-//         struct {
-          // тут мы можем хранить тип команды (например сравнение)
-          uint16_t command_type;
-          // тут мы можем хранить тип значения которое к нам поступает, мне еще нужно указать тип сравнения, по 4 бита выделить?
-          uint8_t number_type;
-          uint8_t compare_type;
-          // тут мы можем хранить непосредственно индекс команды (65000 команд должно хватить на все)
-          uint16_t helper1;
-          //float value;
-          // некие специальные скомпилированные символы? тут можно указать дополнительный тип переменной (например умноженный инком)
-          // тут будет храниться тип объекта, который лежит в дате
-          uint16_t helper2;
-//         };
-        // здесь мы храним значение, либо количество элементов массива
-        double value;
-//       };
-      // по идее строки не должно быть, строки должны быть переделаны в последовательность действий
-      // которые мы выполним по отношению к объекту, с другой стороны строка может потребоваться дальше
-      // как входные данные для функции (или собственно как сама функция)
-      //std::string str_value;
-      // по строке мы иногда можем указать конкртный объект (например титул)
-      // но в строке должна содержаться команда, и то ее нужно будет переделать в скомпилированные действия
-      // в строке может храниться флаг, со флагом особо ничего и не сделаешь
-      // флаг то поди можно засунуть в массив по указателю ниже
-      // и scope id тоже туда же
-      
-      // указатель по идее может хранить массив данных указанных в скрипте
-      void* data;
-      
-      script_data();
-      script_data(const script_data &copy) = delete;
-      script_data(script_data &&move);
-      script_data(const struct target &t);
-      ~script_data();
-      
-      script_data & operator=(const script_data &copy) = delete;
-      script_data & operator=(script_data &&move);
-    };
-    
-    // стейт будет меняться каждый ход? да, наверное так будет лучше всего
-    // нужно замешивать соль от персонажа, 128 стейт достаточно
-    struct random_state {
-      utils::xoroshiro128starstar::state s;
-      
-      uint64_t next();
-    };
-    
-    // контекст по идее должен быть доступен и в обычных функциях
-    struct context {
-      std::vector<script_data> array_data;
-      phmap::flat_hash_map<std::string, script_data> map_data;
-      random_state* rnd;
-      mutable sol::function* itr_func;
-    };
-    
     namespace command_type {
-      enum value {
+      enum values {
         invalid,
         condition,
         action,
         condition_script_block,
         action_script_block,
+        general_script_block,
         object_function,
+//         complex_variable,
+        rvalue,
         // к скоупу мы обратимся через контекст, а может и нет
         scope,
         save_scope,
@@ -97,19 +46,22 @@ namespace devils_engine {
     }
     
     namespace number_type {
-      enum value {
+      enum values {
         boolean,
         number,
-        string,
         object,
+        stat,
         array,
+        lvalue,
+        lvalue_array,
+        string_view,
+        string,
         get_scope,
-        stat
       };
     }
     
     namespace number_compare_type {
-      enum value {
+      enum values {
         equal,
         not_equal,
         more,
@@ -120,7 +72,7 @@ namespace devils_engine {
     }
     
     namespace number_update_type {
-      enum value {
+      enum values {
         add,
         diff
       };
@@ -167,34 +119,148 @@ namespace devils_engine {
       };
     }
     
+    // по идее в какой то такой структуре должны содержаться и команды и данные
+    struct script_data {
+//       union {
+//         struct {
+          // тут мы можем хранить тип команды (например сравнение)
+          uint16_t command_type;
+          // тут мы можем хранить тип значения которое к нам поступает, мне еще нужно указать тип сравнения, по 4 бита выделить?
+          uint8_t number_type;
+          uint8_t compare_type;
+          // тут мы можем хранить непосредственно индекс команды (65000 команд должно хватить на все)
+          uint16_t helper1;
+          //float value;
+          // некие специальные скомпилированные символы? тут можно указать дополнительный тип переменной (например умноженный инком)
+          // тут будет храниться тип объекта, который лежит в дате
+          uint16_t helper2;
+//         };
+        // здесь мы храним значение, либо количество элементов массива
+        double value;
+//       };
+      // по идее строки не должно быть, строки должны быть переделаны в последовательность действий
+      // которые мы выполним по отношению к объекту, с другой стороны строка может потребоваться дальше
+      // как входные данные для функции (или собственно как сама функция)
+      //std::string str_value;
+      // по строке мы иногда можем указать конкртный объект (например титул)
+      // но в строке должна содержаться команда, и то ее нужно будет переделать в скомпилированные действия
+      // в строке может храниться флаг, со флагом особо ничего и не сделаешь
+      // флаг то поди можно засунуть в массив по указателю ниже
+      // и scope id тоже туда же
+      
+      // указатель по идее может хранить массив данных указанных в скрипте
+      void* data;
+      
+      script_data();
+      script_data(const script_data &copy) = delete;
+      script_data(script_data &&move);
+      script_data(const struct target_t &t);
+      script_data(const std::string_view &str);
+      script_data(const double &value, const uint8_t &compare_type = number_compare_type::more_eq);
+      ~script_data();
+      
+      script_data & operator=(const script_data &copy) = delete;
+      script_data & operator=(script_data &&move);
+      script_data & operator=(const struct target_t &t);
+      script_data & operator=(const std::string_view &str);
+      script_data & operator=(const double &value);
+      
+      void clear();
+    };
+    
+    // стейт будет меняться каждый ход? да, наверное так будет лучше всего
+    // нужно замешивать соль от персонажа, 128 стейт достаточно
+    struct random_state {
+      utils::xoroshiro128starstar::state s;
+      
+      uint64_t next();
+    };
+    
+    // контекст по идее должен быть доступен и в обычных функциях
+    struct context {
+      // это нужно убрать, и убрать соответственно все обращения к массиву (массив нинужен, все усложняет)
+      //std::vector<script_data> array_data;
+      target_t root;
+      phmap::flat_hash_map<std::string, script_data> map_data;
+      random_state* rnd;
+      sol::function* itr_func;
+      // хотя все равно не понимаю зачем стак, нужен только prev
+      //std::vector<target> targets_stack;
+      target_t prev;
+      script_data current_value;
+      size_t nest_level;
+      
+      context();
+    };
+    
+    struct turn_off_function {
+      context* ctx;
+      sol::function* f;
+      
+      inline turn_off_function(context* ctx) noexcept : ctx(ctx), f(nullptr) { std::swap(ctx->itr_func, f); }
+      inline ~turn_off_function() noexcept { std::swap(ctx->itr_func, f); }
+    };
+    
+    struct change_prev_target {
+      context* ctx;
+      target_t mem;
+      
+      inline change_prev_target(context* ctx, const target_t &current) noexcept : ctx(ctx), mem(ctx->prev) { ctx->prev = current; }
+      inline ~change_prev_target() noexcept { ctx->prev = mem; }
+    };
+    
+    struct increase_nesting {
+      context* ctx;
+      
+      inline increase_nesting(context* ctx) noexcept : ctx(ctx) { ++ctx->nest_level; }
+      inline ~increase_nesting() noexcept { --ctx->nest_level; }
+    };
+    
     namespace condition_function {
-      enum value {
-  #define CONDITION_COMMAND_FUNC(name) name,
+      enum values {
+#define CONDITION_COMMAND_FUNC(name) name,
         CONDITION_COMMANDS_LIST
-  #undef CONDITION_COMMAND_FUNC
+#undef CONDITION_COMMAND_FUNC
+  
+#define STAT_FUNC(name) name,
+#define CHARACTER_PENALTY_STAT_FUNC(name) name##_penalty,
+        UNIQUE_STATS_LIST
+#undef STAT_FUNC
+#undef CHARACTER_PENALTY_STAT_FUNC
+
         count
       };
     }
     
     namespace action_function {
-      enum value {
+      enum values {
 #define ACTION_COMMAND_FUNC(name) name,
         ACTION_COMMANDS_LIST
 #undef ACTION_COMMAND_FUNC
+
+#define STAT_FUNC(name) add_##name,
+#define CHARACTER_PENALTY_STAT_FUNC(name) add_##name##_penalty,
+        UNIQUE_STATS_LIST
+#undef STAT_FUNC
+#undef CHARACTER_PENALTY_STAT_FUNC
+
         count
       };
     }
     
     // лучше все же разделить блок функции
-    namespace block_function {
-      enum value {
+    namespace general_block_function {
+      enum values {
+#define SCRIPT_BLOCK_COMMAND_FUNC(name) name,
+        SCRIPT_BLOCK_COMMANDS_LIST
+#undef SCRIPT_BLOCK_COMMAND_FUNC
         count
       };
     }
     
     // есть хотя бы одна функция которая доступна в блоке экшонов
     namespace condition_block_function {
-      enum value {
+      enum values {
 #define SCRIPT_BLOCK_COMMAND_FUNC(name) name,
       CONDITION_SCRIPT_BLOCK_COMMANDS_LIST
 #undef SCRIPT_BLOCK_COMMAND_FUNC
@@ -203,7 +269,7 @@ namespace devils_engine {
     }
     
     namespace action_block_function {
-      enum value {
+      enum values {
 #define SCRIPT_BLOCK_COMMAND_FUNC(name) name,
       ACTION_SCRIPT_BLOCK_COMMANDS_LIST
 #undef SCRIPT_BLOCK_COMMAND_FUNC
@@ -214,192 +280,45 @@ namespace devils_engine {
     // нужно сделать список строгой последовательности функций + инициализации
     // 
     
-    // тут мы должны учесть еще контекст
-    typedef bool (*condition_function_p) (const target &, const context &, const uint32_t &, const script_data*);
-    typedef void (*action_function_p)    (const target &, const context &, const uint32_t &, const script_data*);
-    typedef int32_t (*block_function_p)  (const target &, const context &, const uint32_t &, const script_data*);
-    typedef void (*function_init_p)      (const uint32_t &, const sol::object &, script_data*); // инициализируем те данные которые мы будем отправлять в функцию
+    // зачем я сделал константный контекст? с учетом того что мне нужно в нем что то постоянно менять (например стек объектов)
+    typedef bool (*condition_function_p)        (const target_t&, context*, const uint32_t&, const script_data*);
+    typedef void (*action_function_p)           (const target_t&, context*, const uint32_t&, const script_data*);
+    typedef int32_t (*block_function_p)         (const target_t&, context*, const uint32_t&, const script_data*);
+    typedef int32_t (*general_block_function_p) (const target_t&, context*, const uint32_t&, const script_data*, const uint32_t&);
+    typedef void (*function_init_p)             (const uint32_t&, const sol::object&, script_data*); // инициализируем те данные которые мы будем отправлять в функцию
+    typedef void (*general_function_init_p)     (const uint32_t&, const sol::object&, script_data*, const uint32_t&);
     
     extern const condition_function_p condition_functions[];
     extern const action_function_p action_functions[];
     extern const block_function_p condition_block_functions[];
     extern const block_function_p action_block_functions[];
+    extern const general_block_function_p general_block_functions[];
     
     extern const function_init_p condition_init_functions[];
     extern const function_init_p action_init_functions[];
     extern const function_init_p condition_block_init_functions[];
     extern const function_init_p action_block_init_functions[];
+    extern const general_function_init_p general_block_init_functions[];
     
     extern const std::string_view complex_var_regex; // "(\\w+):(\\w+):([+-]?([0-9]+([.][0-9]*)?|[.][0-9]+))"
+    extern const std::string_view dot_matcher;
+    extern const std::string_view colon_matcher;
+    extern const std::string_view number_matcher;
     
-    // в данных должны быть и таргеты
-//     bool is_ai(const struct target &target, const uint32_t &count, const script_data* data) {
-//       ASSERT(count == 1);
-//       ASSERT(data[0].type == data_type::number);
-//       ASSERT(data[0].data_type == number_type::boolean);
-//       ASSERT(target.type == 1);
-//       return target.data->is_ai() == bool(data[0].value);
-//     }
-//     
-//     bool learning_diff(const struct target &target, const uint32_t &count, const script_data* data) {
-//       ASSERT(count == 3);
-//       ASSERT(data[0].type == data_type::target);
-//       ASSERT(data[1].type == data_type::number);
-//       ASSERT(data[2].type == data_type::number);
-//       ASSERT(data[0].data_type == 1);
-//       ASSERT(data[1].data_type == number_type::integer);
-//       ASSERT(data[2].data_type == number_type::boolean);
-//       //ASSERT(data[1].helper == number_compare_type::more);
-//       
-//       // стоп, а где тип сравнения? в helper?
-//       switch (data[1].helper) {
-//         case number_compare_type::more: {
-//           
-//           break;
-//         }
-//       }
-//       
-//       // тут обращаемся к данным двух тагретов
-//       // вычитаем одно из другого
-//       // сравниваем с data[1].value
-//     }
-//     
-//     // any_faction_member должен генерировать цикл, а для этого нужны новые переменные
-//     target any_faction_member(const struct target &target, const uint32_t &count, const script_data* data) {
-//       ASSERT(count == 1);
-//       // в этом случае нужно понимание что перед нами, по идее мы можем добавить это в хелпер
-//       // тут может быть указано конкретное количество челиков которые мы должны обойти
-//       // как обходить? по идее берем рандомных челиков по количеству или какую то часть
-//       if (data[0].helper == 123) {
-//         
-//       }
-//     }
-//     
-//     void money(const struct target &target, const uint32_t &count, const script_data* data) {
-//       ASSERT(count == 1);
-//       ASSERT(data[0].type == data_type::number);
-//       ASSERT(data[0].data_type == number_type::integer);
-//       
-//       switch (data[1].helper) {
-//         case number_update_type::add: {
-//           target.data->add_stat(data[0].value);
-//           break;
-//         }
-//       }
-//     }
-//     
-//     void start_war(const struct target &target, const uint32_t &count, const script_data* data) {
-//       // тут мы должны получить несколько аргументов + массив титулов
-//       // как должен быть передан массив титулов? скорее всего мы должны создать массив 
-//       // когда пытаемся получить титулы
-//       // казус бели кажется тоже нужно создавать, а значит мы должны передать id
-//       // таргет мы получим из контекста, клеймет - контекст, массив титулов - тоже несколько id
-//       // хотя может и нет, вообще наверное можно и так и так
-//       ASSERT(count == 4);
-//       ASSERT(data[0].type == data_type::number);
-//     }
-//     
-//     // смена таргета - это всегда рекурсивная функция, смена условия выхода - это рекурсивная функция
-//     // if_condition - это скорее всего рекурсивная функция
-//     // что такое array? по идее массив script_data + конкретные функции
-//     // что такое data? это вектор + мап, из которых мы берем данные по командам
-//     bool compute_condition(void* array, void* data, const bool current_bad, const struct target &current_target);
-//     void compute_action(void* array, void* data, const struct target &current_target);
-//     bool compute_condition_loop(void* array, void* data, const bool current_bad, const struct target &current_target);
-//     void compute_action_loop(void* array, void* data, const struct target &current_target);
-//     
-//     // эта функция должна быть рекурсивна
-//     void fire_decision() {
-//       enum type {
-//         cond,
-//         change_target,
-//         or_table,
-//         end,
-//         end_or
-//       };
-//       
-//       struct data {
-//         uint32_t type;
-//       };
-//       
-//       std::array<script_data, 16> context;
-//       std::array<script_data, 16> scope; 
-//       // со скоупом не очень понятно как его собирать
-//       // у нас по идее должна быть возможность запомнить всех any_faction_member
-//       // тогда нужны инструменты к обходу контекста
-//       // короче нужно реализовать несколько тестовых сценариев
-//       // и много раз проводить тестирование
-//       
-//       // короче нужно сделать несколько рекурсивных функций, которые будут выступать вместо стека
-//       // и нужно будет реализовать цикл, цикл по идее тоже можно через рекурсивные функции
-//       // мне кажется что скорее всего в цк все сделано через рекурсию (???), хотя вряд ли
-//       // короч рекурсивные функции какие? переход контекста, эти функции могут быть как и цикльными так и нет
-//       // как использоваться в условных блоках, так и в блоках эффектов
-//       // нужны видимо 4 разных типов рекурсивных функций
-//       // теперь вопрос как передавать туда данные? хороший вопрос, не очень понимаю вообще что такое данные в этом контексте
-//       // возможно нужно вводить vector и unordered_map, для разных типов данных
-//       
-//       size_t loop_index = SIZE_MAX;
-//       size_t current_loop_index = 0;
-//       //bool current_bad = false;
-//       // все стеки можно заменить рекурсией
-//       // думаю что так будет лучше
-//       // с рекурсией как передать правильно собранный контекст
-//       size_t stack_top = 0;
-//       std::array<struct target, 16> stack;
-//       // все же наверное нужно добавить стек для булеан значений
-//       // нам нужно смешать 'или' и 'и' структуры, и придется видимо добавить стек current_bad
-//       // нет, скорее только current_bad ...
-//       size_t bool_stack_top = 0;
-//       std::array<bool, 16> bool_stack;
-//       bool_stack[bool_stack_top] = false;
-//       std::vector<data> condition;
-//       for (size_t i = 0; i < condition.size(); ++i) {
-//         const target local_target = stack[stack_top];
-//         const bool current_bad = bool_stack[bool_stack_top];
-//         
-//         switch (condition[i].type) {
-//           case type::cond: {
-//             script_data d;
-//             const bool ret = is_ai(local_target, 1, &d);
-//             // вообще тут до первого false, или если мы находимся в 'или' структуре, то до первого true
-//             if (ret == current_bad) {
-//               if (stack_top == 0) {} // выходим
-//               else {} // ищем type::end
-//             }
-//             break;
-//           }
-//           
-//           case type::or_table: {
-//             ++bool_stack_top;
-//             bool_stack[bool_stack_top] = true;
-//             break;
-//           }
-//           
-//           case type::change_target: {
-//             const auto next_target = any_faction_member(local_target, 0, nullptr);
-//             ++stack_top;
-//             stack[stack_top] = next_target;
-//             break;
-//           }
-//           
-//           case type::end: {
-//             ASSERT(stack_top != 0);
-//             --stack_top;
-//             if (loop_index != SIZE_MAX) {
-//               i = loop_index-1;
-//               ++current_loop_index;
-//             }
-//             break;
-//           }
-//           
-//           case type::end_or: {
-//             --bool_stack_top;
-//             break;
-//           }
-//         }
-//       }
-//     }
+    // нужно добавить парочку утилити функций для того чтобы удобнее пользоваться было скриптами
+    // например инициализация
+    void init_condition(const uint32_t &target_type, const sol::object &obj, script_data* data);
+    void init_action(const uint32_t &target_type, const sol::object &obj, script_data* data);
+    void init_string_from_script(const uint32_t &target_type, const sol::object &obj, script_data* data);
+    void init_number_from_script(const uint32_t &target_type, const sol::object &obj, script_data* data);
+    
+    template <typename T>
+    target_t make_target(T* t) {
+      return {static_cast<uint32_t>(T::s_type), t};
+    }
+    
+    std::string_view get_string_from_script(const target_t &t, context* ctx, const script_data* data);
+    double get_number_from_script(const target_t &t, context* ctx, const script_data* data);
   }
 }
 
@@ -427,5 +346,20 @@ namespace devils_engine {
 // кажется все, в принципе до конца разработки буду возиться с этим, дык еще и длс (что с ними?),
 // хардкодить длс не хочется, но при этом новые функции нужны, 
 // нужно придумать способ сериализовать без самоуничтожений при добавлении новых функций
+
+// нужно еще сделать функции объекта, то есть ряд вещей которые возвращают что то полезное в качестве лефтвалуе
+// для этого нужно более серьезно парсить строки, например у нас может быть строка "context:attacker.top_liege"
+// или "prev.faith", что мне нужно для этого? все таки стек, проверять строку я должен не через реджекс
+// (точнее мне достаточно проверить наличие символов ':' и '.'), функции объекта через точку, 
+// нужно ли добавлять возможность указать входные данные как в функцию? кое что в любом случае нужно будет указать,
+// но нужно минимизировать такие вещи, например у меня явно будет что то вроде "character.stats.military"
+// по большому счету это означает еще ряд дополнительных функций, и придется видимо немного переписать 
+// текстовую составляющую скрипта
+// в этом случае у нас есть и lvalue и rvalue, и сделать бы и то и другое
+// rvalue должно лежать первым перед возможным кондишеном, у конкретной функции может быть lvalue
+// может ли быть пара rvalue и lvalue одновременно? так можно было бы сделать например запоминание скоупа
+// например вот так "'scope:attacker' = 'prev.leader'", в принципе само собой у нас появилось разделение
+// на скоуп и функции объекта (скоуп через :, функции объекта через .) в чем прикол функции объекта?
+// они возвращают некую унифицированную структуру (script_data меня пока что устраивает)
 
 #endif

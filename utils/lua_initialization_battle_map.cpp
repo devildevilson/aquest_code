@@ -1,4 +1,4 @@
-#include "lua_initialization.h"
+#include "lua_initialization_hidden.h"
 
 #include "bin/battle_map.h"
 #include "utils/battle_map_enum.h"

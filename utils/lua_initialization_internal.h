@@ -2,6 +2,7 @@
 #define LUA_INITIALIZATION_INTERNAL_H
 
 #include "utils/sol.h"
+#include "reserved_lua_table_names.h"
 
 namespace devils_engine {
   namespace utils {

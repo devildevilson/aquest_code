@@ -5,7 +5,7 @@
 #include "core/culture.h"
 #include "core/religion.h"
 #include "core/titulus.h"
-#include "lua_initialization.h"
+#include "reserved_lua_table_names.h"
 #include "magic_enum_header.h"
 #include "stats_table.h"
 
@@ -34,7 +34,7 @@ namespace devils_engine {
               const size_t stat_index = obj.as<size_t>();
               const size_t final_index = FROM_LUA_INDEX(stat_index);
               if (final_index > core::character_stats::count) throw std::runtime_error("Bad character stat index " + std::to_string(stat_index));
-              return self->base_stat(final_index);
+              return self->stats.get(final_index);
             }
             
             const std::string_view str = obj.as<std::string_view>();
@@ -45,7 +45,7 @@ namespace devils_engine {
             const auto itr = character_stats_map.find(str);
             if (itr == character_stats_map.end()) throw std::runtime_error("Bad character stat index " + std::string(str));
             const uint32_t index = itr->second;
-            return self->base_stat(index);
+            return self->stats.get(index);
           },
           "get_current_stat", [] (const core::character* self, const sol::object &obj) -> float {
             if (obj.get_type() != sol::type::number && obj.get_type() != sol::type::string) throw std::runtime_error("Bad character stat index type");
@@ -54,14 +54,14 @@ namespace devils_engine {
               const size_t stat_index = obj.as<size_t>();
               const size_t final_index = FROM_LUA_INDEX(stat_index);
               if (final_index > core::character_stats::count) throw std::runtime_error("Bad character stat index " + std::to_string(stat_index));
-              return self->stat(final_index);
+              return self->current_stats.get(final_index);
             }
             
             const std::string_view str = obj.as<std::string_view>();
             const auto itr = character_stats_map.find(str);
             if (itr == character_stats_map.end()) throw std::runtime_error("Bad character stat index " + std::string(str));
             const uint32_t index = itr->second;
-            return self->stat(index);
+            return self->current_stats.get(index);
           },
           "get_base_hero_stat", [] (const core::character* self, const sol::object &obj) -> float {
             if (obj.get_type() != sol::type::number && obj.get_type() != sol::type::string) throw std::runtime_error("Bad character stat index type");
@@ -70,14 +70,14 @@ namespace devils_engine {
               const size_t stat_index = obj.as<size_t>();
               const size_t final_index = FROM_LUA_INDEX(stat_index);
               if (final_index > core::character_stats::count) throw std::runtime_error("Bad character stat index " + std::to_string(stat_index));
-              return self->base_hero_stat(final_index);
+              return self->hero_stats.get(final_index);
             }
             
             const std::string_view str = obj.as<std::string_view>();
             const auto itr = hero_stats_map.find(str);
             if (itr == hero_stats_map.end()) throw std::runtime_error("Bad character stat index " + std::string(str));
             const uint32_t index = itr->second;
-            return self->base_hero_stat(index);
+            return self->hero_stats.get(index);
           },
           "get_current_hero_stat", [] (const core::character* self, const sol::object &obj) -> float {
             if (obj.get_type() != sol::type::number && obj.get_type() != sol::type::string) throw std::runtime_error("Bad character stat index type");
@@ -86,14 +86,14 @@ namespace devils_engine {
               const size_t stat_index = obj.as<size_t>();
               const size_t final_index = FROM_LUA_INDEX(stat_index);
               if (final_index > core::character_stats::count) throw std::runtime_error("Bad character stat index " + std::to_string(stat_index));
-              return self->hero_stat(final_index);
+              return self->current_hero_stats.get(final_index);
             }
             
             const std::string_view str = obj.as<std::string_view>();
             const auto itr = hero_stats_map.find(str);
             if (itr == hero_stats_map.end()) throw std::runtime_error("Bad character stat index " + std::string(str));
             const uint32_t index = itr->second;
-            return self->hero_stat(index);
+            return self->current_hero_stats.get(index);
           },
           "name_number", sol::readonly(&core::character::name_number),
           "born_day", sol::readonly(&core::character::born_day),

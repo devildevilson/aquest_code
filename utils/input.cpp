@@ -1,11 +1,11 @@
 #include "input.h"
 
-#include "globals.h"
-#include "shared_time_constant.h"
 #include <cstring>
 #include <iostream>
+
+#include "globals.h"
+#include "shared_time_constant.h"
 #include "render/window.h"
-#include "GLFW/glfw3.h"
 
 namespace devils_engine {
   namespace utils {
@@ -998,14 +998,12 @@ namespace devils_engine {
     
     std::tuple<double, double> get_cursor_pos() {
       auto w = global::get<render::window>();
-      double x,y;
-      glfwGetCursorPos(w->handle, &x, &y);
-      return std::tie(x, y);
+      return w->get_cursor_pos();
     }
     
     std::tuple<uint32_t, uint32_t> get_framebuffer_size() {
       auto w = global::get<render::window>();
-      return {w->surface.extent.width, w->surface.extent.height};
+      return w->framebuffer_size();
     }
     
     std::tuple<float, float> get_window_content_scale() {

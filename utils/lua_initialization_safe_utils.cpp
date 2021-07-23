@@ -1,4 +1,4 @@
-#include "lua_initialization.h"
+#include "lua_initialization_hidden.h"
 
 #include "render/shared_render_utility.h"
 #include "magic_enum_header.h"

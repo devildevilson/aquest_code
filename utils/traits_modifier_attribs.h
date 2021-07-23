@@ -2,6 +2,7 @@
 #define TRAITS_MODIFIER_ATTRIBS_H
 
 #include <cstdint>
+#include "constexpr_funcs.h"
 
 namespace devils_engine {
   namespace utils {
@@ -43,7 +44,7 @@ namespace devils_engine {
         count
       };
       
-      constexpr const uint32_t bit_container_size = count / UINT32_WIDTH + 1;
+      constexpr const uint32_t bit_container_size = ceil(double(count) / double(UINT32_WIDTH));
     }
     
     namespace modificators {
@@ -68,7 +69,7 @@ namespace devils_engine {
         count
       };
       
-      constexpr const uint32_t bit_container_size = count / UINT32_WIDTH + 1;
+      constexpr const uint32_t bit_container_size = ceil(double(count) / double(UINT32_WIDTH));
     }
   }
 }

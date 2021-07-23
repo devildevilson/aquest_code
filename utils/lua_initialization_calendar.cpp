@@ -1,4 +1,4 @@
-#include "lua_initialization.h"
+#include "lua_initialization_hidden.h"
 
 #include "bin/game_time.h"
 #include "globals.h"

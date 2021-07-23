@@ -1,4 +1,4 @@
-#include "lua_initialization.h"
+#include "lua_initialization_hidden.h"
 
 #include "bin/map.h"
 #include "magic_enum_header.h"

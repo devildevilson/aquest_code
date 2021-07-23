@@ -2,7 +2,7 @@
 
 #include "core/building_type.h"
 #include "lua_initialization.h"
-#include "magic_enum.hpp"
+#include "magic_enum_header.h"
 
 namespace devils_engine {
   namespace utils {

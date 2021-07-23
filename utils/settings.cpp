@@ -1,15 +1,17 @@
 #include "settings.h"
 
+#include <iostream>
+#include <fstream>
+#include <filesystem>
+
 #include "globals.h"
 #include "sol.h"
 #include "input.h"
 #include "render/window.h"
-#include <GLFW/glfw3.h>
-#include <iostream>
-#include <fstream>
-#include <filesystem>
 #include "game_enums.h"
 #include "systems.h"
+
+#include <GLFW/glfw3.h>
 
 namespace devils_engine {
   namespace utils {
@@ -106,7 +108,8 @@ namespace devils_engine {
 //         
 //       }
       
-      if (width != w->surface.extent.width && height != w->surface.extent.height) {
+      const auto [window_width, window_height] = w->size();
+      if (width != uint32_t(window_width) && height != uint32_t(window_height)) {
         //w->recreate(width, height);
         glfwSetWindowSize(w->handle, width, height);
 //         width = w->surface.extent.width;

@@ -36,20 +36,21 @@ namespace devils_engine {
     
     interface_container::interface_container(const create_info &info) : ctx(info.ctx), game_ctx(info.game_ctx), env(lua, sol::create), local_table(lua, sol::create) {
       lua.open_libraries(sol::lib::base, sol::lib::table, sol::lib::math, sol::lib::string, sol::lib::utf8, sol::lib::bit32, sol::lib::package, sol::lib::coroutine);
-      utils::setup_lua_constants(lua);
-      utils::setup_lua_safe_utils(lua);
-      utils::setup_lua_input(lua);
-      utils::setup_lua_package_path(lua);
-      //utils::setup_lua_main_menu(lua); // наверное мы в самом луа сделаем
-      utils::setup_lua_settings(lua);
-      utils::setup_lua_tile(lua);
-      utils::setup_lua_game_context(lua);
-      utils::setup_lua_localization(lua);
-      utils::setup_lua_main_menu(lua);
-      utils::setup_lua_interface_utils(lua);
-      utils::setup_lua_types(lua);
-      utils::setup_lua_camera(lua);
-      utils::setup_lua_selection(lua);
+//       utils::setup_lua_constants(lua);
+//       utils::setup_lua_safe_utils(lua);
+//       utils::setup_lua_input(lua);
+//       utils::setup_lua_package_path(lua);
+//       //utils::setup_lua_main_menu(lua); // наверное мы в самом луа сделаем
+//       utils::setup_lua_settings(lua);
+//       utils::setup_lua_tile(lua);
+//       utils::setup_lua_game_context(lua);
+//       utils::setup_lua_localization(lua);
+//       utils::setup_lua_main_menu(lua);
+//       utils::setup_lua_interface_utils(lua);
+//       utils::setup_lua_types(lua);
+//       utils::setup_lua_camera(lua);
+//       utils::setup_lua_selection(lua);
+      utils::game_interface::setup_lua(lua); // так добавлять новые вещи должно быть попроще
       
       auto utils = lua["utils"].get_or_create<sol::table>();
       utils.new_usertype<timer>("frame_timer", sol::no_constructor,

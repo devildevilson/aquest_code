@@ -5,6 +5,7 @@
 
 #include "magic_enum.hpp"
 #include "lua_initialization.h"
+#include "reserved_lua_table_names.h"
 #include "assert.h"
 #include "globals.h"
 

@@ -1,7 +1,8 @@
-#include "lua_initialization.h"
+#include "lua_initialization_hidden.h"
 #include "lua_initialization_internal.h"
 
 #include "core/stats.h"
+#include "utils/magic_enum_header.h"
 
 #define TO_LUA_INDEX(index) ((index)+1)
 #define FROM_LUA_INDEX(index) ((index)-1)
@@ -34,7 +35,7 @@ namespace devils_engine {
         core["character_stats"] = create_enum<core::character_stats::values>(core, "character_stats", core::offsets::character_stats);
         core["troop_stats"] = create_enum<core::troop_stats::values>(core, "troop_stats", core::offsets::troop_stats);
         core["hero_stats"] = create_enum<core::hero_stats::values>(core, "hero_stats", core::offsets::hero_stats);
-        core["faction_stats"] = create_enum<core::realm_stats::values>(core, "faction_stats", core::offsets::faction_stats);
+        core["faction_stats"] = create_enum<core::realm_stats::values>(core, "faction_stats", core::offsets::realm_stats);
         core["province_stats"] = create_enum<core::province_stats::values>(core, "province_stats", core::offsets::province_stats);
         core["city_stats"] = create_enum<core::city_stats::values>(core, "city_stats", core::offsets::city_stats);
         core["army_stats"] = create_enum<core::army_stats::values>(core, "army_stats", core::offsets::army_stats);

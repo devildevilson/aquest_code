@@ -1,4 +1,4 @@
-#include "lua_initialization.h"
+#include "lua_initialization_hidden.h"
 
 #include "bin/generator_container.h"
 #include "bin/generator_context2.h"

@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <cstdint>
 #include "parallel_hashmap/phmap.h"
+#include "core/stat_data.h"
 
 namespace devils_engine {
   namespace core {
@@ -50,6 +51,51 @@ namespace devils_engine {
       bool has_modificator(const core::modificator* modificator) const;
       void add_modificator(const core::modificator* modificator, const size_t &turns);
       void remove_modificator(const core::modificator* modificator);
+    };
+
+    // тут нужно как то добавить проверку типов, в принципе особо проблем нет просто добавить указатель
+    // нужно ли проверять указатель на баунды? а мы можем указать в теплейте? можем
+    // почему наличие указателя выдает ворнинг subobject-linkage? пишет что есть анонимный неймспейс
+    // стаковерфлоу говорит что это баг компилятора
+    template <typename T, const core::stat_type::values* type_array = nullptr>
+    struct stats_container {
+      std::array<core::stat_container, T::count> array;
+      
+      stats_container() {
+        memset(array.data(), 0, array.size() * sizeof(array[0]));
+      }
+      
+      float get(const uint32_t &index) const {
+        if constexpr (type_array == nullptr) return array[index].ival;
+        switch (type_array[index]) {
+          case core::stat_type::int_t:   return array[index].ival;
+          case core::stat_type::uint_t:  return array[index].uval;
+          case core::stat_type::float_t: return array[index].fval;
+          default: assert(false);
+        }
+        return 0.0f;
+      }
+      
+      void set(const uint32_t &index, const float &value) {
+        if constexpr (type_array == nullptr) { array[index].ival = value; return; }
+        switch (type_array[index]) {
+          case core::stat_type::int_t:   array[index].ival = value; break;
+          case core::stat_type::uint_t:  array[index].uval = value; break;
+          case core::stat_type::float_t: array[index].fval = value; break;
+          default: assert(false);
+        }
+      }
+      
+      float add(const uint32_t &index, const float &value) {
+        if constexpr (type_array == nullptr) { const int32_t a = array[index].ival; array[index].ival += value; return a; }
+        switch (type_array[index]) {
+          case core::stat_type::int_t:   { const  int32_t a = array[index].ival; array[index].ival += value; return a; }
+          case core::stat_type::uint_t:  { const uint32_t a = array[index].uval; array[index].uval += value; return a; }
+          case core::stat_type::float_t: { const    float a = array[index].fval; array[index].fval += value; return a; }
+          default: assert(false);
+        }
+        return 0.0f;
+      }
     };
    
     // массивы вообще имеют право на жизнь

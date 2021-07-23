@@ -30,6 +30,7 @@
 #include "render/image_container.h"
 #include "render/image_controller.h"
 #include "render/battle_render_stages.h"
+#include "render/map_data.h"
 
 #include "ai/sub_system.h"
 #include "ai/ai_system.h"
@@ -114,14 +115,11 @@ namespace devils_engine {
     }
     
     core_t::~core_t() {
-      RELEASE_CONTAINER_DATA(render_slots)
-      RELEASE_CONTAINER_DATA(image_container)
-      RELEASE_CONTAINER_DATA(image_controller)
       RELEASE_CONTAINER_DATA(context)
+      RELEASE_CONTAINER_DATA(render_slots)
+      RELEASE_CONTAINER_DATA(image_controller)
+      RELEASE_CONTAINER_DATA(image_container)
       //RELEASE_CONTAINER_DATA(input_data)
-      for (size_t i = 0; i < player::states_count; ++i) {
-        RELEASE_CONTAINER_DATA(keys_mapping[i])
-      }
       RELEASE_CONTAINER_DATA(graphics_container)
 //       RELEASE_CONTAINER_DATA(interface)
 //       RELEASE_CONTAINER_DATA(menu)
@@ -133,6 +131,10 @@ namespace devils_engine {
       RELEASE_CONTAINER_DATA(selection.primary)
       RELEASE_CONTAINER_DATA(selection.secondary)
       RELEASE_CONTAINER_DATA(path_managment)
+      
+      for (size_t i = 0; i < player::states_count; ++i) {
+        RELEASE_CONTAINER_DATA(keys_mapping[i])
+      }
       
       //RELEASE_CONTAINER_DATA(loc)
       //RELEASE_CONTAINER_DATA(interface_container)
@@ -186,14 +188,14 @@ namespace devils_engine {
         sizeof(render::task_begin) +
         
         sizeof(render::tile_optimizer) +
-        sizeof(render::tile_borders_optimizer) +
-        sizeof(render::tile_walls_optimizer) +
+//         sizeof(render::tile_borders_optimizer) +
+//         sizeof(render::tile_walls_optimizer) +
         sizeof(render::barriers) +
 
         sizeof(render::render_pass_begin) +
         sizeof(render::tile_render) +
         sizeof(render::tile_border_render) +
-        sizeof(render::tile_connections_render) +
+//         sizeof(render::tile_connections_render) +
         sizeof(render::interface_stage) +
         sizeof(render::render_pass_end) +
 
@@ -230,12 +232,16 @@ namespace devils_engine {
         0,
         settings->graphics.fullscreen
       };
-
+      
+      // я так понимаю что лучше рендер контекст хранить в одной структуре
+      // иначе чет капец душно
+      
       graphics_container = container.create<render::container>();
-      graphics_container->create_instance(extensions, &info);
       auto window = graphics_container->create_window(inf);
+      graphics_container->create_instance(extensions, &info);
       graphics_container->create_device();
-      window->create_swapchain(graphics_container->device);
+      graphics_container->create_vlk_window();
+      graphics_container->create_swapchain();
       graphics_container->create_system(stage_container_size); // auto render = 
       graphics_container->create_tasks();
       //container.decals_system = container.container.create<systems::decals>();
@@ -247,10 +253,16 @@ namespace devils_engine {
       global::get(graphics_container);
       //global::get(systems.decals_system);
       
-      image_container = container.create<render::image_container>(render::image_container::create_info{graphics_container->device});
-      image_controller = container.create<render::image_controller>(graphics_container->device, image_container);
+      // АККУРАТНО С УКАЗАТЕЛЯМИ! НУЖНО ПЕРЕДЕЛАТЬ
+      auto device = &graphics_container->vulkan->device;
+      auto physical_device = &graphics_container->vulkan->physical_device;
+      auto pool = graphics_container->vulkan->transfer_command_pool;
+      auto queue = graphics_container->vulkan->graphics;
+      auto fence = graphics_container->vulkan->transfer_fence;
+      image_container = container.create<render::image_container>(render::image_container::create_info{device, physical_device, &pool, &queue, &fence});
+      image_controller = container.create<render::image_controller>(device, image_container);
       
-      context = container.create<interface::context>(graphics_container->device, window, image_container);
+      context = container.create<interface::context>(graphics_container, window, image_container);
       global::get(context);
       
       image_controller->update_set();
@@ -270,11 +282,11 @@ namespace devils_engine {
 //         sizeof(render::tile_connections_render);
       
       auto system = graphics_container->render;
-      auto device = graphics_container->device;
+      auto device = graphics_container->vulkan->device;
       auto window = graphics_container->window;
-      auto buffers = system->add_target<render::buffers>(device);
+      auto buffers = system->add_target<render::buffers>(graphics_container);
 
-      auto next_frame = system->add_stage<render::window_next_frame>(render::window_next_frame::create_info{window});
+      auto next_frame = system->add_stage<render::window_next_frame>();
       auto begin   = system->add_stage<render::task_begin>();
                     
 //       auto world_r = system->add_stage<render::world_map_render>(render::world_map_render::create_info{world_map_render_size});
@@ -290,12 +302,12 @@ namespace devils_engine {
 //       auto tiles   = system->add_stage<render::tile_render>(render::tile_render::create_info{device, opt});
 //       auto borders = system->add_stage<render::tile_border_render>(render::tile_border_render::create_info{device, opt2});
 //       auto walls   = system->add_stage<render::tile_connections_render>(render::tile_connections_render::create_info{device, opt3});
-      auto intr    = system->add_stage<render::interface_stage>(render::interface_stage::create_info{device});
+      auto intr    = system->add_stage<render::interface_stage>(render::interface_stage::create_info{graphics_container, *image_controller->get_descriptor_set_layout()});
       auto rp_end  = system->add_stage<render::render_pass_end>();
 
       auto task_end=  system->add_stage<render::task_end>();
-      auto start   = system->add_stage<render::task_start>(device);
-      auto present =  system->add_stage<render::window_present>(render::window_present::create_info{window});
+      auto start   =  system->add_stage<render::task_start>(device);
+      auto present =  system->add_stage<render::window_present>();
                     
 //       auto opt     = world_r->add_stage<render::tile_optimizer>(render::tile_optimizer::create_info{device});
 //       auto opt2    = world_r->add_stage<render::tile_borders_optimizer>(render::tile_borders_optimizer::create_info{device});
@@ -329,7 +341,8 @@ namespace devils_engine {
       
       const float dist = 550.0f;
       const glm::vec3 default_camera_pos = glm::normalize(glm::vec3(1.0f, 0.0f, 0.0f)) * dist;
-      const glm::mat4 persp = glm::perspective(glm::radians(75.0f), float(window->surface.extent.width) / float(window->surface.extent.height), 0.1f, 256.0f);
+      const auto [w, h] = window->framebuffer_size();
+      const glm::mat4 persp = glm::perspective(glm::radians(75.0f), float(w) / float(h), 0.1f, 256.0f);
       const glm::mat4 view  = glm::lookAt(default_camera_pos, glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
   //     buffers->update_matrix(persp * view);
       buffers->update_projection_matrix(persp);
@@ -514,7 +527,7 @@ namespace devils_engine {
       
       container.init();
       auto systems = global::get<core_t>();
-      map = container.create<core::map, 0>(core::map::create_info{systems->graphics_container->device});
+      map = container.create<core::map, 0>(core::map::create_info{systems->graphics_container});
       core_context = container.create<core::context, 1>();
       seasons = container.create<core::seasons, 2>();
       const size_t container_size = sizeof(devils_engine::ai::build_subsystem);
@@ -823,9 +836,9 @@ namespace devils_engine {
 //       systems->render_slots->clear_slot(7);
       
       global::get(reinterpret_cast<render::tile_render*>(SIZE_MAX));
-      global::get(reinterpret_cast<render::tile_connections_render*>(SIZE_MAX));
-      global::get(reinterpret_cast<render::tile_borders_optimizer*>(SIZE_MAX));
-      global::get(reinterpret_cast<render::tile_walls_optimizer*>(SIZE_MAX));
+//       global::get(reinterpret_cast<render::tile_connections_render*>(SIZE_MAX));
+//       global::get(reinterpret_cast<render::tile_borders_optimizer*>(SIZE_MAX));
+//       global::get(reinterpret_cast<render::tile_walls_optimizer*>(SIZE_MAX));
 //       global::get(reinterpret_cast<render::world_map_buffers*>(SIZE_MAX));
       
       world_buffers = nullptr;
@@ -843,13 +856,13 @@ namespace devils_engine {
     
     void map_t::create_render_stages() {
       const size_t optimizators_size = sizeof(render::world_map_buffers) +
-        sizeof(render::tile_optimizer) + 
-        sizeof(render::tile_borders_optimizer) + 
-        sizeof(render::tile_walls_optimizer);
+        sizeof(render::tile_optimizer);
+//         sizeof(render::tile_borders_optimizer) + 
+//         sizeof(render::tile_walls_optimizer);
         
       const size_t render_size = sizeof(render::tile_render) +
         sizeof(render::tile_border_render) +
-        sizeof(render::tile_connections_render) +
+//         sizeof(render::tile_connections_render) +
         sizeof(render::tile_object_render) +
         sizeof(render::tile_highlights_render) +
         sizeof(render::render_pass_end) +
@@ -865,25 +878,30 @@ namespace devils_engine {
       optimizators_container = container.create<render::stage_container, 6>(optimizators_size);
       render_container = container.create<render::stage_container, 7>(render_size);
       auto systems = global::get<core_t>();
-      auto device = systems->graphics_container->device;
-      auto buffers = optimizators_container->add_target<render::world_map_buffers>(device);
+      auto container = systems->graphics_container;
+      auto device = container->vulkan->device;
+      auto allocator = container->vulkan->buffer_allocator;
+      auto uniform_layout = container->vulkan->uniform_layout;
+      auto tiles_layout = map->data->tiles_layout;
+      auto images_layout = *systems->image_controller->get_descriptor_set_layout();
+      auto buffers = optimizators_container->add_target<render::world_map_buffers>(container);
       world_buffers = buffers;
       
-      auto opt1 = optimizators_container->add_stage<render::tile_optimizer>(render::tile_optimizer::create_info{device});
+      auto opt1 = optimizators_container->add_stage<render::tile_optimizer>(render::tile_optimizer::create_info{device, allocator, tiles_layout, uniform_layout});
 //       auto opt2 = optimizators_container->add_stage<render::tile_borders_optimizer>(render::tile_borders_optimizer::create_info{device, buffers});
 //       auto opt3 = optimizators_container->add_stage<render::tile_walls_optimizer>(render::tile_walls_optimizer::create_info{device, buffers});
       
-      auto tiles   = render_container->add_stage<render::tile_render>(render::tile_render::create_info{device, opt1});
-      auto borders = render_container->add_stage<render::tile_border_render>(render::tile_border_render::create_info{device, opt1, buffers});
+      auto tiles   = render_container->add_stage<render::tile_render>(render::tile_render::create_info{container, tiles_layout, images_layout, opt1});
+      auto borders = render_container->add_stage<render::tile_border_render>(render::tile_border_render::create_info{container, tiles_layout, images_layout, opt1, buffers});
 //       auto walls   = render_container->add_stage<render::tile_connections_render>(render::tile_connections_render::create_info{device, opt1, buffers});
-                     render_container->add_stage<render::tile_object_render>(render::tile_object_render::create_info{device, opt1, buffers});
-      auto thl     = render_container->add_stage<render::tile_highlights_render>(render::tile_highlights_render::create_info{device, buffers});
+                     render_container->add_stage<render::tile_object_render>(render::tile_object_render::create_info{container, tiles_layout, images_layout, opt1, buffers});
+      auto thl     = render_container->add_stage<render::tile_highlights_render>(render::tile_highlights_render::create_info{container, tiles_layout, buffers});
                      render_container->add_stage<render::render_pass_end>();
-                     render_container->add_stage<render::tile_objects_optimizer>(render::tile_objects_optimizer::create_info{device, opt1});
+                     render_container->add_stage<render::tile_objects_optimizer>(render::tile_objects_optimizer::create_info{device, allocator, tiles_layout, uniform_layout, opt1});
                      render_container->add_stage<render::render_pass_begin>(1);
-                     render_container->add_stage<render::tile_structure_render>(render::tile_structure_render::create_info{device, opt1, world_buffers});
-                     render_container->add_stage<render::heraldies_render>(render::heraldies_render::create_info{device, opt1, world_buffers});
-                     render_container->add_stage<render::armies_render>(render::armies_render::create_info{device, opt1, world_buffers});
+                     render_container->add_stage<render::tile_structure_render>(render::tile_structure_render::create_info{container, tiles_layout, images_layout, opt1, world_buffers});
+                     render_container->add_stage<render::heraldies_render>(render::heraldies_render::create_info{container, tiles_layout, images_layout, opt1, world_buffers});
+                     render_container->add_stage<render::armies_render>(render::armies_render::create_info{container, tiles_layout, images_layout, opt1, world_buffers});
                      
 //       systems->render_slots->set_stage(2, optimizators_container);
 //       systems->render_slots->set_stage(7, render_container);
@@ -1035,8 +1053,8 @@ namespace devils_engine {
       if (!is_init()) container.init();
       
       auto core = global::get<systems::core_t>();
-      auto device = core->graphics_container->device;
-      map = container.create<battle::map, 0>(battle::map::create_info{device});
+      auto cont = core->graphics_container;
+      map = container.create<battle::map, 0>(battle::map::create_info{cont});
       map->create_tiles(128, 128, battle::map::coordinate_system::square, battle::map::orientation::even_pointy);
       
       camera = container.create<components::battle_camera, 4>(glm::vec3(0.0f, 3.0f, 0.0f));
@@ -1059,12 +1077,13 @@ namespace devils_engine {
       optimizators_container = container.create<render::stage_container, 2>(optimizators_size);
       render_container = container.create<render::stage_container, 3>(render_size);
       auto systems = global::get<core_t>();
-      auto device = systems->graphics_container->device;
+      auto cont = systems->graphics_container;
+      auto map_layout = *map->get_descriptor_set_layout();
       
-      auto opt1 = optimizators_container->add_stage<render::battle::tile_optimizer>(render::battle::tile_optimizer::create_info{device});
-      render_container->add_stage<render::battle::tile_render>(render::battle::tile_render::create_info{device, opt1});
-      render_container->add_stage<render::battle::biome_render>(render::battle::biome_render::create_info{device, opt1});
-      render_container->add_stage<render::battle::units_render>(render::battle::units_render::create_info{device, opt1});
+      auto opt1 = optimizators_container->add_stage<render::battle::tile_optimizer>(render::battle::tile_optimizer::create_info{cont, map_layout});
+      render_container->add_stage<render::battle::tile_render>(render::battle::tile_render::create_info{cont, map_layout, opt1});
+      render_container->add_stage<render::battle::biome_render>(render::battle::biome_render::create_info{cont, map_layout, opt1});
+      render_container->add_stage<render::battle::units_render>(render::battle::units_render::create_info{cont, map_layout, opt1});
 //       systems->render_slots->set_stage(2, optimizators_container);
 //       systems->render_slots->set_stage(7, render_container);
       
@@ -1073,6 +1092,8 @@ namespace devils_engine {
       // нужно еще продумать способы синхронизации
       // иногда мне нужно подождать пока другой поток применит изменения 
       // и кажется ничего более адекватного чем мьютекс еще не придумали
+      
+      opt1->update_containers(); // перенесен из квест стейтов
     }
     
 //     void battle_t::setup_generator_random() {

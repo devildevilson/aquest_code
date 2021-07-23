@@ -11,9 +11,12 @@
 #include "bin/logic.h"
 #include "bin/battle_map.h"
 #include "render/image_controller.h"
-#include "render/battle_render_stages.h"
+// #include "render/battle_render_stages.h"
 #include "utils/input.h"
 #include "utils/game_enums.h"
+
+// посчтитать используемую память
+#include "render/container.h"
 
 namespace devils_engine {
   namespace utils {
@@ -77,6 +80,7 @@ namespace devils_engine {
       // эта функция будет запускаться перед загрузкой
       //set_up_input_keys(player::in_menu);
       if (prev_state != nullptr) prev_state->clean(this);
+//       global::get<render::container>()->print_memory_info();
     }
 
 //     bool main_menu_state::load(quest_state* prev_state) {
@@ -521,6 +525,8 @@ namespace devils_engine {
           base->image_controller->clear_type(render::image_controller::image_type::heraldy);
           base->image_controller->clear_type(render::image_controller::image_type::icon);
         }
+        
+        base->image_controller->update_set();
       }
       
       m_next_state = UINT32_MAX;
@@ -533,6 +539,7 @@ namespace devils_engine {
 //       PRINT("world_map_state::enter")
 //       map->start_rendering();
       prev_state->clean(this); // ???
+//       global::get<render::container>()->print_memory_info();
     }
 
     // тут нужно как то определить загружаем ли мы сохранение или грузим карту
@@ -654,6 +661,8 @@ namespace devils_engine {
         base->image_controller->clear_type(render::image_controller::image_type::icon);
       }
       
+      base->image_controller->update_set();
+      
       m_next_state = UINT32_MAX;
       //set_up_input_keys(player::in_menu);
     }
@@ -726,7 +735,7 @@ namespace devils_engine {
         battle->create_render_stages();
         
         // тут у нас создалась карта, но вот количество юнитов еще недоступно
-        global::get<render::battle::tile_optimizer>()->update_containers();
+//         global::get<render::battle::tile_optimizer>()->update_containers();
         
         battle->start_rendering();
         //battle->setup_generator_random();

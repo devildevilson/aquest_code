@@ -9,8 +9,7 @@ namespace devils_engine {
     lua_container::lua_container() : states(new sol::state[std::thread::hardware_concurrency()]) { // registered_functions(std::thread::hardware_concurrency())
       for (size_t i = 0; i < std::thread::hardware_concurrency(); ++i) {
         states[i].open_libraries(sol::lib::base, sol::lib::math, sol::lib::bit32, sol::lib::table, sol::lib::string);
-        utils::setup_lua_battle_unit(states[i]);
-        utils::setup_lua_constants(states[i]);
+        utils::battle_map::setup_lua(states[i]);
       }
     }
     

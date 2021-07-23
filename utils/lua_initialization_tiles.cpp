@@ -1,5 +1,6 @@
-#include "lua_initialization.h"
+#include "lua_initialization_hidden.h"
 
+#include "magic_enum_header.h"
 #include "bin/tiles_funcs.h"
 #include "core/tile.h"
 #include "core/city.h"
@@ -12,7 +13,6 @@
 #include "globals.h"
 #include "systems.h"
 #include "render/stages.h"
-#include "magic_enum.hpp"
 #include "ai/path_container.h"
 #include "ai/path_finding_data.h"
 
@@ -162,31 +162,6 @@ namespace devils_engine {
           current_path += available_path;
           color_counter = (color_counter+1) % counter;
           color_counter += uint32_t(color_counter == 0);
-        }
-      });
-      
-      core.set_function("toggle_border_rendering", [] () {
-        auto tile_opt = global::get<render::tile_optimizer>();
-        if (tile_opt == nullptr) throw std::runtime_error("Bad game state. Could not get world map");
-        tile_opt->set_border_rendering(!tile_opt->is_rendering_border());
-      });
-      
-      core.set_function("each_title", [] (const core::realm* f, const sol::function &function) {
-        auto title = f->titles;
-        while (title != nullptr) {
-          const auto ret = function(title);
-          if (!ret.valid()) {
-            sol::error err = ret;
-            std::cout << err.what();
-            throw std::runtime_error("There is lua errors");
-          }
-          
-          if (ret.get_type() == sol::type::boolean) {
-            const bool val = ret;
-            if (val) break;
-          }
-                        
-          title = title->next;
         }
       });
       

@@ -1,12 +1,20 @@
-#include "lua_initialization.h"
+#include "lua_initialization_hidden.h"
 
 #include "script/script_header.h"
 #include "magic_enum_header.h"
 //#include "bin/core_structures.h"
 #include "core/structures_header.h"
+#include "re2/re2.h"
+#include "core/target_type.h"
+#include "script/lua_data_struct.h"
 
 namespace devils_engine {
   namespace utils {
+    static const RE2 regex_obj(script::complex_var_regex);
+    static const RE2 regex_dot_matcher(script::dot_matcher);
+    static const RE2 regex_colon_matcher(script::colon_matcher);
+    static const RE2 regex_number_matcher(script::number_matcher);
+    
     // расходы, как описать сравнение? в имени указать? да, наверное
     void set_stat_function(sol::table &t, const uint32_t &enum_id) {
       const std::string name = std::string(magic_enum::enum_name(static_cast<script::data_source_type::values>(enum_id)));
@@ -33,6 +41,16 @@ namespace devils_engine {
       auto script_utils = lua["script_utils"].get_or_create<sol::table>();
       
       //script_utils.new_usertype<script::script_data>("script_data");
+      script_utils.new_usertype<script::lua_data_struct>(
+        "lua_data_struct", sol::no_constructor,
+        "name", &script::lua_data_struct::name,
+        "nesting", &script::lua_data_struct::nesting,
+        "compare_type", &script::lua_data_struct::compare_type,
+        "special_stat", &script::lua_data_struct::special_stat,
+        "value", &script::lua_data_struct::value,
+        "data", &script::lua_data_struct::data,
+        "return_value", &script::lua_data_struct::return_value
+      );
       
       script_utils.set_function("more", [] (const double &num) {
         return std::string(magic_enum::enum_name(script::data_source_type::value)) + ":" + 
@@ -99,7 +117,7 @@ namespace devils_engine {
 //       });
       
       script_utils.new_enum("decision", {
-        std::make_pair(magic_enum::enum_name(core::decision::type::diplomatic), core::decision::type::diplomatic),
+        //std::make_pair(magic_enum::enum_name(core::decision::type::diplomatic), core::decision::type::diplomatic),
         std::make_pair(magic_enum::enum_name(core::decision::type::major), core::decision::type::major),
         std::make_pair(magic_enum::enum_name(core::decision::type::minor), core::decision::type::minor)
       });
@@ -109,7 +127,7 @@ namespace devils_engine {
         std::make_pair(magic_enum::enum_name(core::target_type::city), core::target_type::city),
         std::make_pair(magic_enum::enum_name(core::target_type::religion), core::target_type::religion),
         std::make_pair(magic_enum::enum_name(core::target_type::culture), core::target_type::culture),
-        std::make_pair(magic_enum::enum_name(core::target_type::title), core::target_type::title),
+        std::make_pair(magic_enum::enum_name(core::target_type::titulus), core::target_type::titulus),
         std::make_pair(magic_enum::enum_name(core::target_type::character), core::target_type::character),
         std::make_pair(magic_enum::enum_name(core::target_type::dynasty), core::target_type::dynasty),
         std::make_pair(magic_enum::enum_name(core::target_type::realm), core::target_type::realm),

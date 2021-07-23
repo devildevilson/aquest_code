@@ -16,6 +16,7 @@ namespace devils_engine {
   namespace utils {
     template <size_t N>
     struct bit_field {
+      using container_type = size_t;
 //       size_t copy_N;
       std::array<size_t, N> container; // атомарность? вряд ли
 
@@ -24,7 +25,7 @@ namespace devils_engine {
         ASSERT(index < SIZE_WIDTH * N);
         const size_t container_index = index / SIZE_WIDTH;
         const size_t index_container = index % SIZE_WIDTH;
-        const size_t mask = size_t(1) << index_container;
+        const container_type mask = container_type(1) << index_container;
         const bool old_value = bool(container[container_index] & mask);
         container[container_index] = value ? container[container_index] | mask : container[container_index] & ~(mask);
         return old_value;
@@ -34,7 +35,7 @@ namespace devils_engine {
         ASSERT(index < SIZE_WIDTH * N);
         const size_t container_index = index / SIZE_WIDTH;
         const size_t index_container = index % SIZE_WIDTH;
-        const size_t mask = size_t(1) << index_container;
+        const container_type mask = container_type(1) << index_container;
         return bool(container[container_index] & mask);
       }
 
@@ -43,21 +44,22 @@ namespace devils_engine {
       }
 
       inline void reset() {
-        memset(container.data(), 0, sizeof(size_t) * N);
+        memset(container.data(), 0, sizeof(container_type) * N);
       }
     };
 
     template <uint32_t N>
     struct bit_field_32 {
+      using container_type = uint32_t;
 //       uint32_t copy_N;
-      std::array<uint32_t, N> container;
+      std::array<container_type, N> container;
 
       inline bit_field_32() { reset(); }
       inline bool set(const size_t &index, const bool value) {
         ASSERT(index < UINT32_WIDTH * N);
         const size_t container_index = index / UINT32_WIDTH;
-        const uint32_t index_container = index % UINT32_WIDTH;
-        const uint32_t mask = uint32_t(1) << index_container;
+        const size_t index_container = index % UINT32_WIDTH;
+        const container_type mask = container_type(1) << index_container;
         const bool old_value = bool(container[container_index] & mask);
         container[container_index] = value ? container[container_index] | mask : container[container_index] & ~(mask);
         return old_value;
@@ -66,8 +68,8 @@ namespace devils_engine {
       inline bool get(const size_t &index) const {
         ASSERT(index < UINT32_WIDTH * N);
         const size_t container_index = index / UINT32_WIDTH;
-        const uint32_t index_container = index % UINT32_WIDTH;
-        const uint32_t mask = uint32_t(1) << index_container;
+        const size_t index_container = index % UINT32_WIDTH;
+        const container_type mask = container_type(1) << index_container;
         return bool(container[container_index] & mask);
       }
 
@@ -76,7 +78,7 @@ namespace devils_engine {
       }
 
       inline void reset() {
-        memset(container.data(), 0, sizeof(uint32_t) * N);
+        memset(container.data(), 0, sizeof(container_type) * N);
       }
     };
   }

@@ -61,6 +61,7 @@ namespace devils_engine {
       }
       
       void destroy(elem_ptr ptr) {
+        if (ptr == nullptr) return;
         ptr->~T();
         auto ptr_mem = reinterpret_cast<char**>(ptr);
         ptr_mem[0] = free_memory;

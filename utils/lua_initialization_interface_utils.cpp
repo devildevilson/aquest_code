@@ -1,14 +1,47 @@
-#include "lua_initialization.h"
+#include "lua_initialization_hidden.h"
 
+#include "magic_enum_header.h"
 #include "globals.h"
 #include "systems.h"
 #include "bin/interface_context.h"
 #include "render/utils.h"
 #include "core/titulus.h"
+#include "core/realm.h"
 #include "game_context.h"
+#include "render/stages.h"
 
 namespace devils_engine {
   namespace utils {
+    void setup_lua_interface_core(sol::state_view lua) {
+      auto core = lua[magic_enum::enum_name(reserved_lua::core)].get_or_create<sol::table>();
+      core.set_function("toggle_border_rendering", [] () {
+        auto tile_opt = global::get<render::tile_optimizer>();
+        if (tile_opt == nullptr) throw std::runtime_error("Bad game state. Could not get world map");
+        tile_opt->set_border_rendering(!tile_opt->is_rendering_border());
+      });
+      
+      core.set_function("each_title", [] (const core::realm* f, const sol::function &function) {
+        if (f == nullptr) throw std::runtime_error("each_title: Invalid realm");
+                        
+        auto title = f->titles;
+        while (title != nullptr) {
+          const auto ret = function(title);
+          if (!ret.valid()) {
+            sol::error err = ret;
+            std::cout << err.what();
+            throw std::runtime_error("There is lua errors");
+          }
+          
+          if (ret.get_type() == sol::type::boolean) {
+            const bool val = ret;
+            if (val) break;
+          }
+                        
+          title = title->next;
+        }
+      });
+    }
+    
     void setup_lua_interface_utils(sol::state_view lua) {
       auto interface = lua["interface"].get_or_create<sol::table>();
       interface.set_function("is_hovered", [] (const std::string_view &except) {

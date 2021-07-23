@@ -113,13 +113,13 @@ namespace devils_engine {
       tiles.reserve(hex_count);
       points.reserve(final_points_count);
 
-      std::cout << "computed " << '\n';
-      std::cout << "triangles_count " << triangles_count << '\n';
-      std::cout << "last_level_triangles_count " << last_level_triangles_count << '\n';
-      std::cout << "icosahedron_points_count " << icosahedron_points_count << '\n';
-      std::cout << "triangle_hex_count " << triangle_hex_count << '\n';
-      std::cout << "hex_count " << hex_count << '\n';
-      std::cout << "final_points_count " << final_points_count << '\n';
+//       std::cout << "computed " << '\n';
+//       std::cout << "triangles_count " << triangles_count << '\n';
+//       std::cout << "last_level_triangles_count " << last_level_triangles_count << '\n';
+//       std::cout << "icosahedron_points_count " << icosahedron_points_count << '\n';
+//       std::cout << "triangle_hex_count " << triangle_hex_count << '\n';
+//       std::cout << "hex_count " << hex_count << '\n';
+//       std::cout << "final_points_count " << final_points_count << '\n';
 
       const float t = (1.0f + std::sqrt(5.0f)) / 2.0f;
       // поворот я решил вычислять в другом месте (ну то есть отдельно)
@@ -419,9 +419,9 @@ namespace devils_engine {
 //         
 //       }
 
-      std::cout << "triangle_hex_count " << (tiles.size()-point_hexes) << '\n';
-      std::cout << "hex_count " << tiles.size() << '\n';
-      std::cout << "final_points_count " << points.size() << '\n';
+//       std::cout << "triangle_hex_count " << (tiles.size()-point_hexes) << '\n';
+//       std::cout << "hex_count " << tiles.size() << '\n';
+//       std::cout << "final_points_count " << points.size() << '\n';
 
       ASSERT(triangles_count == triangles.size());
       ASSERT(hex_count == tiles.size());

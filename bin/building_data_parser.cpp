@@ -3,6 +3,7 @@
 #include "utils/table_container.h"
 #include "utils/string_container.h"
 #include "utils/serializator_helper.h"
+#include "utils/magic_enum_header.h"
 
 #include "core/context.h"
 
@@ -383,7 +384,7 @@ namespace devils_engine {
           }
           
           if (auto val = magic_enum::enum_cast<core::realm_stats::values>(stat); val.has_value()) {
-            building_type->mods[current_stat].type = core::unit_type::faction;
+            building_type->mods[current_stat].type = core::unit_type::realm;
             building_type->mods[current_stat].stat = val.value();
             building_type->mods[current_stat].mod.fval = value;
             ++current_stat;

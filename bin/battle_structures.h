@@ -7,6 +7,7 @@
 #include <functional>
 #include "utils/linear_rng.h"
 #include "core/stats.h"
+#include "core/stat_data.h"
 #include "state.h"
 #include "battle_structures_enum.h"
 

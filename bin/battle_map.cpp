@@ -1,40 +1,73 @@
 #include "battle_map.h"
 
-#include "render/yavf.h"
+#include "render/container.h"
+#include "render/vulkan_hpp_header.h"
 #include "render/shared_battle_structures.h"
+#include "render/makers.h"
 
 namespace devils_engine {
+  namespace render {
+    struct battle_map_data {
+      container* cont;
+      
+      // нужен наверное какой нибудь юниформ буфер, буфер оффсетов это не юниформ буфер? вряд ли
+      // как проверять эти тайлы с фрустумом? (сфера = скорость, но тогда проверять каждый тайл?)
+      // в циве 5 на самой большой карте используется 128×80 тайлов (10240 всего), это хорошее число
+      // думаю что на этот предел и надо ориентироваться, другое дело что удастся ли уместить все отряды на такую карту
+      // или придется ее расширить? с этим проблем быть особенно не должно, но в базовой игре нужно постараться уместить
+      // мне нужно будет придумать чем я заполню пустые пространства вне карты + наверное как то ограничить камеру
+      // камера по идее легко ограничивается боксом мин макс
+      vk_buffer_data tiles_uniform; // пригодится
+      vk_buffer_data tiles_buffer;
+      vk_buffer_data offsets_buffer;
+      vk_buffer_data biomes_buffer;
+      // сколько выделять для юнитов
+      vk_buffer_data units_buffer;
+      // тип нужно последовательно добавить все текстурки
+      vk_buffer_data textures_buffer;
+      
+      vk::DescriptorPool pool;
+      vk::DescriptorSetLayout layout;
+      vk::DescriptorSet set;
+      
+      inline battle_map_data(container* cont) : cont(cont) {}
+      inline ~battle_map_data() {
+        auto allocator = cont->vulkan->buffer_allocator;
+        auto device = cont->vulkan->device;
+        
+        tiles_uniform.destroy(allocator);
+        tiles_buffer.destroy(allocator);
+        offsets_buffer.destroy(allocator);
+        biomes_buffer.destroy(allocator);
+        units_buffer.destroy(allocator);
+        textures_buffer.destroy(allocator);
+        
+        device.destroy(pool);
+        device.destroy(layout);
+      }
+    };
+  }
+  
   namespace battle {
+    
+    
     map::map(const create_info &info) : 
       width(0), 
       height(0), 
       tiles_count(0), 
       units_count(0),
       textures_count(0),
-      device(info.device), 
-      tiles_buffer(nullptr), 
-      offsets_buffer(nullptr), 
-      biomes_buffer(nullptr), 
-      units_buffer(nullptr), 
-      textures_buffer(nullptr),
-      set(nullptr) 
+      data(new render::battle_map_data(info.cont))
     {}
     
-    map::~map() {
-      device->destroy(tiles_uniform);
-      device->destroy(tiles_buffer);
-      device->destroy(offsets_buffer);
-      device->destroy(biomes_buffer);
-      if (units_buffer != nullptr) device->destroy(units_buffer);
-      
-      device->destroySetLayout(BATTLE_MAP_DESCRIPTOR_SET_LAYOUT_NAME);
-      device->destroyDescriptorPool(BATTLE_MAP_DESCRIPTOR_POOL_NAME);
-    }
+    map::~map() {}
     
     void map::create_tiles(const uint32_t &width, const uint32_t &height, const coordinate_system &system, const orientation &orient) {
       type.set(0, system == coordinate_system::square);
       type.set(1, orient == orientation::even_flat || orient == orientation::odd_flat);
       type.set(2, orient == orientation::odd_flat || orient == orientation::odd_pointy);
+      auto allocator = data->cont->vulkan->buffer_allocator;
+      auto device = data->cont->vulkan->device;
       
       if (is_square()) {
         tiles_count = width * height;
@@ -42,20 +75,21 @@ namespace devils_engine {
         this->height = height;
         // тут по идее просто width*height, просто нужно понять какими системами мы пользуемся
         // в этом случае равенство: y * height + x = tile_index
-        tiles_uniform = device->create(yavf::BufferCreateInfo::buffer(sizeof(uniform_buffer_data), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT), VMA_MEMORY_USAGE_GPU_ONLY);
-        tiles_buffer = device->create(yavf::BufferCreateInfo::buffer(tiles_count*sizeof(render::battle_map_tile_data_t), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT), VMA_MEMORY_USAGE_CPU_ONLY);
-        offsets_buffer = device->create(yavf::BufferCreateInfo::buffer(width*height*sizeof(render::battle_map_tile_data_t), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT), VMA_MEMORY_USAGE_CPU_ONLY);
-        biomes_buffer = device->create(
-          yavf::BufferCreateInfo::buffer(
+        data->tiles_uniform.create(allocator, render::buffer(sizeof(uniform_buffer_data), vk::BufferUsageFlagBits::eUniformBuffer | vk::BufferUsageFlagBits::eTransferDst), vma::MemoryUsage::eGpuOnly);
+        data->tiles_buffer.create(allocator, render::buffer(tiles_count*sizeof(render::battle_map_tile_data_t), vk::BufferUsageFlagBits::eStorageBuffer), vma::MemoryUsage::eCpuOnly);
+        data->offsets_buffer.create(allocator, render::buffer(width*height*sizeof(render::battle_map_tile_data_t), vk::BufferUsageFlagBits::eStorageBuffer), vma::MemoryUsage::eCpuOnly);
+        data->biomes_buffer.create(
+          allocator,
+          render::buffer(
             BATTLE_BIOMES_MAX_COUNT*sizeof(render::battle_biome_data_t), 
-            VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT
+            vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst
           ), 
-          VMA_MEMORY_USAGE_GPU_ONLY
+          vma::MemoryUsage::eGpuOnly
         );
-        units_buffer = device->create(yavf::BufferCreateInfo::buffer(1*sizeof(render::unit_t), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT), VMA_MEMORY_USAGE_CPU_ONLY);
+        data->units_buffer.create(allocator, render::buffer(1*sizeof(render::unit_t), vk::BufferUsageFlagBits::eStorageBuffer), vma::MemoryUsage::eCpuOnly);
         // короч думаю прост надо сделать сначала квадрат, а потом если захочу гекс (но по идее ничего сложного, но нужно париться в шейдерах с изменением формул)
         
-        auto tiles_array_ptr = reinterpret_cast<render::battle_map_tile_data_t*>(tiles_buffer->ptr());
+        auto tiles_array_ptr = reinterpret_cast<render::battle_map_tile_data_t*>(data->tiles_buffer.ptr);
         for (size_t i = 0; i < tiles_count; ++i) {
           tiles_array_ptr[i].height = 1.0f;
           tiles_array_ptr[i].ground = render::image_t{GPU_UINT_MAX};
@@ -64,60 +98,66 @@ namespace devils_engine {
           tiles_array_ptr[i].troop_data = GPU_UINT_MAX;
         }
         
-        yavf::Buffer staging(device, yavf::BufferCreateInfo::buffer(sizeof(uniform_buffer_data), VK_BUFFER_USAGE_TRANSFER_SRC_BIT), VMA_MEMORY_USAGE_CPU_ONLY);
-        auto data = reinterpret_cast<uniform_buffer_data*>(staging.ptr());
-        data->map_properties.x = tiles_count;
-        data->map_properties.y = width;
-        data->map_properties.z = height;
-        data->map_properties.w = type.container[0];
+        auto staging = render::create_buffer_unique(allocator, render::buffer(sizeof(uniform_buffer_data), vk::BufferUsageFlagBits::eTransferSrc), vma::MemoryUsage::eCpuOnly);
+        auto data_uniform = reinterpret_cast<uniform_buffer_data*>(staging.ptr);
+        data_uniform->map_properties.x = tiles_count;
+        data_uniform->map_properties.y = width;
+        data_uniform->map_properties.z = height;
+        data_uniform->map_properties.w = type.container[0];
         
-//         std::unique_lock<std::mutex> lock(mutex);
+        auto pool = data->cont->vulkan->transfer_command_pool;
+        auto fence = data->cont->vulkan->transfer_fence;
+        auto queue = data->cont->vulkan->graphics;
         
-        auto task = device->allocateTransferTask();
-        task->begin();
-        task->copy(&staging, tiles_uniform);
-        task->end();
-        
-        task->start();
-        task->wait();
-        device->deallocate(task);
+        render::do_command(
+          device, pool, queue, fence, 
+          [&] (vk::CommandBuffer task) {
+            const vk::BufferCopy c{0, 0, sizeof(uniform_buffer_data)};
+            const vk::CommandBufferBeginInfo b(vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
+            task.begin(b);
+            task.copyBuffer(staging.handle, data->tiles_uniform.handle, c);
+            task.end();
+          }
+        );
       } else {
         // наращиваем слои до min(width, height), и дальше наращиваем часть слоя в высоту/ширину
         // тут мы используем аксиальные координаты + буфер оффсетов
+        assert(false);
       }
       
       // мне нужен быстрый доступ по координатам к тайлу и в том и в другом случае + позиция тайла
       // по идее для этого нужно сделать формулы перевода из индекса к позиции
       
-      yavf::DescriptorSetLayout layout = VK_NULL_HANDLE;
       {
-        yavf::DescriptorLayoutMaker dlm(device);
-        layout = dlm.binding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_ALL)
-                    .binding(1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_ALL)
-                    .binding(2, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_ALL)
-                    .binding(3, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_ALL)
-                    .binding(4, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_ALL)
-                    .binding(5, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_ALL)
-                    .create(BATTLE_MAP_DESCRIPTOR_SET_LAYOUT_NAME);
-      }
-      
-      yavf::DescriptorPool pool = VK_NULL_HANDLE;
-      {
-        yavf::DescriptorPoolMaker dpm(device);
-        pool = dpm.poolSize(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 6).poolSize(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1).create(BATTLE_MAP_DESCRIPTOR_POOL_NAME);
+        render::descriptor_set_layout_maker dlm(&device);
+        data->layout = dlm.binding(0, vk::DescriptorType::eUniformBuffer, vk::ShaderStageFlagBits::eAll)
+                          .binding(1, vk::DescriptorType::eStorageBuffer, vk::ShaderStageFlagBits::eAll)
+                          .binding(2, vk::DescriptorType::eStorageBuffer, vk::ShaderStageFlagBits::eAll)
+                          .binding(3, vk::DescriptorType::eStorageBuffer, vk::ShaderStageFlagBits::eAll)
+                          .binding(4, vk::DescriptorType::eStorageBuffer, vk::ShaderStageFlagBits::eAll)
+                          .binding(5, vk::DescriptorType::eStorageBuffer, vk::ShaderStageFlagBits::eAll)
+                          .create(BATTLE_MAP_DESCRIPTOR_SET_LAYOUT_NAME);
       }
       
       {
-        yavf::DescriptorMaker dm(device);
-        set = dm.layout(layout).create(pool)[0];
+        render::descriptor_pool_maker dpm(&device);
+        data->pool = dpm.poolSize(vk::DescriptorType::eStorageBuffer, 6).poolSize(vk::DescriptorType::eUniformBuffer, 1).create(BATTLE_MAP_DESCRIPTOR_POOL_NAME);
       }
       
-      set->add({tiles_uniform, 0, tiles_uniform->info().size, 0, 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER});
-      set->add({tiles_buffer, 0, tiles_buffer->info().size, 0, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER});
-      set->add({offsets_buffer, 0, offsets_buffer->info().size, 0, 2, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER});
-      set->add({biomes_buffer, 0, biomes_buffer->info().size, 0, 3, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER});
-      set->add({units_buffer, 0, units_buffer->info().size, 0, 5, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER});
-      set->update();
+      {
+        render::descriptor_set_maker dm(&device);
+        data->set = dm.layout(data->layout).create(data->pool)[0];
+        
+        render::descriptor_set_updater dsu(&device);
+        dsu.currentSet(data->set);
+        dsu.begin(0, 0, vk::DescriptorType::eUniformBuffer).buffer(data->tiles_uniform.handle);
+        dsu.begin(1, 0, vk::DescriptorType::eStorageBuffer).buffer(data->tiles_buffer.handle);
+        dsu.begin(2, 0, vk::DescriptorType::eStorageBuffer).buffer(data->offsets_buffer.handle);
+        dsu.begin(3, 0, vk::DescriptorType::eStorageBuffer).buffer(data->biomes_buffer.handle);
+        //dsu.begin(4, 0, vk::DescriptorType::eStorageBuffer).buffer(data->textures_buffer.handle); // этот буфер создаем позже
+        dsu.begin(5, 0, vk::DescriptorType::eStorageBuffer).buffer(data->units_buffer.handle);
+        dsu.update();
+      }
     }
     
     // писать в буффер вместе с рендером не рекомендуется 
@@ -127,26 +167,26 @@ namespace devils_engine {
     void map::set_tile_height(const uint32_t &tile_index, const float &height) {
       if (tile_index >= tiles_count) throw std::runtime_error("Bad tile index");
       std::unique_lock<std::mutex> lock(mutex);
-      auto array = reinterpret_cast<render::battle_map_tile_data_t*>(tiles_buffer->ptr());
+      auto array = reinterpret_cast<render::battle_map_tile_data_t*>(data->tiles_buffer.ptr);
       array[tile_index].height = height;
     }
     
     float map::get_tile_height(const uint32_t &tile_index) const {
       if (tile_index >= tiles_count) throw std::runtime_error("Bad tile index");
-      auto array = reinterpret_cast<render::battle_map_tile_data_t*>(tiles_buffer->ptr());
+      auto array = reinterpret_cast<render::battle_map_tile_data_t*>(data->tiles_buffer.ptr);
       return array[tile_index].height;
     }
     
     void map::set_tile_biome(const uint32_t &tile_index, const uint32_t &biome_index) {
       if (tile_index >= tiles_count) throw std::runtime_error("Bad tile index");
       std::unique_lock<std::mutex> lock(mutex);
-      auto array = reinterpret_cast<render::battle_map_tile_data_t*>(tiles_buffer->ptr());
+      auto array = reinterpret_cast<render::battle_map_tile_data_t*>(data->tiles_buffer.ptr);
       array[tile_index].biome_index = biome_index;
     }
     
     uint32_t map::get_tile_biome(const uint32_t &tile_index) const {
       if (tile_index >= tiles_count) throw std::runtime_error("Bad tile index");
-      auto array = reinterpret_cast<render::battle_map_tile_data_t*>(tiles_buffer->ptr());
+      auto array = reinterpret_cast<render::battle_map_tile_data_t*>(data->tiles_buffer.ptr);
       return array[tile_index].biome_index;
     }
     
@@ -154,35 +194,41 @@ namespace devils_engine {
       units_count = count;
       
       std::unique_lock<std::mutex> lock(mutex);
+      auto allocator = data->cont->vulkan->buffer_allocator;
+      auto device = data->cont->vulkan->device;
       const size_t size = align_to(count*sizeof(render::unit_t), 16);
-      units_buffer->resize(size);
-      set->add({units_buffer, 0, units_buffer->info().size, 0, 5, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER});
-      set->update();
+      data->units_buffer.destroy(allocator);
+      data->units_buffer.create(allocator, render::buffer(size, vk::BufferUsageFlagBits::eStorageBuffer), vma::MemoryUsage::eCpuOnly);
+      
+      render::descriptor_set_updater dsu(&device);
+      dsu.currentSet(data->set);
+      dsu.begin(5, 0, vk::DescriptorType::eStorageBuffer).buffer(data->units_buffer.handle);
+      dsu.update();
     }
     
     render::unit_t map::get_unit_data(const uint32_t &index) const {
       // мьютекс?
       ASSERT(index < units_count);
-      auto units = reinterpret_cast<render::unit_t*>(units_buffer->ptr());
+      auto units = reinterpret_cast<render::unit_t*>(data->units_buffer.ptr);
       return units[index];
     }
     
     void map::set_unit_data(const uint32_t &index, const render::unit_t &data) {
       ASSERT(index < units_count);
-      auto units = reinterpret_cast<render::unit_t*>(units_buffer->ptr());
+      auto units = reinterpret_cast<render::unit_t*>(this->data->units_buffer.ptr);
       units[index] = data;
     }
     
     void map::set_tile_troop_data(const uint32_t &index, const uint32_t &data) {
       if (index >= tiles_count) throw std::runtime_error("Bad tile index");
       std::unique_lock<std::mutex> lock(mutex);
-      auto array = reinterpret_cast<render::battle_map_tile_data_t*>(tiles_buffer->ptr());
+      auto array = reinterpret_cast<render::battle_map_tile_data_t*>(this->data->tiles_buffer.ptr);
       array[index].troop_data = data;
     }
     
     uint32_t map::get_tile_troop_data(const uint32_t &index) const {
       if (index >= tiles_count) throw std::runtime_error("Bad tile index");
-      auto array = reinterpret_cast<render::battle_map_tile_data_t*>(tiles_buffer->ptr());
+      auto array = reinterpret_cast<render::battle_map_tile_data_t*>(data->tiles_buffer.ptr);
       return array[index].troop_data;
     }
     
@@ -190,44 +236,57 @@ namespace devils_engine {
       const size_t data_size = BATTLE_BIOMES_MAX_COUNT*sizeof(render::battle_biome_data_t);
       ASSERT(data_size == sizeof(data[0])*data.size());
       ASSERT(data[0].density == 52.0f);
-      yavf::Buffer staging(device, yavf::BufferCreateInfo::buffer(data_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT), VMA_MEMORY_USAGE_CPU_ONLY);
-      memcpy(staging.ptr(), data.data(), data_size);
+      auto allocator = this->data->cont->vulkan->buffer_allocator;
+      auto device = this->data->cont->vulkan->device;
+      
+      auto staging = render::create_buffer_unique(allocator, render::buffer(data_size, vk::BufferUsageFlagBits::eTransferSrc), vma::MemoryUsage::eCpuOnly);
+      memcpy(staging.ptr, data.data(), data_size);
       
       std::unique_lock<std::mutex> lock(mutex);
       
-      auto task = device->allocateTransferTask();
-      task->begin();
-      task->copy(&staging, biomes_buffer);
-      task->end();
+      auto pool = this->data->cont->vulkan->transfer_command_pool;
+      auto fence = this->data->cont->vulkan->transfer_fence;
+      auto queue = this->data->cont->vulkan->graphics;
       
-      task->start();
-      task->wait();
-      
-      device->deallocate(task);
-      
-      //biomes_buffer->flush();
+      render::do_command(
+        device, pool, queue, fence, 
+        [&] (vk::CommandBuffer task) {
+          const vk::BufferCopy c{0, 0, data_size};
+          const vk::CommandBufferBeginInfo b(vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
+          task.begin(b);
+          task.copyBuffer(staging.handle, this->data->biomes_buffer.handle, c);
+          task.end();
+        }
+      );
     }
     
     void map::add_unit_textures(const std::vector<render::image_t> &array) {
+      auto allocator = this->data->cont->vulkan->buffer_allocator;
+      auto device = this->data->cont->vulkan->device;
       const size_t size = align_to(array.size() * sizeof(render::image_t), 16);
-      yavf::Buffer staging(device, yavf::BufferCreateInfo::buffer(size, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT), VMA_MEMORY_USAGE_CPU_ONLY);
-      memcpy(staging.ptr(), array.data(), array.size() * sizeof(render::image_t));
+      auto staging = render::create_buffer_unique(allocator, render::buffer(size, vk::BufferUsageFlagBits::eTransferSrc), vma::MemoryUsage::eCpuOnly);
+      memcpy(staging.ptr, array.data(), array.size() * sizeof(render::image_t));
       
       std::unique_lock<std::mutex> lock(mutex);
-      textures_buffer = device->create(yavf::BufferCreateInfo::buffer(size, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT), VMA_MEMORY_USAGE_CPU_ONLY);
+      auto pool = this->data->cont->vulkan->transfer_command_pool;
+      auto fence = this->data->cont->vulkan->transfer_fence;
+      auto queue = this->data->cont->vulkan->graphics;
+      data->textures_buffer.create(allocator, render::buffer(size, vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst), vma::MemoryUsage::eGpuOnly);
       
-      auto task = device->allocateTransferTask();
-      task->begin();
-      task->copy(&staging, textures_buffer);
-      task->end();
-      task->start();
-      task->wait();
-      device->deallocate(task);
+      render::do_command(
+        device, pool, queue, fence, 
+        [&] (vk::CommandBuffer task) {
+          const vk::BufferCopy c{0, 0, size};
+          const vk::CommandBufferBeginInfo b(vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
+          task.begin(b);
+          task.copyBuffer(staging.handle, this->data->textures_buffer.handle, c);
+          task.end();
+        }
+      );
       
-      set->add({textures_buffer, 0, textures_buffer->info().size, 0, 4, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER});
-      set->update();
-      
-      // что еще?
+      render::descriptor_set_updater dsu(&device);
+      dsu.begin(4, 0, vk::DescriptorType::eStorageBuffer).buffer(data->textures_buffer.handle);
+      dsu.update();
     }
     
     glm::vec3 map::get_tile_pos(const uint32_t &tile_index) const {
@@ -262,6 +321,13 @@ namespace devils_engine {
       
       const float h = get_tile_height(tile_index);
       return glm::vec3(tile_pos.x, h, tile_pos.y);
+    }
+    
+    vk::DescriptorSet* map::get_descriptor_set() const { return &data->set; }
+    vk::DescriptorSetLayout* map::get_descriptor_set_layout() const { return &data->layout; }
+    
+    void* map::get_tiles_buffer_memory() const {
+      return data->tiles_buffer.ptr;
     }
   }
 }

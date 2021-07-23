@@ -3,16 +3,13 @@
 
 #include "render/nuklear_header.h"
 #include "render/shared_structures.h"
+#include "render/vulkan_declarations.h"
 #include <vector>
 #include <cstdint>
 #include <string>
 // #include "utils/sol.h"
 
-namespace yavf {
-  class Device;
-  class ImageView;
-  class DescriptorSet;
-}
+#define NUKLEAR_SAMPLER_ID 2
 
 namespace devils_engine {
   struct image_handle_data {
@@ -28,6 +25,7 @@ namespace devils_engine {
   
   namespace render {
     struct window;
+    struct container;
     class image_container;
   }
   
@@ -53,21 +51,6 @@ namespace devils_engine {
         float y;
       };
       
-      struct extent {
-        float width;
-        float height;
-      };
-      
-      struct offset {
-        float x;
-        float y;
-      };
-      
-      struct rect {
-        data::offset offset;
-        data::extent extent;
-      };
-      
       // что вообще мне может потребоваться? 
       // на самом деле это определятся строго теми виджетами которые я использую
       // мне бы 
@@ -82,7 +65,12 @@ namespace devils_engine {
     }
     
     struct context {
-      yavf::Device* device;
+      struct fonts_settings2 {
+        std::string name;
+        float size;
+      };
+      
+      render::container* render_container;
       render::image_container* container;
       nk_context ctx;
       nk_font* fonts[fonts::count];
@@ -91,15 +79,13 @@ namespace devils_engine {
       // нужно создавать пулы из одной картинки
       nk_font_atlas atlas; // атлас единственный?
       render::image_t font_atlas_image;
-//       yavf::ImageView* view;
-      yavf::DescriptorSet* atlas_descriptor;
+      vk::DescriptorSet* atlas_descriptor;
       size_t descriptor_index;
       nk_draw_null_texture null;
       nk_buffer cmds;
-//       sol::object moonnuklear_ctx;
-//       sol::object moonnuklear_font;
+      std::vector<fonts_settings2> fonts_data;
       
-      context(yavf::Device* device, render::window* window, render::image_container* container);
+      context(render::container* render_container, render::window* window, render::image_container* container);
       ~context();
       void remake_font_atlas(const uint32_t &window_width, const uint32_t &window_height);
     };

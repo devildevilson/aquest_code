@@ -1,8 +1,7 @@
 #include "heraldy_parser.h"
 
-#include "render/yavf.h"
+#include "render/vulkan_hpp_header.h"
 #include "render/image_controller.h"
-#include "render/heraldy.h"
 
 #include "utils/globals.h"
 #include "utils/table_container.h"
@@ -113,7 +112,7 @@ namespace devils_engine {
       return true;
     }
     
-    void load_heraldy_layers(render::image_controller* controller, const std::vector<sol::table> &heraldy_tables, yavf::Buffer* buffer) {
+    std::vector<render::packed_heraldy_layer_t> load_heraldy_layers(render::image_controller* controller, const std::vector<sol::table> &heraldy_tables) {
       auto to_data = global::get<utils::numeric_string_container>();
 //       utils::numeric_string_container local_container;
 //       auto to_data = &local_container;
@@ -129,11 +128,12 @@ namespace devils_engine {
       }
       
       // тут нужно получить доступ к буферу
-      const size_t heraldy_buffer_size = heraldy_tables.size() * sizeof(render::packed_heraldy_layer_t);
-      const size_t aligned = align_to(heraldy_buffer_size, 16);
-      buffer->resize(aligned);
+//       const size_t heraldy_buffer_size = heraldy_tables.size() * sizeof(render::packed_heraldy_layer_t);
+//       const size_t aligned = align_to(heraldy_buffer_size, 16);
+      std::vector<render::packed_heraldy_layer_t> buffer(heraldy_tables.size());
       
-      auto arr = reinterpret_cast<render::packed_heraldy_layer_t*>(buffer->ptr());
+      //auto arr = reinterpret_cast<render::packed_heraldy_layer_t*>(buffer->ptr());
+      auto arr = buffer.data();
       for (size_t i = 0; i < heraldy_tables.size(); ++i) {
         const auto &table = heraldy_tables[i];
         render::heraldy_layer_t l{
@@ -220,6 +220,8 @@ namespace devils_engine {
         
         arr[i] = render::pack_heraldy_data(l);
       }
+      
+      return buffer;
     }
   }
 }

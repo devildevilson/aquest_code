@@ -127,7 +127,7 @@ namespace devils_engine {
           {
             STATS_ARRAY,
             check_table_value::type::int_t,
-            core::offsets::character_stats, core::offsets::faction_stats + core::realm_stats::count, {}
+            core::offsets::character_stats, core::offsets::realm_stats + core::realm_stats::count, {}
           }
         }
       },
@@ -352,7 +352,7 @@ namespace devils_engine {
           
           if (const auto &val = magic_enum::enum_cast<core::hero_stats::values>(stat); val.has_value()) {
             const size_t stat_id = val.value();
-            character->hero_stats[stat_id].ival = value;
+            character->hero_stats.set(stat_id, value);
           }
         }
       }
@@ -422,11 +422,7 @@ namespace devils_engine {
           if (const auto &val = magic_enum::enum_cast<core::character_stats::values>(stat); val.has_value()) {
             const size_t stat_id = val.value();
             ASSERT(stat_id < core::character_stats::count);
-            switch (core::character_stats::types[stat_id]) {
-              case core::stat_type::float_t: character->stats[stat_id].fval = value; break;
-              case core::stat_type::uint_t:  character->stats[stat_id].uval = value; break;
-              case core::stat_type::int_t:   character->stats[stat_id].ival = value; break;
-            }
+            character->stats.set(stat_id, value);
             
             continue;
           }
@@ -434,11 +430,12 @@ namespace devils_engine {
           // статы элективной фракции? скорее всего здесь укажем статы именно персонажа
           if (const auto &val = magic_enum::enum_cast<core::realm_stats::values>(stat); val.has_value()) {
             if (character->realms[core::character::self] == nullptr) { 
-              character->realms[core::character::self] = ctx->create_faction(); 
+              const size_t token = ctx->create_realm();
+              character->realms[core::character::self] = ctx->get_realm(token);
               character->realms[core::character::self]->leader = character;
             }
             const size_t stat_id = val.value();
-            character->realms[core::character::self]->stats[stat_id].fval = value;
+            character->realms[core::character::self]->stats.set(stat_id, value);
             continue;
           }
         }
@@ -446,14 +443,16 @@ namespace devils_engine {
 
       if (const auto &liege = table["liege"]; liege.valid()) {
         if (character->realms[core::character::self] == nullptr) { 
-          character->realms[core::character::self] = ctx->create_faction(); 
+          const size_t token = ctx->create_realm();
+          character->realms[core::character::self] = ctx->get_realm(token); 
           character->realms[core::character::self]->leader = character;
         }
         
         const size_t index = FROM_LUA_INDEX(liege.get<size_t>());
         auto c = ctx->get_character(index);
         if (c->realms[core::character::self] == nullptr) { 
-          c->realms[core::character::self] = ctx->create_faction();
+          const size_t token = ctx->create_realm();
+          c->realms[core::character::self] = ctx->get_realm(token);
           c->realms[core::character::self]->leader = c;
         }
         
@@ -464,7 +463,8 @@ namespace devils_engine {
       
       if (const auto &titles = table["titles"]; titles.valid()) {
         if (character->realms[core::character::self] == nullptr) {
-          character->realms[core::character::self] = ctx->create_faction();
+          const size_t token = ctx->create_realm();
+          character->realms[core::character::self] = ctx->get_realm(token);
           character->realms[core::character::self]->leader = character;
         }
         

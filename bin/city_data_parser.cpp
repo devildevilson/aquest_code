@@ -125,7 +125,7 @@ namespace devils_engine {
         if (index == SIZE_MAX) throw std::runtime_error("Could not find city_type " + str);
         auto city_type = ctx->get_entity<core::city_type>(index);
         city->type = city_type;
-        memcpy(city->current_stats.data(), city_type->stats.data(), sizeof(core::stat_container) * core::city_stats::count);
+        memcpy(city->current_stats.array.data(), city_type->stats.data(), sizeof(core::stat_container) * core::city_stats::count);
       }
       
       city->tile_index = FROM_LUA_INDEX(table["tile_index"].get<uint32_t>());

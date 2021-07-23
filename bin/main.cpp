@@ -1,6 +1,4 @@
 #include "helper.h"
-#include "utils/utility.h"
-#include <filesystem>
 
 using namespace devils_engine;
 
@@ -337,8 +335,8 @@ int main(int argc, char const *argv[]) {
     }
     
     if (game_ctx->state == utils::quest_state::world_map) {
-      auto c = game_ctx->player_character;
-      test_decision(c);
+      //auto c = game_ctx->player_character;
+      //test_decision(c);
     }
     
     // в текущем виде занимает в среднем от 20-50 мкс, 

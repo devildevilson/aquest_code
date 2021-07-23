@@ -45,7 +45,8 @@ namespace devils_engine {
       
       const float final_dist = glm::mix(minimum_dist, maximum_dist, zoom_norm); // нужно поиграть со значениями
       
-      const glm::mat4 persp = glm::perspective(glm::radians(75.0f), float(window->surface.extent.width) / float(window->surface.extent.height), 1.0f, final_dist);
+      const auto [w,h] = window->framebuffer_size();
+      const glm::mat4 persp = glm::perspective(glm::radians(75.0f), float(w) / float(h), 1.0f, final_dist);
       const glm::vec3 pos   = camera->current_pos();
       const glm::vec3 dir   = camera->dir();
       //const glm::vec3 up    = camera->up();
@@ -66,7 +67,7 @@ namespace devils_engine {
       buffers->update_pos(pos);
       buffers->update_dir(dir);
       buffers->update_zoom(zoom_norm);
-      buffers->update_dimensions(window->surface.extent.width, window->surface.extent.height);
+      buffers->update_dimensions(w, h);
     }
     
     components::camera* get_camera() {
@@ -127,11 +128,9 @@ namespace devils_engine {
       current_zoom = std::min(current_zoom, max_zoom + 1.0f);
       float a;
       m_dir = compute_dir(m_front, current_zoom, a);
-      const float norm_zoom = (current_zoom - min_zoom) / (max_zoom - min_zoom);
-      auto u = global::get<render::buffers>()->uniform;
-      auto camera_data = reinterpret_cast<render::camera_data*>(u->ptr());
-      ASSERT(camera_data != nullptr);
-      camera_data->dim.z = glm::floatBitsToUint(norm_zoom);
+//       const float norm_zoom = (current_zoom - min_zoom) / (max_zoom - min_zoom);
+//       m_zoom = norm_zoom;
+//       global::get<render::buffers>()->update_zoom(norm_zoom);
       
       m_accumulation_zoom += (0.0f - m_accumulation_zoom) * 0.2f;
     }

@@ -1,16 +1,22 @@
 #include "map.h"
-#include "render/yavf.h"
-#include "render/shared_structures.h"
-#include "figures.h"
+
 #include <thread>
 #include <chrono>
+#include <atomic>
+
+#include "render/shared_structures.h"
+#include "render/container.h"
+#include "render/map_data.h"
+#include "render/vulkan_hpp_header.h"
+#include "render/makers.h"
+
+#include "figures.h"
 #include "seasons.h"
+
 #include "utils/thread_pool.h"
 #include "utils/works_utils.h"
-#include "seasons.h"
 #include "utils/globals.h"
 #include "utils/utility.h"
-#include <atomic>
 
 #define MAP_CONTAINER_DESCRIPTOR_POOL_NAME "map_container_descriptor_pool"
 
@@ -33,57 +39,48 @@ namespace devils_engine {
     static_assert(alignof(c_tile_data) == alignof(render::additional_data_t));
     
     map::map(const create_info &info) : 
-      device(info.device),
-      points(nullptr),
-      tiles(nullptr),
-      accel_triangles(nullptr),
-      biomes(nullptr),
-      structures(nullptr),
-      provinces(nullptr),
-      faiths(nullptr),
-      cultures(nullptr),
+      render_container(info.render_container),
+      data(new render::map_data(render_container->vulkan->device, render_container->vulkan->physical_device, render_container->vulkan->buffer_allocator)),
       free_army_slot(UINT32_MAX),
       armies_count(0),
       s(status::initial)
     {
-      const uint32_t accel_triangles_count = tri_count_d(accel_struct_detail_level);
-      const uint32_t tiles_count = hex_count_d(detail_level);
-      const uint32_t points_count = points_count_d(detail_level);
+      const size_t accel_triangles_count = tri_count_d(accel_struct_detail_level);
+      const size_t points_count = points_count_d(detail_level);
+      const size_t tiles_count = hex_count_d(detail_level);
+//       const uint32_t tile_indices_count = std::ceil(float(tiles_count)/float(4));
+      const size_t tile_indices_size = align_to(tiles_count * sizeof(uint32_t), 16);
+      const size_t army_data_size = sizeof(render::army_data_t) * maximum_army_count;
       
-      points = device->create(yavf::BufferCreateInfo::buffer(sizeof(glm::vec4)*points_count, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT), VMA_MEMORY_USAGE_CPU_ONLY);
-      tiles = device->create(yavf::BufferCreateInfo::buffer(sizeof(render::light_map_tile_t)*tiles_count, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT), VMA_MEMORY_USAGE_CPU_ONLY);
-      accel_triangles = device->create(yavf::BufferCreateInfo::buffer(
-        sizeof(render::packed_fast_triangle_t)*accel_triangles_count, 
-        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT
-      ), VMA_MEMORY_USAGE_CPU_ONLY);
-      biomes = device->create(yavf::BufferCreateInfo::buffer(
-        sizeof(render::packed_biome_data_t)*MAX_BIOMES_COUNT, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT
-      ), VMA_MEMORY_USAGE_GPU_ONLY);
-      
-      const uint32_t tile_indices_count = std::ceil(float(tiles_count)/float(4));
-      tile_indices = device->create(yavf::BufferCreateInfo::buffer(
-        sizeof(glm::uvec4)*tile_indices_count, 
-        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT
-      ), VMA_MEMORY_USAGE_CPU_ONLY); // это можно засунуть сразу в гпу память
-      
-      structures = device->create(yavf::BufferCreateInfo::buffer(
+      auto allocator = data->allocator;
+      auto device = data->device;
+      data->points.create(allocator, render::buffer(sizeof(glm::vec4)*points_count, vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferSrc), vma::MemoryUsage::eCpuOnly, "map::points");
+      data->tiles.create(allocator, render::buffer(sizeof(render::light_map_tile_t)*tiles_count, vk::BufferUsageFlagBits::eStorageBuffer), vma::MemoryUsage::eCpuOnly, "map::tiles");
+      data->accel_triangles.create(allocator, render::buffer(
+        sizeof(render::packed_fast_triangle_t)*accel_triangles_count,
+        vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferSrc
+      ), vma::MemoryUsage::eCpuOnly, "map::accel_triangles");
+      data->biomes.create(allocator, render::buffer(
+        sizeof(render::packed_biome_data_t)*MAX_BIOMES_COUNT, 
+        vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst
+      ), vma::MemoryUsage::eGpuOnly, "map::biomes");
+      data->tile_indices.create(allocator, render::buffer(
+        tile_indices_size, 
+        vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferSrc
+      ), vma::MemoryUsage::eCpuOnly, "map::tile_indices");
+      data->structures.create(allocator, render::buffer(
         sizeof(glm::uvec4), 
-        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT
-      ), VMA_MEMORY_USAGE_GPU_ONLY);
+        vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst
+      ), vma::MemoryUsage::eGpuOnly, "map::structures");
+      data->tile_object_indices.create(allocator, render::buffer(
+        sizeof(c_tile_data) * tiles_count, 
+        vk::BufferUsageFlagBits::eStorageBuffer
+      ), vma::MemoryUsage::eCpuOnly, "map::tile_object_indices");
+      data->army_data_buffer.create(allocator, render::buffer(army_data_size, vk::BufferUsageFlagBits::eStorageBuffer), vma::MemoryUsage::eCpuOnly, "map::army_data_buffer");
       
-      tile_object_indices = device->create(yavf::BufferCreateInfo::buffer(
-        sizeof(c_tile_data) * tiles_count,
-        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
-      ), VMA_MEMORY_USAGE_CPU_ONLY);
-      
-      army_data_buffer = device->create(yavf::BufferCreateInfo::buffer(
-        sizeof(render::army_data_t) * 16,
-        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
-      ), VMA_MEMORY_USAGE_CPU_ONLY);
-      
-      memset(tile_indices->ptr(), 0, tile_indices->info().size);
+      memset(data->tile_indices.ptr, 0, tile_indices_size);
       using array_data_type = c_tile_data;
-      auto object_indices = reinterpret_cast<array_data_type*>(tile_object_indices->ptr());
+      auto object_indices = reinterpret_cast<array_data_type*>(data->tile_object_indices.ptr);
       const uint32_t vec_count = sizeof(array_data_type) / sizeof(glm::uvec4);
       for (size_t i = 0; i < tiles_count; ++i) {
         for (uint32_t j = 0; j < vec_count; ++j) {
@@ -99,60 +96,38 @@ namespace devils_engine {
       }
       accum += tri_count_d(detail_level);
       
+      points.resize(points_count, glm::vec4(0.0f, 0.0f, 0.0f, 1.0f));
       triangles.resize(accum);
       triangles_data.resize(accum);
       
-      yavf::DescriptorSetLayout tiles_data_layout = device->setLayout(TILES_DATA_LAYOUT_NAME);
-      if (tiles_data_layout == VK_NULL_HANDLE) {
-        yavf::DescriptorLayoutMaker dlm(device);
-        tiles_data_layout = dlm.binding(0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_ALL)
-                               .binding(1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_ALL)
-                               .binding(2, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_ALL)
-                               .binding(3, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_ALL)
-                               .binding(4, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_ALL)
-                               .binding(5, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_ALL)
-                               .binding(6, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_ALL)
-                               .binding(7, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_ALL)
-                               .create(TILES_DATA_LAYOUT_NAME);
-      }
-      
-      //auto pool = device->descriptorPool(DEFAULT_DESCRIPTOR_POOL_NAME);
-      yavf::DescriptorPool pool = VK_NULL_HANDLE;
       {
-        yavf::DescriptorPoolMaker dpm(device);
-        pool = dpm.poolSize(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 10).create(MAP_CONTAINER_DESCRIPTOR_POOL_NAME);
+        render::descriptor_set_layout_maker dslm(&device);
+        data->tiles_layout = 
+          dslm.binding(0, vk::DescriptorType::eStorageBuffer, vk::ShaderStageFlagBits::eAll)
+              .binding(1, vk::DescriptorType::eStorageBuffer, vk::ShaderStageFlagBits::eAll)
+              .binding(2, vk::DescriptorType::eStorageBuffer, vk::ShaderStageFlagBits::eAll)
+              .binding(3, vk::DescriptorType::eStorageBuffer, vk::ShaderStageFlagBits::eAll)
+              .binding(4, vk::DescriptorType::eStorageBuffer, vk::ShaderStageFlagBits::eAll)
+              .binding(5, vk::DescriptorType::eStorageBuffer, vk::ShaderStageFlagBits::eAll)
+              .binding(6, vk::DescriptorType::eStorageBuffer, vk::ShaderStageFlagBits::eAll)
+              .binding(7, vk::DescriptorType::eStorageBuffer, vk::ShaderStageFlagBits::eAll)
+              .create(TILES_DATA_LAYOUT_NAME);
       }
       
       {
-        yavf::DescriptorMaker dm(device);
-        tiles_set = dm.layout(tiles_data_layout).create(pool)[0];
-        size_t index = tiles_set->add({tiles, 0, tiles->info().size, 0, 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER});
-                       tiles_set->add({biomes, 0, biomes->info().size, 0, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER});
-                       tiles_set->add({points, 0, points->info().size, 0, 2, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER});
-                       tiles_set->add({accel_triangles, 0, accel_triangles->info().size, 0, 3, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER});
-                       tiles_set->add({tile_indices, 0, tile_indices->info().size, 0, 4, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER});
-                       tiles_set->add({structures, 0, structures->info().size, 0, 5, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER});
-                       tiles_set->add({tile_object_indices, 0, tile_object_indices->info().size, 0, 6, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER});
-                       tiles_set->add({army_data_buffer, 0, army_data_buffer->info().size, 0, 7, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER});
-        tiles_set->update();
-        tiles->setDescriptor(tiles_set, index);
+        render::descriptor_pool_maker dpm(&device);
+        data->tiles_set_pool = dpm.poolSize(vk::DescriptorType::eStorageBuffer, 10).create(MAP_CONTAINER_DESCRIPTOR_POOL_NAME);
+      }
+      
+      {
+        render::descriptor_set_maker dsm(&device);
+        data->tiles_set = dsm.layout(data->tiles_layout).create(data->tiles_set_pool, "map buffers descriptor")[0];
+        
+        update_set();
       }
     }
     
-    map::~map() {
-      device->destroy(points);
-      device->destroy(tiles);
-      device->destroy(accel_triangles);
-      device->destroy(biomes);
-      device->destroy(tile_indices);
-      device->destroy(structures);
-      device->destroy(tile_object_indices);
-      device->destroy(army_data_buffer);
-      device->destroyDescriptorPool(MAP_CONTAINER_DESCRIPTOR_POOL_NAME);
-//       device->destroy(provinces);
-//       device->destroy(faiths);
-//       device->destroy(cultures);
-    }
+    map::~map() {}
     
     bool test_intersect_func(const glm::vec4 &v0, const glm::vec4 &v1, const glm::vec4 &v2, const utils::ray &ray, float &t) {
       const glm::vec3 v0v1 = v1 - v0;
@@ -262,118 +237,122 @@ namespace devils_engine {
     }
     
 #define MAX_VALUE 1000000.0f
-    uint32_t map::cast_ray(const utils::ray &ray, float &ray_dist) const {
-      static const std::function<uint32_t(const utils::ray &ray, const uint32_t &tri_index, float &distance)> reck = [this] (const utils::ray &ray, const uint32_t &tri_index, float &distance) {
-        const bool ret = intersect_container(tri_index, ray);
-        if (!ret) return UINT32_MAX;
-        
-        const triangle &tri = triangles[tri_index];
-        
-        const uint32_t level = tri.current_level;
-        if (level == detail_level) {
-          uint32_t final_tile_index = UINT32_MAX;
-          float final_tile_dist = MAX_VALUE;
-          for (size_t i = 0; i < 4; ++i) {
-            const uint32_t tile_index = tri.next_level[i];
-            // тут нужно проверить дальность до тайла + проверить пересечение со стенками
-            // нужно ли чекать ближайший треугольник? не уверен что это необходимо
-            
-            const auto &tile_data = render::unpack_data(get_tile(tile_index));
-            const float height = tile_data.height;
-            const uint32_t p_count = render::is_pentagon(tile_data) ? 5 : 6;
-            const uint32_t point_a_index = tile_data.center;
-            const uint32_t height_layer = render::compute_height_layer(height);
-            const float final_height = render::layer_height * height_layer;
-            const float computed_height = final_height * render::render_tile_height;
-            
-            glm::vec4 center = get_point(point_a_index);
-            glm::vec4 center_height = center + glm::normalize(glm::vec4(glm::vec3(center), 0.0f)) * (computed_height);
-            glm::vec4 local_points[6];
-            glm::vec4 local_points_height[6];
-            for (uint32_t j = 0; j < p_count; ++j) {
-              const uint32_t point1_index = tile_data.points[j];
-              const glm::vec4 point = get_point(point1_index);
-              const glm::vec4 point_normal = glm::vec4(glm::vec3(point) / world_radius, 0.0f);
-              const glm::vec4 point_height = point + point_normal * (computed_height);
-              local_points[j] = point;
-              local_points_height[j] = point_height;
-            }
-            
-            for (uint32_t j = 0; j < p_count; ++j) {
-              const uint32_t b_index = j;
-              const uint32_t c_index = (j+1)%p_count;
-              
-              ASSERT(c_index < p_count);
-              
-              float dist = MAX_VALUE;
-//               const bool ret = intersect_tri(get_point(point_a_index), get_point(point_b_index), get_point(point_c_index), ray, dist);
-              const bool ret = intersect_tri(center_height, local_points_height[b_index], local_points_height[c_index], ray, dist);
-              if (ret && dist < final_tile_dist) {
-                final_tile_index = tile_index;
-                final_tile_dist = dist;
-                //break;
-              }
-            }
-            
-            if (final_tile_index != UINT32_MAX) {
-              distance = final_tile_dist;
-              return final_tile_index;
-            }
-
-            // почему то по приоритету берутся стенки
-            for (uint32_t j = 0; j < p_count; ++j) {
-              const uint32_t b_index = j;
-              const uint32_t c_index = (j+1)%p_count;
-              const glm::vec4 point1 = local_points[b_index];
-              const glm::vec4 point2 = local_points[c_index];
-              const glm::vec4 point3 = local_points_height[b_index];
-              const glm::vec4 point4 = local_points_height[c_index];
-              // две стенки
-              const std::tuple<glm::vec4, glm::vec4, glm::vec4> wall_triangle[] = {
-                std::tie(point1, point2, point3),
-                std::tie(point4, point3, point2)
-              };
-              
-              float dist1 = MAX_VALUE;
-              float dist2 = MAX_VALUE;
-              const bool ret1 = intersect_tri(std::get<0>(wall_triangle[0]), std::get<1>(wall_triangle[0]), std::get<2>(wall_triangle[0]), ray, dist1);
-              const bool ret2 = intersect_tri(std::get<0>(wall_triangle[1]), std::get<1>(wall_triangle[1]), std::get<2>(wall_triangle[1]), ray, dist2);
-              
-              if (ret1 && dist1 < final_tile_dist) {
-                final_tile_dist = dist1;
-                final_tile_index = tile_index;
-              }
-              
-              if (ret2 && dist2 < final_tile_dist) {
-                final_tile_dist = dist2;
-                final_tile_index = tile_index;
-              }
-            }
-          }
-          
-          distance = final_tile_dist;
-          return final_tile_index;
-        }
-        
-        float global_dist = MAX_VALUE;
-        uint32_t global_index = UINT32_MAX;
+    uint32_t cast_ray_reck(const map* m, const utils::ray &ray, const uint32_t &tri_index, float &distance) {
+      const bool ret = m->intersect_container(tri_index, ray);
+      if (!ret) return UINT32_MAX;
+      
+      const map::triangle &tri = m->triangles[tri_index];
+      
+      const uint32_t level = tri.current_level;
+      if (level == map::detail_level) {
+        uint32_t final_tile_index = UINT32_MAX;
+        float final_tile_dist = MAX_VALUE;
         for (size_t i = 0; i < 4; ++i) {
-          const uint32_t tri_index = tri.next_level[i];
+          const uint32_t tile_index = tri.next_level[i];
+          // тут нужно проверить дальность до тайла + проверить пересечение со стенками
+          // нужно ли чекать ближайший треугольник? не уверен что это необходимо
           
-          float dist = MAX_VALUE;
-          const uint32_t index = reck(ray, tri_index, dist); // может я тут что то не так делаю
+          const auto &tile_data = render::unpack_data(m->get_tile(tile_index));
+          const float height = tile_data.height;
+          const uint32_t p_count = render::is_pentagon(tile_data) ? 5 : 6;
+          const uint32_t point_a_index = tile_data.center;
+          const uint32_t height_layer = render::compute_height_layer(height);
+          const float final_height = render::layer_height * height_layer;
+          const float computed_height = final_height * render::render_tile_height;
           
-          if (index == UINT32_MAX) continue;
+          glm::vec4 center = m->get_point(point_a_index);
+          glm::vec4 center_height = center + glm::normalize(glm::vec4(glm::vec3(center), 0.0f)) * (computed_height);
+          glm::vec4 local_points[6];
+          glm::vec4 local_points_height[6];
+          for (uint32_t j = 0; j < p_count; ++j) {
+            const uint32_t point1_index = tile_data.points[j];
+            const glm::vec4 point = m->get_point(point1_index);
+            const glm::vec4 point_normal = glm::vec4(glm::vec3(point) / map::world_radius, 0.0f);
+            const glm::vec4 point_height = point + point_normal * (computed_height);
+            local_points[j] = point;
+            local_points_height[j] = point_height;
+          }
           
-          if (dist < global_dist) {
-            global_dist = dist;
-            global_index = index;
+          for (uint32_t j = 0; j < p_count; ++j) {
+            const uint32_t b_index = j;
+            const uint32_t c_index = (j+1)%p_count;
+            
+            ASSERT(c_index < p_count);
+            
+            float dist = MAX_VALUE;
+//               const bool ret = intersect_tri(get_point(point_a_index), get_point(point_b_index), get_point(point_c_index), ray, dist);
+            const bool ret = m->intersect_tri(center_height, local_points_height[b_index], local_points_height[c_index], ray, dist);
+            if (ret && dist < final_tile_dist) {
+              final_tile_index = tile_index;
+              final_tile_dist = dist;
+              //break;
+            }
+          }
+          
+          if (final_tile_index != UINT32_MAX) {
+            distance = final_tile_dist;
+            return final_tile_index;
+          }
+
+          // почему то по приоритету берутся стенки
+          for (uint32_t j = 0; j < p_count; ++j) {
+            const uint32_t b_index = j;
+            const uint32_t c_index = (j+1)%p_count;
+            const glm::vec4 point1 = local_points[b_index];
+            const glm::vec4 point2 = local_points[c_index];
+            const glm::vec4 point3 = local_points_height[b_index];
+            const glm::vec4 point4 = local_points_height[c_index];
+            // две стенки
+            const std::tuple<glm::vec4, glm::vec4, glm::vec4> wall_triangle[] = {
+              std::tie(point1, point2, point3),
+              std::tie(point4, point3, point2)
+            };
+            
+            float dist1 = MAX_VALUE;
+            float dist2 = MAX_VALUE;
+            const bool ret1 = m->intersect_tri(std::get<0>(wall_triangle[0]), std::get<1>(wall_triangle[0]), std::get<2>(wall_triangle[0]), ray, dist1);
+            const bool ret2 = m->intersect_tri(std::get<0>(wall_triangle[1]), std::get<1>(wall_triangle[1]), std::get<2>(wall_triangle[1]), ray, dist2);
+            
+            if (ret1 && dist1 < final_tile_dist) {
+              final_tile_dist = dist1;
+              final_tile_index = tile_index;
+            }
+            
+            if (ret2 && dist2 < final_tile_dist) {
+              final_tile_dist = dist2;
+              final_tile_index = tile_index;
+            }
           }
         }
         
-        distance = global_dist;
-        return global_index;
-      };
+        distance = final_tile_dist;
+        return final_tile_index;
+      }
+      
+      float global_dist = MAX_VALUE;
+      uint32_t global_index = UINT32_MAX;
+      for (size_t i = 0; i < 4; ++i) {
+        const uint32_t tri_index = tri.next_level[i];
+        
+        float dist = MAX_VALUE;
+        const uint32_t index = cast_ray_reck(m, ray, tri_index, dist); // может я тут что то не так делаю
+        
+        if (index == UINT32_MAX) continue;
+        
+        if (dist < global_dist) {
+          global_dist = dist;
+          global_index = index;
+        }
+      }
+      
+      distance = global_dist;
+      return global_index;
+    }
+
+    uint32_t map::cast_ray(const utils::ray &ray, float &ray_dist) const {
+//       static const std::function<uint32_t(const utils::ray &ray, const uint32_t &tri_index, float &distance)> reck = [this] (const utils::ray &ray, const uint32_t &tri_index, float &distance) {
+//         
+//       };
       
       size_t current_detail_level = 0;
       
@@ -381,7 +360,7 @@ namespace devils_engine {
       uint32_t final_tile = UINT32_MAX;
       for (size_t i = 0; i < 20*power4(current_detail_level); ++i) {
         float local_dist = MAX_VALUE;
-        const uint32_t tile_index = reck(ray, i, local_dist);
+        const uint32_t tile_index = cast_ray_reck(this, ray, i, local_dist);
         
         if (local_dist < dist) {
           dist = local_dist;
@@ -391,98 +370,6 @@ namespace devils_engine {
       
       ray_dist = dist;
       return final_tile;
-      
-//       //ASSERT(current_tri_index != UINT32_MAX); // по идее это условие всегда должно выполняться
-//       // у нас еще не создана карта
-//       if (current_tri_index == UINT32_MAX) return UINT32_MAX;
-//       
-//       while (current_detail_level <= detail_level) {
-//         const triangle &tri = triangles[current_tri_index];
-// //         const uint32_t tri_index_test = current_tri_index;
-//         current_tri_index = UINT32_MAX;
-//         for (size_t i = 0; i < 4; ++i) {
-//           const uint32_t tri_index = tri.next_level[i];
-//           if (intersect_container(tri_index, ray)) {
-//             current_tri_index = tri_index;
-//             //ASSERT(triangles[current_tri_index].current_level == current_detail_level);
-//             ++current_detail_level;
-//             //std::cout << "current_tri_index " << current_tri_index << '\n';            
-//             break;
-//           }
-//           
-// // #ifndef _NDEBUG
-// //           size_t count = 0;
-// //           for (size_t i = 0; i < triangles[tri_index].current_level; ++i) {
-// //             count += 20*power4(i);
-// //           }
-// //           
-// //           const size_t offset = count;
-// //           const size_t last = offset + 20*power4(triangles[tri_index].current_level);
-// //           
-// //           ASSERT(tri_index >= offset && tri_index < last);
-// // #endif
-// //           
-// //         }
-// // 
-// //         if (current_tri_index == UINT32_MAX) {
-// // //           PRINT_VAR("detail_level", detail_level)
-// // //           PRINT_VAR("current_detail_level", current_detail_level)
-// //           PRINT_VAR("tri_index_test", tri_index_test)
-// //           PRINT_VAR("tri.current_level", tri.current_level)
-// // //           PRINT_VAR("triangles count", (20*power4(current_detail_level-1)))
-// // //           PRINT_VAR("next level 0", tri.next_level[0])
-// // //           PRINT_VEC4("ray dir", ray.dir)
-// // //           auto points_arr = reinterpret_cast<glm::vec4*>(points->ptr());
-// // //           PRINT_VEC4("p 0", points_arr[tri.points[0]])
-// // //           PRINT_VEC4("p 1", points_arr[tri.points[1]])
-// // //           PRINT_VEC4("p 2", points_arr[tri.points[2]])
-// // //           const glm::vec4 test_point = ray.pos + ray.dir * 20.0f;
-// // //           PRINT_VEC4("test point", test_point)
-// //           
-// //           PRINT_VEC4("ray pos", ray.pos)
-// //           PRINT_VEC4("ray dir", ray.dir)
-// //           PRINT_VEC4("ray p  ", (ray.pos + ray.dir * 20.0f))
-// //           auto points_arr = reinterpret_cast<glm::vec4*>(points->ptr());
-// //           for (uint32_t i = 0; i < 4; ++i) {
-// //             const triangle &next_tri = triangles[tri.next_level[i]];
-// //             const glm::vec4 p0 = points_arr[next_tri.points[0]];
-// //             const glm::vec4 p1 = points_arr[next_tri.points[1]];
-// //             const glm::vec4 p2 = points_arr[next_tri.points[2]];
-// //             PRINT_VAR("index", tri.next_level[i])
-// //             PRINT_VEC4("p0", p0)
-// //             PRINT_VEC4("p1", p1)
-// //             PRINT_VEC4("p2", p2)
-// //             test_intersect_func(p0, p1, p2, ray);
-// //           }
-//         }
-//         ASSERT(current_tri_index != UINT32_MAX);
-//       }
-//       
-//       ASSERT(triangles[current_tri_index].current_level == detail_level);
-//       
-//       for (size_t i = 0; i < 4; ++i) {
-//         const uint32_t tile_index = triangles[current_tri_index].next_level[i];
-//         //std::cout << "tile_index " << tile_index << '\n';
-//         if (intersect_tile(tile_index, ray)) return tile_index;
-//       }
-// 
-//       return UINT32_MAX;
-      
-//       auto fast_triangles_arr = reinterpret_cast<render::packed_fast_triangle_t*>(accel_triangles->ptr());
-//       const size_t accel_triangles_count = tri_count_d(accel_struct_detail_level);
-//       auto points_arr = reinterpret_cast<glm::vec4*>(points->ptr());
-//       
-//       for (size_t i = 0; i < accel_triangles_count; ++i) {
-//         const auto &fast_triangle = fast_triangles_arr[i];
-//         const glm::vec4 a = points_arr[fast_triangle.points.x];
-//         const glm::vec4 b = points_arr[fast_triangle.points.y];
-//         const glm::vec4 c = points_arr[fast_triangle.points.z];
-//         
-//         const bool intersect = intersect_tri(a, b, c, ray);
-//         if (!intersect) continue;
-//         
-//         
-//       }
     }
     
     glm::vec4 surface_normal(const std::tuple<glm::vec4, glm::vec4, glm::vec4> &points) {
@@ -505,7 +392,8 @@ namespace devils_engine {
       ASSERT(tri_index < triangles.size());
       const triangle &tri = triangles[tri_index];
       ASSERT(!triangles.empty());
-      auto points_arr = reinterpret_cast<glm::vec4*>(points->ptr());
+      //auto points_arr = reinterpret_cast<glm::vec4*>(data->points.ptr);
+      const auto points_arr = points.data();
       
       // короче я что то тут упускаю серьезно и не проверяю
       // не могу добиться чтобы луч попадал во все треугольники
@@ -590,8 +478,8 @@ namespace devils_engine {
     }
     
     bool map::intersect_tile(const uint32_t &tile_index, const utils::ray &ray) const {
-      auto tiles_arr = reinterpret_cast<render::light_map_tile_t*>(tiles->ptr());
-      auto points_arr = reinterpret_cast<glm::vec4*>(points->ptr());
+      auto tiles_arr = reinterpret_cast<render::light_map_tile_t*>(data->tiles.ptr);
+      const auto points_arr = points.data();
       const auto &tile_data = render::unpack_data(tiles_arr[tile_index]);
       const uint32_t points_count = render::is_pentagon(tile_data) ? 5 : 6;
       //const uint32_t point_a_index = tile_data.points[0];
@@ -600,7 +488,7 @@ namespace devils_engine {
         const uint32_t point_b_index = tile_data.points[i];
         const uint32_t point_c_index = tile_data.points[(i+1)%points_count];
         
-        float dist = 124414.0f;
+        float dist = MAX_VALUE;
         const bool ret = intersect_tri(points_arr[point_a_index], points_arr[point_b_index], points_arr[point_c_index], ray, dist);
         if (ret) return true;
       }
@@ -647,7 +535,7 @@ namespace devils_engine {
         // что делать с объектами которые не попадают в первые треугольники?
         // добавлять в какой нибудь, так как скорее всего и луч и фрустум заденут объект 
         
-        auto points_arr = reinterpret_cast<glm::vec4*>(points->ptr());
+        const auto points_arr = points.data();
         
         using local_vec4 = glm::vec4;
         using local_vec3 = glm::vec3;
@@ -795,7 +683,7 @@ namespace devils_engine {
         }
         
         for (size_t i = 0; i < triangles_data[tri_index].size(); ++i) {
-          float dist = 1000000.0f;
+          float dist = MAX_VALUE;
           const bool ret = test_ray_aabb(ray, triangles_data[tri_index][i].aabb, dist);
           
           if (ret && dist < global_dist) {
@@ -809,9 +697,9 @@ namespace devils_engine {
       };
       
       void* object_ptr = nullptr;
-      float distance = 1000000.0f;
+      float distance = MAX_VALUE;
       for (size_t i = 0; i < 20*power4(0); ++i) {
-        float d = 1000000.0f;
+        float d = MAX_VALUE;
         void* ptr = reck(ray, i, d);
         
         if (d < distance) {
@@ -830,7 +718,7 @@ namespace devils_engine {
     
     bool map::test_triangle_frustum(const uint32_t &tri_index, const utils::frustum &frustum) const {
       const auto &tri = triangles[tri_index];
-      auto points_arr = reinterpret_cast<glm::vec4*>(points->ptr());
+      const auto points_arr = points.data();
         
       using local_vec4 = glm::vec4;
       using local_vec3 = glm::vec3;
@@ -962,19 +850,19 @@ namespace devils_engine {
     const render::light_map_tile_t map::get_tile(const uint32_t &index) const {
       ASSERT(index < tiles_count());
 //       std::unique_lock<std::mutex> lock(mutex);
-      auto tiles_arr = reinterpret_cast<render::light_map_tile_t*>(tiles->ptr());
+      const auto tiles_arr = reinterpret_cast<render::light_map_tile_t*>(data->tiles.ptr);
       return tiles_arr[index];
     }
     
     const render::map_tile_t* map::get_tile_ptr(const uint32_t &index) const {
       if (index >= tiles_count()) return nullptr;
-      auto tiles_arr = reinterpret_cast<render::map_tile_t*>(tiles->ptr());
+      auto tiles_arr = reinterpret_cast<render::map_tile_t*>(data->tiles.ptr);
       return &tiles_arr[index];
     }
     
     render::map_tile_t* map::get_tile_ptr(const uint32_t &index) {
       if (index >= tiles_count()) return nullptr;
-      auto tiles_arr = reinterpret_cast<render::map_tile_t*>(tiles->ptr());
+      auto tiles_arr = reinterpret_cast<render::map_tile_t*>(data->tiles.ptr);
       return &tiles_arr[index];
     }
     
@@ -985,23 +873,25 @@ namespace devils_engine {
     const glm::vec4 map::get_point(const uint32_t &index) const {
       ASSERT(index < points_count());
 //       std::unique_lock<std::mutex> lock(mutex);
-      auto points_arr = reinterpret_cast<glm::vec4*>(points->ptr());
+      const auto points_arr = points.data();
       return points_arr[index];
     }
     
     uint32_t map::points_count() const {
-//       std::unique_lock<std::mutex> lock(mutex);
-      return points->info().size / sizeof(glm::vec4);
+      return points.size();
     }
     
     uint32_t map::tiles_count() const {
 //       std::unique_lock<std::mutex> lock(mutex);
-      return tiles->info().size / sizeof(render::light_map_tile_t);
+      //return tiles->info().size / sizeof(render::light_map_tile_t);
+      const uint32_t tiles_count = hex_count_d(detail_level);
+      return tiles_count;
     }
     
     uint32_t map::accel_triangles_count() const {
 //       std::unique_lock<std::mutex> lock(mutex);
-      return accel_triangles->info().size / sizeof(render::packed_fast_triangle_t);
+      //return accel_triangles->info().size / sizeof(render::packed_fast_triangle_t);
+      return tri_count_d(accel_struct_detail_level);
     }
     
     uint32_t map::triangles_count() const {
@@ -1013,7 +903,7 @@ namespace devils_engine {
       ASSERT(index < tiles_count());
       std::unique_lock<std::mutex> lock(mutex);
       
-      auto tiles_arr = reinterpret_cast<render::light_map_tile_t*>(tiles->ptr());
+      auto tiles_arr = reinterpret_cast<render::light_map_tile_t*>(data->tiles.ptr);
       const render::map_tile_t map_tile{
         tile->index,
         {GPU_UINT_MAX},
@@ -1031,15 +921,16 @@ namespace devils_engine {
     
     void map::set_point_data(const glm::vec3 &point, const uint32_t &index) {
       ASSERT(index < points_count());
+      assert(false); // нужно наверное просто удалить
       std::unique_lock<std::mutex> lock(mutex);
-      auto points_arr = reinterpret_cast<glm::vec4*>(points->ptr());
+      auto points_arr = reinterpret_cast<glm::vec4*>(data->points.ptr);
       points_arr[index] = glm::vec4(point, 1.0f);
     }
     
     void map::set_tile_indices(const uint32_t &triangle_index, const glm::uvec3 &points, const std::vector<uint32_t> &indices, const uint32_t &offset, const uint32_t &count, const bool has_pentagon) {
       std::unique_lock<std::mutex> lock(mutex);
-      auto triangles_arr = reinterpret_cast<render::packed_fast_triangle_t*>(accel_triangles->ptr());
-      auto tile_indices_arr = reinterpret_cast<uint32_t*>(tile_indices->ptr()); // важно не забыть как мы храним индексы
+      auto triangles_arr = reinterpret_cast<render::packed_fast_triangle_t*>(data->accel_triangles.ptr);
+      auto tile_indices_arr = reinterpret_cast<uint32_t*>(data->tile_indices.ptr); // важно не забыть как мы храним индексы
       
       ASSERT(indices.size() == count);
       
@@ -1053,93 +944,103 @@ namespace devils_engine {
       memcpy(&tile_indices_arr[offset], indices.data(), sizeof(uint32_t)*count);
     }
     
+    void map::update_set() {
+      render::descriptor_set_updater dsu(&data->device);
+      dsu.currentSet(data->tiles_set);
+      dsu.begin(0, 0, vk::DescriptorType::eStorageBuffer).buffer(data->tiles.handle);
+      dsu.begin(1, 0, vk::DescriptorType::eStorageBuffer).buffer(data->biomes.handle);
+      dsu.begin(2, 0, vk::DescriptorType::eStorageBuffer).buffer(data->points.handle);
+      dsu.begin(3, 0, vk::DescriptorType::eStorageBuffer).buffer(data->accel_triangles.handle);
+      dsu.begin(4, 0, vk::DescriptorType::eStorageBuffer).buffer(data->tile_indices.handle);
+      dsu.begin(5, 0, vk::DescriptorType::eStorageBuffer).buffer(data->structures.handle);
+      dsu.begin(6, 0, vk::DescriptorType::eStorageBuffer).buffer(data->tile_object_indices.handle);
+      dsu.begin(7, 0, vk::DescriptorType::eStorageBuffer).buffer(data->army_data_buffer.handle);
+      dsu.update();
+    }
+    
     void map::flush_data() {
       std::unique_lock<std::mutex> lock(mutex);
-      auto accel_triangles_gpu = device->create(yavf::BufferCreateInfo::buffer(accel_triangles->info().size, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT), VMA_MEMORY_USAGE_GPU_ONLY);
-      auto tile_indices_gpu = device->create(yavf::BufferCreateInfo::buffer(tile_indices->info().size, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT), VMA_MEMORY_USAGE_GPU_ONLY);
+      const uint32_t accel_triangles_count = tri_count_d(accel_struct_detail_level);
+      const size_t accel_size = sizeof(render::packed_fast_triangle_t)*accel_triangles_count;
+      const uint32_t tiles_count = hex_count_d(detail_level);
+      const size_t tile_indices_size = align_to(tiles_count * sizeof(uint32_t), 16);
+      const size_t points_size = sizeof(glm::vec4)*points_count_d(detail_level);
+      render::vk_buffer_data accel_triangles_gpu;
+      render::vk_buffer_data tile_indices_gpu;
+      render::vk_buffer_data points_gpu;
+      accel_triangles_gpu.create(data->allocator, render::buffer(accel_size, vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst), vma::MemoryUsage::eGpuOnly, "map::accel_triangles_gpu");
+      tile_indices_gpu.create(data->allocator, render::buffer(tile_indices_size, vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst), vma::MemoryUsage::eGpuOnly, "map::tile_indices_gpu");
+      points_gpu.create(data->allocator, render::buffer(points_size, vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst), vma::MemoryUsage::eGpuOnly, "map::points_gpu");
+//       auto accel_triangles_gpu = device->create(yavf::BufferCreateInfo::buffer(accel_triangles->info().size, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT), VMA_MEMORY_USAGE_GPU_ONLY);
+//       auto tile_indices_gpu = device->create(yavf::BufferCreateInfo::buffer(tile_indices->info().size, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT), VMA_MEMORY_USAGE_GPU_ONLY);
       
-      auto task = device->allocateTransferTask();
-      task->begin();
-      task->copy(accel_triangles, accel_triangles_gpu);
-      task->copy(tile_indices, tile_indices_gpu);
-      task->end();
+      auto device = render_container->vulkan->device;
+      auto pool = render_container->vulkan->transfer_command_pool;
+      auto queue = render_container->vulkan->graphics;
+      auto fence = render_container->vulkan->transfer_fence;
       
-      task->start();
-      task->wait();
-      device->deallocate(task);
-      
-      device->destroy(accel_triangles);
-      device->destroy(tile_indices);
-      
-      accel_triangles = accel_triangles_gpu;
-      tile_indices = tile_indices_gpu;
-      
-//       auto pool = device->descriptorPool(DEFAULT_DESCRIPTOR_POOL_NAME);
-      
-//       yavf::DescriptorSetLayout tiles_data_layout = device->setLayout(TILES_DATA_LAYOUT_NAME);
-//       {
-//         yavf::DescriptorLayoutMaker dlm(device);
-//         tiles_data_layout = dlm.binding(0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_ALL)
-//                                .binding(1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_ALL)
-//                                .binding(2, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_ALL)
-//                                .binding(3, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_ALL)
-//                                .binding(4, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_ALL)
-//                                .create(TILES_DATA_LAYOUT_NAME);
-//       }
-      
-      {
-        tiles_set->at(0) = {tiles, 0, tiles->info().size, 0, 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER};
-        tiles_set->at(1) = {biomes, 0, biomes->info().size, 0, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER};
-        tiles_set->at(2) = {points, 0, points->info().size, 0, 2, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER};
-        tiles_set->at(3) = {accel_triangles, 0, accel_triangles->info().size, 0, 3, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER};
-        tiles_set->at(4) = {tile_indices, 0, tile_indices->info().size, 0, 4, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER};
-        tiles_set->at(5) = {structures, 0, structures->info().size, 0, 5, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER};
-        tiles_set->at(6) = {tile_object_indices, 0, tile_object_indices->info().size, 0, 6, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER};
-        tiles_set->at(7) = {army_data_buffer, 0, army_data_buffer->info().size, 0, 7, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER};
-        tiles_set->update();
+      render::do_command(device, pool, queue, fence, [&] (vk::CommandBuffer task) {
+        const vk::BufferCopy c1{
+          0, 0, accel_size
+        };
         
-//         yavf::DescriptorMaker dm(device);
-//         auto desc = dm.layout(tiles_data_layout).create(pool)[0];
-//         size_t index = desc->add({tiles, 0, tiles->info().size, 0, 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER});
-//                        desc->add({biomes, 0, biomes->info().size, 0, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER});
-//                        desc->add({points, 0, points->info().size, 0, 2, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER});
-//                        desc->add({accel_triangles, 0, accel_triangles->info().size, 0, 3, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER});
-//                        desc->add({tile_indices, 0, tile_indices->info().size, 0, 4, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER});
-//         desc->update();
-//         tiles->setDescriptor(desc, index);
-      }
+        const vk::BufferCopy c2{
+          0, 0, tile_indices_size
+        };
+        
+        const vk::BufferCopy c3{
+          0, 0, points_size
+        };
+        
+        const vk::CommandBufferBeginInfo b_info(vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
+        task.begin(b_info);
+        task.copyBuffer(data->accel_triangles.handle, accel_triangles_gpu.handle, c1);
+        task.copyBuffer(data->tile_indices.handle, tile_indices_gpu.handle, c2);
+        task.copyBuffer(data->points.handle, points_gpu.handle, c3);
+        task.end();
+      });
+      
+      data->accel_triangles.destroy(data->allocator);
+      data->tile_indices.destroy(data->allocator);
+      data->points.destroy(data->allocator);
+      
+      data->accel_triangles = accel_triangles_gpu;
+      data->tile_indices = tile_indices_gpu;
+      data->points = points_gpu;
+      
+      update_set();
     }
     
     void map::flush_points() { // TODO: добавить все ресурсы в gpu память (!)
-      auto points_gpu = device->create(yavf::BufferCreateInfo::buffer(sizeof(glm::vec4)*points_count_d(detail_level), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT), VMA_MEMORY_USAGE_GPU_ONLY);
-      
-      auto task = device->allocateTransferTask();
-      task->begin();
-      task->copy(points, points_gpu);
-      task->end();
-      
-      task->start();
-      task->wait();
-      device->deallocate(task);
-      
-      device->destroy(points);
-      
-      points = points_gpu;
-      
-      tiles_set->at(0) = {tiles, 0, tiles->info().size, 0, 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER};
-      tiles_set->at(1) = {biomes, 0, biomes->info().size, 0, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER};
-      tiles_set->at(2) = {points, 0, points->info().size, 0, 2, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER};
-      tiles_set->at(3) = {accel_triangles, 0, accel_triangles->info().size, 0, 3, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER};
-      tiles_set->at(4) = {tile_indices, 0, tile_indices->info().size, 0, 4, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER};
-      tiles_set->at(5) = {structures, 0, structures->info().size, 0, 5, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER};
-      tiles_set->at(6) = {tile_object_indices, 0, tile_object_indices->info().size, 0, 6, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER};
-      tiles_set->at(7) = {army_data_buffer, 0, army_data_buffer->info().size, 0, 7, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER};
-      tiles_set->update();
+//       auto points_gpu = device->create(yavf::BufferCreateInfo::buffer(sizeof(glm::vec4)*points_count_d(detail_level), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT), VMA_MEMORY_USAGE_GPU_ONLY);
+//       
+//       auto task = device->allocateTransferTask();
+//       task->begin();
+//       task->copy(points, points_gpu);
+//       task->end();
+//       
+//       task->start();
+//       task->wait();
+//       device->deallocate(task);
+//       
+//       device->destroy(points);
+//       
+//       points = points_gpu;
+//       
+//       tiles_set->at(0) = {tiles, 0, tiles->info().size, 0, 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER};
+//       tiles_set->at(1) = {biomes, 0, biomes->info().size, 0, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER};
+//       tiles_set->at(2) = {points, 0, points->info().size, 0, 2, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER};
+//       tiles_set->at(3) = {accel_triangles, 0, accel_triangles->info().size, 0, 3, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER};
+//       tiles_set->at(4) = {tile_indices, 0, tile_indices->info().size, 0, 4, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER};
+//       tiles_set->at(5) = {structures, 0, structures->info().size, 0, 5, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER};
+//       tiles_set->at(6) = {tile_object_indices, 0, tile_object_indices->info().size, 0, 6, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER};
+//       tiles_set->at(7) = {army_data_buffer, 0, army_data_buffer->info().size, 0, 7, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER};
+//       tiles_set->update();
     }
     
     void map::flush_structures() {
-      tiles_set->at(5) = {structures, 0, structures->info().size, 0, 5, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER};
-      tiles_set->update(5);
+      render::descriptor_set_updater dsu(&data->device);
+      dsu.currentSet(data->tiles_set).begin(5, 0, vk::DescriptorType::eStorageBuffer).buffer(data->structures.handle).update();
     }
     
 //     void map::set_tile_biom(const uint32_t &tile_index, const uint32_t &biom_index) {
@@ -1155,21 +1056,21 @@ namespace devils_engine {
     void map::set_tile_color(const uint32_t &tile_index, const render::color_t &color) {
       ASSERT(tile_index < tiles_count());
       std::unique_lock<std::mutex> lock(mutex);
-      auto tiles_arr = reinterpret_cast<render::light_map_tile_t*>(tiles->ptr());
+      auto tiles_arr = reinterpret_cast<render::light_map_tile_t*>(data->tiles.ptr);
       tiles_arr[tile_index].tile_indices.z = color.container;
     }
     
     void map::set_tile_texture(const uint32_t &tile_index, const render::image_t &texture) {
       ASSERT(tile_index < tiles_count());
       std::unique_lock<std::mutex> lock(mutex);
-      auto tiles_arr = reinterpret_cast<render::light_map_tile_t*>(tiles->ptr());
+      auto tiles_arr = reinterpret_cast<render::light_map_tile_t*>(data->tiles.ptr);
       tiles_arr[tile_index].tile_indices.y = texture.container;
     }
     
     void map::set_tile_height(const uint32_t &tile_index, const float &tile_hight) {
       ASSERT(tile_index < tiles_count());
       std::unique_lock<std::mutex> lock(mutex);
-      auto tiles_arr = reinterpret_cast<render::light_map_tile_t*>(tiles->ptr());
+      auto tiles_arr = reinterpret_cast<render::light_map_tile_t*>(data->tiles.ptr);
       tiles_arr[tile_index].tile_indices.w = glm::floatBitsToUint(tile_hight);
     }
     
@@ -1183,7 +1084,7 @@ namespace devils_engine {
       ASSERT(offset < render::border_offset_mask);
       const uint32_t packed_border_data = (size << 28) | (offset & render::border_offset_mask);
       std::unique_lock<std::mutex> lock(mutex);
-      auto tiles_arr = reinterpret_cast<render::light_map_tile_t*>(tiles->ptr());
+      auto tiles_arr = reinterpret_cast<render::light_map_tile_t*>(data->tiles.ptr);
       tiles_arr[tile_index].packed_data4[0] = packed_border_data;
     }
     
@@ -1193,7 +1094,7 @@ namespace devils_engine {
       ASSERT(offset < render::connections_offset_mask);
       const uint32_t packed_connections_data = (size << 28) | (offset & render::connections_offset_mask);
       std::unique_lock<std::mutex> lock(mutex);
-      auto tiles_arr = reinterpret_cast<render::light_map_tile_t*>(tiles->ptr());
+      auto tiles_arr = reinterpret_cast<render::light_map_tile_t*>(data->tiles.ptr);
       tiles_arr[tile_index].packed_data4[1] = packed_connections_data;
     }
     
@@ -1206,7 +1107,7 @@ namespace devils_engine {
       ASSERT(data_index < data_count);
       UNUSED_VARIABLE(data_count);
       const uint32_t lesser_data_count = sizeof(glm::uvec4) / sizeof(uint32_t);
-      auto array = reinterpret_cast<array_data_type*>(tile_object_indices->ptr());
+      auto array = reinterpret_cast<array_data_type*>(data->tile_object_indices.ptr);
       
       const uint32_t index1 = data_index / lesser_data_count;
       const uint32_t index2 = data_index % lesser_data_count;
@@ -1224,7 +1125,7 @@ namespace devils_engine {
       UNUSED_VARIABLE(data_count);
       const uint32_t lesser_data_count = sizeof(glm::uvec4) / sizeof(uint32_t);
       
-      auto array = reinterpret_cast<array_data_type*>(tile_object_indices->ptr());
+      auto array = reinterpret_cast<array_data_type*>(this->data->tile_object_indices.ptr);
       const uint32_t index1 = data_index / lesser_data_count;
       const uint32_t index2 = data_index % lesser_data_count;
       
@@ -1240,7 +1141,7 @@ namespace devils_engine {
       UNUSED_VARIABLE(data_count);
       const uint32_t lesser_data_count = sizeof(glm::uvec4) / sizeof(uint32_t);
       
-      auto array = reinterpret_cast<array_data_type*>(tile_object_indices->ptr());
+      auto array = reinterpret_cast<array_data_type*>(this->data->tile_object_indices.ptr);
       const uint32_t index1 = data_index / lesser_data_count;
       const uint32_t index2 = data_index % lesser_data_count;
       
@@ -1248,7 +1149,7 @@ namespace devils_engine {
     }
     
     uint32_t map::allocate_army_data() {
-      auto data_ptr = reinterpret_cast<render::army_data_t*>(army_data_buffer->ptr());
+      auto data_ptr = reinterpret_cast<render::army_data_t*>(data->army_data_buffer.ptr);
       if (free_army_slot != UINT32_MAX) {
         const uint32_t next_index = glm::floatBitsToUint(data_ptr[free_army_slot].data.w);
         const uint32_t current_index = free_army_slot;
@@ -1261,65 +1162,59 @@ namespace devils_engine {
       const uint32_t current_index = armies_count;
       ++armies_count;
       
-      if (current_index * sizeof(render::army_data_t) >= army_data_buffer->info().size) {
-        const size_t prev_size = army_data_buffer->info().size;
-        auto ptr = new char[prev_size];
-        memcpy(ptr, data_ptr, prev_size);
-        army_data_buffer->resize(prev_size*2);
-        data_ptr = reinterpret_cast<render::army_data_t*>(army_data_buffer->ptr());
-        memcpy(data_ptr, ptr, prev_size);
-        delete [] ptr;
-        
-        tiles_set->at(7) = {army_data_buffer, 0, army_data_buffer->info().size, 0, 7, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER};
-        tiles_set->update(7);
-      }
+      if (armies_count >= maximum_army_count) throw std::runtime_error("Too many armies");
       
       data_ptr[current_index].data = glm::vec4(0.0f, 0.0f, 0.0f, glm::uintBitsToFloat(UINT32_MAX));
       return current_index;
     }
     
     void map::release_army_data(const uint32_t &index) {
-      ASSERT(index * sizeof(render::army_data_t) < army_data_buffer->info().size); 
+      const size_t army_data_size = sizeof(render::army_data_t) * maximum_army_count;
+      ASSERT(index * sizeof(render::army_data_t) < army_data_size);
       ASSERT(index < armies_count);
-      auto data_ptr = reinterpret_cast<render::army_data_t*>(army_data_buffer->ptr());
+      auto data_ptr = reinterpret_cast<render::army_data_t*>(data->army_data_buffer.ptr);
       data_ptr[index].data.w = glm::uintBitsToFloat(free_army_slot);
       free_army_slot = index;
     }
     
     void map::set_army_pos(const uint32_t &index, const glm::vec3 &pos) {
-      ASSERT(index * sizeof(render::army_data_t) < army_data_buffer->info().size); 
+      const size_t army_data_size = sizeof(render::army_data_t) * maximum_army_count;
+      ASSERT(index * sizeof(render::army_data_t) < army_data_size); 
       ASSERT(index < armies_count);
-      auto data_ptr = reinterpret_cast<render::army_data_t*>(army_data_buffer->ptr());
+      auto data_ptr = reinterpret_cast<render::army_data_t*>(data->army_data_buffer.ptr);
       data_ptr[index].data.x = pos.x;
       data_ptr[index].data.y = pos.y;
       data_ptr[index].data.z = pos.z;
     }
     
     void map::set_army_image(const uint32_t &index, const render::image_t &img) {
-      ASSERT(index * sizeof(render::army_data_t) < army_data_buffer->info().size); 
+      const size_t army_data_size = sizeof(render::army_data_t) * maximum_army_count;
+      ASSERT(index * sizeof(render::army_data_t) < army_data_size); 
       ASSERT(index < armies_count);
-      auto data_ptr = reinterpret_cast<render::army_data_t*>(army_data_buffer->ptr());
+      auto data_ptr = reinterpret_cast<render::army_data_t*>(data->army_data_buffer.ptr);
       data_ptr[index].data.w = glm::uintBitsToFloat(img.container);
     }
     
     glm::vec3 map::get_army_pos(const uint32_t &index) const {
-      ASSERT(index * sizeof(render::army_data_t) < army_data_buffer->info().size); 
+      const size_t army_data_size = sizeof(render::army_data_t) * maximum_army_count;
+      ASSERT(index * sizeof(render::army_data_t) < army_data_size); 
       ASSERT(index < armies_count);
-      auto data_ptr = reinterpret_cast<render::army_data_t*>(army_data_buffer->ptr());
+      auto data_ptr = reinterpret_cast<render::army_data_t*>(data->army_data_buffer.ptr);
       return glm::vec3(data_ptr[index].data.x, data_ptr[index].data.y, data_ptr[index].data.z);
     }
     
     render::image_t map::get_army_image(const uint32_t &index) const {
-      ASSERT(index * sizeof(render::army_data_t) < army_data_buffer->info().size); 
+      const size_t army_data_size = sizeof(render::army_data_t) * maximum_army_count;
+      ASSERT(index * sizeof(render::army_data_t) < army_data_size); 
       ASSERT(index < armies_count);
-      auto data_ptr = reinterpret_cast<render::army_data_t*>(army_data_buffer->ptr());
+      auto data_ptr = reinterpret_cast<render::army_data_t*>(data->army_data_buffer.ptr);
       return {glm::floatBitsToUint(data_ptr[index].data.w)};
     }
     
     float map::get_tile_height(const uint32_t &tile_index) const {
       ASSERT(tile_index < tiles_count());
       std::unique_lock<std::mutex> lock(mutex);
-      auto tiles_arr = reinterpret_cast<render::light_map_tile_t*>(tiles->ptr());
+      auto tiles_arr = reinterpret_cast<render::light_map_tile_t*>(data->tiles.ptr);
       return glm::uintBitsToFloat(tiles_arr[tile_index].tile_indices.w);
     }
     
@@ -1328,26 +1223,41 @@ namespace devils_engine {
     }
     
     void map::copy_biomes(const seasons* s) {
-      yavf::Buffer staging(device, yavf::BufferCreateInfo::buffer(
-        sizeof(render::packed_biome_data_t)*MAX_BIOMES_COUNT, VK_BUFFER_USAGE_TRANSFER_SRC_BIT
-      ), VMA_MEMORY_USAGE_CPU_ONLY);
+      const size_t biomes_size = sizeof(render::biome_data_t)*MAX_BIOMES_COUNT;
+      auto device = render_container->vulkan->device;
+      auto physical_device = render_container->vulkan->physical_device;
+      const auto [buf, mem] = render::create_buffer_unique(
+        device, 
+        physical_device, 
+        render::buffer(sizeof(render::packed_biome_data_t)*MAX_BIOMES_COUNT, vk::BufferUsageFlagBits::eTransferSrc), 
+        vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent
+      );
       
-      static_assert(sizeof(render::packed_biome_data_t)*MAX_BIOMES_COUNT == sizeof(render::biome_data_t)*MAX_BIOMES_COUNT);
-      memcpy(staging.ptr(), s->biomes, sizeof(render::biome_data_t)*MAX_BIOMES_COUNT);
+      auto ptr = device.mapMemory(mem.get(), 0, VK_WHOLE_SIZE);
+      memcpy(ptr, s->biomes, biomes_size);
       
-      auto task = device->allocateTransferTask();
-      task->begin();
-      task->copy(&staging, biomes);
-      task->end();
-      
-      task->start();
-      task->wait();
-      device->deallocate(task);
+      vk::Buffer staging_b = buf.get();
+      render::do_command(
+        device, 
+        render_container->vulkan->transfer_command_pool, 
+        render_container->vulkan->graphics, 
+        render_container->vulkan->transfer_fence, 
+        [&] (vk::CommandBuffer task) {
+          const vk::BufferCopy c{
+          0, 0, biomes_size
+        };
+        
+        const vk::CommandBufferBeginInfo b_info(vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
+        task.begin(b_info);
+        task.copyBuffer(staging_b, data->biomes.handle, c);
+        task.end();
+        }
+      );
     }
     
     void map::set_tile_biome(const seasons* s) {
       std::unique_lock<std::mutex> lock(mutex);
-      auto tiles_arr = reinterpret_cast<render::light_map_tile_t*>(tiles->ptr());
+      auto tiles_arr = reinterpret_cast<render::light_map_tile_t*>(data->tiles.ptr);
       for (size_t i = 0; i < tiles_count(); ++i) {
         const uint8_t index = s->get_tile_biome(s->current_season, i);
         const uint32_t mask = 0x00ffffff;
@@ -1359,9 +1269,32 @@ namespace devils_engine {
     void map::set_tile_structure_index(const uint32_t &tile_index, const uint32_t &struct_index) {
       ASSERT(tile_index < tiles_count());
       ASSERT(struct_index < render::maximum_structure_types);
-      auto tiles_arr = reinterpret_cast<render::light_map_tile_t*>(tiles->ptr());
+      auto tiles_arr = reinterpret_cast<render::light_map_tile_t*>(data->tiles.ptr);
       const uint8_t biome_index = uint8_t(tiles_arr[tile_index].packed_data4[2] >> 24);
       tiles_arr[tile_index].packed_data4[2] = uint32_t(biome_index) << 24 | struct_index;
+    }
+    
+    void map::resize_structures_buffer(const size_t &size) {
+      data->structures.destroy(data->allocator);
+      data->structures.create(data->allocator, render::buffer(
+        size, vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst
+      ), vma::MemoryUsage::eGpuOnly);
+    }
+    
+    void map::copy_main_map_data(
+      const std::vector<render::light_map_tile_t> &tiles,
+      const std::vector<glm::vec4> &points,
+      const std::vector<render::packed_fast_triangle_t> &fast_triangles,
+      const std::vector<uint32_t> &tile_indices,
+      const std::vector<triangle> &triangles
+    ) {
+      std::unique_lock<std::mutex> lock(mutex);
+      memcpy(data->tiles.ptr, tiles.data(), tiles.size()*sizeof(tiles[0]));
+      memcpy(data->points.ptr, points.data(), points.size()*sizeof(points[0]));
+      memcpy(data->accel_triangles.ptr, fast_triangles.data(), fast_triangles.size()*sizeof(fast_triangles[0]));
+      memcpy(data->tile_indices.ptr, tile_indices.data(), tile_indices.size()*sizeof(tile_indices[0]));
+      this->points = points;
+      this->triangles = triangles;
     }
     
     enum map::status map::status() const {
@@ -1373,13 +1306,22 @@ namespace devils_engine {
     }
     
     size_t map::memory_size() const {
+      const size_t accel_triangles_count = tri_count_d(accel_struct_detail_level);
+      const size_t points_count = points_count_d(detail_level);
+      const size_t tiles_count = hex_count_d(detail_level);
+//       const uint32_t tile_indices_count = std::ceil(float(tiles_count)/float(4));
+      const size_t tile_indices_size = align_to(tiles_count * sizeof(uint32_t), 16);
+      const size_t army_data_size = sizeof(render::army_data_t) * maximum_army_count;
+      const size_t biomes_size = sizeof(render::biome_data_t)*MAX_BIOMES_COUNT;
+      
       size_t mem = 0;
-      mem += points->info().size;
-      mem += tiles->info().size;
-      mem += accel_triangles->info().size;
-      mem += tile_indices->info().size;
-      mem += biomes->info().size;
+      mem += points_count * sizeof(glm::vec4);
+      mem += tiles_count * sizeof(render::light_map_tile_t);
+      mem += accel_triangles_count * sizeof(render::fast_triangle_t);
+      mem += tile_indices_size;
+      mem += biomes_size;
       mem += triangles.size() * sizeof(triangles[0]);
+      mem += army_data_size;
       mem += sizeof(*this);
       return mem;
     }

@@ -2,6 +2,7 @@
 
 #include "utils/globals.h"
 #include "utils/string_container.h"
+#include "utils/magic_enum_header.h"
 
 #include "core/stats.h"
 

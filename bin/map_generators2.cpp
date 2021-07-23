@@ -10,7 +10,7 @@
 
 #include "render/shared_structures.h"
 #include "render/shared_render_utility.h"
-#include "render/yavf.h"
+// #include "render/yavf.h"
 
 #include "figures.h"
 #include "generator_context2.h"
@@ -25,6 +25,8 @@
 
 #include "core/stats.h"
 #include "core/structures_header.h"
+
+#include "utils/magic_enum_header.h"
 
 namespace devils_engine {
   namespace map {
@@ -251,7 +253,7 @@ namespace devils_engine {
       
       {
         std::vector<render::light_map_tile_t> tiles(map->tiles_count(), render::light_map_tile_t{});
-        std::vector<glm::vec4> points(core::map::points_count_d(core::map::detail_level), glm::vec4(0.0f, 0.0f, 0.0f, 0.0f));
+        std::vector<glm::vec4> points(core::map::points_count_d(core::map::detail_level), glm::vec4(0.0f, 0.0f, 0.0f, 1.0f));
         {
           ASSERT(tiles.size() == core::map::hex_count_d(core::map::detail_level));
           ASSERT(generated_core.tiles.size() == core::map::hex_count_d(core::map::detail_level));
@@ -354,20 +356,11 @@ namespace devils_engine {
         
         ASSERT(generated_core.triangles.size() == map->triangles.size());
         static_assert(sizeof(core::map::triangle) == sizeof(map::triangle));
-        ASSERT(map->tile_indices->info().size <= tile_indices.size()*sizeof(tile_indices[0]));
         
-        ASSERT(map->accel_triangles != nullptr);
-        ASSERT(map->accel_triangles->ptr() != nullptr);
-        
-        {
-          utils::time_log log("copying data to map container");
-          std::unique_lock<std::mutex> lock(map->mutex);
-          memcpy(map->tiles->ptr(), tiles.data(), tiles.size()*sizeof(tiles[0]));
-          memcpy(map->points->ptr(), points.data(), points.size()*sizeof(points[0]));
-          memcpy(map->accel_triangles->ptr(), fast_triangles.data(), fast_triangles.size()*sizeof(fast_triangles[0]));
-          memcpy(map->tile_indices->ptr(), tile_indices.data(), tile_indices.size()*sizeof(tile_indices[0]));
-          memcpy(map->triangles.data(), generated_core.triangles.data(), map->triangles.size()*sizeof(map->triangles[0]));
-        }
+        utils::time_log log("copying data to map container");
+        std::vector<core::map::triangle> tmp_triangles(generated_core.triangles.size());
+        memcpy(tmp_triangles.data(), generated_core.triangles.data(), tmp_triangles.size()*sizeof(tmp_triangles[0]));
+        map->copy_main_map_data(tiles, points, fast_triangles, tile_indices, tmp_triangles);
       }
       
       {
@@ -6653,7 +6646,7 @@ namespace devils_engine {
           auto character_table = global::get<sol::state>()->create_table();
           character_table.create("family");
           auto char_stats = character_table.create("stats");
-          char_stats[core::character_stats::money] = 400.0f;
+          char_stats[core::character_resources::money] = 400.0f;
           character_table.create("hero_stats");
           character_table["male"] = true;
           character_table["dead"] = false;
@@ -6760,7 +6753,7 @@ namespace devils_engine {
           auto character_table = global::get<sol::state>()->create_table();
           character_table.create("family");
           auto char_stats = character_table.create("stats");
-          char_stats[core::character_stats::money] = 400.0f;
+          char_stats[core::character_resources::money] = 400.0f;
           character_table.create("hero_stats");
           character_table["male"] = true;
           character_table["dead"] = false;
@@ -6819,7 +6812,7 @@ namespace devils_engine {
           auto character_table = global::get<sol::state>()->create_table();
           character_table.create("family");
           auto char_stats = character_table.create("stats");
-          char_stats[core::character_stats::money] = 400.0f;
+          char_stats[core::character_resources::money] = 400.0f;
           character_table.create("hero_stats");
           character_table["male"] = true;
           character_table["dead"] = false;

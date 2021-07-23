@@ -17,6 +17,8 @@
 #include "utils/lua_environment.h"
 #include "utils/systems.h"
 
+#include "re2/re2.h"
+
 #include <stdexcept>
 #include <random>
 #include <iostream>
@@ -77,153 +79,9 @@ namespace devils_engine {
 
       return ret;
     }
-    
-//     property_int::property_int(const create_info &info) :
-//       min(info.min),
-//       default_val(info.default_val),
-//       max(info.max),
-//       step(info.step),
-//       pixel_step(info.pixel_step),
-//       prop_name(info.prop_name),
-//       var_name(info.var_name)
-//     {}
-//
-//     void property_int::draw(sol::table &table) {
-//       auto interface = global::get<interface::context>();
-//       auto ctx = &interface->ctx;
-//
-//       nk_layout_row_dynamic(ctx, 30.0f, 1);
-//       table["userdata"][var_name] = nk_propertyi(ctx, prop_name.c_str(), min, table["userdata"][var_name], max, step, pixel_step);
-//     }
-//
-//     void property_int::set_default_value(sol::table &table) {
-//       table["userdata"][var_name] = default_val;
-//     }
-//
-//     property_float::property_float(const create_info &info) :
-//       min(info.min),
-//       default_val(info.default_val),
-//       max(info.max),
-//       step(info.step),
-//       pixel_step(info.pixel_step),
-//       prop_name(info.prop_name),
-//       var_name(info.var_name)
-//     {}
-//
-//     void property_float::draw(sol::table &table) {
-//       auto interface = global::get<interface::context>();
-//       auto ctx = &interface->ctx;
-//
-//       nk_layout_row_dynamic(ctx, 30.0f, 1);
-//       table["userdata"][var_name] = nk_propertyf(ctx, prop_name.c_str(), min, table["userdata"][var_name], max, step, pixel_step);
-//     }
-//
-//     void property_float::set_default_value(sol::table &table) {
-//       table["userdata"][var_name] = default_val;
-//     }
 
-//     step::step(const bool first, const size_t &container_size, const std::string &name, const std::vector<map::generator_pair> &pairs, const std::string &rendering_mode) :
-//       first(first),
-//       container(container_size),
-//       pairs(pairs),
-//       name(name),
-//       rendering_mode(rendering_mode)
-//     {}
-
-    //step::step(const sol::function &interface, const std::vector<map::generator_pair> &pairs) : pairs(pairs), interface(interface) {} //const bool first,
     step::step(const std::string &step_name, const std::vector<map::generator_pair> &pairs) : pairs(pairs), m_step_name(step_name) {}
-
-    step::~step() {
-//       for (auto p : variables) {
-//         container.destroy(p);
-//       }
-    }
-
-//     int32_t step::prepare(systems::generator &gen, map::generator::context* context, sol::table &table) {
-//       auto interface = global::get<interface::context>();
-//       auto ctx = &interface->ctx;
-//
-//       static uint32_t random_seed = 1;
-//       static char buffer[16] = "1";
-//       static int32_t buffer_len = 1;
-//
-//       int32_t code = 0;
-//       if (nk_begin(ctx, name.c_str(), nk_rect(5, 5, 400, 400), NK_WINDOW_NO_SCROLLBAR | NK_WINDOW_BACKGROUND)) {
-//         nk_layout_row_static(ctx, 30.0f, 400, 1);
-//         nk_label(ctx, name.c_str(), NK_TEXT_ALIGN_LEFT);
-//
-//         if (first) {
-//           const float ratio[] = {0.6, 0.4};
-//           nk_layout_row(ctx, NK_DYNAMIC, 30.0f, 2, ratio);
-//           nk_edit_string(ctx, NK_EDIT_SIMPLE, buffer, &buffer_len, 11, nk_filter_decimal);
-//           if (nk_button_label(ctx, "Randomize")) {
-//             std::random_device dev;
-//             random_seed = dev();
-//             const std::string str = fmt::format(FMT_STRING("{}"), random_seed);
-// //                 std::cout << "Randomized " << str << " size " << str.size() << " length " << str.length() << "\n";
-//             memcpy(buffer, str.c_str(), str.size());
-//             buffer_len = str.length();
-//           }
-//
-//           buffer[buffer_len] = '\0';
-//           const size_t num = atol(buffer);
-// //               ASSERT(num != 0);
-//
-//           if (num > UINT32_MAX) {
-//             random_seed = UINT32_MAX;
-//           } else {
-//             random_seed = num;
-//           }
-//
-//           if (num > UINT32_MAX) {
-//             const std::string str = fmt::format(FMT_STRING("{}"), random_seed);
-//             memcpy(buffer, str.c_str(), str.size());
-//             buffer_len = str.size();
-//           }
-//         }
-//
-//         for (auto p : variables) {
-//           p->draw(table);
-//         }
-//
-//         nk_layout_row_static(ctx, 30.0f, 199, 2);
-//         if (first) nk_spacing(ctx, 1);
-//         else {
-//           if (nk_button_label(ctx, "Back")) code = -1;
-//         }
-//
-//         if (nk_button_label(ctx, "Generate")) {
-//           gen.clear();
-//           for (const auto &pair : pairs) {
-//             gen.add(pair);
-//           }
-//
-//           if (first) {
-//             union transform {
-//               uint32_t valu;
-//               int32_t vali;
-//             };
-//
-//             transform t;
-//             t.valu = random_seed;
-//
-//             context->random->set_seed(random_seed);
-//             context->noise->SetSeed(t.vali);
-//           }
-//
-//           gen.generate(context, table);
-//           render::mode(rendering_mode);
-//           code = 1;
-//         }
-//       }
-//       nk_end(ctx);
-//
-//       return code;
-//     }
-
-//     const sol::function & step::get_interface() const {
-//       return interface;
-//     }
+    step::~step() {}
 
     const std::vector<map::generator_pair> & step::get_functions() const {
       return pairs;
@@ -232,214 +90,11 @@ namespace devils_engine {
     std::string step::step_name() const {
       return m_step_name;
     }
-
-//     std::string step::step_function() const {
-//       return m_step_function;
-//     }
     
     union convert {
       uint64_t u;
       double d;
     };
-    
-//     std::filesystem::path make_module_path(const std::string_view &module) {
-//       std::filesystem::path p;
-//       size_t pos = 0;
-//       while (pos != std::string::npos) {
-//         const size_t new_pos = module.find('.', pos);
-//         const auto str = module.substr(pos, new_pos-pos);
-//         p /= str;
-//         pos = new_pos == std::string::npos ? new_pos : new_pos+1;
-//       }
-//       
-//       return p;
-//     }
-//     
-//     std::filesystem::path check_path(const std::filesystem::path &path) {
-//       if (path.empty()) return std::filesystem::path();
-//       
-//       auto first_itr = path.begin();
-//       ASSERT(*first_itr == "apates_quest");
-//       std::filesystem::path new_path = global::root_directory();
-//       for (auto itr = ++first_itr; itr != path.end(); ++itr) {
-//         new_path /= *itr;
-//       }
-//       
-// //       std::cout << new_path << "\n";
-//       std::filesystem::directory_entry e(new_path);
-//       if (!e.exists()) return std::filesystem::path();
-//       if (!e.is_regular_file()) return std::filesystem::path();
-//       
-//       return new_path;
-//     }
-//     
-//     void parse_module_name(const std::string_view &name, std::string_view &mod_name, std::string_view &module_path) {
-//       const size_t index = name.find_first_of('.');
-//       if (index == std::string_view::npos) {
-//         mod_name = "";
-//         module_path = name;
-//         return;
-//       }
-//       
-//       mod_name = name.substr(0, index);
-//       module_path = name.substr(index+1, std::string_view::npos);
-//     }
-//     
-//     void make_environment(sol::state_view lua, sol::environment &env) {
-//       //env["_G"] = lua.create_table(); 
-//       env["_G"] = env; 
-//       lua["security_env"] = env;
-//       
-//       const std::initializer_list<std::string_view> whitelisted = {
-//         "assert",
-//         "error",
-//         "ipairs",
-//         "next",
-//         "pairs",
-//         "pcall",
-//         "print",
-//         "select",
-//         "tonumber",
-//         "tostring",
-//         "type",
-//         "_VERSION",
-//         "xpcall",
-// 
-//         // эти функции могут обойти метатаблицы, но кажется ничего больше
-//         "rawequal",
-//         "rawget",
-//         "rawset",
-//         "rawlen",
-//         "setmetatable",
-//         "getmetatable",
-//         
-//         // по идее тоже безопасный метод
-//         "collectgarbage"
-//       };
-//       
-//       for (const auto &name : whitelisted) {
-//         sol::object obj = lua[name]; // прокси добавить не получится
-//         env[name] = obj;
-//       }
-//       
-//       const std::initializer_list<std::string_view> safe_libraries = {"coroutine", "string", "utf8", "table", "math"}; // "math" - тут нужно отключить матх.рандом
-//       
-//       for (const auto &name : safe_libraries) {
-//         auto copy = lua.create_table(0, 0);
-//         auto t = lua[name].get<sol::table>();
-//         for (const auto &pair : t) {
-//           // first is the name of a function in module, second is the function
-//           copy[pair.first] = pair.second;
-//         }
-//         
-//         env[name] = copy;
-//         if (name == "math") {
-//           env[name]["random"] = sol::nil;
-//           env[name]["randomseed"] = sol::nil;
-//         }
-//       }
-//       
-//       auto io = lua.create_table(0, 0);
-//       // думаю что инпут не нужен
-// //       io.set_function("input", [] (sol::this_state s, const std::string_view &path) -> bool {
-// //         const auto &new_path = check_path(path);
-// //                       
-// //         sol::state_view lua = s;
-// //         auto file = lua["io"]["open"](new_path.c_str());
-// //         if (!file.valid()) return false;
-// //         lua["io"]["input"](file);
-// //         
-// //         return true;
-// //       });
-//       
-//       io.set_function("lines", [] (sol::this_state s, const std::string_view &path, const sol::variadic_args &args) {
-//         sol::state_view lua = s;
-//         
-//         // проблема в том что у меня потом это дело изменится на zip архивы
-//         // в этом случае мне чуть ли не самому придется писать функцию лайнс (эта функция возвращает итератор)
-//         const auto &p = check_path(path);
-//         if (p.empty()) return sol::make_object(lua, sol::nil);
-//         
-//         auto file = lua["io"]["open"](p.c_str());
-//         if (!file.valid()) return sol::make_object(lua, sol::nil);
-//         auto ret = lua["io"]["lines"](file, sol::as_args(args));
-//         if (!ret.valid()) return sol::make_object(lua, sol::nil);
-//         sol::object o = ret;
-//         return o;
-//       });
-//       env["io"] = io;
-//       
-//       env.set_function("require", [] (sol::this_state s, sol::this_environment e, const std::string_view &module_name) {
-//         // module_name должен быть вида mod_name/module (+ можно добавить обычные вещи типа: io, table, math и ...)
-//         // mod_name - указываем архив мода из которого грузим, в архиве что? как архив устроен? 
-//         // по идее мы можем использовать оригинальный dofile
-//         // архив устроен как то так
-//         // std::string lua_lib = arch.get_entry(124).readAsText()
-//         // lua.script(lua_lib, env)
-//         // сначала смотрим есть ли название в текущем контексте, парсим название, смотрим если ли валидное название 
-//         // в lua.packages, грузим как скрипт и добавляем в lua.packages, скрипт должен получить такое название 
-//         // чтобы не пересекаться с другими скриптами с тем же названием но в других модах,
-//         // с другой стороны можно просто забить и не запоминать скрипт (хотя почему бы и нет)
-//         
-//         sol::state_view lua = s;
-//         sol::environment &env = e;
-//         auto proxy = env[module_name];
-//         if (proxy.valid()) return proxy.get<sol::object>();
-//                        
-//         std::string_view mod_name;
-//         std::string_view module_path;
-//         parse_module_name(module_name, mod_name, module_path);
-//         
-//         const std::string local_module_name = "module_" + std::string(mod_name) + "_" + std::string(module_path);
-//         
-//         sol::table loaded_table = lua["package"]["loaded"];
-//         auto lproxy = loaded_table[local_module_name];
-//         if (lproxy.valid()) return lproxy.get<sol::object>();
-//         
-//         // тут проверим путь
-//         //const auto &p = check_path(module_path);
-//         //const auto &p = check_path(std::string(module_name) + ".lua");
-//         auto std_module_path = make_module_path(module_name);
-//         std_module_path += ".lua";
-//         //PRINT(std_module_path)
-//         ASSERT(std_module_path.extension() == ".lua");
-//         const auto &p = check_path(std_module_path);
-//         assert(!p.empty());
-//         if (p.empty()) throw std::runtime_error("Could not find module " + std::string(module_name));
-//         
-//         auto ret = lua.script_file(p.string(), env);
-//         if (!ret.valid()) {
-//           sol::error err = ret;
-//           std::cout << err.what();
-//           throw std::runtime_error("Could not load module " + std::string(module_name));
-//         }
-//         
-//         sol::object obj = ret;
-//         loaded_table[local_module_name] = obj;
-//         
-//         return obj;
-//       });
-//       
-//       // вообще можно получить функции из стейта, но тогда они не удалятся при разрушении стейта
-//       // нужно ли мне это вообще? скорее всего было бы полезно для интерфейса, и больше ни для чего наверное
-//       // нужно создать список таблиц в которых я храню юзер типы
-//       
-//       for (size_t i = 0; i < utils::reserved_lua::count; ++i) {
-//         const auto name = magic_enum::enum_name<utils::reserved_lua::values>(static_cast<utils::reserved_lua::values>(i));
-//         auto proxy = lua[name];
-//         if (!proxy.valid()) continue;
-//         
-// //         PRINT(name)
-// //         auto copy = lua.create_table(0, 0);
-//         auto t = proxy.get<sol::table>();
-// //         for (const auto &pair : t) {
-// //           copy[pair.first] = pair.second;
-// //         }
-//         
-//         //env[name] = copy; // тут еще нужно будет узнать что мне нужно а что нет
-//         env[name] = t;
-//       }
-//     }
     
     //utils::interface_container* interface, 
     creator::creator(core::map* map, core::seasons* seasons) :
@@ -490,15 +145,7 @@ namespace devils_engine {
         serpent_line = proxy.get<sol::function>();
       }
       
-      utils::setup_lua_package_path(lua);
-      utils::setup_lua_world_map(lua);
-      utils::setup_lua_utility_map_generator_functions(lua);
-      utils::setup_lua_generator_container(lua);
-      utils::setup_lua_constants(lua);
-      utils::setup_lua_random_engine(lua);
-      utils::setup_lua_noiser(lua);
-      utils::setup_lua_calendar(lua);
-      utils::setup_lua_safe_utils(lua);
+      utils::world_map_generation::setup_lua(lua);
       
       utils::make_environment(lua, env_lua);
       utils::add_io_lines(lua, env_lua);
@@ -523,18 +170,6 @@ namespace devils_engine {
       global::get<utils::world_map_string_container>(reinterpret_cast<utils::world_map_string_container*>(SIZE_MAX));
       //ASSERT(global::get<table_container_t>() == nullptr);
       ASSERT(global::get<utils::world_serializator>() == nullptr);
-
-//       auto gen_table = interface->lua["generator"].get_or_create<sol::table>();
-//       gen_table["setup_random_seed"] = sol::nil;
-//       gen_table["setup_noise_seed"] = sol::nil;
-//       gen_table["get_random_int"] = sol::nil;
-//       gen_table["set_world_name"] = sol::nil;
-//       gen_table["set_folder_name"] = sol::nil;
-
-//       for (const auto &name : clearing_sol_state) {
-//         interface->lua[name] = sol::nil;
-//         interface->layers_table[name] = sol::nil;
-//       }
     }
 
     step* creator::create(const std::string &step_name, const std::vector<map::generator_pair> &pairs) {
@@ -550,150 +185,7 @@ namespace devils_engine {
       return step;
     }
 
-//     sol::table pass_to_other_state(sol::state_view first, const sol::table &table, sol::state_view second, std::string &copy) {
-//       // таблицу в строку и передаем в другую таблицу
-//       const auto &serializator = first["serpent"];
-//       if (!serializator.valid()) throw std::runtime_error("Could not load serializator");
-//       const sol::function &func = serializator["line"];
-//       if (!func.valid()) throw std::runtime_error("Bad serializator");
-//       auto opts = first.create_table();
-//       opts["compact"] = true;
-//       opts["fatal"] = true;
-//       opts["comment"] = false;
-//       auto ret = func(table, opts);
-//       if (!ret.valid()) {
-//         sol::error err = ret;
-//         std::cout << err.what();
-//         throw std::runtime_error("Could not serialize lua table");
-//       }
-// 
-//       std::string value = ret;
-//       copy = value;
-// //       PRINT_VAR("ser value", value)
-//       auto res = second.safe_script("return " + value); // value выглядит так: {table_data1=2334,table_data2=1241}
-//       if (!res.valid()) {
-//         sol::error err = res;
-//         std::cout << err.what();
-//         throw std::runtime_error("Small script error");
-//       }
-//       //if (!second["global_tmp_table"].valid()) throw std::runtime_error("Bad context changing");
-//       return res;
-//     }
-
-    void creator::generate() {
-//       if (old_step != current_step) {
-//         if (gen.finished()) {
-//           old_step = current_step;
-//           interface->close_layer(utils::interface_container::last_layer()); // if (!finished())
-//           
-//           lua.collect_garbage();
-//           return;
-//         }
-//         
-//         if (scripts_needs_to_update) {
-//           PRINT_VAR("old_step", old_step);
-//           current_step = old_step;
-//           interface->close_layer(utils::interface_container::last_layer());
-//           
-//           return;
-//         }
-// 
-//         // у нас же существуют значения в луа по ссылкам? тогда можно не обновлять выходные данные через интерфейс верно?
-//         auto info_table = interface->lua["tmp_table"].get_or_create<sol::table>();
-//         info_table["current_step"] = gen.current();
-//         info_table["hint2"] = gen.hint();
-//         info_table["step_count"] = gen.size();
-//         info_table["hint1"] = steps[old_step]->step_name();
-//         info_table["type"] = utils::progress_container::creating_map;
-// //         auto res = progress_interface_func(interface->get_ctx(), info_table); // контекст и текущая итерация
-// //         if (!res.valid()) {
-// //           sol::error err = res;
-// //           std::cout << err.what();
-// //           throw std::runtime_error("Progress bar interface function error");
-// //         }
-//         return;
-//       }
-// 
-//       if (!interface->is_visible(utils::interface_container::last_layer())) {
-//         interface->open_layer(utils::interface_container::last_layer(), steps[current_step]->step_function(), {interface_table});
-//         return;
-//       }
-// 
-//       // тут читаем просто выхлоп из интерфейсов
-//       // или вообще пропускаем если сейчас идет генерация
-//       auto ret_lua = interface->openned_layers[utils::interface_container::last_layer()].ret;
-// 
-// //         auto ret_lua = steps[current_step]->get_interface()(interface->get_ctx(), interface_table);
-// //         if (!ret_lua.valid()) {
-// //           sol::error err = ret_lua;
-// //           std::cout << err.what();
-// //           throw std::runtime_error("Bad lua function result. Step " + std::to_string(current_step));
-// //         }
-// 
-//       ASSERT(!ret_lua.is<sol::nil_t>());
-//       if (!ret_lua.is<int32_t>()) throw std::runtime_error("Bad return from generator step");
-//       int32_t ret = ret_lua.as<int32_t>();
-//       ret = std::min(ret,  1);
-//       ret = std::max(ret, -1);
-//       current_step += ret;
-//       if (current_step != old_step && current_step >= 0) {
-//         if (scripts_needs_to_update) {
-//           auto tmp = old_step;
-//           for (auto p : steps) {
-//             steps_pool.destroy(p);
-//           }
-//           steps.clear();
-//           
-//           for (const auto &name : clearing_sol_state) {
-//             interface->lua[name] = sol::nil;
-//             interface->layers_table[name] = sol::nil;
-//           }
-//           
-//           clearing_sol_state.clear();
-//           interface->lua.collect_garbage();
-//           lua.collect_garbage();
-//           // перезагрузить скрипты?
-//           auto map = global::get<systems::map_t>();
-//           systems::setup_map_generator(map);
-//           
-//           scripts_needs_to_update = false;
-//           old_step = tmp;
-//         }
-//         
-//         table["userdata"] = pass_to_other_state(interface->lua, interface_table, lua, world_settings);
-//         gen.clear();
-//         for (const auto &pair : steps[old_step]->get_functions()) {
-//           gen.add(pair);
-//         }
-// 
-//         interface->close_layer(utils::interface_container::last_layer());
-// 
-//         auto info_table = interface->lua["tmp_table"].get_or_create<sol::table>();
-//         info_table["current_step"] = gen.current();
-//         info_table["hint1"] = gen.hint();
-//         info_table["step_count"] = gen.size();
-//         info_table["hint2"] = steps[old_step]->step_name();
-//         info_table["type"] = utils::progress_container::creating_map;
-//         interface->open_layer(utils::interface_container::last_layer(), "progress_bar", {info_table});
-//         
-//         auto generator = &gen;
-//         auto ctx_ptr = &ctx;
-//         auto table_ptr = &table;
-//         global::get<dt::thread_pool>()->submitbase([this, generator, ctx_ptr, table_ptr] () {
-//           try {
-//             generator->generate(ctx_ptr, *table_ptr);
-//           } catch (const std::runtime_error &err) {
-//             // что тут? по идее нужно ждать пока мы не обновим скрипты
-//             //generator->clear();
-//             std::cout << err.what() << "\n";
-//             scripts_needs_to_update = true;
-// //             while (scripts_needs_to_update) {
-// //               std::this_thread::sleep_for(std::chrono::microseconds(1));
-// //             }
-//           }
-//         });
-//       }
-      
+    void creator::generate() {      
       ASSERT(size_t(current_step) < steps.size());
       ASSERT(advance_gen || advance_gen_all);
       
@@ -791,28 +283,6 @@ namespace devils_engine {
       }
     }
 
-//     void creator::run_interface_script(const std::string_view &path) {
-//       std::filesystem::path p(path);
-//       std::filesystem::directory_entry e(p);
-//       if (!e.exists()) throw std::runtime_error("Script " + std::string(path) + " does not exist");
-//       if (p.extension() != ".lua") throw std::runtime_error("Bad script extension. " + std::string(path));
-//       if (!e.is_regular_file()) throw std::runtime_error("Bad script file. " + std::string(path));
-// 
-// //       auto res = interface->lua.safe_script_file(p);
-// //       if (!res.valid()) {
-// //         sol::error e = res;
-// //         std::cout << e.what() << "\n";
-// //         throw std::runtime_error("Could not load script " + std::string(path));
-// //       }
-// 
-//       interface->process_script_file(p.string());
-//     }
-
-//     void creator::progress_interface(const std::string_view &name) {
-//       clearing_sol_state.insert(std::string(name));
-//       progress_interface_func = interface->get_state()[name];
-//     }
-
     sol::function creator::get_func(const std::string_view &name, const bool remove_global) {
       //auto proxy = lua[name];
       auto proxy = env_lua[name];
@@ -827,10 +297,6 @@ namespace devils_engine {
     sol::state & creator::state() {
       return lua;
     }
-
-//     creator::table_container_t & creator::table_container() {
-//       return m_table_container;
-//     }
 
     utils::world_serializator* creator::serializator_ptr() {
       return &serializator;
@@ -886,6 +352,9 @@ namespace devils_engine {
     sol::function creator::get_serpent_line() const {
       return serpent_line;
     }
+    
+    static const std::string_view folder_name_regex_str = "^[a-zA-Z0-9_.]+$";
+    static const RE2 folder_name_regex(folder_name_regex_str);
     
     void creator::setup_map_generator_functions(utils::interface_container* interface) {
       // мне нужно расшарить несколько функций для интерфейса по которым 
@@ -943,8 +412,9 @@ namespace devils_engine {
         if (global::get<systems::map_t>()->map_creator == nullptr) throw std::runtime_error("Map generator does not exist");
         
         if (str.empty()) throw std::runtime_error("Bad world folder name string");
-        const std::regex folder_name_regex("^[a-zA-Z0-9_.]+$", std::regex_constants::icase);
-        if (!std::regex_match(str.begin(), str.end(), folder_name_regex)) throw std::runtime_error("Folder name must match ^[a-zA-Z0-9_.]+$ expression");
+        //const std::regex folder_name_regex("^[a-zA-Z0-9_.]+$", std::regex_constants::icase);
+        //if (!std::regex_match(str.begin(), str.end(), folder_name_regex)) throw std::runtime_error("Folder name must match ^[a-zA-Z0-9_.]+$ expression");
+        if (!RE2::FullMatch(str, folder_name_regex)) throw std::runtime_error("Folder name must match " + std::string(folder_name_regex_str) + " expression");
         folder_name = std::string(str);
       });
 
@@ -952,8 +422,9 @@ namespace devils_engine {
         if (global::get<systems::map_t>()->map_creator == nullptr) throw std::runtime_error("Map generator does not exist");
         
         if (str.empty()) return 0;
-        const std::regex folder_name_regex("^[a-zA-Z0-9_.]+$", std::regex_constants::icase);
-        if (!std::regex_match(str.begin(), str.end(), folder_name_regex)) return 1;
+        //const std::regex folder_name_regex("^[a-zA-Z0-9_.]+$", std::regex_constants::icase);
+        //if (!std::regex_match(str.begin(), str.end(), folder_name_regex)) return 1;
+        if (!RE2::FullMatch(str, folder_name_regex)) return 1;
         const std::filesystem::path p = global::root_directory() + "/saves/" + std::string(str) + "/world_data";
         const std::filesystem::directory_entry e(p);
         if (e.exists()) return 2;

@@ -1,11 +1,12 @@
 #include "image_parser.h"
 
-#include "render/yavf.h"
+#include "render/vulkan_hpp_header.h"
 #include "render/image_controller.h"
 #include "render/image_container.h"
 #include "render/image_container_constants.h"
 #include "render/shared_structures.h"
 #include "render/shared_battle_structures.h"
+#include "render/container.h"
 
 #include "utils/globals.h"
 #include "utils/table_container.h"
@@ -351,12 +352,16 @@ namespace devils_engine {
         uint32_t rows;
         uint32_t columns;
         uint32_t count;
+        
+        inline atlas() : start_x(0), start_y(0), width(0), height(0), rows(0), columns(0), count(0) {}
       };
       
       struct scale {
         uint32_t width;
         uint32_t height;
         uint32_t type;
+        
+        scale() : width(0), height(0), type(UINT32_MAX) {}
       };
       
       std::string id;
@@ -366,15 +371,17 @@ namespace devils_engine {
       struct atlas atlas;
       struct scale scale;
       
-      yavf::Image* img;
+      render::vk_image_data_unique img;
       uint32_t final_width;
       uint32_t final_height;
       
       uint32_t slot;
       uint32_t offset;
+      
+      img_data() : sampler_type(UINT32_MAX), img(nullptr, nullptr, nullptr, nullptr) {}
     };
     
-    void vk_copy_data(const img_data* data, const size_t &start, const std::vector<uint32_t> &indices, std::vector<VkImageBlit> &copies) {
+    void vk_copy_data(const img_data* data, const size_t &start, const std::vector<uint32_t> &indices, std::vector<vk::ImageBlit> &copies) {
       uint32_t counter = 0;
       uint32_t initial_width = data->atlas.start_x;
       uint32_t initial_height = data->atlas.start_y;
@@ -388,24 +395,24 @@ namespace devils_engine {
           if (index < start) continue;
           uint32_t width = data->atlas.width * j + initial_width;
           
-          const VkImageBlit copy{
-            {
-              VK_IMAGE_ASPECT_COLOR_BIT,
+          const vk::ImageBlit copy(
+            vk::ImageSubresourceLayers{
+              vk::ImageAspectFlagBits::eColor,
               0, 0, 1
             },
             {
-              {int32_t(width), int32_t(height), 0},
-              {int32_t(data->atlas.width), int32_t(data->atlas.height), 1}
+              vk::Offset3D{int32_t(width), int32_t(height), 0},
+              vk::Offset3D{int32_t(data->atlas.width), int32_t(data->atlas.height), 1}
             },
-            {
-              VK_IMAGE_ASPECT_COLOR_BIT,
+            vk::ImageSubresourceLayers{
+              vk::ImageAspectFlagBits::eColor,
               0, indices[counter], 1 //(counter-1) + startingLayer
             },
             {
-              {0, 0, 0},
-              {int32_t(data->final_width), int32_t(data->final_height), 1}
+              vk::Offset3D{0, 0, 0},
+              vk::Offset3D{int32_t(data->final_width), int32_t(data->final_height), 1}
             }
-          };
+          );
           ++counter;
           
 //           PRINT_VAR("start width", copy.srcOffsets[0].x)
@@ -534,15 +541,18 @@ namespace devils_engine {
         // тут надо уже загрузить
         int x,y,n;
         uint8_t* data = stbi_load(final_p.string().c_str(), &x, &y, &n, STBI_rgb_alpha);
-        img_datas.img = controller->device->create(
-          yavf::ImageCreateInfo::texture2DStaging({uint32_t(x), uint32_t(y)}),
-          VMA_MEMORY_USAGE_CPU_ONLY
-        );
-        memcpy(img_datas.img->ptr(), data, x * y * STBI_rgb_alpha);
+        auto cont = global::get<render::container>();
+        auto allocator = cont->vulkan->buffer_allocator;
+        img_datas.img = render::create_image_unique(allocator, render::texture2D_staging({uint32_t(x), uint32_t(y)}), vma::MemoryUsage::eCpuOnly);
+//         img_datas.img = controller->device->create(
+//           yavf::ImageCreateInfo::texture2DStaging({uint32_t(x), uint32_t(y)}),
+//           VMA_MEMORY_USAGE_CPU_ONLY
+//         );
+        memcpy(img_datas.img.ptr, data, x * y * STBI_rgb_alpha);
         stbi_image_free(data);
         
-        img_datas.atlas.width  = img_datas.atlas.width  == 0 ? img_datas.img->info().extent.width  : img_datas.atlas.width;
-        img_datas.atlas.height = img_datas.atlas.height == 0 ? img_datas.img->info().extent.height : img_datas.atlas.height;
+        img_datas.atlas.width  = img_datas.atlas.width  == 0 ? x  : img_datas.atlas.width;
+        img_datas.atlas.height = img_datas.atlas.height == 0 ? y : img_datas.atlas.height;
         img_datas.final_width  = img_datas.scale.width  == UINT32_MAX ? img_datas.atlas.width  : img_datas.scale.width;
         img_datas.final_height = img_datas.scale.height == UINT32_MAX ? img_datas.atlas.height : img_datas.scale.height;
         if (current_image_type == render::image_controller::image_type::icon) {
@@ -570,10 +580,11 @@ namespace devils_engine {
       // короч нужно засунуть это дело в контроллер
       
       struct copy_data {
-        yavf::Image* src;
-        yavf::Image* dst;
-        std::vector<VkImageBlit> copies;
-        VkFilter filter;
+        vk::Image src;
+        vk::Image dst;
+        std::vector<vk::ImageBlit> copies;
+        vk::Filter filter;
+        uint32_t dst_layers_count;
       };
       
       struct concrete_data {
@@ -625,9 +636,10 @@ namespace devils_engine {
             const size_t index = concrete_d.indices[current_atlas_index];
             auto &d = data_array[index];
             const size_t count = d.atlas.count;
-            const auto filter = d.scale.type == 0 ? VK_FILTER_LINEAR : VK_FILTER_NEAREST;
+            const auto filter = d.scale.type == 0 ? vk::Filter::eLinear : vk::Filter::eNearest;
             auto pool = container->get_pool(pool_index);
-            concrete_d.copy_datas.push_back({d.img, pool->image, {}, filter}); // if (atlas_start == 0) 
+            const uint32_t layers_count = pool->layers_count();
+            concrete_d.copy_datas.push_back({d.img.handle, pool->image, {}, filter, layers_count}); // if (atlas_start == 0) 
             ASSERT(atlas_start < std::min(count, created_layers));
             
             if (d.slot == UINT32_MAX) {
@@ -656,42 +668,108 @@ namespace devils_engine {
       }
       
       {
+        auto map = global::get<systems::map_t>()->map;
+        std::unique_lock<std::mutex> lock(map->mutex);
+        auto cont = global::get<render::container>();
+        auto device = cont->vulkan->device;
+        // этот пул будет использоваться тогда в двух потоках
+        // а это плохо
+        auto pool = cont->vulkan->transfer_command_pool; // обычный пул (!)
+        auto queue = cont->vulkan->graphics;
+        auto fence = cont->vulkan->transfer_fence;
         
-        auto task = controller->device->allocateGraphicTask();
-        
-        task->begin();
-        for (size_t i = 0; i < concrete_datas.size(); ++i) {
-          for (size_t j = 0; j < concrete_datas[i].copy_datas.size(); ++j) {
-            task->setBarrier(concrete_datas[i].copy_datas[j].src, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
-            task->setBarrier(concrete_datas[i].copy_datas[j].dst, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-            task->copyBlit(
-              concrete_datas[i].copy_datas[j].src, 
-              concrete_datas[i].copy_datas[j].dst, 
-              concrete_datas[i].copy_datas[j].copies, 
-              concrete_datas[i].copy_datas[j].filter
-            );
-            task->setBarrier(concrete_datas[i].copy_datas[j].dst, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+        render::do_command(
+          device, pool, queue, fence,
+          [&] (vk::CommandBuffer task) {
+            const vk::CommandBufferBeginInfo info(vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
+            task.begin(info);
+//             for (const auto &concrete_data : concrete_datas) {
+//               for (const auto &copy_data : concrete_data.copy_datas) {
+//                 const vk::ImageSubresourceRange range1{vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1};
+//                 const auto [b1_info, src1, dst1] = render::make_image_memory_barrier(copy_data.src, vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferSrcOptimal, range1);
+//                 task.pipelineBarrier(src1, dst1, vk::DependencyFlagBits::eByRegion, nullptr, nullptr, b1_info);
+//                 
+//                 const vk::ImageSubresourceRange range2{vk::ImageAspectFlagBits::eColor, 0, 1, 0, copy_data.dst_layers_count};
+//                 const auto [b2_info, src2, dst2] = render::make_image_memory_barrier(copy_data.dst, vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal, range2);
+//                 task.pipelineBarrier(src2, dst2, vk::DependencyFlagBits::eByRegion, nullptr, nullptr, b2_info);
+//               }
+//             }
+            
+            for (const auto &concrete_data : concrete_datas) {
+              for (const auto &copy_data : concrete_data.copy_datas) {
+                {
+                  const vk::ImageSubresourceRange range1{vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1};
+                  const auto [b1_info, src1, dst1] = render::make_image_memory_barrier(copy_data.src, vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferSrcOptimal, range1);
+                  task.pipelineBarrier(src1, dst1, vk::DependencyFlagBits::eByRegion, nullptr, nullptr, b1_info);
+                  
+                  const vk::ImageSubresourceRange range2{vk::ImageAspectFlagBits::eColor, 0, 1, 0, copy_data.dst_layers_count};
+                  const auto [b2_info, src2, dst2] = render::make_image_memory_barrier(copy_data.dst, vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal, range2);
+                  task.pipelineBarrier(src2, dst2, vk::DependencyFlagBits::eByRegion, nullptr, nullptr, b2_info);
+                }
+                
+                task.blitImage(
+                  copy_data.src, vk::ImageLayout::eTransferSrcOptimal,
+                  copy_data.dst, vk::ImageLayout::eTransferDstOptimal,
+                  copy_data.copies, 
+                  copy_data.filter
+                );
+                
+                {
+                  const vk::ImageSubresourceRange range1{vk::ImageAspectFlagBits::eColor, 0, 1, 0, copy_data.dst_layers_count};
+                  const auto [b1_info, src1, dst1] = render::make_image_memory_barrier(copy_data.dst, vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eShaderReadOnlyOptimal, range1);
+                  task.pipelineBarrier(src1, dst1, vk::DependencyFlagBits::eByRegion, nullptr, nullptr, b1_info);
+                }
+              }
+            }
+            
+//             for (const auto &concrete_data : concrete_datas) {
+//               for (const auto &copy_data : concrete_data.copy_datas) {
+//                 const vk::ImageSubresourceRange range1{vk::ImageAspectFlagBits::eColor, 0, 1, 0, copy_data.dst_layers_count};
+//                 const auto [b1_info, src1, dst1] = render::make_image_memory_barrier(copy_data.dst, vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eShaderReadOnlyOptimal, range1);
+//                 task.pipelineBarrier(src1, dst1, vk::DependencyFlagBits::eByRegion, nullptr, nullptr, b1_info);
+//               }
+//             }
+            
+            task.end();
           }
-        }
-        task->end();
+        );
         
-        {
-          //auto map = global::get<systems::map_t>()->map;
-          //std::unique_lock<std::mutex> lock(map->mutex);
-          std::unique_lock<std::mutex> lock(get_current_mutex());
-          task->start();
-          task->wait();
-        }
-        
-        controller->device->deallocate(task);
+//         auto task = controller->device->allocateGraphicTask();
+//         
+//         task->begin();
+//         for (size_t i = 0; i < concrete_datas.size(); ++i) {
+//           for (size_t j = 0; j < concrete_datas[i].copy_datas.size(); ++j) {
+//             task->setBarrier(concrete_datas[i].copy_datas[j].src, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+//             task->setBarrier(concrete_datas[i].copy_datas[j].dst, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+//             task->copyBlit(
+//               concrete_datas[i].copy_datas[j].src, 
+//               concrete_datas[i].copy_datas[j].dst, 
+//               concrete_datas[i].copy_datas[j].copies, 
+//               concrete_datas[i].copy_datas[j].filter
+//             );
+//             task->setBarrier(concrete_datas[i].copy_datas[j].dst, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+//           }
+//         }
+//         task->end();
+//         
+//         {
+//           //auto map = global::get<systems::map_t>()->map;
+//           //std::unique_lock<std::mutex> lock(map->mutex);
+//           std::unique_lock<std::mutex> lock(get_current_mutex());
+//           task->start();
+//           task->wait();
+//         }
+//         
+//         controller->device->deallocate(task);
       
         // отказывается грузить нормально изображения размер которых не степень двойки
         // это странно в том плане что во многих источниках используется изображения где не соблюдается это правило
-        for (size_t i = 0; i < concrete_datas.size(); ++i) {
-          for (size_t j = 0; j < concrete_datas[i].copy_datas.size(); ++j) {
-            controller->device->destroy(concrete_datas[i].copy_datas[j].src);
-          }
-        }
+//         for (size_t i = 0; i < concrete_datas.size(); ++i) {
+//           for (size_t j = 0; j < concrete_datas[i].copy_datas.size(); ++j) {
+//             controller->device->destroy(concrete_datas[i].copy_datas[j].src);
+//           }
+//         }
+        // data_array сам по идее должен все почистить
       }
       
       for (const auto &img_data : data_array) {

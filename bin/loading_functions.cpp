@@ -14,14 +14,15 @@
 #include "utils/localization_container.h"
 #include "utils/interface_container2.h"
 
+#include "render/vulkan_hpp_header.h"
 #include "render/container.h"
 #include "render/targets.h"
 #include "render/stages.h"
-#include "render/yavf.h"
 #include "render/image_container.h"
 #include "render/image_controller.h"
 #include "render/shared_battle_structures.h"
 #include "render/battle_render_stages.h"
+#include "render/map_data.h"
 
 #include "map.h"
 #include "seasons.h"
@@ -262,8 +263,10 @@ namespace devils_engine {
     // камеру стоит расчитывать при старте карты
     
     // создаем две армии, пока что нет никакой принадлежности у армий
-    auto army1 = ctx->create_army();
-    auto army2 = ctx->create_army();
+    auto army1_token = ctx->create_army();
+    auto army2_token = ctx->create_army();
+    auto army1 = ctx->get_army(army1_token);
+    auto army2 = ctx->get_army(army2_token);
     // их нужно расположить рядом с городом игрока
     auto province = city->province;
     uint32_t army_tile1 = UINT32_MAX;
@@ -371,9 +374,9 @@ namespace devils_engine {
     }
   }
 
-  void copy_structure_data(const core::context* context, const size_t &offset, core::map* map, yavf::Buffer* buffer) {
+  void copy_structure_data(const core::context* context, const size_t &offset, core::map* map, void* buffer) {
     std::unordered_map<const core::city_type*, uint32_t> type_map;
-    auto buffer_data = reinterpret_cast<render::world_structure_t*>(buffer->ptr());
+    auto buffer_data = reinterpret_cast<render::world_structure_t*>(buffer);
     for (size_t i = 0; i < context->get_entity_count<core::city_type>(); ++i) {
       const size_t index = offset+i;
       auto city_type = context->get_entity<core::city_type>(i);
@@ -551,295 +554,233 @@ namespace devils_engine {
         types.push_back({title->border_color1, GPU_UINT_MAX, title->border_color2, 0.0f}); // толщину границы мы должны в поинт записать
       }
 
-  //     struct advance_borders_count {
-  //       const core::map* map;
-  //       size_t index;
-  //
-  //       advance_borders_count(const core::map* map, size_t i) : map(map), index(i) {}
-  //       ~advance_borders_count() {
-  //         std::unique_lock<std::mutex> lock(map->mutex);
-  //         global::get<render::tile_borders_optimizer>()->set_borders_count(index+1);
-  //       }
-  //     };
-
-  //     std::unordered_set<uint32_t> unique_index;
-      yavf::Buffer* buffer;
+      render::vk_buffer_data buffer;
       {
         std::unique_lock<std::mutex> lock(map->mutex);
-        buffer = global::get<systems::map_t>()->world_buffers->border_buffer;
-        buffer->resize(borders.size() * sizeof(border_buffer));
-        yavf::Buffer* types_buffer = global::get<systems::map_t>()->world_buffers->border_types;
-        types_buffer->resize(types.size() * sizeof(border_type2));
-        auto ptr = types_buffer->ptr();
+        auto world_buffers = global::get<systems::map_t>()->world_buffers;
+        world_buffers->resize_border_buffer(borders.size() * sizeof(border_buffer));
+        world_buffers->resize_border_types(types.size() * sizeof(border_type2));
+        buffer = world_buffers->border_buffer;
+        auto types_buffer = world_buffers->border_types;
+        auto ptr = types_buffer.ptr;
         ASSERT(ptr != nullptr);
         memcpy(ptr, types.data(), types.size() * sizeof(border_type2));
         //global::get<render::tile_borders_optimizer>()->set_borders_count(0);
       }
       //global::get<render::tile_borders_optimizer>()->set_borders_count(borders.size());
       auto pool = global::get<dt::thread_pool>();
-      auto* arr = reinterpret_cast<border_buffer*>(buffer->ptr());
+      auto* arr = reinterpret_cast<border_buffer*>(buffer.ptr);
       utils::submit_works_async(pool, borders.size(), [&] (const size_t &start, const size_t &count) {
       //for (size_t i = 0; i < borders.size(); ++i) {
-      for (size_t i = start; i < start+count; ++i) {
-        const auto &current_data = borders[i];
-        const auto &tile_data = render::unpack_data(map->get_tile(current_data.tile_index));
-        const uint32_t n_count = render::is_pentagon(tile_data) ? 5 : 6;
+        for (size_t i = start; i < start+count; ++i) {
+          const auto &current_data = borders[i];
+          const auto &tile_data = render::unpack_data(map->get_tile(current_data.tile_index));
+          const uint32_t n_count = render::is_pentagon(tile_data) ? 5 : 6;
 
-        ASSERT(tile_data.neighbors[current_data.edge_index] == current_data.opposite_tile_index);
+          ASSERT(tile_data.neighbors[current_data.edge_index] == current_data.opposite_tile_index);
 
-  #ifndef _NDEBUG
-        {
-          const uint32_t k = current_data.edge_index;
-          //const uint32_t k2 = k == 0 ? n_count-1 : k-1;
-          const uint32_t k2 = (k+1)%n_count;
-          const uint32_t point1 = tile_data.points[k];
-          const uint32_t point2 = tile_data.points[k2];
-          ASSERT(point1 != UINT32_MAX);
-          ASSERT(point2 != UINT32_MAX);
-          ASSERT(point1 != point2);
+    #ifndef _NDEBUG
+          {
+            const uint32_t k = current_data.edge_index;
+            //const uint32_t k2 = k == 0 ? n_count-1 : k-1;
+            const uint32_t k2 = (k+1)%n_count;
+            const uint32_t point1 = tile_data.points[k];
+            const uint32_t point2 = tile_data.points[k2];
+            ASSERT(point1 != UINT32_MAX);
+            ASSERT(point2 != UINT32_MAX);
+            ASSERT(point1 != point2);
 
-          const auto &n_tile_data = render::unpack_data(map->get_tile(current_data.opposite_tile_index));
-          const uint32_t n_count2 = render::is_pentagon(n_tile_data) ? 5 : 6;
-          bool found1 = false;
-          bool found2 = false;
-          for (uint32_t j = 0; j < n_count2; ++j) {
-            const uint32_t n_point_index = n_tile_data.points[j];
-            if (n_point_index == point1) found1 = true;
-            if (n_point_index == point2) found2 = true;
+            const auto &n_tile_data = render::unpack_data(map->get_tile(current_data.opposite_tile_index));
+            const uint32_t n_count2 = render::is_pentagon(n_tile_data) ? 5 : 6;
+            bool found1 = false;
+            bool found2 = false;
+            for (uint32_t j = 0; j < n_count2; ++j) {
+              const uint32_t n_point_index = n_tile_data.points[j];
+              if (n_point_index == point1) found1 = true;
+              if (n_point_index == point2) found2 = true;
+            }
+
+            ASSERT(found1 && found2);
           }
+    #endif
 
-          ASSERT(found1 && found2);
-        }
-  #endif
+          const uint32_t tmp_index = (current_data.edge_index)%n_count;
+          const uint32_t adjacent1 = tile_data.neighbors[(tmp_index+1)%n_count];
+          const uint32_t adjacent2 = tile_data.neighbors[tmp_index == 0 ? n_count-1 : tmp_index-1];
 
-        const uint32_t tmp_index = (current_data.edge_index)%n_count;
-        const uint32_t adjacent1 = tile_data.neighbors[(tmp_index+1)%n_count];
-        const uint32_t adjacent2 = tile_data.neighbors[tmp_index == 0 ? n_count-1 : tmp_index-1];
+    #ifndef _NDEBUG
+          {
+            const uint32_t k = (tmp_index+1)%n_count;
+            const uint32_t k2 = k == 0 ? n_count-1 : k-1;
+            const uint32_t k3 = (tmp_index+2)%n_count;
+            const uint32_t k4 = k == 0 ? n_count-2 : (k == 1 ? n_count-1 : k-2);
+            const uint32_t point1 = tile_data.points[k];
+            const uint32_t point2 = tile_data.points[k2];
+            const uint32_t point3 = tile_data.points[k3];
+            const uint32_t point4 = tile_data.points[k4];
+            ASSERT(point1 != UINT32_MAX);
+            ASSERT(point2 != UINT32_MAX);
+            ASSERT(point1 != point2);
 
-  #ifndef _NDEBUG
-        {
+            {
+              bool found1 = false;
+              bool found2 = false;
+              bool found3 = false;
+              bool found4 = false;
+
+              const auto &n_tile_data = render::unpack_data(map->get_tile(adjacent1));
+              const uint32_t n_count2 = render::is_pentagon(n_tile_data) ? 5 : 6;
+              for (uint32_t j = 0; j < n_count2; ++j) {
+                const uint32_t n_point_index = n_tile_data.points[j];
+                if (n_point_index == point1) found1 = true;
+                if (n_point_index == point2) found2 = true;
+                if (n_point_index == point3) found3 = true;
+                if (n_point_index == point4) found4 = true;
+              }
+
+              ASSERT(found1);
+              ASSERT(found3);
+              ASSERT(!found2);
+              ASSERT(!found4);
+            }
+
+            {
+              bool found1 = false;
+              bool found2 = false;
+              bool found3 = false;
+              bool found4 = false;
+
+              const auto &n_tile_data = render::unpack_data(map->get_tile(adjacent2));
+              const uint32_t n_count2 = render::is_pentagon(n_tile_data) ? 5 : 6;
+              for (uint32_t j = 0; j < n_count2; ++j) {
+                const uint32_t n_point_index = n_tile_data.points[j];
+                if (n_point_index == point1) found1 = true;
+                if (n_point_index == point2) found2 = true;
+                if (n_point_index == point3) found3 = true;
+                if (n_point_index == point4) found4 = true;
+              }
+
+              ASSERT(!found1);
+              ASSERT(!found3);
+              ASSERT(found2);
+              ASSERT(found4);
+            }
+          }
+    #endif
+
+          // каждый ход нам необходимо произвести небольшие вычисления
+          // чтобы обновить границы по ходу игры
+          // каждый кадр обновляю то что нужно нарисовать фрустум тест
+
+          //advance_borders_count adv(map, i);
+    //       if (i % 1000 == 0) {
+    //         std::unique_lock<std::mutex> lock(map->mutex);
+    //         global::get<render::tile_borders_optimizer>()->set_borders_count(i);
+    //       }
+    
+          // я хочу сделать все данные карты в гпу локал памяти (вообще лучше ВСЕ данные в локальной памяти сделать)
+          // поэтому здесь видимо придется копировать в стейджинг буфер это дело
+          // каждый раз когда мы хотим поправить границы на карте
+
           const uint32_t k = (tmp_index+1)%n_count;
           const uint32_t k2 = k == 0 ? n_count-1 : k-1;
-          const uint32_t k3 = (tmp_index+2)%n_count;
-          const uint32_t k4 = k == 0 ? n_count-2 : (k == 1 ? n_count-1 : k-2);
-          const uint32_t point1 = tile_data.points[k];
-          const uint32_t point2 = tile_data.points[k2];
-          const uint32_t point3 = tile_data.points[k3];
-          const uint32_t point4 = tile_data.points[k4];
-          ASSERT(point1 != UINT32_MAX);
-          ASSERT(point2 != UINT32_MAX);
-          ASSERT(point1 != point2);
+          //const uint32_t k2 = (k+1)%n_count;
+          const uint32_t point1_index = tile_data.points[k];
+          const uint32_t point2_index = tile_data.points[k2];
+          const glm::vec4 point1 = map->get_point(point1_index);
+          const glm::vec4 point2 = map->get_point(point2_index);
+          arr[i].points[0] = point2;
+          arr[i].points[1] = point1;
 
-          {
-            bool found1 = false;
-            bool found2 = false;
-            bool found3 = false;
-            bool found4 = false;
+          // нужно заполнить направления
+          // нужно проверить принадлежат ли смежные тайлы к тем же государствам
+          // тут же мы определяем тип границы (государственная, вассальная, граница провинции)
 
-            const auto &n_tile_data = render::unpack_data(map->get_tile(adjacent1));
-            const uint32_t n_count2 = render::is_pentagon(n_tile_data) ? 5 : 6;
-            for (uint32_t j = 0; j < n_count2; ++j) {
-              const uint32_t n_point_index = n_tile_data.points[j];
-              if (n_point_index == point1) found1 = true;
-              if (n_point_index == point2) found2 = true;
-              if (n_point_index == point3) found3 = true;
-              if (n_point_index == point4) found4 = true;
-            }
+          const uint32_t province_index = ctx->get_tile(current_data.tile_index).province;
+          const uint32_t opposite_province_index = ctx->get_tile(current_data.opposite_tile_index).province;
 
-            ASSERT(found1);
-            ASSERT(found3);
-            ASSERT(!found2);
-            ASSERT(!found4);
+          const uint32_t adjacent1_province_index = ctx->get_tile(adjacent1).province;
+          const uint32_t adjacent2_province_index = ctx->get_tile(adjacent2).province;
+
+          if (province_index != adjacent1_province_index) {
+            const glm::vec4 center = map->get_point(tile_data.center);
+            arr[i].dirs[1] = glm::normalize(center - arr[i].points[1]);
+          } else {
+            const uint32_t k3 = (tmp_index+2)%n_count;
+            const uint32_t point3_index = tile_data.points[k3];
+            const glm::vec4 point3 = map->get_point(point3_index);
+            arr[i].dirs[1] = glm::normalize(point3 - arr[i].points[1]);
           }
 
-          {
-            bool found1 = false;
-            bool found2 = false;
-            bool found3 = false;
-            bool found4 = false;
-
-            const auto &n_tile_data = render::unpack_data(map->get_tile(adjacent2));
-            const uint32_t n_count2 = render::is_pentagon(n_tile_data) ? 5 : 6;
-            for (uint32_t j = 0; j < n_count2; ++j) {
-              const uint32_t n_point_index = n_tile_data.points[j];
-              if (n_point_index == point1) found1 = true;
-              if (n_point_index == point2) found2 = true;
-              if (n_point_index == point3) found3 = true;
-              if (n_point_index == point4) found4 = true;
-            }
-
-            ASSERT(!found1);
-            ASSERT(!found3);
-            ASSERT(found2);
-            ASSERT(found4);
+          if (province_index != adjacent2_province_index) {
+            const glm::vec4 center = map->get_point(tile_data.center);
+            arr[i].dirs[0] = glm::normalize(center - arr[i].points[0]);
+          } else {
+            const uint32_t k4 = k == 0 ? n_count-2 : (k == 1 ? n_count-1 : k-2);
+            const uint32_t point4_index = tile_data.points[k4];
+            const glm::vec4 point4 = map->get_point(point4_index);
+            arr[i].dirs[0] = glm::normalize(point4 - arr[i].points[0]);
           }
-        }
-  #endif
 
-        // каждый ход нам необходимо произвести небольшие вычисления
-        // чтобы обновить границы по ходу игры
-        // каждый кадр обновляю то что нужно нарисовать фрустум тест
+          const auto province = ctx->get_entity<core::province>(province_index);
+          const auto opposite_province = opposite_province_index == UINT32_MAX ? nullptr : ctx->get_entity<core::province>(opposite_province_index);
+          ASSERT(province->title->owner != nullptr);
 
-        //advance_borders_count adv(map, i);
-  //       if (i % 1000 == 0) {
-  //         std::unique_lock<std::mutex> lock(map->mutex);
-  //         global::get<render::tile_borders_optimizer>()->set_borders_count(i);
-  //       }
-  
-        // я хочу сделать все данные карты в гпу локал памяти (вообще лучше ВСЕ данные в локальной памяти сделать)
-        // поэтому здесь видимо придется копировать в стейджинг буфер это дело
-        // каждый раз когда мы хотим поправить границы на карте
+          arr[i].dirs[0].w = glm::uintBitsToFloat(current_data.tile_index);
+          if (opposite_province == nullptr) {
+            auto title = province->title->owner->main_title;
+            ASSERT(type_index.find(title) != type_index.end());
+            const uint32_t type_idx = type_index[title];
+            arr[i].points[0].w = borders_size[0];
+            arr[i].dirs[1].w = glm::uintBitsToFloat(type_idx); // или здесь другую границу?
+            continue;
+          }
 
-        const uint32_t k = (tmp_index+1)%n_count;
-        const uint32_t k2 = k == 0 ? n_count-1 : k-1;
-        //const uint32_t k2 = (k+1)%n_count;
-        const uint32_t point1_index = tile_data.points[k];
-        const uint32_t point2_index = tile_data.points[k2];
-        const glm::vec4 point1 = map->get_point(point1_index);
-        const glm::vec4 point2 = map->get_point(point2_index);
-        arr[i].points[0] = point2;
-        arr[i].points[1] = point1;
+          ASSERT(opposite_province->title->owner != nullptr);
+          if (province->title->owner == opposite_province->title->owner) {
+            // один владелец, мы должны нарисовать базовую границу
+            arr[i].points[0].w = borders_size[2];
+            arr[i].dirs[1].w = glm::uintBitsToFloat(0);
+            continue;
+          }
 
-        // нужно заполнить направления
-        // нужно проверить принадлежат ли смежные тайлы к тем же государствам
-        // тут же мы определяем тип границы (государственная, вассальная, граница провинции)
+          std::unordered_set<core::realm*> factions;
+          auto liege1 = province->title->owner;
+          while (liege1 != nullptr) {
+            factions.insert(liege1);
+            liege1 = liege1->liege;
+          }
 
-        const uint32_t province_index = ctx->get_tile(current_data.tile_index).province;
-        const uint32_t opposite_province_index = ctx->get_tile(current_data.opposite_tile_index).province;
+          bool found = false;
+          auto liege2 = opposite_province->title->owner;
+          while (liege2 != nullptr) {
+            found = found || factions.find(liege2) != factions.end();
+            liege2 = liege2->liege;
+          }
 
-        const uint32_t adjacent1_province_index = ctx->get_tile(adjacent1).province;
-        const uint32_t adjacent2_province_index = ctx->get_tile(adjacent2).province;
+          if (found) {
+            // эти провинции находятся в одном государстве
+            auto title = province->title->owner->main_title;
+            ASSERT(type_index.find(title) != type_index.end());
+            const uint32_t type_idx = type_index[title];
+            arr[i].points[0].w = borders_size[1];
+            arr[i].dirs[1].w = glm::uintBitsToFloat(type_idx);
 
-        if (province_index != adjacent1_province_index) {
-          const glm::vec4 center = map->get_point(tile_data.center);
-          arr[i].dirs[1] = glm::normalize(center - arr[i].points[1]);
-        } else {
-          const uint32_t k3 = (tmp_index+2)%n_count;
-          const uint32_t point3_index = tile_data.points[k3];
-          const glm::vec4 point3 = map->get_point(point3_index);
-          arr[i].dirs[1] = glm::normalize(point3 - arr[i].points[1]);
-        }
+            continue;
+          }
 
-        if (province_index != adjacent2_province_index) {
-          const glm::vec4 center = map->get_point(tile_data.center);
-          arr[i].dirs[0] = glm::normalize(center - arr[i].points[0]);
-        } else {
-          const uint32_t k4 = k == 0 ? n_count-2 : (k == 1 ? n_count-1 : k-2);
-          const uint32_t point4_index = tile_data.points[k4];
-          const glm::vec4 point4 = map->get_point(point4_index);
-          arr[i].dirs[0] = glm::normalize(point4 - arr[i].points[0]);
-        }
-
-        const auto province = ctx->get_entity<core::province>(province_index);
-        const auto opposite_province = opposite_province_index == UINT32_MAX ? nullptr : ctx->get_entity<core::province>(opposite_province_index);
-        ASSERT(province->title->owner != nullptr);
-
-        arr[i].dirs[0].w = glm::uintBitsToFloat(current_data.tile_index);
-        if (opposite_province == nullptr) {
+          // это граница разных государств
           auto title = province->title->owner->main_title;
           ASSERT(type_index.find(title) != type_index.end());
           const uint32_t type_idx = type_index[title];
           arr[i].points[0].w = borders_size[0];
-          arr[i].dirs[1].w = glm::uintBitsToFloat(type_idx); // или здесь другую границу?
-          continue;
-        }
-
-        ASSERT(opposite_province->title->owner != nullptr);
-        if (province->title->owner == opposite_province->title->owner) {
-          // один владелец, мы должны нарисовать базовую границу
-          arr[i].points[0].w = borders_size[2];
-          arr[i].dirs[1].w = glm::uintBitsToFloat(0);
-          continue;
-        }
-
-        std::unordered_set<core::realm*> factions;
-        auto liege1 = province->title->owner;
-        while (liege1 != nullptr) {
-          factions.insert(liege1);
-          liege1 = liege1->liege;
-        }
-
-        bool found = false;
-        auto liege2 = opposite_province->title->owner;
-        while (liege2 != nullptr) {
-          found = found || factions.find(liege2) != factions.end();
-          liege2 = liege2->liege;
-        }
-
-        if (found) {
-          // эти провинции находятся в одном государстве
-          auto title = province->title->owner->main_title;
-          ASSERT(type_index.find(title) != type_index.end());
-          const uint32_t type_idx = type_index[title];
-          arr[i].points[0].w = borders_size[1];
           arr[i].dirs[1].w = glm::uintBitsToFloat(type_idx);
-
-          continue;
+          
+          // по идее все что мне нужно теперь делать каждый ход это:
+          // обновить тип границы, обновить направления
+          // и все
+          // каждый кадр запихиваем три координаты в фрустум тест
         }
-
-        // это граница разных государств
-        auto title = province->title->owner->main_title;
-        ASSERT(type_index.find(title) != type_index.end());
-        const uint32_t type_idx = type_index[title];
-        arr[i].points[0].w = borders_size[0];
-        arr[i].dirs[1].w = glm::uintBitsToFloat(type_idx);
-
-  //       const std::vector<uint32_t> prop_arr = {
-  //         map::debug::properties::tile::country_index,
-  //         map::debug::properties::tile::province_index
-  //       };
-  //
-  //       for (const auto &prop : prop_arr) {
-  //         // или лучше брать эти данные из провинции
-  //         const uint32_t country_index = container->get_data<uint32_t>(map::debug::entities::tile, current_data.tile_index, prop);
-  //         const uint32_t opposing_country_index = container->get_data<uint32_t>(map::debug::entities::tile, current_data.opposite_tile_index, prop);
-  //
-  //         if (country_index == opposing_country_index) continue;
-  //
-  //         const uint32_t adjacent1_index = container->get_data<uint32_t>(map::debug::entities::tile, adjacent1, prop);
-  //         const uint32_t adjacent2_index = container->get_data<uint32_t>(map::debug::entities::tile, adjacent2, prop);
-  //
-  //         if (country_index != adjacent1_index) {
-  //           const glm::vec4 center = map->get_point(tile_data.center);
-  //           arr[i].dirs[1] = glm::normalize(center - arr[i].points[1]);
-  //         } else {
-  //           const uint32_t k3 = (tmp_index+2)%n_count;
-  //           const uint32_t point3_index = tile_data.points[k3];
-  //           const glm::vec4 point3 = map->get_point(point3_index);
-  //           arr[i].dirs[1] = glm::normalize(point3 - arr[i].points[1]);
-  //         }
-  //
-  //         if (country_index != adjacent2_index) {
-  //           const glm::vec4 center = map->get_point(tile_data.center);
-  //           arr[i].dirs[0] = glm::normalize(center - arr[i].points[0]);
-  //         } else {
-  //           const uint32_t k4 = k == 0 ? n_count-2 : (k == 1 ? n_count-1 : k-2);
-  //           const uint32_t point4_index = tile_data.points[k4];
-  //           const glm::vec4 point4 = map->get_point(point4_index);
-  //           arr[i].dirs[0] = glm::normalize(point4 - arr[i].points[0]);
-  //         }
-  //
-  //         if (prop == map::debug::properties::tile::country_index) {
-  //           types[country_index+1] = {render::make_color(0.0f, 0.0f, 0.0f, 1.0f), UINT32_MAX, render::make_color(0.0f, 0.0f, 0.0f, 1.0f), 0.3f}; // это мы заполняем для каждого титула
-  //           arr[i].dirs[1].w = glm::uintBitsToFloat(country_index+1);
-  //         }
-  //
-  //         if (prop == map::debug::properties::tile::province_index) {
-  //           types[0] = {render::make_color(0.0f, 0.0f, 0.0f, 1.0f), UINT32_MAX, render::make_color(0.0f, 0.0f, 0.0f, 1.0f), 0.15f};
-  //           arr[i].dirs[1].w = glm::uintBitsToFloat(0);
-  //         }
-  //
-  //         break;
-  //       }
-  //
-  //       arr[i].dirs[0].w = glm::uintBitsToFloat(current_data.tile_index);
-        //arr[i].dirs[1].w = glm::uintBitsToFloat(border_type);
-
-        // по идее все что мне нужно теперь делать каждый ход это:
-        // обновить тип границы, обновить направления
-        // и все
-        // каждый кадр запихиваем три координаты в фрустум тест
-      }
       });
       utils::async_wait(pool);
 
@@ -858,107 +799,108 @@ namespace devils_engine {
 //     const float render_tile_height = 10.0f;
 //     const float layer_height = mountain_height / float(layers_count);
     void generate_tile_connections(core::map* map, dt::thread_pool* pool) {
-      struct wall {
-        uint32_t tile1;
-        uint32_t tile2;
-        uint32_t point1;
-        uint32_t point2;
-      };
-
-      std::vector<wall> walls;
-      std::mutex mutex;
-
-      utils::submit_works_async(pool, map->tiles_count(), [map, &walls, &mutex] (const size_t &start, const size_t &count) {
-        for (size_t i = start; i < start+count; ++i) {
-          const uint32_t tile_index = i;
-          const auto &tile_data = render::unpack_data(map->get_tile(tile_index));
-          const uint32_t n_count = render::is_pentagon(tile_data) ? 5 : 6;
-          const float tile_height = tile_data.height;
-          const uint32_t height_layer = render::compute_height_layer(tile_height);
-          if (height_layer == 0) continue;
-
-          uint32_t size = 0;
-          for (uint32_t j = 0; j < n_count; ++j) {
-            const uint32_t n_index = tile_data.neighbors[j];
-            const auto &n_tile_data = render::unpack_data(map->get_tile(n_index));
-            const float n_tile_height = n_tile_data.height;
-            const uint32_t n_height_layer = render::compute_height_layer(n_tile_height);
-            if (height_layer <= n_height_layer) continue;
-            ++size;
-          }
-
-          if (size == 0) continue;
-
-#ifdef _WIN32
-          std::vector<wall> tmp_arr(size); 
-#else
-          wall tmp_arr[size];
-#endif
-          uint32_t counter = 0;
-          for (uint32_t j = 0; j < n_count; ++j) {
-            const uint32_t n_index = tile_data.neighbors[j];
-            const auto &n_tile_data = render::unpack_data(map->get_tile(n_index));
-            const float n_tile_height = n_tile_data.height;
-            const uint32_t n_height_layer = render::compute_height_layer(n_tile_height);
-            if (height_layer <= n_height_layer) continue;
-
-            // добавляем стенку
-            // нам нужны две точки и индексы тайлов
-
-            const uint32_t point1 = tile_data.points[j];
-            const uint32_t point2 = tile_data.points[(j+1)%n_count];
-
-  #ifndef _NDEBUG
-            {
-              std::unordered_set<uint32_t> tmp;
-              tmp.insert(point1);
-              tmp.insert(point2);
-
-              uint32_t found = 0;
-              const uint32_t n_n_count = render::is_pentagon(n_tile_data) ? 5 : 6;
-              for (uint32_t k = 0; k < n_n_count; ++k) {
-                const uint32_t point_index = n_tile_data.points[k];
-                found += uint32_t(tmp.find(point_index) != tmp.end());
-
-  //               if (point1 == point_index) {
-  //                 const bool a = (n_tile_data.points[(k+1)%n_n_count] == point2 || n_tile_data.points[k == 0 ? n_n_count-1 : k-1] == point2);
-  //                 if (a) found = true;
-  //               }
-              }
-
-              ASSERT(found == 2);
-            }
-  #endif
-
+      assert(false);
+//       struct wall {
+//         uint32_t tile1;
+//         uint32_t tile2;
+//         uint32_t point1;
+//         uint32_t point2;
+//       };
+// 
+//       std::vector<wall> walls;
+//       std::mutex mutex;
+// 
+//       utils::submit_works_async(pool, map->tiles_count(), [map, &walls, &mutex] (const size_t &start, const size_t &count) {
+//         for (size_t i = start; i < start+count; ++i) {
+//           const uint32_t tile_index = i;
+//           const auto &tile_data = render::unpack_data(map->get_tile(tile_index));
+//           const uint32_t n_count = render::is_pentagon(tile_data) ? 5 : 6;
+//           const float tile_height = tile_data.height;
+//           const uint32_t height_layer = render::compute_height_layer(tile_height);
+//           if (height_layer == 0) continue;
+// 
+//           uint32_t size = 0;
+//           for (uint32_t j = 0; j < n_count; ++j) {
+//             const uint32_t n_index = tile_data.neighbors[j];
+//             const auto &n_tile_data = render::unpack_data(map->get_tile(n_index));
+//             const float n_tile_height = n_tile_data.height;
+//             const uint32_t n_height_layer = render::compute_height_layer(n_tile_height);
+//             if (height_layer <= n_height_layer) continue;
+//             ++size;
+//           }
+// 
+//           if (size == 0) continue;
+// 
+// #ifdef _WIN32
+//           std::vector<wall> tmp_arr(size); 
+// #else
+//           wall tmp_arr[size];
+// #endif
+//           uint32_t counter = 0;
+//           for (uint32_t j = 0; j < n_count; ++j) {
+//             const uint32_t n_index = tile_data.neighbors[j];
+//             const auto &n_tile_data = render::unpack_data(map->get_tile(n_index));
+//             const float n_tile_height = n_tile_data.height;
+//             const uint32_t n_height_layer = render::compute_height_layer(n_tile_height);
+//             if (height_layer <= n_height_layer) continue;
+// 
+//             // добавляем стенку
+//             // нам нужны две точки и индексы тайлов
+// 
+//             const uint32_t point1 = tile_data.points[j];
+//             const uint32_t point2 = tile_data.points[(j+1)%n_count];
+// 
+//   #ifndef _NDEBUG
+//             {
+//               std::unordered_set<uint32_t> tmp;
+//               tmp.insert(point1);
+//               tmp.insert(point2);
+// 
+//               uint32_t found = 0;
+//               const uint32_t n_n_count = render::is_pentagon(n_tile_data) ? 5 : 6;
+//               for (uint32_t k = 0; k < n_n_count; ++k) {
+//                 const uint32_t point_index = n_tile_data.points[k];
+//                 found += uint32_t(tmp.find(point_index) != tmp.end());
+// 
+//   //               if (point1 == point_index) {
+//   //                 const bool a = (n_tile_data.points[(k+1)%n_n_count] == point2 || n_tile_data.points[k == 0 ? n_n_count-1 : k-1] == point2);
+//   //                 if (a) found = true;
+//   //               }
+//               }
+// 
+//               ASSERT(found == 2);
+//             }
+//   #endif
+// 
+// //             std::unique_lock<std::mutex> lock(mutex);
+// //             walls.push_back({tile_index, n_index, point1, point2});
+//             tmp_arr[counter] = {tile_index, n_index, point1, point2};
+//             ++counter;
+//           }
+// 
+//           uint32_t offset = UINT32_MAX;
+//           {
 //             std::unique_lock<std::mutex> lock(mutex);
-//             walls.push_back({tile_index, n_index, point1, point2});
-            tmp_arr[counter] = {tile_index, n_index, point1, point2};
-            ++counter;
-          }
-
-          uint32_t offset = UINT32_MAX;
-          {
-            std::unique_lock<std::mutex> lock(mutex);
-            offset = walls.size();
-            for (uint32_t i = 0; i < size; ++i) {
-              walls.push_back(tmp_arr[i]);
-            }
-          }
-
-          map->set_tile_connections_data(tile_index, offset, size);
-        }
-      });
-      utils::async_wait(pool); // текущий тред не должен быть главным!!!
-
-      std::unique_lock<std::mutex> lock(map->mutex);
-      auto connections = global::get<systems::map_t>()->world_buffers->tiles_connections;
-      connections->resize(walls.size() * sizeof(walls[0]));
-      auto ptr = connections->ptr();
-      memcpy(ptr, walls.data(), walls.size() * sizeof(walls[0]));
-      //ASSERT(global::get<render::tile_walls_optimizer>() != nullptr);
-      //global::get<render::tile_walls_optimizer>()->set_connections_count(walls.size());
-      ASSERT(global::get<render::tile_optimizer>() != nullptr);
-      global::get<render::tile_optimizer>()->set_connections_count(walls.size());
+//             offset = walls.size();
+//             for (uint32_t i = 0; i < size; ++i) {
+//               walls.push_back(tmp_arr[i]);
+//             }
+//           }
+// 
+//           map->set_tile_connections_data(tile_index, offset, size);
+//         }
+//       });
+//       utils::async_wait(pool); // текущий тред не должен быть главным!!!
+// 
+//       std::unique_lock<std::mutex> lock(map->mutex);
+//       auto connections = global::get<systems::map_t>()->world_buffers->tiles_connections;
+//       connections->resize(walls.size() * sizeof(walls[0]));
+//       auto ptr = connections->ptr();
+//       memcpy(ptr, walls.data(), walls.size() * sizeof(walls[0]));
+//       //ASSERT(global::get<render::tile_walls_optimizer>() != nullptr);
+//       //global::get<render::tile_walls_optimizer>()->set_connections_count(walls.size());
+//       ASSERT(global::get<render::tile_optimizer>() != nullptr);
+//       global::get<render::tile_optimizer>()->set_connections_count(walls.size());
     }
 
     void connect_game_data(core::map* map, core::context* ctx) {
@@ -1988,12 +1930,13 @@ namespace devils_engine {
       // нужно создать непосредственно core map
       load_map_data(map_systems->map, world_data, create_map_tiles);
       
-      auto device = global::get<systems::core_t>()->graphics_container->device;
+      auto graphics_container = global::get<systems::core_t>()->graphics_container;
       sol::state lua;
       lua.open_libraries(sol::lib::base, sol::lib::string, sol::lib::table, sol::lib::bit32, sol::lib::math, sol::lib::utf8); // sol::lib::coroutine // корутины не нужны
-      utils::setup_lua_safe_utils(lua);
-      utils::setup_lua_loading_functions(lua);
-      utils::setup_lua_constants(lua);
+//       utils::setup_lua_safe_utils(lua);
+//       utils::setup_lua_loading_functions(lua);
+//       utils::setup_lua_constants(lua);
+      utils::world_map_loading::setup_lua(lua);
       
       // мне тут нужен энвайронмент, там нужно удалить рандомность у математики + в этом конкретном случае не делать 
       // где бы функцию для энвайронмента сделать?
@@ -2018,10 +1961,19 @@ namespace devils_engine {
         }
       }
       
-      yavf::Buffer heraldy_tmp(device, yavf::BufferCreateInfo::buffer(16, VK_BUFFER_USAGE_TRANSFER_SRC_BIT), VMA_MEMORY_USAGE_CPU_ONLY);
+      auto device = graphics_container->vulkan->device;
+      auto allocator = graphics_container->vulkan->buffer_allocator;
+      size_t heraldy_layers_size = 0;
+      render::vk_buffer_data_unique heraldy_tmp(nullptr, nullptr, nullptr, nullptr);
       {
         const auto heraldies_data = get_data_tables(world_data, lua, utils::world_serializator::heraldy_layer, "heraldy", utils::validate_heraldy_layer);
-        utils::load_heraldy_layers(controller, heraldies_data, &heraldy_tmp);
+        const auto layers_buffer = utils::load_heraldy_layers(controller, heraldies_data);
+        heraldy_layers_size = layers_buffer.size() * sizeof(layers_buffer[0]);
+        heraldy_tmp = render::create_buffer_unique(allocator, render::buffer(
+          heraldy_layers_size, vk::BufferUsageFlagBits::eTransferSrc
+        ), vma::MemoryUsage::eCpuOnly);
+        
+        memcpy(heraldy_tmp.ptr, layers_buffer.data(), heraldy_layers_size);
       }
       
       {
@@ -2075,25 +2027,32 @@ namespace devils_engine {
         auto ctx = map_systems->core_context;
         const size_t structures_count = ctx->get_entity_count<core::city>();
         const size_t structure_data_size = ctx->get_entity_count<core::city_type>() * sizeof(render::world_structure_t);
-        yavf::Buffer buf(device, yavf::BufferCreateInfo::buffer(structure_data_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT), VMA_MEMORY_USAGE_CPU_ONLY);
+        auto buf = render::create_buffer_unique(allocator, render::buffer(
+          structure_data_size, vk::BufferUsageFlagBits::eTransferSrc
+        ), vma::MemoryUsage::eCpuOnly);
         auto map = map_systems->map;
         map_systems->lock_map();
         controller->update_set();
         map_systems->map->copy_biomes(map_systems->seasons);
         global::get<render::tile_optimizer>()->set_biome_tile_count(data);
         
-        copy_structure_data(ctx, 0, map, &buf);
-        map->structures->resize(structure_data_size);
-        buffers->heraldy->resize(heraldy_tmp.info().size);
+        copy_structure_data(ctx, 0, map, buf.ptr);
+        map->resize_structures_buffer(structure_data_size);
+        ASSERT(heraldy_layers_size != 0);
+        buffers->resize_heraldy_buffer(heraldy_layers_size);
         
-        auto task = device->allocateTransferTask();
-        task->begin();
-        task->copy(&buf, map->structures);
-        task->copy(&heraldy_tmp, buffers->heraldy);
-        task->end();
-        task->start();
-        task->wait();
-        device->deallocate(task);
+        auto pool = graphics_container->vulkan->transfer_command_pool;
+        auto queue = graphics_container->vulkan->graphics;
+        auto fence = graphics_container->vulkan->transfer_fence;
+        render::do_command(device, pool, queue, fence, [&] (vk::CommandBuffer task) {
+          const vk::BufferCopy c1{0, 0, structure_data_size};
+          const vk::BufferCopy c2{0, 0, heraldy_layers_size};
+          const vk::CommandBufferBeginInfo info(vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
+          task.begin(info);
+          task.copyBuffer(buf.handle, map->data->structures.handle, c1);
+          task.copyBuffer(heraldy_tmp.handle, buffers->heraldy.handle, c2);
+          task.end();
+        });
         
         global::get<render::tile_optimizer>()->set_max_structures_count(structures_count);
         global::get<render::tile_optimizer>()->set_max_heraldy_count(structures_count);
@@ -2252,12 +2211,7 @@ namespace devils_engine {
     void from_map_to_battle_part1(sol::state_view lua, utils::progress_container* prog) {
       // тут грузим конфиг, собираем данные о карте
       lua.open_libraries(sol::lib::base, sol::lib::string, sol::lib::table, sol::lib::utf8, sol::lib::math, sol::lib::bit32);
-      utils::setup_lua_generator_container(lua);
-      utils::setup_lua_random_engine(lua);
-      utils::setup_lua_noiser(lua);
-      utils::setup_lua_battle_map(lua);
-      utils::setup_lua_utility_battle_generator_functions(lua);
-      utils::setup_lua_constants(lua);
+      utils::battle_map_generation::setup_lua(lua);
       
       std::unordered_set<std::string> loaded_scripts;
       std::unordered_set<std::string> loaded_functions;
@@ -2334,7 +2288,7 @@ namespace devils_engine {
     void set_map_textures(battle::map* map, const std::vector<std::pair<render::image_t, render::image_t>> &textures) {
       ASSERT(textures.size() == map->tiles_count);
       
-      auto buffer = reinterpret_cast<render::battle_map_tile_data_t*>(map->tiles_buffer->ptr());
+      auto buffer = reinterpret_cast<render::battle_map_tile_data_t*>(map->get_tiles_buffer_memory());
       ASSERT(buffer != nullptr);
       for (size_t i = 0; i < map->tiles_count; ++i) {
         if (!render::is_image_valid(textures[i].first)) throw std::runtime_error("Tile " + std::to_string(i) + " has invalid texture");

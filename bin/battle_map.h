@@ -5,15 +5,11 @@
 #include <mutex>
 #include <array>
 #include <vector>
+#include <memory>
 #include "utils/utility.h"
 #include "utils/bit_field.h"
 #include "render/shared_battle_structures.h"
-
-namespace yavf {
-  class Buffer;
-  class Device;
-  class DescriptorSet;
-}
+#include "render/vulkan_declarations.h"
 
 // несколько координатных систем: квадратная + гексагональная
 // нужно ли для координатных систем делать отдельные типы координат?
@@ -47,6 +43,11 @@ namespace yavf {
 // нужно учесть нажатие клавиш чтобы происходило только на определенном слое
 
 namespace devils_engine {
+  namespace render {
+    struct container;
+    struct battle_map_data;
+  }
+  
   namespace battle {
     struct map {
       enum class orientation {
@@ -124,24 +125,7 @@ namespace devils_engine {
       uint32_t units_count;
       uint32_t textures_count;
       
-      yavf::Device* device;
-      
-      // нужен наверное какой нибудь юниформ буфер, буфер оффсетов это не юниформ буфер? вряд ли
-      // как проверять эти тайлы с фрустумом? (сфера = скорость, но тогда проверять каждый тайл?)
-      // в циве 5 на самой большой карте используется 128×80 тайлов (10240 всего), это хорошее число
-      // думаю что на этот предел и надо ориентироваться, другое дело что удастся ли уместить все отряды на такую карту
-      // или придется ее расширить? с этим проблем быть особенно не должно, но в базовой игре нужно постараться уместить
-      // мне нужно будет придумать чем я заполню пустые пространства вне карты + наверное как то ограничить камеру
-      // камера по идее легко ограничивается боксом мин макс
-      yavf::Buffer* tiles_uniform; // пригодится
-      yavf::Buffer* tiles_buffer;
-      yavf::Buffer* offsets_buffer;
-      yavf::Buffer* biomes_buffer;
-      // сколько выделять для юнитов
-      yavf::Buffer* units_buffer;
-      // тип нужно последовательно добавить все текстурки
-      yavf::Buffer* textures_buffer;
-      yavf::DescriptorSet* set;
+      std::unique_ptr<render::battle_map_data> data;
       
       // как при отрисовке определить положение тайла? у нас есть базовый тайл в (0,0)
       // по координатам тайла мы должны посчитать положение
@@ -149,7 +133,7 @@ namespace devils_engine {
       std::mutex mutex;
       
       struct create_info {
-        yavf::Device* device;
+        render::container* cont;
       };
       map(const create_info &info);
       ~map();
@@ -186,6 +170,12 @@ namespace devils_engine {
       void add_unit_textures(const std::vector<render::image_t> &array);
       
       glm::vec3 get_tile_pos(const uint32_t &tile_index) const;
+      
+      vk::DescriptorSet* get_descriptor_set() const;
+      vk::DescriptorSetLayout* get_descriptor_set_layout() const;
+      
+      // вообще надо бы просто структуру в отдельный хедер пеоенести или сделать друго способ копирования
+      void* get_tiles_buffer_memory() const;
     };
   }
 }

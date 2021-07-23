@@ -518,7 +518,8 @@ namespace devils_engine {
     // сейчас пока прикинем рамку
     auto settings = global::get<utils::settings>();
     auto window = global::get<render::window>();
-    const glm::uvec2 dim = glm::uvec2(window->surface.extent.width, window->surface.extent.height);
+    const auto [w,h] = window->framebuffer_size();
+    const glm::uvec2 dim = glm::uvec2(w, h);
     const glm::dvec2 cursor_pos = glm::dvec2(xpos / double(dim.x), ypos / double(dim.y));
     //const glm::dvec2 movement_border = glm::dvec2(20.0 / double(dim.x), 20.0 / double(dim.y));
     const glm::dvec2 movement_border = glm::dvec2(0.1, 0.1);
@@ -575,13 +576,13 @@ namespace devils_engine {
       }
 //     }
     
-    const auto size = window->surface.extent;
+    const auto [w,h] = window->framebuffer_size();
     // нужно поставить ограничения на выход за пределы окна, но при этом нужно сделать это настраиваемым
     // причем желательно сделать отрисовку курсора в самом рендере
     if (lock_mouse) {
       //ASSERT(false);
-      xpos = glm::max(glm::min(xpos, double(size.width)),  0.0);
-      ypos = glm::max(glm::min(ypos, double(size.height)), 0.0);
+      xpos = glm::max(glm::min(xpos, double(w)), 0.0);
+      ypos = glm::max(glm::min(ypos, double(h)), 0.0);
       glfwSetCursorPos(window->handle, xpos, ypos);
       //glfwSetWindowAttrib(window->handle, GLFW);
     }
@@ -731,10 +732,11 @@ namespace devils_engine {
 
     const glm::mat4 inv_proj = buffers->get_inv_proj();
     const glm::mat4 inv_view = buffers->get_inv_view();
-
-    float x = (2.0f * xpos) /  float(window->surface.extent.width) - 1.0f;
-    float y = 1.0f - (2.0f * ypos) / float(window->surface.extent.height); // тут по идее должно быть обратное значение
-    float z = 1.0f;
+    
+    const auto [w,h] = window->framebuffer_size();
+    const float x = (2.0f * xpos) /  float(w) - 1.0f;
+    const float y = 1.0f - (2.0f * ypos) / float(h); // тут по идее должно быть обратное значение
+    const float z = 1.0f;
 
     ASSERT(x >= -1.0f && x <= 1.0f);
     ASSERT(y >= -1.0f && y <= 1.0f);
@@ -749,6 +751,10 @@ namespace devils_engine {
     //const glm::vec4 final_dir = camera_dir;
     return dir;
   }
+  
+  std::tuple<glm::vec4, glm::vec4> get_up_right_vectors(const glm::vec4 &forw) {
+    
+  }
 
   uint32_t cast_mouse_ray(float &ray_dist) {
     auto window = global::get<render::window>();
@@ -758,10 +764,11 @@ namespace devils_engine {
     glfwGetCursorPos(window->handle, &xpos, &ypos);
     
     buffers->update_cursor_dir(glm::vec4(0.0f, 0.0f, 0.0f, 0.0f));
-
+    
+    const auto [w,h] = window->framebuffer_size();
     if (!window->flags.focused()) return UINT32_MAX;
-    if (xpos > window->surface.extent.width) return UINT32_MAX;
-    if (ypos > window->surface.extent.height) return UINT32_MAX;
+    if (xpos > w) return UINT32_MAX;
+    if (ypos > h) return UINT32_MAX;
     if (xpos < 0.0) return UINT32_MAX;
     if (ypos < 0.0) return UINT32_MAX;
 
@@ -774,21 +781,7 @@ namespace devils_engine {
       camera_pos,
       final_dir
     };
-
-//     const float hit = hit_sphere(glm::vec4(0.0f, 0.0f, 0.0f, 1.0f), 500.0f, intersect_sphere);
-//     if (hit < 0.0f) return UINT32_MAX;
-// 
-//     //PRINT_VAR("hit", hit)
-// 
-//     const glm::vec4 point_on_sphere = intersect_sphere.pos + intersect_sphere.dir * hit;
-//     const glm::vec4 new_dir = glm::normalize(-glm::vec4(glm::vec3(point_on_sphere), 0.0f));
-// 
-//     const utils::ray casting_ray{
-//       point_on_sphere - new_dir * 5.0f,
-//       new_dir
-//     };
-// 
-//     const uint32_t tile_index_local1 = global::get<core::map>()->cast_ray(casting_ray);
+    
     auto map_system = global::get<systems::map_t>();
     if (!map_system->is_init()) return UINT32_MAX;
     if (map_system->map->status() != core::map::status::valid) return UINT32_MAX;
@@ -815,12 +808,15 @@ namespace devils_engine {
 //     convert_int_unit_float c;
     //const uint32_t mask = uint32_t(1) << 31;
     const uint32_t mask = 0x1;
-    auto buffer = global::get<render::battle::tile_optimizer>()->get_selection_indices();
-    auto indirect = global::get<render::battle::tile_optimizer>()->get_indirect_buffer();
-    auto tiles_data = reinterpret_cast<render::battle::tile_optimizer::indirect_buffer_data*>(indirect->ptr());
+    auto opt = global::get<render::battle::tile_optimizer>();
+//     auto buffer = opt->get_selection_indices();
+//     auto indirect = opt->get_indirect_buffer();
+//     auto tiles_data = reinterpret_cast<render::battle::tile_optimizer::indirect_buffer_data*>(indirect->ptr());
     //const size_t selection_slots = render::battle::tile_optimizer::selection_slots;
-    const size_t selection_slots = tiles_data->sizes_data.z / 2;
-    auto array = reinterpret_cast<uint32_t*>(buffer->ptr());
+  
+    const size_t selection_slots = opt->get_selection_count();
+    auto array = opt->get_selection_data();
+    //auto array = reinterpret_cast<uint32_t*>(buffer->ptr());
     for (size_t i = 0; i < selection_slots; ++i) {
       const size_t final_index = i*2;
       const uint32_t val = array[final_index];
@@ -1295,11 +1291,18 @@ return function(command_name, target, value, compare_type, additional_data_type,
 end
 )C0L0N";
   
+#define INPUT_CASE(type) case core::target_type::type: {      \
+    d.input_array[current_index].first = std::string(id);     \
+    d.input_array[current_index].second.number_type = script::number_type::object; \
+    d.input_array[current_index].second.helper2 = static_cast<uint32_t>(core::type::s_type); \
+    break;                                                    \
+  }
+  
   void test_decision(core::character* c) {
     {
       sol::state lua;
       lua.open_libraries(sol::lib::base, sol::lib::math, sol::lib::package, sol::lib::string, sol::lib::table, sol::lib::utf8, sol::lib::coroutine);
-      utils::setup_lua_script_utils(lua);
+      utils::world_map_loading::setup_lua(lua);
       
       const auto ret = lua.script_file(global::root_directory() + "scripts/decision_thoughts.lua");
       if (!ret.valid()) {
@@ -1308,152 +1311,10 @@ end
         throw std::runtime_error("There is lua errors");
       }
       
+      // короче нужно написать инициализацию десижона + какой то способ обойти десижоны
       const sol::table t = ret;
       core::decision d;
-      d.id = t["id"];
-      d.name_id = t["name"];
-      d.description_id = t["description"];
-      const auto input_t = t["input"].get<sol::table>();
-      for (const auto &pair : input_t) {
-        if (pair.first.get_type() != sol::type::number) continue;
-        if (pair.second.get_type() != sol::type::number) continue;
-        
-        const uint32_t type = pair.second.as<uint32_t>();
-        switch (type) {
-          case core::target_type::character: {
-            const size_t current_index = d.input_count;
-            ++d.input_count;
-            d.input_array[current_index].command_type = script::command_type::invalid;
-            d.input_array[current_index].number_type = script::number_type::object;
-            d.input_array[current_index].helper2 = static_cast<uint32_t>(core::character::s_type);
-            break;
-          }
-          
-          case core::target_type::army: {
-            const size_t current_index = d.input_count;
-            ++d.input_count;
-            d.input_array[current_index].command_type = script::command_type::invalid;
-            d.input_array[current_index].number_type = script::number_type::object;
-            d.input_array[current_index].helper2 = static_cast<uint32_t>(core::army::s_type);
-            break;
-          }
-          
-          case core::target_type::city: {
-            const size_t current_index = d.input_count;
-            ++d.input_count;
-            d.input_array[current_index].command_type = script::command_type::invalid;
-            d.input_array[current_index].number_type = script::number_type::object;
-            d.input_array[current_index].helper2 = static_cast<uint32_t>(core::city::s_type);
-            break;
-          }
-          
-          case core::target_type::culture: {
-            const size_t current_index = d.input_count;
-            ++d.input_count;
-            d.input_array[current_index].command_type = script::command_type::invalid;
-            d.input_array[current_index].number_type = script::number_type::object;
-            d.input_array[current_index].helper2 = static_cast<uint32_t>(core::culture::s_type);
-            break;
-          }
-          
-          case core::target_type::dynasty: {
-  //           const size_t current_index = d.input_count;
-  //           ++d.input_count;
-  //           d.input_array[current_index].command_type = script::command_type::invalid;
-  //           d.input_array[current_index].number_type = script::number_type::object;
-  //           d.input_array[current_index].helper1 = static_cast<uint32_t>(core::dynasty::s_type);
-            assert(false);
-            break;
-          }
-          
-          case core::target_type::hero_troop: {
-            const size_t current_index = d.input_count;
-            ++d.input_count;
-            d.input_array[current_index].command_type = script::command_type::invalid;
-            d.input_array[current_index].number_type = script::number_type::object;
-            d.input_array[current_index].helper2 = static_cast<uint32_t>(core::hero_troop::s_type);
-            break;
-          }
-          
-          case core::target_type::province: {
-            const size_t current_index = d.input_count;
-            ++d.input_count;
-            d.input_array[current_index].command_type = script::command_type::invalid;
-            d.input_array[current_index].number_type = script::number_type::object;
-            d.input_array[current_index].helper2 = static_cast<uint32_t>(core::province::s_type);
-            break;
-          }
-          
-          case core::target_type::realm: {
-            const size_t current_index = d.input_count;
-            ++d.input_count;
-            d.input_array[current_index].command_type = script::command_type::invalid;
-            d.input_array[current_index].number_type = script::number_type::object;
-            d.input_array[current_index].helper2 = static_cast<uint32_t>(core::realm::s_type);
-            break;
-          }
-          
-          case core::target_type::religion: {
-            const size_t current_index = d.input_count;
-            ++d.input_count;
-            d.input_array[current_index].command_type = script::command_type::invalid;
-            d.input_array[current_index].number_type = script::number_type::object;
-            d.input_array[current_index].helper2 = static_cast<uint32_t>(core::religion::s_type);
-            break;
-          }
-          
-          case core::target_type::title: {
-            const size_t current_index = d.input_count;
-            ++d.input_count;
-            d.input_array[current_index].command_type = script::command_type::invalid;
-            d.input_array[current_index].number_type = script::number_type::object;
-            d.input_array[current_index].helper2 = static_cast<uint32_t>(core::titulus::s_type);
-            break;
-          }
-          
-          case core::target_type::boolean: {
-            const size_t current_index = d.input_count;
-            ++d.input_count;
-            d.input_array[current_index].command_type = script::command_type::invalid;
-            d.input_array[current_index].number_type = script::number_type::boolean;
-            break;
-          }
-          
-          case core::target_type::number: {
-            const size_t current_index = d.input_count;
-            ++d.input_count;
-            d.input_array[current_index].command_type = script::command_type::invalid;
-            d.input_array[current_index].number_type = script::number_type::number;
-            break;
-          }
-          
-          case core::target_type::string: {
-            const size_t current_index = d.input_count;
-            ++d.input_count;
-            d.input_array[current_index].command_type = script::command_type::invalid;
-            d.input_array[current_index].number_type = script::number_type::string;
-            break;
-          }
-        }
-      }
-
-      {
-        const auto potential_t = t["potential"].get<sol::table>();
-        const auto func = script::condition_block_init_functions[script::condition_block_function::condition];
-        func(d.input_array[0].helper2, potential_t, &d.potential);
-      }
-      
-      {
-        const auto condition_t = t["conditions"].get<sol::table>();
-        const auto func = script::condition_block_init_functions[script::condition_block_function::condition];
-        func(d.input_array[0].helper2, condition_t, &d.condition);
-      }
-      
-      {
-        const auto effect_t = t["effects"].get<sol::table>();
-        const auto func = script::action_block_init_functions[script::action_block_function::action];
-        func(d.input_array[0].helper2, effect_t, &d.effect);
-      }
+      core::parse_decision(&d, t);
       
       // теперь у нас есть десижон d что мы можем попробовать сделать?
       // собрать контекст и что нибудь попробовать запустить
@@ -1477,19 +1338,25 @@ end
       script::context ctx;
       sol::function f = lua_ret;
       ctx.itr_func = &f;
-      ctx.array_data.emplace_back(script::target{static_cast<uint32_t>(core::character::s_type), c});
-      d.iterate_conditions(ctx);
-      d.iterate_actions(ctx);
+      ctx.root = script::target_t{static_cast<uint32_t>(core::character::s_type), c, SIZE_MAX};
+      d.iterate_conditions(&ctx);
+      d.iterate_actions(&ctx);
       
       ctx.itr_func = nullptr;
-      const float before_money = c->stat(core::character_stats::money);
-      d.run(ctx);
-      const float after_money = c->stat(core::character_stats::money);
+      const float before_money = c->resources.get(core::character_resources::money);
+      d.run(&ctx);
+      const float after_money = c->resources.get(core::character_resources::money);
       
       PRINT_VAR("before_money", before_money)
       PRINT_VAR("after_money ", after_money)
     }
     
+    // я вроде бы более мнее сделал всю логическую чать скриптов (01.07.2021)
+    // теперь нужно бы все потестировать и добавить больше функции
+    // что нужно потестить: сложные переменные, lvalue, rvalue, взятие скоупа, что то нужно придумать с массивом
+    // проблема в том что нам каким то образом нужно получать несколько входных данных, некоторые из этих вещей
+    // удобно пихнуть в мапу, а некоторые удобно передать так (например 'потентиал' условия принимают несколько таргетов)
+    // (их проще всего их засунуть в массив? хотя зачем? в принципе эти условия должны работать также как и остальные)
     assert(false);
   }
   
@@ -1815,7 +1682,8 @@ end
 
   void window_resize_callback(GLFWwindow*, int w, int h) {
     auto system = global::get<systems::core_t>();
-    global::get<render::window>()->recreate(w, h);
+//     global::get<render::window>()->recreate(w, h);
+    global::get<render::window>()->resize();
     //global::get<GBufferStage>()->recreate(w, h);
     //global::get<render::stage_container>()->recreate(w, h);
     system->interface_container->free_fonts();

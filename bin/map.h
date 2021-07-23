@@ -6,22 +6,19 @@
 #include <vector>
 #include <atomic>
 #include <mutex>
+#include <memory>
+
 #include "utils/utility.h"
 #include "render/shared_structures.h"
 #include "utils/ray.h"
 #include "utils/frustum.h"
+#include "render/vulkan_declarations.h"
 
 // все данные карты должны хранится здесь
 // точки, гексы, треугольники, биомы, провинции, религии, культуры (это из основных)
 // + несколько буферов неосновных данных (возможно пригодятся разные данные полученные при генерации)
 // здесь должны быть только данные + несколько алгоритмов (каст луча, поиск и проч)
 // эти данные мы должны использовать при отрисовки карты
-
-namespace yavf {
-  class Buffer;
-  class Device;
-  class DescriptorSet;
-}
 
 constexpr size_t power4(const uint32_t &pow) {
   return size_t(1) << pow*2;
@@ -34,6 +31,11 @@ constexpr size_t div4(const size_t &num) {
 namespace devils_engine {
   namespace map {
     struct tile;
+  }
+  
+  namespace render {
+    struct container;
+    struct map_data;
   }
   
   namespace core {
@@ -49,6 +51,7 @@ namespace devils_engine {
       // уровень детализации карты лучше задавать через константы
       static const uint32_t detail_level = 7;
       static const uint32_t accel_struct_detail_level = 4;
+      static const size_t maximum_army_count = 10000;
       constexpr static const float world_radius = WORLD_RADIUS_CONSTANT;
       constexpr static const float maximum_world_elevation = 15.0f; // кажется этого должно хватить для 
       
@@ -118,22 +121,9 @@ namespace devils_engine {
       
       // почти все мы тут можем сгенерировать
       // кроме высот и матрицы поворота
-      yavf::Device* device;
-      yavf::Buffer* points;
-      yavf::Buffer* tiles;
-      yavf::Buffer* accel_triangles;
-      yavf::Buffer* tile_indices;
-      // биомы: это текстура + цвет, мы это дело можем записать в данные тайла
-      // + какие то объекты на карте, что с ними? нужно придумать какой то способ нарисовать спрайт так чтобы он выглядел максимально 3дшно
-      // у нас есть жесткие ограничения по тому как мы видим объекты на карте, мы их видим в основном сверху и чуть с юга
-      yavf::Buffer* biomes;
-      yavf::Buffer* structures;
-      yavf::Buffer* tile_object_indices; // тут по идее мы будем хранить кучу всяких индексов
-      yavf::Buffer* army_data_buffer;
-      yavf::Buffer* provinces; // скорее всего не пригодится (и далее)
-      yavf::Buffer* faiths;
-      yavf::Buffer* cultures;
-      yavf::DescriptorSet* tiles_set;
+      render::container* render_container;
+      std::unique_ptr<render::map_data> data;
+      std::vector<glm::vec4> points;
       std::vector<triangle> triangles;
       std::vector<std::vector<object>> triangles_data;
       float max_triangle_size; // 23.8457f
@@ -146,7 +136,7 @@ namespace devils_engine {
       mutable std::mutex mutex;
       
       struct create_info {
-        yavf::Device* device;
+        render::container* render_container;
       };
       map(const create_info &info);
       ~map();
@@ -178,6 +168,7 @@ namespace devils_engine {
       void set_tile_data(const devils_engine::map::tile* tile, const uint32_t &index);
       void set_point_data(const glm::vec3 &point, const uint32_t &index);
       void set_tile_indices(const uint32_t &triangle_index, const glm::uvec3 &points, const std::vector<uint32_t> &indices, const uint32_t &offset, const uint32_t &count, const bool has_pentagon);
+      void update_set();
       void flush_data();
       void flush_points();
       void flush_structures();
@@ -208,6 +199,16 @@ namespace devils_engine {
       void set_tile_biome(const seasons* s);
       
       void set_tile_structure_index(const uint32_t &tile_index, const uint32_t &struct_index);
+      
+      void resize_structures_buffer(const size_t &size);
+      
+      void copy_main_map_data(
+        const std::vector<render::light_map_tile_t> &tiles,
+        const std::vector<glm::vec4> &points,
+        const std::vector<render::packed_fast_triangle_t> &fast_triangles,
+        const std::vector<uint32_t> &tile_indices,
+        const std::vector<triangle> &triangles
+      );
       
       enum status status() const;
       void set_status(const enum status s);

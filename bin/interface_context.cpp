@@ -1,7 +1,6 @@
 #include "interface_context.h"
 
 #include "render/window.h"
-// #include "Helper.h"
 #include "utils/globals.h"
 #include "render/container.h"
 #include "render/image_container.h"
@@ -17,15 +16,13 @@
 
 #define NK_IMPLEMENTATION
 #include "render/nuklear_header.h"
+
+#include "render/vulkan_hpp_header.h"
+
 #include <GLFW/glfw3.h>
 
 struct fonts_settings {
   const char* name;
-  float size;
-};
-
-struct fonts_settings2 {
-  std::string name;
   float size;
 };
 
@@ -102,7 +99,7 @@ namespace devils_engine {
   }
   
   namespace interface {
-    void load_font_settings(const nlohmann::json &json, std::vector<fonts_settings2> &fonts) {
+    void load_font_settings(const nlohmann::json &json, std::vector<context::fonts_settings2> &fonts) {
       for (auto itr = json.begin(); itr != json.end(); ++itr) {
         if (itr.value().is_object()) {
           size_t index = fonts::count;
@@ -147,7 +144,7 @@ namespace devils_engine {
       file.read(mem.data(), length);
     }
     
-    context::context(yavf::Device* device, render::window* window, render::image_container* container) : device(device), container(container) {
+    context::context(render::container* render_container, render::window* window, render::image_container* container) : render_container(render_container), container(container), fonts_data(fonts::count) {
       nlohmann::json j;
       {
         std::fstream file(global::root_directory()+"fonts/fonts.json");
@@ -155,15 +152,39 @@ namespace devils_engine {
         file >> j;
       }
       
-//       int window_width, window_height;
-//       glfwGetWindowSize(window->handle(), &window_width, &window_height);
-      uint32_t window_height = window->surface.extent.height;
-      static const float data_window_height = 720.0f;
+      const auto [w, window_height] = window->size();
+//       static const float data_window_height = 720.0f;
       
       memset(fonts, 0, sizeof(fonts[0]) * fonts::count);
-      
-      std::vector<fonts_settings2> fonts_data(fonts::count);
       load_font_settings(j, fonts_data);
+      
+      // UINT32_MAX - дает поянть что мы в первый раз зашли в функцию
+      remake_font_atlas(UINT32_MAX, window_height);
+      nk_init_default(&ctx, &fonts[fonts::technical]->handle);
+
+      ctx.clip.copy = clipbardCopy;
+      ctx.clip.paste = clipbardPaste;
+      ctx.clip.userdata = nk_handle_ptr(window);
+    }
+    
+    context::~context() {
+      container->destroy_pool(0);
+      nk_font_atlas_clear(&atlas);
+      nk_buffer_free(&cmds);
+      nk_free(&ctx);
+    }
+    
+    void context::remake_font_atlas(const uint32_t &window_width, const uint32_t &window_height) {
+      if (window_width != UINT32_MAX) nk_font_atlas_clear(&atlas);
+      //device->destroy(view->image());
+      container->destroy_pool(0);
+      memset(fonts, 0, sizeof(fonts[0]) * fonts::count);
+      //null.texture = nk_handle_image(render::image_t{GPU_UINT_MAX});
+//       null.texture = image_data_to_nk_handle({GPU_UINT_MAX, GPU_UINT_MAX});
+//       null.uv = {0.0f, 0.0f};
+      
+      // нужно определиться к каким размерам экрана подгонять размер шрифта
+      static const float data_window_height = 720.0f;
       
       //null.texture = nk_handle_image(render::image_t{GPU_UINT_MAX});
       null.texture = image_data_to_nk_handle({GPU_UINT_MAX, GPU_UINT_MAX});
@@ -186,12 +207,6 @@ namespace devils_engine {
             // размер шрифта должен определяться используя dpi экрана
             // а с размером шрифта должны меняться некоторые элементы интерфейса (или все?)
             const float size = fonts_data[i].size * (float(window_height) / data_window_height);
-//             struct nk_font_config config = nk_font_config(size);
-//             config.oversample_h = 1;
-//             config.oversample_v = 1;
-//             config.range = &unicode_glyph_ranges[0];
-// //             config.range = nk_font_cyrillic_glyph_ranges();
-//             fonts[i] = nk_font_atlas_add_from_memory(&atlas, font_mem, font_size, size, &config);
             fonts[i] = nk_font_atlas_add_from_memory(&atlas, font_mem, font_size, size, nullptr);
           } else {
 //             fonts[i] = fonts[fonts::technical];
@@ -202,219 +217,73 @@ namespace devils_engine {
         image = nk_font_atlas_bake(&atlas, &w, &h, NK_FONT_ATLAS_RGBA32);
 //         std::cout << "backed atlas width " << w << " height " << h << "\n";
         
-        yavf::Image* img = nullptr;
-        //yavf::ImageView* view = nullptr;
         {
-          auto staging = device->create(yavf::ImageCreateInfo::texture2DStaging({static_cast<uint32_t>(w), static_cast<uint32_t>(h)}), VMA_MEMORY_USAGE_CPU_ONLY);
-
+          const auto device = render_container->vulkan->device;
+          const auto physical_device = render_container->vulkan->physical_device;
+          const auto transfer_command_pool = render_container->vulkan->transfer_command_pool;
+          const auto queue = render_container->vulkan->graphics;
+          const auto fence = render_container->vulkan->transfer_fence;
+          const auto st_info = render::texture2D_staging({uint32_t(w), uint32_t(h)});
+          const auto [staging, staging_mem] = render::create_image_unique(device, physical_device, st_info, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
+          auto ptr = device.mapMemory(staging_mem.get(), 0, VK_WHOLE_SIZE);
           const size_t imageSize = w * h * 4;
-          memcpy(staging->ptr(), image, imageSize);
+          memcpy(ptr, image, imageSize);
+          device.unmapMemory(staging_mem.get());
           
           container->create_pool(0, {static_cast<uint32_t>(w), static_cast<uint32_t>(h)}, 1, 1);
           const auto cont_img = container->get_image(0);
-          font_atlas_image = render::create_image(render::get_image_index(cont_img), render::get_image_layer(cont_img), 2);
+          font_atlas_image = render::create_image(render::get_image_index(cont_img), render::get_image_layer(cont_img), NUKLEAR_SAMPLER_ID);
           auto pool = container->get_pool(0);
           //pool->image
 
 //           img = device->create(yavf::ImageCreateInfo::texture2D({static_cast<uint32_t>(w), static_cast<uint32_t>(h)},
 //                                                                 VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT),
 //                               VMA_MEMORY_USAGE_GPU_ONLY);
-          img = pool->image;
+          auto img = vk::Image(pool->image);
           
-          const VkImageCopy c{
-            {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
+          const vk::ImageSubresourceRange range_staging(vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1);
+          const vk::ImageSubresourceRange range(vk::ImageAspectFlagBits::eColor, 0, 1, render::get_image_layer(cont_img), 1);
+          
+          const vk::ImageCopy c{
+            {vk::ImageAspectFlagBits::eColor, 0, 0, 1},
             {0,0,0},
-            {VK_IMAGE_ASPECT_COLOR_BIT, 0, render::get_image_layer(cont_img), 1},
+            {vk::ImageAspectFlagBits::eColor, 0, render::get_image_layer(cont_img), 1},
             {0,0,0},
             {uint32_t(w),uint32_t(h),1}
           };
-
-          yavf::TransferTask* task = device->allocateTransferTask();
-
-          task->begin();
-          task->setBarrier(staging, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
-          task->setBarrier(img, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-          task->copy(staging, img, c);
-          task->setBarrier(img, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-          task->end();
-
-          task->start();
-          task->wait();
-
-          device->deallocate(task);
-          device->destroy(staging);
-
-          //view = img->createView(VK_IMAGE_VIEW_TYPE_2D, {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1});
-
-          // тут нужен еще сэмплер и дескриптор
-//           yavf::Sampler sampler;
-//           {
-//             auto container = global::get<render::container>();
-//             int enable = VK_FALSE;
-//             float level = 1.0f;
-//             if (container->is_properties_presented(render::container::physical_device_sampler_anisotropy)) {
-//               enable = VK_TRUE;
-//               level = 16.0f;
-//             }
-//             
-//             yavf::SamplerMaker sm(device);
-// 
-//             sampler = sm.addressMode(VK_SAMPLER_ADDRESS_MODE_REPEAT, VK_SAMPLER_ADDRESS_MODE_REPEAT)
-//                         .anisotropy(enable, level)
-//                         .borderColor(VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK)
-//                         .compareOp(VK_FALSE, VK_COMPARE_OP_GREATER)
-//                         .filter(VK_FILTER_NEAREST, VK_FILTER_NEAREST)
-//                         .lod(0.0f, 1.0f)
-//                         .mipmapMode(VK_SAMPLER_MIPMAP_MODE_NEAREST)
-//                         .unnormalizedCoordinates(VK_FALSE)
-//                         .create("default_nuklear_sampler");
-// 
-//     //         img->setSampler(sampler);
-//           }
-
-//           {
-//             yavf::DescriptorPool pool = device->descriptorPool(DEFAULT_DESCRIPTOR_POOL_NAME);
-//             yavf::DescriptorSetLayout sampled_image_layout = device->setLayout(SAMPLED_IMAGE_LAYOUT_NAME);
-//             {
-//               yavf::DescriptorLayoutMaker dlm(device);
-// 
-//               if (sampled_image_layout == VK_NULL_HANDLE) {
-//                 sampled_image_layout = dlm.binding(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT).create(SAMPLED_IMAGE_LAYOUT_NAME);
-//               }
-//             }
-// 
-//             yavf::DescriptorMaker dm(device);
-// 
-//             auto d = dm.layout(sampled_image_layout).create(pool)[0];
-// 
-//             const size_t i = d->add({sampler, view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 0, 0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER});
-//             view->setDescriptor(d, i);
-//             atlas_descriptor = d;
-//             descriptor_index = i;
-//           }
-        }
-
-        //nk_font_atlas_end(&atlas, nk_handle_ptr(view), &null);
-        //nk_font_atlas_end(&atlas, nk_handle_image(font_atlas_image), &null);
-        nk_font_atlas_end(&atlas, image_data_to_nk_handle({IMAGE_TYPE_DEFAULT, font_atlas_image.container}), &null);
-      }
-
-      nk_init_default(&ctx, &fonts[fonts::technical]->handle);
-
-      ctx.clip.copy = clipbardCopy;
-      ctx.clip.paste = clipbardPaste;
-      ctx.clip.userdata = nk_handle_ptr(window);
-    }
-    
-    context::~context() {
-      nk_font_atlas_clear(&atlas);
-      nk_buffer_free(&cmds);
-      nk_free(&ctx);
-    }
-    
-    void context::remake_font_atlas(const uint32_t &window_width, const uint32_t &window_height) {
-      nk_font_atlas_clear(&atlas);
-      //device->destroy(view->image());
-      container->destroy_pool(0);
-      memset(fonts, 0, sizeof(fonts[0]) * fonts::count);
-      //null.texture = nk_handle_image(render::image_t{GPU_UINT_MAX});
-      null.texture = image_data_to_nk_handle({GPU_UINT_MAX, GPU_UINT_MAX});
-      
-      // нужно определиться к каким размерам экрана подгонять размер шрифта
-      static const float data_window_height = 720.0f;
-      
-      nlohmann::json j;
-      {
-        std::fstream file(global::root_directory()+"fonts/fonts.json");
-        ASSERT(file);
-        file >> j;
-      }
-      
-      std::vector<fonts_settings2> fonts_data(fonts::count);
-      load_font_settings(j, fonts_data);
-      
-      {
-        const void *image;
-        int w, h;
-        nk_font_atlas_init_default(&atlas);
-        nk_font_atlas_begin(&atlas);
-        
-        std::vector<char> memory[fonts::count];
-        for (size_t i = 0; i < fonts::count; ++i) {
-          if (!fonts_data[i].name.empty()) {
-            load_font(global::root_directory()+"fonts/"+ fonts_data[i].name, memory[i]);
-            void* font_mem = memory[i].data();
-            const size_t font_size = memory[i].size();
-            // размер шрифта должен определяться используя dpi экрана
-            // а с размером шрифта должны меняться некоторые элементы интерфейса (или все?)
-            const float size = fonts_data[i].size * (float(window_height) / data_window_height);
-//             struct nk_font_config config = nk_font_config(size);
-//             config.oversample_h = 1;
-//             config.oversample_v = 1;
-//             config.range = &unicode_glyph_ranges[0];
-// //             config.range = nk_font_cyrillic_glyph_ranges();
-//             fonts[i] = nk_font_atlas_add_from_memory(&atlas, font_mem, font_size, size, &config);
-            fonts[i] = nk_font_atlas_add_from_memory(&atlas, font_mem, font_size, size, nullptr);
-          } else {
-//             fonts[i] = fonts[fonts::technical];
-//             ASSERT(fonts[i] != nullptr);
+          
+          const vk::CommandBufferAllocateInfo alloc_info(transfer_command_pool, vk::CommandBufferLevel::ePrimary, 1);
+          auto task = device.allocateCommandBuffers(alloc_info)[0];
+          
+          const vk::CommandBufferBeginInfo binfo(vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
+          task.begin(binfo);
+          {
+            const auto [b_info, srcStage, dstStage] = render::make_image_memory_barrier(staging.get(), vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferSrcOptimal, range_staging);
+            task.pipelineBarrier(srcStage, dstStage, vk::DependencyFlagBits::eByRegion, nullptr, nullptr, b_info);
           }
-        }
-        if (fonts[fonts::technical] == nullptr) throw std::runtime_error("System font must exist");
-        image = nk_font_atlas_bake(&atlas, &w, &h, NK_FONT_ATLAS_RGBA32);
-//         std::cout << "backed atlas width " << w << " height " << h << "\n";
-        
-        yavf::Image* img = nullptr;
-        //yavf::ImageView* view = nullptr;
-        {
-          auto staging = device->create(yavf::ImageCreateInfo::texture2DStaging({static_cast<uint32_t>(w), static_cast<uint32_t>(h)}), VMA_MEMORY_USAGE_CPU_ONLY);
-
-          const size_t imageSize = w * h * 4;
-          memcpy(staging->ptr(), image, imageSize);
           
-          container->create_pool(0, {static_cast<uint32_t>(w), static_cast<uint32_t>(h)}, 1, 1);
-          const auto cont_img = container->get_image(0);
-          font_atlas_image = render::create_image(render::get_image_index(cont_img), render::get_image_layer(cont_img), 2);
-          auto pool = container->get_pool(0);
-
-//           img = device->create(yavf::ImageCreateInfo::texture2D({static_cast<uint32_t>(w), static_cast<uint32_t>(h)},
-//                                                                 VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT),
-//                               VMA_MEMORY_USAGE_GPU_ONLY);
-          img = pool->image;
+          {
+            const auto [b_info, srcStage, dstStage] = render::make_image_memory_barrier(img, vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal, range);
+            task.pipelineBarrier(srcStage, dstStage, vk::DependencyFlagBits::eByRegion, nullptr, nullptr, b_info);
+          }
           
-          const VkImageCopy c{
-            {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
-            {0,0,0},
-            {VK_IMAGE_ASPECT_COLOR_BIT, 0, render::get_image_layer(cont_img), 1},
-            {0,0,0},
-            {uint32_t(w),uint32_t(h),1}
-          };
-
-          yavf::TransferTask* task = device->allocateTransferTask();
-
-          task->begin();
-          task->setBarrier(staging, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
-          task->setBarrier(img, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-          task->copy(staging, img, c);
-          task->setBarrier(img, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-          task->end();
-
-          task->start();
-          task->wait();
-
-          device->deallocate(task);
-          device->destroy(staging);
-
-          //view = img->createView(VK_IMAGE_VIEW_TYPE_2D, {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1});
-
-          // тут нужен еще сэмплер и дескриптор
-//           yavf::Sampler sampler = device->sampler("default_nuklear_sampler");
-
-//           { 
-//             atlas_descriptor->at(descriptor_index) = {sampler, view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 0, 0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER};
-//             view->setDescriptor(atlas_descriptor, descriptor_index);
-//             atlas_descriptor->update(descriptor_index);
-//           }
+          task.copyImage(staging.get(), vk::ImageLayout::eTransferSrcOptimal, img, vk::ImageLayout::eTransferDstOptimal, c);
+          
+          {
+            const auto [b_info, srcStage, dstStage] = render::make_image_memory_barrier(img, vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eShaderReadOnlyOptimal, range);
+            task.pipelineBarrier(srcStage, dstStage, vk::DependencyFlagBits::eByRegion, nullptr, nullptr, b_info);
+          }
+          
+          task.end();
+          
+          const vk::SubmitInfo submit(nullptr, nullptr, task, nullptr);
+          queue.submit(submit, fence);
+          
+          const auto res = device.waitForFences(fence, VK_TRUE, SIZE_MAX);
+          if (res != vk::Result::eSuccess) throw std::runtime_error("waitForFences failed");
+          
+          device.freeCommandBuffers(transfer_command_pool, task);
+          device.resetFences(fence);
         }
 
         //nk_font_atlas_end(&atlas, nk_handle_ptr(view), &null);
@@ -422,9 +291,8 @@ namespace devils_engine {
         nk_font_atlas_end(&atlas, image_data_to_nk_handle({IMAGE_TYPE_DEFAULT, font_atlas_image.container}), &null);
       }
       
-      nk_style_set_font(&ctx, &fonts[fonts::technical]->handle);
-      
-      (void)window_width;
+      // window_width == UINT32_MAX - означает что создаем в первый раз
+      if (window_width != UINT32_MAX) nk_style_set_font(&ctx, &fonts[fonts::technical]->handle);      
     }
     
     bool is_interface_hovered(nk_context* ctx, const std::string_view &except) {

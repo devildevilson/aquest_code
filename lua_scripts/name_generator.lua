@@ -177,7 +177,7 @@ function template_string.set_pattern(self, pattern)
   local stack = {}
 
   local function submit_to_stack(p)
-    while is_reverse(stack[#stack]) || is_capitalize(stack[#stack]) do
+    while is_reverse(stack[#stack]) or is_capitalize(stack[#stack]) do
       local tmp = stack[#stack]
       stack[#stack] = nil
       tmp:add(p)
@@ -189,7 +189,7 @@ function template_string.set_pattern(self, pattern)
 
   local function add_word(word)
     local new_word = ""
-    local p = create_producer(function (self) return word end)
+    local p = create_producer(function (_) return word end)
     submit_to_stack(p)
 
     return new_word
@@ -197,7 +197,7 @@ function template_string.set_pattern(self, pattern)
 
   local function add_table(table_literal)
     assert(template_string.string_table[table_literal] ~= nil)
-    local p = create_producer(function (self)
+    local p = create_producer(function (_)
       local random_engine = template_string.random_engine
       assert(random_engine ~= nil)
       local table = template_string.string_table[table_literal]
@@ -211,7 +211,9 @@ function template_string.set_pattern(self, pattern)
   local word = ""
   stack[#stack+1] = create_producer(sequence)
   assert(is_sequence(stack[#stack]))
-  for i = 1, #str do
+  local str = pattern
+  local i = 1
+  while i <= #str do
     local c = str:sub(i,i)
 
     if c == '(' then
@@ -243,7 +245,7 @@ function template_string.set_pattern(self, pattern)
       assert(#str >= next)
       local table_literal = str:sub(next,next)
       add_table(table_literal)
-      i=next
+      i = next
     elseif c == '~' then -- обратный порядок
       if word ~= "" then word = add_word(word) end
       local p = create_producer(reverse)
@@ -253,6 +255,7 @@ function template_string.set_pattern(self, pattern)
       local p = create_producer(capitalize)
       stack[#stack+1] = p
     else word = word .. c end
+    i = i + 1
   end
 
   assert(#stack == 1)

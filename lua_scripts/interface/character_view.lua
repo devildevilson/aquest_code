@@ -40,9 +40,10 @@ local function character_panel(ctx, character, window_bounds)
   local char_image_offset = 10
 
   local hovering_title = nil
-  local faction = character.faction
+  local realm = character.realm
+  assert(realm ~= nil)
   local titles_count = 0
-  core.each_title(faction, function(_) titles_count = titles_count + 1 end)
+  core.each_title(realm, function(_) titles_count = titles_count + 1 end)
 
   -- local main_title = faction.main_title
   -- if main_title.type == core.title_types.king then
@@ -87,7 +88,7 @@ local function character_panel(ctx, character, window_bounds)
         nk.layout_space_push(ctx, {0, text_start, max_str_width, font_height})
         nk.label(ctx, title_str, nk.TEXT_ALIGN_LEFT)
         local title_counter = 0
-        core.each_title(faction, function(title)
+        core.each_title(realm, function(title)
           nk.layout_space_push(ctx, {max_str_width+title_counter*title_offset, 0, title_size, title_size})
           local title_bounds = nk.widget_bounds(ctx)
           interface.heraldy_image(ctx, title)

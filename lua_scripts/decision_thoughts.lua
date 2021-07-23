@@ -77,12 +77,33 @@
 --   print("Current command " .. command_name .. " ")
 -- end
 
+-- local vassal_cond = {
+--   is_male = true,
+--   is_married = false,
+--   money = script_utils.less(100)
+-- }
+
 -- небольшой тест
 return {
   id = "test_decision123",
   name = "decisions.names.test_decision123",
-  description = "decisions.descriptions.test_decision123",
-  input = { script_utils.target.character }, -- , script_utils.target.number
+  --description = "decisions.descriptions.test_decision123",
+  description = { -- ожидается строка
+    {
+      -- desc или str?
+      string = "decisions.descriptions.test_decision123",
+      -- условия
+    },
+    {
+      string = "decisions.descriptions.test_decision456",
+      -- условия
+    }
+  },
+  -- не понятно пока что как и что задавать для эвента
+  -- так теперь мы задаем конкретные имена для входных данных
+  -- root - это специальное имя, также его можно указать просто без имени
+  -- все остальные входные вещи должны задаваться по имени
+  input = { root = script_utils.target.character }, -- , attacker = script_utils.target.realm
   type = script_utils.decision.minor,
   potential = {
     is_player = true,
@@ -95,12 +116,44 @@ return {
     money = script_utils.less(100),
     strength = script_utils.less(10),
     -- если есть хотя бы один вассал по заданным условиям
-    --has_vassal = {},
+    -- has_vassal = vassal_cond,
   },
   effects = {
     --add_money = script_utils.context(2)
     add_money = 20,
-    --random_vassal = {} -- случайный один вассал, можно задать условия что и выше
+    -- lvalue, берем, условно, у атакующего государства лидера, а у него дипломатию
+    -- как указать тип сравнения? можно в начале строки указать тип
+    add_diplomacy = "less:context:attacker.leader.diplomacy",
+    add_military = {
+      value = 20,
+      factor = 2,
+      condition = { -- если в таком виде не выполняется, то что? ноль?
+        -- проверяем получим ли мы эту прибавку
+      }
+    },
+    -- если все условия проходят, то расчитывается как (5 * 1 + 11) * 2 + 22
+    add_intellect = {
+      value = 5, -- здесь также можно указать lvalue
+      {
+        factor = 1,
+        value = 11,
+
+        -- таблицу condition здесь указывать необязательно
+        -- все что не factor и не value расценивается как условие
+      },
+      {
+        factor = 2,
+        value = 22,
+        condition = { -- если в таком виде не выполняется, то что? ноль?
+          -- проверяем получим ли мы эту прибавку
+        }
+      }
+    },
+    -- случайный один вассал, можно задать условия что и выше
+    -- random_vassal = {
+    --   condition = vassal_cond,
+    --   add_money = 20
+    -- }
     -- эту функцию, как и другие, можно будет поставить лишь раз в блок скрипта,
     -- нужны ли мне повторяющиеся блоки? для блоков AND, OR, NAND и проч нужны
     --[script_utils.context("character")] = {}

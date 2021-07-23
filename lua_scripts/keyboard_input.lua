@@ -12,9 +12,9 @@ local function key_input(game_ctx, _) -- timer
 
       if event == go_to_capital then
         local p = game_ctx.player_character
-        local f = p.faction
+        local r = p.realm
         local capital = nil
-        core.each_title(f, function(title)
+        core.each_title(r, function(title)
           --print(title.id .. " " .. title.type .. " " .. core.titulus_type.city)
           if title.type == core.titulus_type.city then capital = title:get_city(); return true end
           return false

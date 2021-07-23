@@ -38,6 +38,11 @@ return {
       oct = "october",
       nov = "november",
       dec = "december"
+    },
+    cultures = {
+      english = {
+        names = { "John", "Elliot" } -- вот это нужно еще как то генерировать
+      }
     }
   }
 }

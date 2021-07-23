@@ -2,7 +2,6 @@
 
 #include "stage.h"
 #include "target.h"
-#include "context.h"
 
 namespace devils_engine {
   namespace render {
@@ -23,7 +22,7 @@ namespace devils_engine {
       }
     }
     
-    void stage_container::proccess(devils_engine::render::context* ctx) {
+    void stage_container::proccess(devils_engine::render::container* ctx) {
       for (auto stage : stages) {
         stage->proccess(ctx);
       }

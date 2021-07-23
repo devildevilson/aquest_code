@@ -5,6 +5,10 @@
 #include "targets.h"
 #include "utils/utility.h"
 
+// #include "vulkan_hpp_header.h"
+// #include "makers.h"
+#include <stdexcept>
+
 // #define GLFW_INCLUDE_NONE
 #define GLFW_INCLUDE_VULKAN
 #include "GLFW/glfw3.h"
@@ -22,48 +26,6 @@ enum FLAGS_CONSTS {
 
 namespace devils_engine {
   namespace render {
-    VkResult createSwapChain(const struct window::surface &surfaceData, yavf::Device* device, struct window::swapchain &swapchainData) {
-      uint32_t imageCount = surfaceData.capabilities.minImageCount + 1;
-      if (surfaceData.capabilities.maxImageCount > 0 && imageCount > surfaceData.capabilities.maxImageCount) {
-        imageCount = surfaceData.capabilities.maxImageCount;
-      }
-
-      yavf::Swapchain old = swapchainData.handle;
-
-//       if (old != VK_NULL_HANDLE) {
-//         for (auto img : swapchainData.images) {
-//           if (img->view() == nullptr) continue;
-//           device->destroy(img->view());
-//         }
-//       }
-
-      const VkSwapchainCreateInfoKHR info{
-        VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
-        nullptr,
-        0,
-        surfaceData.handle,
-        imageCount,
-        surfaceData.format.format,
-        surfaceData.format.colorSpace,
-        surfaceData.extent,
-        1,
-        VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
-        VK_SHARING_MODE_EXCLUSIVE,
-        0,
-        nullptr,
-        surfaceData.capabilities.currentTransform,
-        VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
-        surfaceData.presentMode,
-        VK_TRUE,
-        old
-      };
-
-      swapchainData.handle = device->recreate(info, "window_swapchain");
-      swapchainData.images = device->getSwapchainImages(swapchainData.handle);
-
-      return VK_SUCCESS;
-    }
-
     window::flags::flags() : container(0) {}
     bool window::flags::vsync() const {
       return (container & FLAG_VSYNC) == FLAG_VSYNC;
@@ -105,9 +67,9 @@ namespace devils_engine {
       container = value ? container | FLAG_FULLSCREEN : container & (~FLAG_FULLSCREEN);
     }
 
-    window::surface::surface() : handle(VK_NULL_HANDLE), presentMode(VK_PRESENT_MODE_MAX_ENUM_KHR), offset{0, 0}, extent{0, 0} {}
+    //window::surface::surface() : handle(VK_NULL_HANDLE), presentMode(VK_PRESENT_MODE_MAX_ENUM_KHR), offset{0, 0}, extent{0, 0} {}
 
-    window::window(const create_info &info) : inst(info.inst), device(nullptr), monitor(nullptr), handle(nullptr) {
+    window::window(const create_info &info) : monitor(nullptr), handle(nullptr), recration_target(info.recration_target) {
       // const bool fullscreen = Global::get<utils::settings>()->graphics.fullscreen;
       // uint32_t width = Global::get<utils::settings>()->graphics.width;
       // uint32_t height = Global::get<utils::settings>()->graphics.height;
@@ -153,337 +115,25 @@ namespace devils_engine {
         handle = glfwCreateWindow(width, height, APP_NAME, nullptr, nullptr);
       }
 
-      yavf::vkCheckError("glfwCreateWindowSurface", nullptr,
-      glfwCreateWindowSurface(inst->handle(), handle, nullptr, &surface.handle));
-
       flags.set_fullscreen(fullscreen);
       flags.set_focused(false);
     }
 
     window::~window() {
-      for (size_t i = 0; i < frames.size(); ++i) {
-        device->destroy(frames[i].image_available);
-        device->destroy(frames[i].finish_rendering);
-      }
-
-      for (auto &buffer : swapchain.buffers) {
-        device->destroy(buffer);
-      }
-
-      for (auto &depth : swapchain.depths) {
-        device->destroy(depth);
-      }
-
-      device->destroy(render_pass);
-      device->destroy(swapchain.handle);
-      vkDestroySurfaceKHR(inst->handle(), surface.handle, nullptr);
       glfwDestroyWindow(handle);
     }
 
-    void window::create_swapchain(yavf::Device* device) {
-      this->device = device;
-
-      for (size_t i = 0; i < device->getFamiliesCount(); ++i) {
-        VkBool32 present;
-        vkGetPhysicalDeviceSurfaceSupportKHR(device->physicalHandle(), i, surface.handle, &present);
-
-        if (present == VK_TRUE) {
-          present_family = i;
-          break;
-        }
-      }
-
-      vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device->physicalHandle(), surface.handle, &surface.capabilities);
-
-      // возможно нужно проверить на наличие hdr вывода
-      uint32_t count = 0;
-      vkGetPhysicalDeviceSurfaceFormatsKHR(device->physicalHandle(), surface.handle, &count, nullptr);
-      std::vector<VkSurfaceFormatKHR> formats(count);
-      vkGetPhysicalDeviceSurfaceFormatsKHR(device->physicalHandle(), surface.handle, &count, formats.data());
-
-    //   std::cout << "Window formats count " << formats.size() << "\n";
-    //   for (uint32_t i = 0; i < formats.size(); ++i) {
-    //     std::cout << "Window format " << i << " : " << (formats[i].format) << "\n";
-    //   }
-
-      // в будущем понадобится переделывать под разные презент моды
-      vkGetPhysicalDeviceSurfacePresentModesKHR(device->physicalHandle(), surface.handle, &count, nullptr);
-      std::vector<VkPresentModeKHR> presents(count);
-      vkGetPhysicalDeviceSurfacePresentModesKHR(device->physicalHandle(), surface.handle, &count, presents.data());
-
-      int w,h;
-      glfwGetWindowSize(handle, &w, &h);
-
-      surface.format = yavf::chooseSwapSurfaceFormat(formats);
-      surface.presentMode = yavf::chooseSwapPresentMode(presents);
-      surface.extent = yavf::chooseSwapchainExtent(w, h, surface.capabilities);
-
-      auto immediatePresentMode = yavf::checkSwapchainPresentMode(presents, VK_PRESENT_MODE_IMMEDIATE_KHR);
-      flags.immediate_present_mode(immediatePresentMode);
-      flags.set_vsync(true);
-      flags.set_focused(true);
-
-      createSwapChain(surface, device, swapchain);
-
-      const VkFormat depth = yavf::findSupportedFormat(device->physicalHandle(),
-                                                      {VK_FORMAT_D32_SFLOAT, VK_FORMAT_D32_SFLOAT_S8_UINT, VK_FORMAT_D24_UNORM_S8_UINT},
-                                                      VK_IMAGE_TILING_OPTIMAL,
-                                                      VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT);
-
-      swapchain.depths.resize(swapchain.images.size(), nullptr);
-      frames.resize(swapchain.images.size());
-      swapchain.buffers.resize(swapchain.images.size());
-
-      ASSERT(swapchain.images.size() != 0);
-
-      for (uint32_t i = 0; i < swapchain.images.size(); ++i) {
-        swapchain.images[i]->createView(VK_IMAGE_VIEW_TYPE_2D, {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1}, surface.format.format);
-        
-        // VMA_MEMORY_USAGE_GPU_LAZILY_ALLOCATED - ВМА говорит что этот флаг существует только на мобилках, и с него никакого толку на компах
-        swapchain.depths[i] = device->create(yavf::ImageCreateInfo::texture2D(surface.extent,
-                                                                              VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
-                                                                              depth),
-                                             VMA_MEMORY_USAGE_GPU_ONLY);
-        swapchain.depths[i]->createView(VK_IMAGE_VIEW_TYPE_2D, {VK_IMAGE_ASPECT_DEPTH_BIT, 0, 1, 0, 1});
-
-        frames[i].image_available = device->createSemaphore();
-        frames[i].flags = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT; // VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-        frames[i].finish_rendering = device->createSemaphore();
-      }
-
-      create_render_pass();
-
-      for (uint32_t i = 0; i < swapchain.images.size(); ++i) {
-        const std::vector<VkImageView> views = {
-          swapchain.images[i]->view()->handle(),
-          swapchain.depths[i]->view()->handle()
-        };
-        swapchain.buffers[i] = device->create(yavf::FramebufferCreateInfo::framebuffer(render_pass,
-                                                                                       views.size(),
-                                                                                       views.data(),
-                                                                                       surface.extent.width,
-                                                                                       surface.extent.height),
-                                              "window_framebuffer_"+std::to_string(i));
-      }
-      
-      // на всякий случай
-      ASSERT(swapchain.images[0] != swapchain.images[1] && swapchain.images[0] != swapchain.images[2] && swapchain.images[1] != swapchain.images[2]);
-      ASSERT(swapchain.images[0]->handle() != swapchain.images[1]->handle() && swapchain.images[0]->handle() != swapchain.images[2]->handle() && swapchain.images[1]->handle() != swapchain.images[2]->handle());
-
-      yavf::TransferTask* task = device->allocateTransferTask();
-
-      task->begin();
-      for (uint32_t i = 0; i < swapchain.depths.size(); ++i) {
-        task->setBarrier(swapchain.depths[i], VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, VK_IMAGE_ASPECT_DEPTH_BIT);
-      }
-      task->end();
-
-      task->start();
-      task->wait();
-
-      device->deallocate(task);
+    VkSurfaceKHR window::create_surface(VkInstance instance) const {
+      VkSurfaceKHR s = VK_NULL_HANDLE;
+      const auto res = glfwCreateWindowSurface(instance, handle, nullptr, &s);
+      if (res != VK_SUCCESS) throw std::runtime_error("Could not create window surface");
+      return s;
     }
-
-    std::vector<VkClearValue> window::clearValues() const {
-//       if (swapchain.image_index == 0) return {{0.0f, 0.0f, 1.0f, 1.0f}, {1.0f, 0}};
-//       if (swapchain.image_index == 1) return {{1.0f, 0.0f, 0.0f, 1.0f}, {1.0f, 0}};
-      return {{0.0f, 0.0f, 0.0f, 1.0f}, {1.0f, 0}};
-    }
-
-    VkRect2D window::size() const {
-      return {
-        {0, 0},
-        surface.extent
-      };
-    }
-
-    yavf::RenderPass window::renderPass() const {
-      return render_pass;
-    }
-
-    VkViewport window::viewport() const {
-      return {
-        0.0f, 0.0f,
-        static_cast<float>(surface.extent.width),
-        static_cast<float>(surface.extent.height),
-        0.0f, 1.0f
-      };
-    }
-
-    VkRect2D window::scissor() const {
-      return {
-        {0, 0},
-        surface.extent
-      };
-    }
-
-    yavf::Framebuffer window::framebuffer() const {
-//       PRINT_VAR("swapchain.image_index", swapchain.image_index)
-      return swapchain.buffers[swapchain.image_index];
-    }
-
-    void window::recreate(const uint32_t &width, const uint32_t &height) {
-      //if (surface.extent.width == width && surface.extent.height == height) return;
-      device->wait();
-      
-      vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device->physicalHandle(), surface.handle, &surface.capabilities);
-      //std::cout << "1 w " << surface.extent.width << " h " << surface.extent.height << "\n";
-      surface.extent = yavf::chooseSwapchainExtent(width, height, surface.capabilities);
-      //std::cout << "2 w " << surface.extent.width << " h " << surface.extent.height << "\n";
-
-      createSwapChain(surface, device, swapchain);
-
-      const VkFormat depth = yavf::findSupportedFormat(device->physicalHandle(),
-                                                      {VK_FORMAT_D32_SFLOAT, VK_FORMAT_D32_SFLOAT_S8_UINT, VK_FORMAT_D24_UNORM_S8_UINT},
-                                                      VK_IMAGE_TILING_OPTIMAL,
-                                                      VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT);
-
-      for (uint32_t i = 0; i < swapchain.images.size(); ++i) {
-        device->destroy(swapchain.depths[i]);
-        device->destroy(swapchain.buffers[i]);
-
-        swapchain.images[i]->createView(VK_IMAGE_VIEW_TYPE_2D, {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1}, surface.format.format);
-
-        swapchain.depths[i] = device->create(yavf::ImageCreateInfo::texture2D(surface.extent,
-                                                                        VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
-                                                                        depth),
-                                        VMA_MEMORY_USAGE_GPU_ONLY);
-        swapchain.depths[i]->createView(VK_IMAGE_VIEW_TYPE_2D, {VK_IMAGE_ASPECT_DEPTH_BIT, 0, 1, 0, 1});
-
-        const std::vector<VkImageView> views = {
-          swapchain.images[i]->view()->handle(),
-          swapchain.depths[i]->view()->handle()
-        };
-        swapchain.buffers[i] = device->create(yavf::FramebufferCreateInfo::framebuffer(render_pass,
-                                                                                       views.size(),
-                                                                                       views.data(),
-                                                                                       surface.extent.width,
-                                                                                       surface.extent.height),
-                                              "window_framebuffer_"+std::to_string(i));
-      }
-
-      yavf::TransferTask* task = device->allocateTransferTask();
-
-      task->begin();
-      for (uint32_t i = 0; i < swapchain.depths.size(); ++i) {
-        task->setBarrier(swapchain.depths[i], VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, VK_IMAGE_ASPECT_DEPTH_BIT);
-      }
-      task->end();
-
-      task->start();
-      task->wait();
-
-      device->deallocate(task);
-
-      update_buffers();
-    }
-
+    
     void window::resize() {
       int w, h;
       glfwGetWindowSize(handle, &w, &h);
-      recreate(w, h);
-    }
-
-    void window::next_frame() {
-      current_frame = (current_frame + 1) % frames.size();
-
-      VkResult res = swapchain.handle.acquireNextImage(UINT64_MAX, frames[current_frame].image_available, VK_NULL_HANDLE, &swapchain.image_index);
-
-      switch(res) {
-        case VK_SUCCESS:
-        case VK_SUBOPTIMAL_KHR:
-          break;
-        case VK_ERROR_OUT_OF_DATE_KHR:
-          resize();
-          break;
-        default:
-          //Global::console()->print("Problem occurred during swap chain image acquisition!");
-          throw std::runtime_error("Problem occurred during swap chain image acquisition!");
-      }
-    }
-
-    void window::present() {
-      VkResult res;
-      {
-        // RegionLog rl("vkQueuePresent");
-
-        const VkSwapchainKHR s = swapchain.handle;
-
-        const VkPresentInfoKHR info{
-          VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
-          nullptr,
-          1,
-          &frames[current_frame].finish_rendering,
-          //nullptr,
-          1,
-          &s,
-          &swapchain.image_index,
-          nullptr
-        };
-        
-        //PRINT_VAR("current_frame        ", current_frame)
-        //PRINT_VAR("swapchain.image_index", swapchain.image_index)
-//         PRINT_VAR("present_family", present_family)
-
-        auto queue = device->getQueue(present_family);
-        res = vkQueuePresentKHR(queue.handle, &info);
-        //vkQueueWaitIdle(queue.handle);
-        //vkDeviceWaitIdle(device->handle());
-      }
-
-      // RegionLog rl("switch(res)");
-
-      switch(res) {
-        case VK_SUCCESS:
-          break;
-        case VK_SUBOPTIMAL_KHR:
-        case VK_ERROR_OUT_OF_DATE_KHR:
-          // int width, height;
-          resize();
-          break;
-        default:
-          //Global::console()->print("Problem occurred during image presentation!\n");
-          throw std::runtime_error("Problem occurred during image presentation!");
-      }
-    }
-    
-    void window::present(const yavf::Internal::Queue &queue) {
-      VkResult res;
-      {
-        // RegionLog rl("vkQueuePresent");
-
-        const VkSwapchainKHR s = swapchain.handle;
-
-        const VkPresentInfoKHR info{
-          VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
-          nullptr,
-          1,
-          &frames[current_frame].finish_rendering,
-          1,
-          &s,
-          &swapchain.image_index,
-          nullptr
-        };
-        
-//         PRINT_VAR("swapchain.image_index", swapchain.image_index)
-
-        res = vkQueuePresentKHR(queue.handle, &info);
-      }
-
-      // RegionLog rl("switch(res)");
-
-      switch(res) {
-        case VK_SUCCESS:
-          break;
-        case VK_SUBOPTIMAL_KHR:
-        case VK_ERROR_OUT_OF_DATE_KHR:
-          // int width, height;
-          resize();
-          break;
-        default:
-          //Global::console()->print("Problem occurred during image presentation!\n");
-          throw std::runtime_error("Problem occurred during image presentation!");
-      }
+      recration_target->recreate(w, h);
     }
 
     uint32_t window::refresh_rate() const {
@@ -502,143 +152,49 @@ namespace devils_engine {
       return rate == 0 ? 0 : REFRESH_RATE_TO_MCS(rate);
     }
 
-    void window::create_render_pass() {
-      yavf::RenderPassMaker rpm(device);
-      
-//       const VkAccessFlags debug = VK_ACCESS_INDIRECT_COMMAND_READ_BIT |
-//                                   VK_ACCESS_INDEX_READ_BIT |
-//                                   VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT |
-//                                   VK_ACCESS_UNIFORM_READ_BIT |
-//                                   VK_ACCESS_INPUT_ATTACHMENT_READ_BIT |
-//                                   VK_ACCESS_SHADER_READ_BIT |
-//                                   VK_ACCESS_SHADER_WRITE_BIT |
-//                                   VK_ACCESS_COLOR_ATTACHMENT_READ_BIT |
-//                                   VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT |
-//                                   VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT |
-//                                   VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-// //                                   VK_ACCESS_TRANSFER_READ_BIT |
-// //                                   VK_ACCESS_TRANSFER_WRITE_BIT |
-// //                                   VK_ACCESS_HOST_READ_BIT |
-// //                                   VK_ACCESS_HOST_WRITE_BIT;
-
-      render_pass = rpm.attachmentBegin(surface.format.format)
-                         //.attachmentLoadOp(VK_ATTACHMENT_LOAD_OP_LOAD)
-                         .attachmentLoadOp(VK_ATTACHMENT_LOAD_OP_CLEAR)
-                         .attachmentStoreOp(VK_ATTACHMENT_STORE_OP_STORE)
-                         //.attachmentInitialLayout(VK_IMAGE_LAYOUT_PRESENT_SRC_KHR)
-                         .attachmentInitialLayout(VK_IMAGE_LAYOUT_UNDEFINED)
-                         .attachmentFinalLayout(VK_IMAGE_LAYOUT_PRESENT_SRC_KHR)
-                       .attachmentBegin(swapchain.depths[0]->info().format)
-                         //.attachmentLoadOp(VK_ATTACHMENT_LOAD_OP_LOAD)
-                         .attachmentLoadOp(VK_ATTACHMENT_LOAD_OP_CLEAR)
-                         .attachmentStoreOp(VK_ATTACHMENT_STORE_OP_STORE)
-                         //.attachmentInitialLayout(VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
-                         .attachmentInitialLayout(VK_IMAGE_LAYOUT_UNDEFINED)
-                         .attachmentFinalLayout(VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
-                       .subpassBegin(VK_PIPELINE_BIND_POINT_GRAPHICS)
-                         .subpassColorAttachment(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, 0)
-                         .subpassDepthStencilAttachment(VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, 1)
-                       .dependencyBegin(VK_SUBPASS_EXTERNAL, 0)
-//                          .dependencySrcStageMask(VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT) // VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT
-//                          .dependencyDstStageMask(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT) // VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT
-//                          .dependencySrcAccessMask(VK_ACCESS_MEMORY_WRITE_BIT) // VK_ACCESS_SHADER_WRITE_BIT
-//                          .dependencyDstAccessMask(VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT) // VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_INDIRECT_COMMAND_READ_BIT
-                         .dependencySrcStageMask(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT)
-                         .dependencyDstStageMask(VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT)
-                         .dependencySrcAccessMask(VK_ACCESS_SHADER_WRITE_BIT)
-                         .dependencyDstAccessMask(VK_ACCESS_INDIRECT_COMMAND_READ_BIT)
-                       .dependencyBegin(0, VK_SUBPASS_EXTERNAL)
-//                          .dependencySrcStageMask(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT)
-//                          .dependencyDstStageMask(VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT) // VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT
-//                          .dependencySrcAccessMask(VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT) //VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | 
-//                          .dependencyDstAccessMask(0)
-                         .dependencySrcStageMask(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT)
-                         .dependencyDstStageMask(VK_PIPELINE_STAGE_TRANSFER_BIT) //VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT
-                         .dependencySrcAccessMask(VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT) //VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | 
-                         .dependencyDstAccessMask(VK_ACCESS_TRANSFER_WRITE_BIT)
-                       .create("default render pass");
-                       
-       render_pass_objects = rpm.attachmentBegin(surface.format.format)
-                                .attachmentLoadOp(VK_ATTACHMENT_LOAD_OP_LOAD)
-                                .attachmentStoreOp(VK_ATTACHMENT_STORE_OP_STORE)
-                                //.attachmentInitialLayout(VK_IMAGE_LAYOUT_PRESENT_SRC_KHR)
-                                .attachmentInitialLayout(VK_IMAGE_LAYOUT_PRESENT_SRC_KHR)
-                                .attachmentFinalLayout(VK_IMAGE_LAYOUT_PRESENT_SRC_KHR)
-                              .attachmentBegin(swapchain.depths[0]->info().format)
-                                .attachmentLoadOp(VK_ATTACHMENT_LOAD_OP_LOAD)
-                                .attachmentStoreOp(VK_ATTACHMENT_STORE_OP_DONT_CARE)
-                                //.attachmentInitialLayout(VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
-                                .attachmentInitialLayout(VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
-                                .attachmentFinalLayout(VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
-                              .subpassBegin(VK_PIPELINE_BIND_POINT_GRAPHICS)
-                                .subpassColorAttachment(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, 0)
-                                .subpassDepthStencilAttachment(VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, 1)
-                              .dependencyBegin(VK_SUBPASS_EXTERNAL, 0)
-                                .dependencySrcStageMask(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT) // VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT
-                                .dependencyDstStageMask(VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT) // VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT
-                                .dependencySrcAccessMask(VK_ACCESS_SHADER_WRITE_BIT) // VK_ACCESS_SHADER_WRITE_BIT
-                                .dependencyDstAccessMask(VK_ACCESS_INDIRECT_COMMAND_READ_BIT) // VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_INDIRECT_COMMAND_READ_BIT
-//                                 .dependencySrcStageMask(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT) // VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT
-//                                 .dependencyDstStageMask(VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT) // VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT
-//                                 .dependencySrcAccessMask(VK_ACCESS_SHADER_WRITE_BIT) // VK_ACCESS_SHADER_WRITE_BIT
-//                                 .dependencyDstAccessMask(VK_ACCESS_INDIRECT_COMMAND_READ_BIT) // VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_INDIRECT_COMMAND_READ_BIT
-                              .dependencyBegin(0, VK_SUBPASS_EXTERNAL)
-                                .dependencySrcStageMask(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT)
-                                .dependencyDstStageMask(VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT) // VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT
-                                .dependencySrcAccessMask(VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT) //VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | 
-                                .dependencyDstAccessMask(0)
-                              .create("default render pass objects");
-    }
-
-    yavf::Image* window::image() const {
-      return swapchain.images[swapchain.image_index];
-    }
-
-    yavf::Image* window::depth() const {
-      return swapchain.depths[swapchain.image_index];
-    }
-
-    void window::screenshot(yavf::Image* container) const {
-      if (container->info().extent.width != surface.extent.width || container->info().extent.height != surface.extent.height) {
-        container->recreate({surface.extent.width, surface.extent.height, 1});
-      }
-
-      static const VkImageSubresourceRange range{
-        VK_IMAGE_ASPECT_COLOR_BIT,
-        0, 1, 0, 1
-      };
-
-      const VkImageBlit blit{
-        {
-          VK_IMAGE_ASPECT_COLOR_BIT,
-          0, 0, 1
-        },
-        {
-          {0, 0, 0},
-          {static_cast<int32_t>(surface.extent.width), static_cast<int32_t>(surface.extent.height), 1}
-        },
-        {
-          VK_IMAGE_ASPECT_COLOR_BIT,
-          0, 0, 1
-        },
-        {
-          {0, 0, 0},
-          {static_cast<int32_t>(surface.extent.width), static_cast<int32_t>(surface.extent.height), 1}
-        }
-      };
-
-      const uint32_t index = swapchain.image_index == 0 ? swapchain.images.size()-1 : swapchain.image_index-1;
-      yavf::Image* img = swapchain.images[index];
-
-      auto trans = device->allocateGraphicTask();
-      trans->begin();
-      trans->setBarrier(img, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, range, present_family, VK_QUEUE_FAMILY_IGNORED);
-      trans->setBarrier(container, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-      trans->copyBlit(img, container, blit);
-      trans->setBarrier(img, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, range, VK_QUEUE_FAMILY_IGNORED, present_family);
-      trans->setBarrier(container, VK_IMAGE_LAYOUT_GENERAL);
-      trans->end();
-      device->deallocate(trans);
+    void window::screenshot(vk::Image* container) const {
+      (void)container;
+      // пока непонятно что нужно делать толком, скорее всего нужно в стейджах создать специальный стейдж, который будет копировать текущую картинку
+//       if (container->info().extent.width != surface.extent.width || container->info().extent.height != surface.extent.height) {
+//         container->recreate({surface.extent.width, surface.extent.height, 1});
+//       }
+// 
+//       static const VkImageSubresourceRange range{
+//         VK_IMAGE_ASPECT_COLOR_BIT,
+//         0, 1, 0, 1
+//       };
+// 
+//       const VkImageBlit blit{
+//         {
+//           VK_IMAGE_ASPECT_COLOR_BIT,
+//           0, 0, 1
+//         },
+//         {
+//           {0, 0, 0},
+//           {static_cast<int32_t>(surface.extent.width), static_cast<int32_t>(surface.extent.height), 1}
+//         },
+//         {
+//           VK_IMAGE_ASPECT_COLOR_BIT,
+//           0, 0, 1
+//         },
+//         {
+//           {0, 0, 0},
+//           {static_cast<int32_t>(surface.extent.width), static_cast<int32_t>(surface.extent.height), 1}
+//         }
+//       };
+// 
+//       const uint32_t index = swapchain.image_index == 0 ? swapchain.images.size()-1 : swapchain.image_index-1;
+//       yavf::Image* img = swapchain.images[index];
+// 
+//       auto trans = device->allocateGraphicTask();
+//       trans->begin();
+//       trans->setBarrier(img, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, range, present_family, VK_QUEUE_FAMILY_IGNORED);
+//       trans->setBarrier(container, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+//       trans->copyBlit(img, container, blit);
+//       trans->setBarrier(img, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, range, VK_QUEUE_FAMILY_IGNORED, present_family);
+//       trans->setBarrier(container, VK_IMAGE_LAYOUT_GENERAL);
+//       trans->end();
+//       device->deallocate(trans);
     }
 
     void window::show() const {
@@ -651,24 +207,6 @@ namespace devils_engine {
 
     bool window::close() const {
       return glfwWindowShouldClose(handle);
-    }
-
-    void window::toggle_vsync() {
-      if (!flags.immediate_present_mode()) return;
-
-      flags.set_vsync(!flags.vsync());
-      if (flags.vsync()) {
-        uint32_t count = 0;
-        vkGetPhysicalDeviceSurfacePresentModesKHR(device->physicalHandle(), surface.handle, &count, nullptr);
-        std::vector<VkPresentModeKHR> presents(count);
-        vkGetPhysicalDeviceSurfacePresentModesKHR(device->physicalHandle(), surface.handle, &count, presents.data());
-
-        surface.presentMode = yavf::chooseSwapPresentMode(presents);
-      } else {
-        surface.presentMode = VK_PRESENT_MODE_IMMEDIATE_KHR;
-      }
-
-      resize();
     }
     
     void window::toggle_fullscreen() {
@@ -685,33 +223,42 @@ namespace devils_engine {
         glfwSetWindowMonitor(handle, nullptr, 0, 0, mode->width, mode->height, mode->refreshRate);
       }
     }
-
-    void window::update_buffers() const {
-      //std::cout << "width " << surface.extent.width << " height " << surface.extent.height << "\n";
-      //const simd::mat4 &perspective = simd::perspective(glm::radians(fov), float(surface.extent.width) / float(surface.extent.height), 0.1f, FAR_CLIPPING);
-      //const simd::mat4 &ortho = simd::ortho(0.0f, float(surface.extent.width) / float(surface.extent.height), 0.0f, 1.0f, 0.1f, FAR_CLIPPING);
-      // Global::get<render::buffers>()->set_persp(perspective);
-      // Global::get<render::buffers>()->set_ortho(ortho);
-      // Global::get<render::buffers>()->set_camera_dim(surface.extent.width, surface.extent.height);
-      // Global::get<render::buffers>()->update_data();
+    
+    std::tuple<int32_t, int32_t> window::framebuffer_size() const {
+      int32_t w, h;
+      glfwGetFramebufferSize(handle, &w, &h);
+      return std::make_tuple(w, h);
     }
     
-    std::pair<float, float> window::content_scale() const {
-      std::pair<float, float> scale;
-      glfwGetWindowContentScale(handle, &scale.first, &scale.second);
-      return scale;
+    // это возвращает не то что я хочу, должен быть способ вернуть именно пиксели рендерящейся области
+    std::tuple<int32_t, int32_t> window::size() const {
+      int32_t w, h;
+      glfwGetWindowSize(handle, &w, &h);
+      return std::make_tuple(w, h);
     }
     
-    std::pair<int32_t, int32_t> window::monitor_physical_size() const {
-      std::pair<int32_t, int32_t> mm = std::make_pair(0, 0);
-      if (monitor != nullptr) glfwGetMonitorPhysicalSize(monitor, &mm.first, &mm.second);
-      return mm;
+    std::tuple<float, float> window::content_scale() const {
+      float xscale, yscale;
+      glfwGetWindowContentScale(handle, &xscale, &yscale);
+      return std::make_tuple(xscale, yscale);
     }
     
-    std::pair<float, float> window::monitor_content_scale() const {
-      std::pair<float, float> scale = std::make_pair(0.0f, 0.0f);
-      if (monitor != nullptr) glfwGetMonitorContentScale(monitor, &scale.first, &scale.second);
-      return scale;
+    std::tuple<int32_t, int32_t> window::monitor_physical_size() const {
+      int32_t w = 0, h = 0;
+      if (monitor != nullptr) glfwGetMonitorPhysicalSize(monitor, &w, &h);
+      return std::make_tuple(w, h);
+    }
+    
+    std::tuple<float, float> window::monitor_content_scale() const {
+      float xscale = 0.0f, yscale = 0.0f;
+      if (monitor != nullptr) glfwGetMonitorContentScale(monitor, &xscale, &yscale);
+      return std::make_tuple(xscale, yscale);
+    }
+    
+    std::tuple<double, double> window::get_cursor_pos() const {
+      double x,y;
+      glfwGetCursorPos(handle, &x, &y);
+      return std::tie(x, y);
     }
   }
 }

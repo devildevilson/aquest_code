@@ -1,18 +1,19 @@
-#ifndef RENDER_H
-#define RENDER_H
+#ifndef RENDER_STAGE_CONTAINER_H
+#define RENDER_STAGE_CONTAINER_H
 
 #include <cstddef>
 #include <cstdint>
 #include <vector>
+
 #include "utils/typeless_container.h"
 #include "stage.h"
 #include "target.h"
 
 namespace devils_engine {
   namespace render {
-    class context;
     class stage;
     class target;
+    struct container;
     
     class stage_container : public stage, public target {
     public:
@@ -33,10 +34,10 @@ namespace devils_engine {
         return ptr;
       }
       
-      void begin();
-      void proccess(context* ctx);
-      void clear();
-      void recreate(const uint32_t &width, const uint32_t &height);
+      void begin() override;
+      void proccess(container* ctx) override;
+      void clear() override;
+      void recreate(const uint32_t &width, const uint32_t &height) override;
     protected:
       utils::typeless_container container;
       std::vector<stage*> stages;

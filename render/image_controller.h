@@ -5,6 +5,7 @@
 #include <string>
 #include "shared_structures.h"
 #include "utils/memory_pool.h"
+#include "vulkan_declarations.h"
 
 // тут у нас должны храниться названия изображений и доступ к ним
 // как мы загружаем изображения? по идее описываем таблицу 
@@ -28,11 +29,6 @@
 // с другой стороны текстурки разрешения побольше могут пригодиться
 // в принципе я могу пихнуть в слот текстурки любых разрешений
 // скорее я буду вынужден указать максимальное количество слотов
-
-namespace yavf {
-  class Device;
-  class DescriptorSet;
-}
 
 namespace devils_engine {
   namespace render {
@@ -76,17 +72,16 @@ namespace devils_engine {
         image_type type;
         uint32_t sampler;
         
-        std::pair<uint32_t, uint32_t> get_size() const;
+        std::tuple<uint32_t, uint32_t> get_size() const;
         render::image_t get_image(const size_t &index, const bool mirror_u, const bool mirror_v) const;
       };
       
       image_container* container;
-      yavf::Device* device;
-      yavf::DescriptorSet* set;
+      internal* vulkan;
       std::unordered_map<std::string, container_view> image_slots; // строки пихнуть в мемори пул?
       size_t current_slot_offset;
       
-      image_controller(yavf::Device* device, image_container* container);
+      image_controller(vk::Device* device, image_container* container);
       ~image_controller();
       
       const container_view* get_view(const std::string &name) const;
@@ -118,7 +113,11 @@ namespace devils_engine {
       // грузить наверное будем не здесь, тут лучше просто организовать доступ
       
       void update_set();
+      void update_sampler_set();
       size_t get_images_size() const;
+      
+      vk::DescriptorSet* get_descriptor_set() const;
+      vk::DescriptorSetLayout* get_descriptor_set_layout() const;
     };
   }
 }

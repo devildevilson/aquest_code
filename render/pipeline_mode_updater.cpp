@@ -19,8 +19,8 @@ namespace devils_engine {
     void updater::set_water_color(const glm::vec3 &color) { m_color = color; }
     
     void updater::update() {
-      global::get<render::tile_render>()->change_rendering_mode(m_render_mode, m_water_mode, m_render_slot, m_water_slot, m_color);
-      global::get<render::tile_connections_render>()->change_rendering_mode(m_render_mode, m_water_mode, m_render_slot, m_water_slot, m_color);
+//       global::get<render::tile_render>()->change_rendering_mode(m_render_mode, m_water_mode, m_render_slot, m_water_slot, m_color);
+//       global::get<render::tile_connections_render>()->change_rendering_mode(m_render_mode, m_water_mode, m_render_slot, m_water_slot, m_color);
     }
   }
 }

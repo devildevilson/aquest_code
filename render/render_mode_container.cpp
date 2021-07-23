@@ -4,6 +4,7 @@
 #include <stdexcept>
 #include "core/stats.h"
 #include "utils/systems.h"
+#include "utils/magic_enum_header.h"
 #include <atomic>
 #include <iostream>
 

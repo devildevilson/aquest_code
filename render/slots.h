@@ -8,7 +8,7 @@
 namespace devils_engine {
   namespace render {
     class stage;
-    class context;
+    class container;
     
     class slots {
     public:
@@ -17,7 +17,7 @@ namespace devils_engine {
       slots();
       void set_stage(const uint32_t &slot, stage* ptr);
       void clear_slot(const uint32_t &slot);
-      void update(context* ctx);
+      void update(container* ctx);
       void clear();
       const stage* get_stage(const uint32_t &slot) const;
     private:

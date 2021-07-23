@@ -1,6 +1,7 @@
 #include "image_controller.h"
 
-#include "yavf.h"
+#include "vulkan_hpp_header.h"
+#include "makers.h"
 #include "image_container.h"
 #include "image_container_constants.h"
 #include "utils/globals.h"
@@ -74,19 +75,29 @@ namespace devils_engine {
     }
     
     struct internal { // это вытащим наверное в отдельный хедер
-      yavf::DescriptorPool pool;
-      yavf::DescriptorSetLayout layout;
-      yavf::DescriptorSet* image_set;
-      yavf::Device* device;
+      vk::DescriptorPool pool;
+      vk::DescriptorSetLayout layout;
+      vk::DescriptorSet image_set;
+      vk::Device* device;
+      vk::Sampler linear;
+      vk::Sampler nearest;
+      vk::Sampler nuklear;
       uint32_t samplers_count;
       uint32_t images_count;
       
-      inline internal() : pool(VK_NULL_HANDLE), layout(VK_NULL_HANDLE), image_set(nullptr), samplers_count(0), images_count(0) {}
+      internal(vk::Device* device) : pool(nullptr), layout(nullptr), image_set(nullptr), device(device), samplers_count(0), images_count(0) {}
+      ~internal() {
+        device->destroy(pool);
+        device->destroy(layout);
+        device->destroy(linear);
+        device->destroy(nearest);
+        device->destroy(nuklear);
+      }
     };
     
-    std::pair<uint32_t, uint32_t> image_controller::container_view::get_size() const {
+    std::tuple<uint32_t, uint32_t> image_controller::container_view::get_size() const {
       const auto pool = container->get_pool(slot);
-      return std::make_pair(pool->image_size().width, pool->image_size().height);
+      return std::make_tuple(pool->image_size().width, pool->image_size().height);
     }
     
     render::image_t image_controller::container_view::get_image(const size_t &index, const bool mirror_u, const bool mirror_v) const {
@@ -101,28 +112,28 @@ namespace devils_engine {
       return render::create_image(current_slot, current_index, sampler, mirror_u, mirror_v);
     }
     
-    image_controller::image_controller(yavf::Device* device, image_container* container) : container(container), device(device), current_slot_offset(0) {
+    image_controller::image_controller(vk::Device* device, image_container* container) : container(container), vulkan(new internal(device)), current_slot_offset(0) {
       container->set_slots(IMAGE_CONTAINER_SLOT_SIZE); // вряд ли будет больше 256
-      yavf::DescriptorPool pool = VK_NULL_HANDLE;
-      yavf::DescriptorSetLayout layout = VK_NULL_HANDLE;
       
       {
-        yavf::DescriptorPoolMaker dpm(device);
-        pool = dpm.poolSize(VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, IMAGE_CONTAINER_SLOT_SIZE)
-                  .poolSize(VK_DESCRIPTOR_TYPE_SAMPLER, IMAGE_SAMPLERS_COUNT)
-                  .create(IMAGE_CONTAINER_DESCRIPTOR_POOL_NAME);
+        descriptor_pool_maker dpm(device);
+        vulkan->pool = 
+          dpm.poolSize(vk::DescriptorType::eSampledImage, IMAGE_CONTAINER_SLOT_SIZE)
+             .poolSize(vk::DescriptorType::eSampler, IMAGE_SAMPLERS_COUNT)
+             .create(IMAGE_CONTAINER_DESCRIPTOR_POOL_NAME);
       }
       
       {
-        yavf::DescriptorLayoutMaker dlm(device);
-        layout = dlm.binding(0, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, VK_SHADER_STAGE_ALL, IMAGE_CONTAINER_SLOT_SIZE)
-                    .binding(1, VK_DESCRIPTOR_TYPE_SAMPLER, VK_SHADER_STAGE_ALL, IMAGE_SAMPLERS_COUNT)
-                    .create(IMAGE_CONTAINER_DESCRIPTOR_LAYOUT_NAME);
+        descriptor_set_layout_maker dslm(device);
+        vulkan->layout = 
+          dslm.binding(0, vk::DescriptorType::eSampledImage, vk::ShaderStageFlagBits::eAll, IMAGE_CONTAINER_SLOT_SIZE)
+              .binding(1, vk::DescriptorType::eSampler, vk::ShaderStageFlagBits::eAll, IMAGE_SAMPLERS_COUNT)
+              .create(IMAGE_CONTAINER_DESCRIPTOR_LAYOUT_NAME);
       }
       
       {
-        yavf::DescriptorMaker dm(device);
-        set = dm.layout(layout).create(pool)[0];
+        descriptor_set_maker dsm(device);
+        vulkan->image_set = dsm.layout(vulkan->layout).create(vulkan->pool, "image set")[0];
       }
       
       auto render_container = global::get<render::container>();
@@ -134,46 +145,38 @@ namespace devils_engine {
       }
       
       {
-        yavf::SamplerMaker sm(device);
-        yavf::Sampler s1 = sm.addressMode(VK_SAMPLER_ADDRESS_MODE_REPEAT, VK_SAMPLER_ADDRESS_MODE_REPEAT).
-                              anisotropy(enable, level).
-                              filter(VK_FILTER_LINEAR, VK_FILTER_LINEAR).
-                              mipmapMode(VK_SAMPLER_MIPMAP_MODE_LINEAR).
-                              lod(0.0f, 1000.0f).
-                              create(IMAGE_SAMPLER_LINEAR_NAME);
+        sampler_maker sm(device);
+        vulkan->linear = sm.addressMode(vk::SamplerAddressMode::eRepeat, vk::SamplerAddressMode::eRepeat).
+                            anisotropy(enable, level).
+                            filter(vk::Filter::eLinear, vk::Filter::eLinear).
+                            mipmapMode(vk::SamplerMipmapMode::eLinear).
+                            lod(0.0f, 1000.0f).
+                            create(IMAGE_SAMPLER_LINEAR_NAME);
                               
-        yavf::Sampler s2 = sm.addressMode(VK_SAMPLER_ADDRESS_MODE_REPEAT, VK_SAMPLER_ADDRESS_MODE_REPEAT).
-                              anisotropy(enable, level).
-                              filter(VK_FILTER_NEAREST, VK_FILTER_NEAREST).
-                              mipmapMode(VK_SAMPLER_MIPMAP_MODE_NEAREST). // возможно можно скомбинировать с другим типом
-                              lod(0.0f, 1000.0f).
-                              create(IMAGE_SAMPLER_NEAREST_NAME);
+        vulkan->nearest = sm.addressMode(vk::SamplerAddressMode::eRepeat, vk::SamplerAddressMode::eRepeat).
+                             anisotropy(enable, level).
+                             filter(vk::Filter::eNearest, vk::Filter::eNearest).
+                             mipmapMode(vk::SamplerMipmapMode::eNearest). // возможно можно скомбинировать с другим типом
+                             lod(0.0f, 1000.0f).
+                             create(IMAGE_SAMPLER_NEAREST_NAME);
                               
-        yavf::Sampler s3 = sm.addressMode(VK_SAMPLER_ADDRESS_MODE_REPEAT, VK_SAMPLER_ADDRESS_MODE_REPEAT).
+        vulkan->nuklear = sm.addressMode(vk::SamplerAddressMode::eRepeat, vk::SamplerAddressMode::eRepeat).
                               anisotropy(enable, level).
-                              borderColor(VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK).
-                              compareOp(VK_FALSE, VK_COMPARE_OP_GREATER).
-                              filter(VK_FILTER_NEAREST, VK_FILTER_NEAREST).
-                              mipmapMode(VK_SAMPLER_MIPMAP_MODE_NEAREST). // возможно можно скомбинировать с другим типом
+                              borderColor(vk::BorderColor::eFloatTransparentBlack).
+                              compareOp(VK_FALSE, vk::CompareOp::eGreater).
+                              filter(vk::Filter::eNearest, vk::Filter::eNearest).
+                              mipmapMode(vk::SamplerMipmapMode::eNearest). // возможно можно скомбинировать с другим типом
                               lod(0.0f, 1.0f).
                               unnormalizedCoordinates(VK_FALSE).
                               create("default_nuklear_sampler");
-                              
-        set->resize(IMAGE_CONTAINER_SLOT_SIZE + IMAGE_SAMPLERS_COUNT);
-        set->at(IMAGE_CONTAINER_SLOT_SIZE + 0) = {s1.handle(), VK_NULL_HANDLE, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 0, 1, VK_DESCRIPTOR_TYPE_SAMPLER};
-        set->at(IMAGE_CONTAINER_SLOT_SIZE + 1) = {s2.handle(), VK_NULL_HANDLE, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 1, 1, VK_DESCRIPTOR_TYPE_SAMPLER};
-        set->at(IMAGE_CONTAINER_SLOT_SIZE + 2) = {s3.handle(), VK_NULL_HANDLE, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 2, 1, VK_DESCRIPTOR_TYPE_SAMPLER};
       }
       
-      container->update_descriptor_data(set);
-      set->update();
+      update_set();
     }
     
     image_controller::~image_controller() {
-      device->destroyDescriptorPool(IMAGE_CONTAINER_DESCRIPTOR_POOL_NAME);
-      device->destroySetLayout(IMAGE_CONTAINER_DESCRIPTOR_LAYOUT_NAME);
-      device->destroySampler(IMAGE_SAMPLER_LINEAR_NAME);
-      device->destroySampler(IMAGE_SAMPLER_NEAREST_NAME);
+      delete vulkan;
+      vulkan = nullptr;
     }
     
     const image_controller::container_view* image_controller::get_view(const std::string &name) const {
@@ -213,12 +216,32 @@ namespace devils_engine {
 //     }
 
     void image_controller::update_set() {
-      container->update_descriptor_data(set);
-      set->update();
+      container->update_descriptor_data(get_descriptor_set());
+      update_sampler_set();
+    }
+    
+    void image_controller::update_sampler_set() {
+      descriptor_set_updater dsu(vulkan->device);
+      dsu.currentSet(vulkan->image_set);
+      dsu.begin(1, 0, vk::DescriptorType::eSampler);
+      dsu.sampler(vulkan->linear);
+      dsu.begin(1, 1, vk::DescriptorType::eSampler);
+      dsu.sampler(vulkan->nearest);
+      dsu.begin(1, 2, vk::DescriptorType::eSampler);
+      dsu.sampler(vulkan->nuklear);
+      dsu.update();
     }
     
     size_t image_controller::get_images_size() const {
       return container->memory();
+    }
+    
+    vk::DescriptorSet* image_controller::get_descriptor_set() const {
+      return &vulkan->image_set;
+    }
+    
+    vk::DescriptorSetLayout* image_controller::get_descriptor_set_layout() const {
+      return &vulkan->layout;
     }
   }
 }

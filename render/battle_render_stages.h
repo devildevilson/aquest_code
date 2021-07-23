@@ -2,15 +2,17 @@
 #define BATTLE_RENDER_STAGES_H
 
 #include "stage.h"
-#include "yavf.h"
 #include "utils/utility.h"
 #include "utils/frustum.h"
 #include "shared_structures.h"
 #include "shared_battle_structures.h"
+#include "vulkan_hpp_header.h"
 #include <array>
 
 namespace devils_engine {
   namespace render {
+    struct container;
+    
     namespace battle {
       class tile_optimizer : public stage {
       public:
@@ -20,15 +22,10 @@ namespace devils_engine {
         
         // наверное в принципе все данные лучше хранить в гпу буфере, другое дело как обновлять? копировать перед началом... в будущем можно так сделать
         struct indirect_buffer_data {
-//           struct indexed_indirect_command {
-//             VkDrawIndexedIndirectCommand indirect;
-//             glm::uvec3 data;
-//           };
-          
-          VkDrawIndexedIndirectCommand tiles_indirect;
+          vk::DrawIndexedIndirectCommand tiles_indirect;
           glm::uvec3 sizes_data;
           
-          VkDrawIndirectCommand units_indirect;
+          vk::DrawIndirectCommand units_indirect;
           
           utils::frustum frustum;
           
@@ -45,43 +42,57 @@ namespace devils_engine {
         static_assert(sizeof(biome_objects_data_t) % 16 == 0);
         
         struct create_info {
-          yavf::Device* device;
-          
+          container* cont;
+          vk::DescriptorSetLayout map_layout;
         };
         tile_optimizer(const create_info &info);
         ~tile_optimizer();
         
         void begin() override;
-        void proccess(context * ctx) override;
+        void proccess(container* ctx) override;
         void clear() override;
         
-        yavf::Buffer* get_indirect_buffer() const;
-        yavf::Buffer* get_tiles_indices() const;
-        yavf::Buffer* get_biomes_indices() const;
-        yavf::Buffer* get_units_indices() const;
-        yavf::Buffer* get_selection_indices() const;
+        vk::Buffer get_indirect_buffer() const;
+        vk::Buffer get_tiles_indices() const;
+        vk::Buffer get_biomes_indices() const;
+        vk::Buffer get_units_indices() const;
+        vk::Buffer get_selection_indices() const;
+        vk::DescriptorSetLayout get_buffer_layout() const;
+        vk::DescriptorSet get_set() const;
         
         void update_containers();
         void update_unit_container();
         void update_selection_frustum(const utils::frustum &fru);
         void update_biome_data(const std::array<std::pair<uint32_t, uint32_t>, BATTLE_BIOMES_MAX_COUNT> &data);
         void update_mouse_dir_data(const glm::vec4 &pos, const glm::vec4 &dir);
-      private:
-        yavf::Device* device;
-        yavf::Pipeline pipe;
         
-        yavf::DescriptorSet* set;
-        yavf::Buffer* indirect_buffer;
-        yavf::Buffer* tiles_indices;
-        yavf::Buffer* biomes_indices;
-        yavf::Buffer* units_indices;
-        yavf::Buffer* selection_indices;
+        uint32_t get_selection_count() const;
+        const uint32_t* get_selection_data() const;
+      private:
+        vk::Device device;
+        vma::Allocator allocator;
+        vk::PipelineLayout p_layout;
+        vk::Pipeline pipe;
+        
+        vk::DescriptorPool pool;
+        vk::DescriptorSetLayout buffer_layout;
+        vk::DescriptorSet set;
+        vk_buffer_data indirect_buffer;
+        vk_buffer_data tiles_indices;
+        vk_buffer_data biomes_indices;
+        vk_buffer_data units_indices;
+        vk_buffer_data selection_indices;
+        
+        size_t tiles_indices_size;
+        size_t biomes_indices_size;
+        size_t units_indices_size;
       };
       
       class tile_render : public stage {
       public:
         struct create_info {
-          yavf::Device* device;
+          container* cont;
+          vk::DescriptorSetLayout map_layout;
           tile_optimizer* opt;
         };
         
@@ -89,21 +100,24 @@ namespace devils_engine {
         ~tile_render();
         
         void begin() override;
-        void proccess(context * ctx) override;
+        void proccess(container * ctx) override;
         void clear() override;
       private:
-        yavf::Device* device;
+        vk::Device device;
+        vma::Allocator allocator;
         tile_optimizer* opt;
-        yavf::Pipeline pipe;
+        vk::PipelineLayout p_layout;
+        vk::Pipeline pipe;
         
-        yavf::Buffer* points_indices;
-        yavf::DescriptorSet* images_set;
+        vk_buffer_data points_indices;
+        vk::DescriptorSet images_set;
       };
       
       class biome_render : public stage {
       public:
         struct create_info {
-          yavf::Device* device;
+          container* cont;
+          vk::DescriptorSetLayout map_layout;
           tile_optimizer* opt;
         };
         
@@ -111,14 +125,16 @@ namespace devils_engine {
         ~biome_render();
         
         void begin() override;
-        void proccess(context * ctx) override;
+        void proccess(container * ctx) override;
         void clear() override;
       private:
-        yavf::Device* device;
+        vk::Device device;
+        vma::Allocator allocator;
         tile_optimizer* opt;
-        yavf::Pipeline pipe;
+        vk::PipelineLayout p_layout;
+        vk::Pipeline pipe;
         
-        yavf::DescriptorSet* images_set;
+        vk::DescriptorSet images_set;
         
         const bool multidraw;
       };
@@ -126,7 +142,8 @@ namespace devils_engine {
       class units_render : public stage {
       public:
         struct create_info {
-          yavf::Device* device;
+          container* cont;
+          vk::DescriptorSetLayout map_layout;
           tile_optimizer* opt;
         };
         
@@ -134,14 +151,16 @@ namespace devils_engine {
         ~units_render();
         
         void begin() override;
-        void proccess(context * ctx) override;
+        void proccess(container * ctx) override;
         void clear() override;
       private:
-        yavf::Device* device;
+        vk::Device device;
+        vma::Allocator allocator;
         tile_optimizer* opt;
-        yavf::Pipeline pipe;
+        vk::PipelineLayout p_layout;
+        vk::Pipeline pipe;
         
-        yavf::DescriptorSet* images_set;
+        vk::DescriptorSet images_set;
       };
     }
   }

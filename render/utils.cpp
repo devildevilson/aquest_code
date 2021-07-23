@@ -7,6 +7,7 @@
 #include "targets.h"
 #include "window.h"
 #include "bin/camera.h"
+#include "container.h"
 
 #include "utils/sol.h"
 #include "bin/objects_selection.h"
@@ -26,25 +27,38 @@ namespace devils_engine {
       return glm::vec4(norm, 0.0f);
     }
     
+    // по идее должно работать но не работает
+    glm::vec4 get_cursor_dir2(render::buffers* buffers, render::window* window, const double xpos, const double ypos) {
+      const glm::mat4 inv_proj = buffers->get_inv_proj();
+      const glm::mat4 inv_view = buffers->get_inv_view();
+//       const glm::mat4 inv_view_proj = buffers->get_inv_view_proj();
+      const auto [w, h] = window->framebuffer_size();
+      const glm::vec2 window_coords = glm::vec2(xpos, ypos) / glm::vec2(w, h);
+      const vec4 clip_space_position = vec4(window_coords*2.0f-glm::vec2(1.0), 1.0f, 1.0f);
+      vec4 view_space_position = inv_proj * clip_space_position;
+      view_space_position /= view_space_position.w;
+      const glm::vec4 world_pos = inv_view * view_space_position;
+      const glm::vec4 camera_pos = buffers->get_pos();
+      //return glm::normalize(view_space_position - camera_pos);
+      return glm::normalize(glm::vec4(glm::vec3(world_pos), 1.0f) - camera_pos);
+    }
+    
     glm::vec4 get_cursor_dir(render::buffers* buffers, render::window* window, const double xpos, const double ypos) {
       const glm::mat4 inv_proj = buffers->get_inv_proj();
       const glm::mat4 inv_view = buffers->get_inv_view();
-
-      float x = (2.0f * xpos) /  float(window->surface.extent.width) - 1.0f;
-      float y = 1.0f - (2.0f * ypos) / float(window->surface.extent.height); // тут по идее должно быть обратное значение
-      float z = 1.0f;
-
-//       ASSERT(x >= -1.0f && x <= 1.0f);
-//       ASSERT(y >= -1.0f && y <= 1.0f);
-
-      glm::vec3 ray_nds = glm::vec3(x, -y, z);
-      glm::vec4 ray_clip = glm::vec4(ray_nds.x, ray_nds.y, -1.0, 1.0);
+      
+      const auto [w, h] = window->framebuffer_size();
+      const float x = (2.0f * xpos) / float(w) - 1.0f;
+      const float y = 1.0f - (2.0f * ypos) / float(h); // тут по идее должно быть обратное значение
+      const float z = 1.0f; // самая дальняя точка в вулкане это 1.0
+      
+      const glm::vec3 ray_nds = glm::vec3(x, -y, z);
+      const glm::vec4 ray_clip = glm::vec4(ray_nds.x, ray_nds.y, -1.0, 1.0); // -1 тоже работает ???
       glm::vec4 ray_eye = inv_proj * ray_clip;
       ray_eye = glm::vec4(glm::vec2(ray_eye), -1.0, 0.0);
-      glm::vec3 ray_wor = glm::vec3(inv_view * ray_eye);
+      const glm::vec3 ray_wor = glm::vec3(inv_view * ray_eye);
       // don't forget to normalise the vector at some point
       const glm::vec4 dir = glm::vec4(glm::normalize(ray_wor), 0.0f);
-      //const glm::vec4 final_dir = camera_dir;
       return dir;
     }
     
@@ -139,14 +153,8 @@ namespace devils_engine {
       ASSERT(ctx != nullptr);
       
       selection_secondary->clear();
-      
-      const auto indirect_buffer = opt->indirect_buffer();
-      auto indirect_data = reinterpret_cast<struct render::tile_optimizer::indirect_buffer*>(indirect_buffer->ptr());
-      
-      ASSERT(indirect_data->heraldies_command.vertexCount == 4);
-      const uint32_t selection_count = indirect_data->heraldies_command.instanceCount;
-      const auto selection_buffer = opt->structures_index_buffer();
-      const auto selection_data = reinterpret_cast<uint32_t*>(selection_buffer->ptr());
+      const uint32_t selection_count = opt->get_selection_count();
+      auto selection_data = opt->get_selection_data();
       
       float min_dist = 10000.0f;
       uint32_t min_dist_heraldy_index = UINT32_MAX;

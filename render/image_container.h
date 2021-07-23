@@ -8,28 +8,14 @@
 #include "shared_structures.h"
 #include "utils/memory_pool.h"
 #include "utils/bit_field.h"
+#include "vulkan_declarations.h"
 
 #define TEXTURE_MAX_LAYER_COUNT 2048
 
 // я тут прикинул, мы вполне можем теперь использовать array
 // заполняя слоты нулл текстуркой, другое дело что придется испльно переделать image_pool
 
-namespace yavf {
-  class Device;
-  class Image;
-//   class DescriptorPool;
-  class DescriptorSet;
-//   class DescriptorSetLayout;
-}
-
 namespace devils_engine {
-  namespace utils {
-    struct extent_2d {
-      uint32_t width;
-      uint32_t height;
-    };
-  }
-  
   namespace render {
     class image_container {
     public:
@@ -41,10 +27,19 @@ namespace devils_engine {
         
         //uint32_t layers_count;
         utils::bit_field<container_size> data;
-        yavf::Image* image;
+        vk::Device* device;
+        VkDeviceMemory mem;
+        VkImage image;
+        VkImageView view;
+        extent2d img_size;
+        uint32_t mips;
+        uint32_t layers;
 
-        image_pool(yavf::Device* device, const utils::extent_2d &img_size, const uint32_t &mips, const uint32_t &layers);
-        utils::extent_2d image_size() const;
+        // кажется я понял где была ошибка в прошлом: я тут не чистил изображения =(
+        
+        image_pool(vk::Device* device, vk::PhysicalDevice* physical_device, const extent2d &img_size, const uint32_t &mips, const uint32_t &layers);
+        ~image_pool();
+        extent2d image_size() const;
         uint32_t mip_levels() const;
         size_t used_size() const;
         size_t free_size() const;
@@ -59,7 +54,11 @@ namespace devils_engine {
       };
       
       struct create_info {
-        yavf::Device* device;
+        vk::Device* device;
+        vk::PhysicalDevice* physical_device;
+        vk::CommandPool* transfer_command_pool;
+        vk::Queue* queue;
+        vk::Fence* fence;
       };
       image_container(const create_info &info);
       ~image_container();
@@ -72,14 +71,15 @@ namespace devils_engine {
       render::image_t get_image(const size_t &pool_index);
       uint32_t reserve_image(const size_t &pool_index);
       void release_image(const render::image_t &img);
-      void create_pool(const uint32_t &slot_index, const utils::extent_2d &img_size, const uint32_t &mips, const uint32_t &layers);
+      void create_pool(const uint32_t &slot_index, const extent2d &img_size, const uint32_t &mips, const uint32_t &layers);
       void destroy_pool(const uint32_t &slot_index);
       bool check_image(const render::image_t &img);
       
-      void update_descriptor_data(yavf::DescriptorSet* set);
+      void update_descriptor_data(vk::DescriptorSet* set);
       size_t memory() const;
     private:
-      yavf::Device* device;
+      vk::Device* device;
+      vk::PhysicalDevice* physical_device;
       
       utils::memory_pool<image_pool, sizeof(image_pool)*20> image_memory;
       std::vector<image_pool*> slots;

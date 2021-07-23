@@ -1,12 +1,16 @@
 #ifndef CONTEXT_H
 #define CONTEXT_H
 
-namespace yavf {
-  class TransferTask;
-  class CombinedTask;
-  class ComputeTask;
-  class GraphicTask;
-  class TaskInterface;
+// namespace yavf {
+//   class TransferTask;
+//   class CombinedTask;
+//   class ComputeTask;
+//   class GraphicTask;
+//   class TaskInterface;
+// }
+
+namespace vk {
+  class CommandBuffer;
 }
 
 namespace devils_engine {
@@ -34,11 +38,12 @@ namespace devils_engine {
     class context {
     public:
       virtual ~context() {}
-      virtual yavf::TaskInterface* interface() const = 0;
-      virtual yavf::CombinedTask* combined() const = 0;
-      virtual yavf::ComputeTask* compute() const = 0;
-      virtual yavf::GraphicTask* graphics() const = 0;
-      virtual yavf::TransferTask* transfer() const = 0;
+//       virtual yavf::TaskInterface* interface() const = 0;
+//       virtual yavf::CombinedTask* combined() const = 0;
+//       virtual yavf::ComputeTask* compute() const = 0;
+//       virtual yavf::GraphicTask* graphics() const = 0;
+//       virtual yavf::TransferTask* transfer() const = 0;
+      virtual vk::CommandBuffer* command_buffer() const = 0;
     };
   }
 }

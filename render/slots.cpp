@@ -18,7 +18,7 @@ namespace devils_engine {
       stages[slot] = nullptr;
     }
     
-    void slots::update(context* ctx) {
+    void slots::update(container* ctx) {
       for (auto p : stages) { 
         if (p == nullptr) continue;
         p->begin();

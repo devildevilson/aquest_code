@@ -1,35 +1,44 @@
 #include "image_container.h"
 
-#include "yavf.h"
+#include "vulkan_hpp_header.h"
+#include "makers.h"
+#include <iostream>
 
 namespace devils_engine {
   namespace render {
-    static yavf::Image* null_image = nullptr;
+    static vk::DeviceMemory null_memory = nullptr;
+    static vk::Image null_image = nullptr;
+    static vk::ImageView null_image_view = nullptr;
     
-    image_container::image_pool::image_pool(yavf::Device* device, const utils::extent_2d &img_size, const uint32_t &mips, const uint32_t &layers) {
+    image_container::image_pool::image_pool(vk::Device* device, vk::PhysicalDevice* physical_device, const extent2d &img_size, const uint32_t &mips, const uint32_t &layers) : 
+      device(device), mem(nullptr), image(nullptr), view(nullptr), img_size(img_size), mips(mips), layers(layers) 
+    {
       ASSERT(layers < max_size);
       ASSERT(layers != 0);
-      image = device->create(
-        yavf::ImageCreateInfo::texture2D(
-          {img_size.width, img_size.height}, 
-          VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, 
-          VK_FORMAT_R8G8B8A8_UNORM, 
-          layers, 
-          mips
-        ), 
-        VMA_MEMORY_USAGE_GPU_ONLY
-      );
-      
-      //image->createView(layers == 1 ? VK_IMAGE_VIEW_TYPE_2D : VK_IMAGE_VIEW_TYPE_2D_ARRAY, VK_IMAGE_ASPECT_COLOR_BIT);
-      image->createView(VK_IMAGE_VIEW_TYPE_2D_ARRAY, VK_IMAGE_ASPECT_COLOR_BIT);
+      const auto usage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eTransferSrc;
+      const auto info = texture2D(cast(img_size), usage, vk::Format::eR8G8B8A8Unorm, layers, mips);
+      const auto [img, memory] = create_image(*device, *physical_device, info, vk::MemoryPropertyFlagBits::eDeviceLocal);
+      const auto view_info = make_view_info(img, vk::Format::eR8G8B8A8Unorm, vk::ImageViewType::e2DArray, {vk::ImageAspectFlagBits::eColor, 0, mips, 0, layers});
+      const auto v = device->createImageView(view_info);
+      image = img;
+      mem = memory;
+      view = v;
     }
     
-    utils::extent_2d image_container::image_pool::image_size() const {
-      return {image->info().extent.width, image->info().extent.height};
+    image_container::image_pool::~image_pool() {
+//       PRINT_VAR("device_ptr", device)
+//       PRINT_VAR("device", &**device)
+      device->destroy(view);
+      device->destroy(image);
+      device->free(mem);
+    }
+    
+    extent2d image_container::image_pool::image_size() const {
+      return img_size;
     }
     
     uint32_t image_container::image_pool::mip_levels() const {
-      return image->info().mipLevels;
+      return mips;
     }
     
     size_t image_container::image_pool::used_size() const {
@@ -76,35 +85,36 @@ namespace devils_engine {
     }
     
     uint32_t image_container::image_pool::layers_count() const {
-      return image->info().arrayLayers;
+      return layers;
     }
     
     const size_t image_container::image_pool::max_size;
     
-    image_container::image_container(const create_info &info) : device(info.device) {
-      null_image = device->create(yavf::ImageCreateInfo::texture2D({1, 1}, VK_IMAGE_USAGE_SAMPLED_BIT), VMA_MEMORY_USAGE_GPU_ONLY);
-      null_image->createView(VK_IMAGE_VIEW_TYPE_2D_ARRAY, VK_IMAGE_ASPECT_COLOR_BIT);
+    image_container::image_container(const create_info &info) : device(info.device), physical_device(info.physical_device) {
+      const auto null_info = texture2D({1, 1}, vk::ImageUsageFlagBits::eSampled);
+      const auto [img, memory] = create_image(*device, *physical_device, null_info, vk::MemoryPropertyFlagBits::eDeviceLocal);
+      const auto null_view_info = make_view_info(img, vk::Format::eR8G8B8A8Unorm, vk::ImageViewType::e2DArray);
+      null_image = img;
+      null_memory = memory;
+      null_image_view = device->createImageView(null_view_info);
       
-      auto task = device->allocateGraphicTask();
-      task->begin();
-      task->setBarrier(null_image, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-      task->end();
-      
-      task->start();
-      task->wait();
-      
-      device->deallocate(task);
+      const vk::ImageSubresourceRange range(vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1);
+      change_image_layout(*device, null_image, *info.transfer_command_pool, *info.queue, *info.fence, vk::ImageLayout::eUndefined, vk::ImageLayout::eShaderReadOnlyOptimal, range);
     }
     
     image_container::~image_container() {
       for (auto pool : slots) {
         if (pool == nullptr) continue;
-        device->destroy(pool->image);
+        //device->destroy(pool->image);
         image_memory.destroy(pool);
       }
       
       device->destroy(null_image);
+      device->destroy(null_image_view);
+      device->free(null_memory);
       null_image = nullptr;
+      null_image_view = nullptr;
+      null_memory = nullptr;
     }
     
     void image_container::set_slots(const size_t &slots) {
@@ -154,11 +164,11 @@ namespace devils_engine {
       slots[index]->release_index(get_image_layer(img));
     }
     
-    void image_container::create_pool(const uint32_t &slot_index, const utils::extent_2d &img_size, const uint32_t &mips, const uint32_t &layers) {
+    void image_container::create_pool(const uint32_t &slot_index, const extent2d &img_size, const uint32_t &mips, const uint32_t &layers) {
       if (slot_index > slots.size()) throw std::runtime_error("Bad image slot index");
       if (slot_index == slots.size()) slots.push_back(nullptr);
       if (slots[slot_index] != nullptr) throw std::runtime_error("Replacing an existing slot is not allowed");
-      auto ptr = image_memory.create(device, img_size, mips, layers);
+      auto ptr = image_memory.create(device, physical_device, img_size, mips, layers);
       slots[slot_index] = ptr;
     }
     
@@ -184,13 +194,18 @@ namespace devils_engine {
       return true;
     }
     
-    void image_container::update_descriptor_data(yavf::DescriptorSet* set) {
-      if (slots.size() >= set->size()) throw std::runtime_error("slots.size() >= set->size()");
+    void image_container::update_descriptor_data(vk::DescriptorSet* set) {
+      //if (slots.size() >= set->size()) throw std::runtime_error("slots.size() >= set->size()");
+      descriptor_set_updater dsu(device);
+      
+      dsu.currentSet(*set);
       for (size_t i = 0; i < slots.size(); ++i) {
         // мы можем добавить специальную нулл текстурку 1х1, тем самым моделируя отсутствие данных в этом слоте
-        yavf::ImageView* view = slots[i] == nullptr ? null_image->view() : slots[i]->image->view();
-        set->at(i) = {VK_NULL_HANDLE, view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, static_cast<uint32_t>(i), 0, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE};
+        auto view = slots[i] == nullptr ? null_image_view : vk::ImageView(slots[i]->view);
+        dsu.begin(0, i, vk::DescriptorType::eSampledImage).image(view, vk::ImageLayout::eShaderReadOnlyOptimal);
       }
+      
+      dsu.update();
     }
     
     size_t image_container::memory() const {

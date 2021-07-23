@@ -3,13 +3,7 @@
 
 #include "target.h"
 #include "utils/utility.h"
-// #include "bin/figures.h"
-// #include <atomic>
-
-namespace yavf {
-  class Buffer;
-  class Device;
-}
+#include "vulkan_hpp_header.h"
 
 namespace devils_engine {
   namespace core {
@@ -21,13 +15,19 @@ namespace devils_engine {
   }
 
   namespace render {
+    struct container;
+    
     struct buffers : public target {
-      yavf::Device* device;
-      yavf::Buffer* uniform;
-      yavf::Buffer* matrices;
-      yavf::Buffer* heraldy; // данные о геральдике нам много где нужны (везде кроме меню)
+      container* c;
+      vk_buffer_data uniform;
+      vk_buffer_data matrices;
+      vk_buffer_data heraldy; // данные о геральдике нам много где нужны (везде кроме меню)
+      
+      vk::DescriptorSet uniform_set;
+      
+      vk::DescriptorSet heraldy_set;
 
-      buffers(yavf::Device* device);
+      buffers(container* c);
       ~buffers();
 
       void update_projection_matrix(const glm::mat4 &matrix);
@@ -50,6 +50,8 @@ namespace devils_engine {
       glm::vec4 get_pos() const;
       glm::vec4 get_dir() const;
       glm::vec4 get_cursor_dir() const;
+      
+      void resize_heraldy_buffer(const size_t &size);
     };
     
     // в вулкане у нас есть новая перменная gl_VertexIndex
@@ -59,18 +61,25 @@ namespace devils_engine {
     // их мы можем записать в тайлдата, в виде оффсет + количество (не больше 6) (3 бита на количество 29 на оффсет)
     // границы и соединения максимум 6 на один тайл, мы можем нарисовать их вместе
     struct world_map_buffers : public target {
-      yavf::Device* device;
-      yavf::Buffer* border_buffer; // вообще эти вещи после создания могут пойти в гпу спокойно (границы мы будем все же переделывать довольно часто)
-      yavf::Buffer* border_types;
-      yavf::Buffer* tiles_connections; // а вот соединения не будем
-      yavf::Buffer* structure_buffer;  // эти штуки могут быть постоянно в гпу памяти, но совсем иногда их нужно обновлять
+      container* c;
+      vk_buffer_data border_buffer; // вообще эти вещи после создания могут пойти в гпу спокойно (границы мы будем все же переделывать довольно часто)
+      vk_buffer_data border_types;
+      vk_buffer_data tiles_connections; // а вот соединения не будем
+      vk_buffer_data structure_buffer;  // эти штуки могут быть постоянно в гпу памяти, но совсем иногда их нужно обновлять
       
-      world_map_buffers(yavf::Device* device);
+      vk::DescriptorPool pool;
+      vk::DescriptorSet border_set;
+      vk::DescriptorSet types_set;
+      
+      world_map_buffers(container* c);
       ~world_map_buffers();
       
       void recreate(const uint32_t &width, const uint32_t &height) override;
       //void set_structure_data(const uint32_t &size, core::city_type* data); 
       // скопировать наверное нужно отдельно, нам потребуется скорпировать еще и данные структур
+      
+      void resize_border_buffer(const size_t &size);
+      void resize_border_types(const size_t &size);
     };
   }
 }

@@ -192,6 +192,7 @@ struct map_tile_t {
   float height; // мне бы еще подъем какой
   uint points[6];
   uint neighbors[6];
+  // эти вещи я могу перенести в буфер индексов, предпочтительнее
   uint borders_data;
   uint connections_data;
   uint biome_index; 

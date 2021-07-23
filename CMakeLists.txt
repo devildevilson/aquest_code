@@ -53,7 +53,7 @@ include_directories(
   .
   include/sol2/include/
   include/lanes/src/
-  include/VulkanMemoryAllocator/src/
+  #include/VulkanMemoryAllocator/src/
   include/FastNoise/
   #include/
   include/json/single_include/
@@ -258,7 +258,7 @@ set(SRC_LIST
   utils/globals.cpp
   utils/logging.cpp
   utils/frame_time.cpp
-  utils/ecs.cpp
+  #utils/ecs.cpp
   utils/random_engine.cpp
   utils/linear_rng.cpp
   utils/lua_initialization_game_logic.cpp
@@ -296,6 +296,7 @@ set(SRC_LIST
   utils/lua_initialization_camera.cpp
   utils/lua_initialization_selection.cpp
   utils/lua_initialization_script_utils.cpp
+  utils/lua_initialization.cpp
   utils/deferred_tasks.cpp
   utils/lua_environment.cpp
   utils/string_container.cpp
@@ -335,10 +336,10 @@ set(HDR_LIST
   utils/id.h
   utils/logging.h
   utils/frame_time.h
-  utils/ecs.h
-  utils/yacs.h
-  utils/yacs_pool.h
-  utils/yacs_component.h
+  #utils/ecs.h
+  #utils/yacs.h
+  #utils/yacs_pool.h
+  #utils/yacs_component.h
   utils/random_engine.h
   utils/concurrent_vector.h
   utils/linear_rng.h
@@ -347,6 +348,7 @@ set(HDR_LIST
   utils/on_action_types.h
   utils/traits_modifier_attribs.h
   utils/lua_initialization.h
+  utils/lua_initialization_hidden.h
   utils/lua_initialization_internal.h
   utils/deferred_tasks.h
   utils/lua_environment.h
@@ -382,28 +384,37 @@ target_link_libraries(utils ${LUA_LIB}) # PUBLIC foonathan_memory moonnuklear
 # в любом случае нужно компилировать с одной версией луа
 
 set(SRC_LIST
+  #render/Core.cpp
+  #render/Internal.cpp
+  #render/Makers.cpp
+  #render/RAII.cpp
+  #render/Tasks.cpp
+  #render/Types.cpp
   render/container.cpp
-  render/Core.cpp
-  render/Internal.cpp
-  render/Makers.cpp
-  render/RAII.cpp
   render/render.cpp
-  render/Tasks.cpp
-  render/Types.cpp
   render/window.cpp
   render/stages.cpp
   render/targets.cpp
   render/render_mode_container.cpp
-  render/pipeline_mode_updater.cpp
+  #render/pipeline_mode_updater.cpp
   render/image_container.cpp
   render/image_controller.cpp
-  render/persistent_resources.cpp
+  #render/persistent_resources.cpp
   render/slots.cpp
   render/battle_render_stages.cpp
   render/utils.cpp
+  render/makers.cpp
+  render/vulkan_hpp_header.cpp
 )
 
 set(HDR_LIST
+  #render/yavf.h
+  #render/Core.h
+  #render/Internal.h
+  #render/Makers.h
+  #render/RAII.h
+  #render/Tasks.h
+  #render/Types.h
   render/container.h
   render/context.h
   render/shared_structures.h
@@ -411,25 +422,22 @@ set(HDR_LIST
   render/stages.h
   render/target.h
   render/targets.h
-  render/yavf.h
-  render/Core.h
-  render/Internal.h
-  render/Makers.h
-  render/RAII.h
   render/render.h
-  render/Tasks.h
-  render/Types.h
   render/window.h
   render/nuklear_header.h
   render/render_mode_container.h
-  render/pipeline_mode_updater.h
+  #render/pipeline_mode_updater.h
   render/image_container.h
   render/image_controller.h
-  render/persistent_resources.h
+  #render/persistent_resources.h
   render/slots.h
   render/shared_battle_structures.h
   render/battle_render_stages.h
   render/utils.h
+  render/vk_mem_alloc.hpp
+  render/vulkan_declarations.h
+  render/vulkan_hpp_header.h
+  render/makers.h
 )
 
 add_library(render ${SRC_LIST} ${HDR_LIST})
@@ -456,6 +464,7 @@ set(SRC_LIST
   script/action_functions.cpp
   script/script_block_functions.cpp
   script/script_header.cpp
+  script/utility.cpp
 )
 
 set(HDR_LIST
@@ -466,6 +475,7 @@ set(HDR_LIST
   script/condition_commands_macro.h
   script/action_commands_macro.h
   script/script_block_commands_macro.h
+  script/utility.h
 )
 
 add_library(script ${SRC_LIST} ${HDR_LIST})
@@ -507,6 +517,9 @@ set(SRC_LIST
   core/troop_type.cpp
   core/troop.cpp
   core/context.cpp
+  core/interaction.cpp
+  core/war.cpp
+  core/casus_belli.cpp
 )
 
 set(HDR_LIST
@@ -532,6 +545,9 @@ set(HDR_LIST
   core/troop_type.h
   core/troop.h
   core/context.h
+  core/interaction.h
+  core/war.h
+  core/casus_belli.h
 )
 
 add_library(core ${SRC_LIST} ${HDR_LIST})
@@ -602,7 +618,7 @@ set(HDR_LIST
   bin/battle_unit_state_parser.h
 )
 add_executable(${TARGET_NAME} ${SRC_LIST} ${HDR_LIST})
-target_link_libraries(${TARGET_NAME} systems core script ai render utils serialization)
+target_link_libraries(${TARGET_NAME} systems core script ai render utils serialization tcmalloc unwind)
 add_dependencies(${TARGET_NAME} shaders)
 
 if (MSVC)

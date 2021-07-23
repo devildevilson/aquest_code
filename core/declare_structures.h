@@ -16,6 +16,7 @@ namespace devils_engine {
     struct troop;
     struct hero;
     struct decision;
+    struct interaction;
     struct religion_group;
     struct religion;
     struct culture;
@@ -28,19 +29,22 @@ namespace devils_engine {
     struct realm;
     struct hero_troop;
     struct army;
+    struct casus_belli;
+    struct war;
     
     enum class structure : uint32_t {
       tile,
       province,
+      city,
       building_type,
       city_type,
-      city,
       trait,
       modificator,
       troop_type,
 //       troop,
 //       hero,
       decision,
+      interaction,
       religion_group,
       religion,
       culture,
@@ -48,16 +52,37 @@ namespace devils_engine {
 //       right,
       event,
       titulus,
+      casus_belli,
       
       character,
       dynasty,
       realm,  // создавать отдельно это не нужно
       hero_troop,
       army,
+      war,
+      troop,
       count,
       
       static_types_count = character,
       parsing_types_count = realm
+    };
+    
+    enum class id_struct {
+      building_type,
+      city_type,
+      trait,
+      modificator,
+      troop_type,
+      decision,
+      interaction,
+      religion_group,
+      religion,
+      culture,
+      law,
+      event,
+      titulus,
+      casus_belli,
+      count
     };
   }
 }

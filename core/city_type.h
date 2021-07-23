@@ -2,8 +2,10 @@
 #define CITY_TYPE_H
 
 #include <array>
+#include <string>
 #include "declare_structures.h"
 #include "stats.h"
+#include "stat_data.h"
 
 namespace devils_engine {
   namespace core {

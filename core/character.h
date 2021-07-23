@@ -6,6 +6,7 @@
 #include <unordered_set>
 //#include "utils/id.h"
 #include "stats.h"
+#include "stat_data.h"
 #include "utils/realm_mechanics.h"
 #include "utils/bit_field.h"
 //#include "data_parser.h"
@@ -34,6 +35,8 @@ namespace devils_engine {
   namespace core {
     // как династию создать, нужно указать id?
     struct dynasty {
+      static const structure s_type = structure::dynasty;
+      
       size_t name_str;
       std::vector<character*> characters;
       // герб (нужно выбрать тип щита, темплейт, изображения на темплейт, изображения сверху, цвета для всего этого, можно ли за один раз нарисовать?)
@@ -67,6 +70,8 @@ namespace devils_engine {
       static bool is_bastard(const character* a);
       static bool is_concubine_child(const character* a);
       static bool is_concubine(const character* a, const character* b);
+      static bool is_parent(const character* a, const character* b);
+      static bool is_child(const character* a, const character* b);
       
       // придется создавать несколько фракции: собственно персонаж,
       // совет (парламент), суд, элективный огран, все это для того чтобы 
@@ -116,12 +121,19 @@ namespace devils_engine {
         relations();
       };
       
-      std::array<stat_container, character_stats::count> stats; // по умолчанию
-      std::array<stat_container, character_stats::count> current_stats; // пересчитаные статы от треитов, шмоток и модификаторов
-      std::array<stat_container, hero_stats::count> hero_stats;
-      std::array<stat_container, hero_stats::count> current_hero_stats;
+//       std::array<stat_container, character_stats::count> stats; // по умолчанию
+//       std::array<stat_container, character_stats::count> current_stats; // пересчитаные статы от треитов, шмоток и модификаторов
+//       std::array<stat_container, hero_stats::count> hero_stats;
+//       std::array<stat_container, hero_stats::count> current_hero_stats;
+//       std::array<stat_container, character_resources::count> resources;
+      utils::stats_container<character_stats::values, character_stats::types> stats;
+      utils::stats_container<character_stats::values, character_stats::types> current_stats;
+      utils::stats_container<hero_stats::values> hero_stats;
+      utils::stats_container<hero_stats::values> current_hero_stats;
+      utils::stats_container<character_resources::values> resources;
+      
       uint32_t name_number; // если в династии уже есть использованное имя, то тут нужно указать сколько раз встречалось
-//       float money; // деньги наследуются
+//       float money; // валюта должна быть по идее отдельно от статов
       
       int64_t born_day;
       int64_t death_day; // причина?
@@ -155,7 +167,7 @@ namespace devils_engine {
       // вообще указатели на эти вещи есть и у реалма, но как быстро проверить куда входит персонаж?
       
       utils::bit_field<1> data;
-      state rng_state; // нужно ли передать в луа?
+      state rng_state; // нужно ли передать в луа? нет
       
       // можем ли мы разделить трейты на группы? можем, сколько теперь выделять для каждой группы
       // в цк2 трейты разделены на группы, некоторые трейты замещают другие в одной группе
@@ -221,14 +233,17 @@ namespace devils_engine {
       
       // это работа я так понимаю с базовыми статами, текущие обновляются в другом месте
       // может ли вообще потребоваться из луа что то изменять?
-      float base_stat(const uint32_t &index) const;
-      float stat(const uint32_t &index) const;
-      void set_stat(const uint32_t &index, const float &value);
-      float add_to_stat(const uint32_t &index, const float &value);
-      float base_hero_stat(const uint32_t &index) const;
-      float hero_stat(const uint32_t &index) const;
-      void set_hero_stat(const uint32_t &index, const float &value);
-      float add_to_hero_stat(const uint32_t &index, const float &value);
+//       float base_stat(const uint32_t &index) const;
+//       void set_base_stat(const uint32_t &index, const float &value);
+//       float add_to_base_stat(const uint32_t &index, const float &value);
+//       float stat(const uint32_t &index) const;
+//       void set_stat(const uint32_t &index, const float &value);
+//       float add_to_stat(const uint32_t &index, const float &value);
+//       
+//       float base_hero_stat(const uint32_t &index) const;
+//       float hero_stat(const uint32_t &index) const;
+//       void set_hero_stat(const uint32_t &index, const float &value);
+//       float add_to_hero_stat(const uint32_t &index, const float &value);
       
       bool get_bit(const size_t &index) const; // тут по максимуму от того что останется
       bool set_bit(const size_t &index, const bool value);
@@ -258,6 +273,7 @@ namespace devils_engine {
       
       // откуда это брать? по идее это задано по умолчанию, но при этом нужно как то локализацию сделать
       // стрингвью брать не удастся... или нет? не знаю как работает std::string_view в sol
+      // по хорошему тут мы можем возвращать константные строки для локализации и тогда std::string_view встают нормально
       std::string_view object_pronoun() const;
       std::string_view poss_pronoun() const;
       std::string_view reflexive_pronoun() const;
@@ -278,7 +294,8 @@ namespace devils_engine {
       std::string_view sibling_gender() const;
       
       // эти штуки нужно составлять из разных строк, по идее тут нужно возвращать обычный std string
-      // я уже забыл что есть что
+      // я уже забыл что есть что, эти строки составляются из строк полученных из локализации
+      // поэтому тут должны быть обычные строки, но скорее всего эти строчки я буду составлять в lua
       std::string_view first_name() const;
       std::string_view first_name_with_nick() const;
       std::string_view title_str() const;

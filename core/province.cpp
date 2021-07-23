@@ -12,6 +12,9 @@ namespace devils_engine {
       cities_max_count(0), 
       cities_count(0), 
       cities{nullptr} 
-    {}
+    {
+//       memset(stats.data(), 0, stats.size() * sizeof(stats[0]));
+//       memset(current_stats.data(), 0, current_stats.size() * sizeof(current_stats[0]));
+    }
   }
 }

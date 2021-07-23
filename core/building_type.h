@@ -2,7 +2,10 @@
 #define BUILDING_TYPE_H
 
 #include <array>
+#include <cstddef>
+#include <string>
 #include "stats.h"
+#include "stat_data.h"
 #include "declare_structures.h"
 
 namespace devils_engine {

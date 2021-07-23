@@ -23,9 +23,9 @@ namespace devils_engine {
       std::unique_lock<std::mutex> lock(map->mutex);
       army_gpu_slot = map->allocate_army_data();
       
-      modificators.reserve(modificators_container_size);
-      events.reserve(events_container_size);
-      flags.reserve(flags_container_size);
+//       modificators.reserve(modificators_container_size);
+//       events.reserve(events_container_size);
+//       flags.reserve(flags_container_size);
     }
     
     army::~army() {

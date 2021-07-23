@@ -1,9 +1,11 @@
 #ifndef CULTURE_H
 #define CULTURE_H
 
+#include <string>
 #include <array>
 #include "declare_structures.h"
 #include "stats.h"
+#include "stat_data.h"
 #include "utils/realm_mechanics.h"
 
 namespace devils_engine {

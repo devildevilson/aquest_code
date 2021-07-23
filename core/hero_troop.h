@@ -5,6 +5,7 @@
 #include "declare_structures.h"
 #include "utils/structures_utils.h"
 #include "ai/path_finding_data.h"
+#include "stats.h"
 
 namespace devils_engine {
   namespace core {
@@ -43,6 +44,9 @@ namespace devils_engine {
       uint32_t tile_index;
       uint32_t army_gpu_slot; // это обязательный аттрибут любой армии или героя, нужно где то сделать поиск в обратную сторону
       // статы
+      
+      utils::stats_container<hero_troop_stats::values> stats;
+      utils::stats_container<hero_troop_stats::values> current_stats;
       
 //       phmap::flat_hash_map<const modificator*, size_t> modificators;
 //       phmap::flat_hash_map<const event*, event_container> events;

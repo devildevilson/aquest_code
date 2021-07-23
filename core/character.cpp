@@ -113,6 +113,14 @@ namespace devils_engine {
       return a->family.owner == b;
     }
     
+    bool character::is_parent(const character* a, const character* b) {
+      return a != nullptr && b != nullptr && (b->family.parents[0] == a || b->family.parents[1] == a);
+    }
+    
+    bool character::is_child(const character* a, const character* b) {
+      return a != nullptr && b != nullptr && (a->family.parents[0] == b || a->family.parents[1] == b);
+    }
+    
     character::family::family() :
       real_parents{nullptr, nullptr},
       parents{nullptr, nullptr}, 
@@ -158,10 +166,10 @@ namespace devils_engine {
 //       events(nullptr),
 //       flags(nullptr)
     {
-      memset(stats.data(), 0, stats.size()*sizeof(stats[0]));
-      memset(current_stats.data(), 0, current_stats.size()*sizeof(current_stats[0]));
-      memset(hero_stats.data(), 0, hero_stats.size()*sizeof(hero_stats[0]));
-      memset(current_hero_stats.data(), 0, current_hero_stats.size()*sizeof(current_hero_stats[0]));
+//       memset(stats.data(), 0, stats.size()*sizeof(stats[0]));
+//       memset(current_stats.data(), 0, current_stats.size()*sizeof(current_stats[0]));
+//       memset(hero_stats.data(), 0, hero_stats.size()*sizeof(hero_stats[0]));
+//       memset(current_hero_stats.data(), 0, current_hero_stats.size()*sizeof(current_hero_stats[0]));
       data.set(system::male, male);
       data.set(system::dead, dead);
       traits.reserve(traits_container_size);
@@ -282,7 +290,8 @@ namespace devils_engine {
       if (realms[self] == nullptr && title->type > titulus::type::baron) throw std::runtime_error("Cannot give title to unlanded");
       
       if (realms[self] == nullptr) {
-        realms[self] = global::get<core::context>()->create_faction();
+        const size_t token = global::get<core::context>()->create_realm();
+        realms[self] = global::get<core::context>()->get_realm(token);
       }
       
       realms[self]->add_title(title);
@@ -295,7 +304,8 @@ namespace devils_engine {
       
       realms[self]->remove_title(title);
       if (realms[self]->titles == nullptr) {
-        global::get<core::context>()->destroy(realms[self]);
+        const size_t token = global::get<core::context>()->get_realm_token(realms[self]);
+        global::get<core::context>()->destroy_realm(token);
       }
     }
     
@@ -428,77 +438,100 @@ namespace devils_engine {
 //       
 //     }
     
-    float character::base_stat(const uint32_t &index) const {
-      ASSERT(index < character_stats::count);
-      auto s = stats[index];
-      switch(character_stats::types[index]) {
-        case stat_type::uint_t:  return float(s.uval);
-        case stat_type::int_t:   return float(s.ival);
-        case stat_type::float_t: return float(s.fval);
-        default: assert(false);
-      }
-      
-      return 0.0f;
-    }
-    
-    float character::stat(const uint32_t &index) const {
-      ASSERT(index < character_stats::count);
-      auto s = current_stats[index];
-      switch(character_stats::types[index]) {
-        case stat_type::uint_t:  return float(s.uval);
-        case stat_type::int_t:   return float(s.ival);
-        case stat_type::float_t: return float(s.fval);
-        default: assert(false);
-      }
-      
-      return 0.0f;
-    }
-    
-    void character::set_stat(const uint32_t &index, const float &value) {
-      ASSERT(index < character_stats::count);
-      switch(character_stats::types[index]) {
-        case stat_type::uint_t:  current_stats[index].uval = uint32_t(value); break;
-        case stat_type::int_t:   current_stats[index].ival =  int32_t(value); break;
-        case stat_type::float_t: current_stats[index].fval =    float(value); break;
-        default: assert(false);
-      }
-    }
-    
-    float character::add_to_stat(const uint32_t &index, const float &value) {
-      ASSERT(index < character_stats::count);
-      auto s = current_stats[index];
-      switch(character_stats::types[index]) {
-        case stat_type::uint_t:  current_stats[index].uval += uint32_t(value); return float(s.uval);
-        case stat_type::int_t:   current_stats[index].ival +=  int32_t(value); return float(s.ival);
-        case stat_type::float_t: current_stats[index].fval +=    float(value); return float(s.fval);
-        default: assert(false);
-      }
-      
-      return 0.0f;
-    }
-    
-    float character::base_hero_stat(const uint32_t &index) const {
-      ASSERT(index < hero_stats::count);
-      auto s = hero_stats[index];
-      return float(s.ival);
-    }
-    
-    float character::hero_stat(const uint32_t &index) const {
-      ASSERT(index < hero_stats::count);
-      auto s = current_hero_stats[index];
-      return float(s.ival);
-    }
-    
-    void character::set_hero_stat(const uint32_t &index, const float &value) {
-      ASSERT(index < hero_stats::count);
-      current_hero_stats[index].ival = int32_t(value);
-    }
-    
-    float character::add_to_hero_stat(const uint32_t &index, const float &value) {
-      auto s = current_hero_stats[index];
-      current_hero_stats[index].ival += int32_t(value);
-      return float(s.ival);
-    }
+//     float character::base_stat(const uint32_t &index) const {
+//       ASSERT(index < character_stats::count);
+//       auto s = stats[index];
+//       switch(character_stats::types[index]) {
+//         case stat_type::uint_t:  return float(s.uval);
+//         case stat_type::int_t:   return float(s.ival);
+//         case stat_type::float_t: return float(s.fval);
+//         default: assert(false);
+//       }
+//       
+//       return 0.0f;
+//     }
+//     
+//     void character::set_base_stat(const uint32_t &index, const float &value) {
+//       ASSERT(index < character_stats::count);
+//       switch(character_stats::types[index]) {
+//         case stat_type::uint_t:  stats[index].uval = uint32_t(value); break;
+//         case stat_type::int_t:   stats[index].ival =  int32_t(value); break;
+//         case stat_type::float_t: stats[index].fval =    float(value); break;
+//         default: assert(false);
+//       }
+//     }
+//     
+//     float character::add_to_base_stat(const uint32_t &index, const float &value) {
+//       ASSERT(index < character_stats::count);
+//       auto s = stats[index];
+//       switch(character_stats::types[index]) {
+//         case stat_type::uint_t:  stats[index].uval += uint32_t(value); return float(s.uval);
+//         case stat_type::int_t:   stats[index].ival +=  int32_t(value); return float(s.ival);
+//         case stat_type::float_t: stats[index].fval +=    float(value); return float(s.fval);
+//         default: assert(false);
+//       }
+//       
+//       return 0.0f;
+//     }
+//     
+//     float character::stat(const uint32_t &index) const {
+//       ASSERT(index < character_stats::count);
+//       auto s = current_stats[index];
+//       switch(character_stats::types[index]) {
+//         case stat_type::uint_t:  return float(s.uval);
+//         case stat_type::int_t:   return float(s.ival);
+//         case stat_type::float_t: return float(s.fval);
+//         default: assert(false);
+//       }
+//       
+//       return 0.0f;
+//     }
+//     
+//     void character::set_stat(const uint32_t &index, const float &value) {
+//       ASSERT(index < character_stats::count);
+//       switch(character_stats::types[index]) {
+//         case stat_type::uint_t:  current_stats[index].uval = uint32_t(value); break;
+//         case stat_type::int_t:   current_stats[index].ival =  int32_t(value); break;
+//         case stat_type::float_t: current_stats[index].fval =    float(value); break;
+//         default: assert(false);
+//       }
+//     }
+//     
+//     float character::add_to_stat(const uint32_t &index, const float &value) {
+//       ASSERT(index < character_stats::count);
+//       auto s = current_stats[index];
+//       switch(character_stats::types[index]) {
+//         case stat_type::uint_t:  current_stats[index].uval += uint32_t(value); return float(s.uval);
+//         case stat_type::int_t:   current_stats[index].ival +=  int32_t(value); return float(s.ival);
+//         case stat_type::float_t: current_stats[index].fval +=    float(value); return float(s.fval);
+//         default: assert(false);
+//       }
+//       
+//       return 0.0f;
+//     }
+//     
+//     float character::base_hero_stat(const uint32_t &index) const {
+//       ASSERT(index < hero_stats::count);
+//       auto s = hero_stats[index];
+//       return float(s.ival);
+//     }
+//     
+//     float character::hero_stat(const uint32_t &index) const {
+//       ASSERT(index < hero_stats::count);
+//       auto s = current_hero_stats[index];
+//       return float(s.ival);
+//     }
+//     
+//     void character::set_hero_stat(const uint32_t &index, const float &value) {
+//       ASSERT(index < hero_stats::count);
+//       current_hero_stats[index].ival = int32_t(value);
+//     }
+//     
+//     float character::add_to_hero_stat(const uint32_t &index, const float &value) {
+//       auto s = current_hero_stats[index];
+//       current_hero_stats[index].ival += int32_t(value);
+//       return float(s.ival);
+//     }
     
     bool character::get_bit(const size_t &index) const {
       ASSERT(index < SIZE_WIDTH - system::count);

@@ -4,17 +4,11 @@ namespace devils_engine {
   namespace core {
     const structure event::s_type;
     event::event() : 
-      name_id(SIZE_MAX), 
-      description_id(SIZE_MAX), 
-      image{GPU_UINT_MAX}, 
-      mtth(SIZE_MAX), 
+      image{GPU_UINT_MAX},  
       options_count(0) 
     {}
     
-    event::option::option() : 
-      name_id(SIZE_MAX), 
-      desc_id(SIZE_MAX) 
-    {}
+    event::option::option() {}
     
 //     struct current_context {
 //       utils::target_data target;

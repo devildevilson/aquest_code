@@ -22,5 +22,6 @@
 #include "troop_type.h"
 #include "troop.h"
 #include "war.h"
+#include "interaction.h"
 
 #endif

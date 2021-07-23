@@ -8,7 +8,7 @@ namespace devils_engine {
       description_id(SIZE_MAX), 
       card{GPU_UINT_MAX} 
     { 
-      memset(stats.data(), 0, sizeof(stats[0]) * troop_stats::count);
+//       memset(stats.data(), 0, sizeof(stats[0]) * troop_stats::count);
     }
   }
 }

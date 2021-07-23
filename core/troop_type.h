@@ -6,6 +6,7 @@
 #include <cstdint>
 #include "declare_structures.h"
 #include "stats.h"
+#include "stat_data.h"
 
 namespace devils_engine {
   namespace core {

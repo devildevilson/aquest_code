@@ -1,7 +1,9 @@
 #ifndef TRAIT_H
 #define TRAIT_H
 
+#include <string>
 #include "stats.h"
+#include "stat_data.h"
 #include "declare_structures.h"
 
 namespace devils_engine {

@@ -1,7 +1,9 @@
 #ifndef LAW_H
 #define LAW_H
 
+#include <string>
 #include "stats.h"
+#include "stat_data.h"
 #include "declare_structures.h"
 #include "utils/realm_mechanics.h"
 
@@ -21,7 +23,7 @@ namespace devils_engine {
       size_t name_id; // у некоторых сущностей имена должны быть определены заранее (ну то есть мы наверное можем сгенерировать закон, но пока нет)
       size_t description_id;
       std::array<stat_modifier, max_stat_modifiers_count> attrib;                        // закон тоже может изменить аттрибуты
-      std::array<utils::mechanics_modifier, max_mechanics_modifiers_count> modificators; // применяем изменения к механикам государства (тут видимо нужно делать больше размер)
+//       std::array<utils::mechanics_modifier, max_mechanics_modifiers_count> modificators; // применяем изменения к механикам государства (тут видимо нужно делать больше размер)
       //std::vector<utils::functions_container::operation> potential;
       //std::vector<utils::functions_container::operation> conditions;
       // но закон еще меняет механику, механика будет привязана к функции луа (не будет наверное)

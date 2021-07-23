@@ -11,7 +11,7 @@ namespace devils_engine {
   namespace core {  
     struct religion_group {
       static const structure s_type = structure::religion_group;
-      
+      std::string id;
     };
     
     // могут быть как сгенерироваными так и нет

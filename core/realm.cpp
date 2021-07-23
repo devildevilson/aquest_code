@@ -24,7 +24,7 @@ namespace devils_engine {
       prisoners(nullptr) 
     {
       // тут было бы неплохо создать сразу с персонажем это дело
-      memset(stats.data(), 0, sizeof(stats));
+//       memset(stats.data(), 0, sizeof(stats));
     }
     
     void realm::succession() {
@@ -56,7 +56,8 @@ namespace devils_engine {
             if (last != nullptr) { last->next_courtier = courtiers; courtiers = f->courtiers; }
           }
           
-          global::get<core::context>()->destroy(f);
+          const size_t token = global::get<core::context>()->get_realm_token(f);
+          global::get<core::context>()->destroy_realm(token);
         }
         
         if (heir->realms[character::elective] != nullptr) {
@@ -69,7 +70,7 @@ namespace devils_engine {
           // то бишь получается что у челика может быть как бы множество наследников
         }
         
-        heir->current_stats[core::character_stats::money].fval += leader->current_stats[core::character_stats::money].fval;
+        heir->resources.add(core::character_resources::money, leader->resources.get(core::character_resources::money));
         
         heir->realms[character::self] = this;
       }

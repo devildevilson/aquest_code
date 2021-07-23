@@ -1,8 +1,10 @@
 #ifndef MODIFICATOR_H
 #define MODIFICATOR_H
 
+#include <string>
 #include "declare_structures.h"
 #include "stats.h"
+#include "stat_data.h"
 
 namespace devils_engine {
   namespace core {

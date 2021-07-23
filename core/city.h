@@ -6,12 +6,14 @@
 #include "utils/bit_field.h"
 #include "city_type.h"
 #include "stats.h"
+#include "stat_data.h"
 #include "utils/structures_utils.h"
 
 namespace devils_engine {
   namespace core {
     // на карте еще было бы неплохо разместить что то вроде данжей (или например хижину ведьмы)
     // я полагаю необходимо разделить эти вещи
+    // город довольно сильно зависит от титула, в нем будет хранится название, id у города в этом случае не будет видимо
     struct city : public utils::flags_container, public utils::modificators_container, public utils::events_container {
       static const structure s_type = structure::city;
       static const size_t modificators_container_size = 10;
@@ -31,7 +33,9 @@ namespace devils_engine {
       uint32_t building_index;
       uint32_t tile_index;
       // характеристики (текущие характеристики города, база + со всех зданий) (характеристики довольно ограничены, нужно ли дать возможность их модифицировать?)
-      std::array<stat_container, city_stats::count> current_stats;
+      //std::array<stat_container, city_stats::count> current_stats;
+      utils::stats_container<city_stats::values> stats;
+      utils::stats_container<city_stats::values> current_stats;
       
 //       modificators_container<modificators_container_size> modificators; // по идее их меньше чем треитов
 //       events_container<events_container_size> events; // эвенты и флаги хранятся в титуле

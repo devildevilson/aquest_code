@@ -5,6 +5,11 @@
 #include <array>
 #include "declare_structures.h"
 #include "render/shared_structures.h"
+#include "script/script_header.h"
+
+// тут в принципе ничего сложного, проверяем триггер, эвент сидит у объекта, проверяем мттх
+// эвент может быть скрытым, делаем эффект, даем игроку подумать над опциями
+// эвенты полегче чем десижоны
 
 namespace devils_engine {
   namespace core {
@@ -16,23 +21,33 @@ namespace devils_engine {
       static const size_t max_options_count = 8;
       
       struct option {
-        size_t name_id; // наверное и названия нужно скомпилировать
-        size_t desc_id;
-//         std::vector<utils::functions_container::operation> conditions; // наверное можно использовать статический массив
-//         std::vector<utils::functions_container::operation> effects; // как сгенерить описание?
+        script::script_data name_script;
+        script::script_data description_script;
+        script::script_data conditions;
+        script::script_data effects;
+        script::script_data ai_weight;
         
         option();
       };
       
       std::string id;
-      size_t name_id; // индекс строки должен состоять из индекса банка и индекса собственно строки
-      size_t description_id;
-//       enum utils::target_data::type target;
+      script::script_data name_script;
+      script::script_data description_script;
+      
+      // какой инпут? есть ли тут рут? кажется тут вполне можно использовать те же правила что и в десижоне
+      // то есть мы можем запомнить рут в скоуп, но здесь не нужно пушить необходимость присутствия рута
+      // а значит нужно аккуратно сделать рвалуе
+      // нет, у нас рут - это то объект для которого вызывается эвент
+      
+      // вообще это тоже нужно пихнуть в скрипт
       render::image_t image;
-      size_t mtth; // среднее время возникновения, должны быть модификаторы для этого 
-      //std::function<bool(const target_data&)> potential;
+      script::script_data potential;
+      //size_t mtth; // среднее время возникновения, должны быть модификаторы для этого 
+      script::script_data mtth_script;
+      //immediate
+      
+      // наверное нужно пихнуть это дело в вектор
       uint32_t options_count;
-//       std::vector<utils::functions_container::operation> conditions; // средняя длинна скорее всего не превышает 16 (может и меньше) 
       std::array<option, max_options_count> options;
       
       event();

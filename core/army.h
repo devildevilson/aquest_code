@@ -31,8 +31,10 @@ namespace devils_engine {
       // позиция (просто указатель на тайл?)
       uint32_t tile_index;
       // характеристики армии? передвижение, атака, защита (?), все характеристики для отрядов
-      std::array<stat_container, army_stats::count> computed_stats; // 
-      std::array<stat_container, army_stats::count> current_stats;
+//       std::array<stat_container, army_stats::count> computed_stats;
+//       std::array<stat_container, army_stats::count> current_stats;
+      utils::stats_container<army_stats::values> stats;
+      utils::stats_container<army_stats::values> current_stats;
       // какие то спутники? (спутники по идее у персонажа)
       // графика (иконка и отображение на карте)
       //render::image_t map_img; // на карте это нужно отображать с флагом

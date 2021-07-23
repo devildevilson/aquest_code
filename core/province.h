@@ -3,6 +3,8 @@
 
 #include <vector>
 #include <array>
+#include "stats.h"
+#include "stat_data.h"
 #include "declare_structures.h"
 #include "utils/structures_utils.h"
 
@@ -32,9 +34,10 @@ namespace devils_engine {
       uint32_t cities_count;
       std::array<city*, cities_max_game_count> cities; // тут мы должны заранее указать тайл для будущего города
       
-//       modificators_container<modificators_container_size> modificators; // по идее их меньше чем треитов
-//       events_container<events_container_size> events; // должно хватить
-//       flags_container<flags_container_size> flags; // флагов довольно много
+//       std::array<stat_container, province_stats::count> stats;
+//       std::array<stat_container, province_stats::count> current_stats;
+      utils::stats_container<province_stats::values> stats;
+      utils::stats_container<province_stats::values> current_stats;
       
       province();
     };

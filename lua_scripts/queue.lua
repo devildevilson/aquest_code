@@ -39,5 +39,6 @@ local methods = {
   end
 }
 
-local function new() return setmetatable({head = 0, tail = 0}, {__index = methods}) end
+local mt = {__index = methods}
+local function new() return setmetatable({head = 0, tail = 0}, mt) end
 return {new = new}

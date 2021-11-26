@@ -136,7 +136,7 @@ local function map_action(casted_tile_index)
       end
     end
   else
-    if is_clicked and core.is_tile_valid(casted_tile_index) then
+    if is_clicked and core.is_tile_index_valid(casted_tile_index) then
       local province = core.get_tile_province(casted_tile_index)
       if province ~= nil then
         local title = province.title

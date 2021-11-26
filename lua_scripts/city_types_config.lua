@@ -3,7 +3,8 @@
 return {
   {
     id = "city_type1",
-    buildings = { "test_building1", "test_building2" },
+    buildings = { "castle1", "building1" },
+    default_buildings = { "castle1" },
     stats = { tax_income = 1.0 },
     image_top = "castle_top",
     image_face = "castle_face",
@@ -11,7 +12,8 @@ return {
   },
   {
     id = "city_type2",
-    buildings = { "test_building1", "test_building2" },
+    buildings = { "castle1", "building1" },
+    default_buildings = { "castle1" },
     stats = { tax_income = 1.0 },
     image_top = "castle_top",
     image_face = "castle_face",

@@ -7,7 +7,7 @@ end
 local window_flags = nk.WINDOW_NO_SCROLLBAR | nk.WINDOW_NO_INPUT
 
 local function world_map_tooltip_func(nk_ctx, game_ctx, _, _, window_name)
-  assert(core.is_tile_valid(game_ctx.tile_index))
+  assert(core.is_tile_index_valid(game_ctx.tile_index))
 
   local mouse_x, mouse_y = input.get_cursor_pos()
   local fbw, fbh = input.get_framebuffer_size()

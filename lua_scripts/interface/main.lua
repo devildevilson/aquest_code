@@ -2,6 +2,10 @@ local nk = require("moonnuklear") -- это зарегестрированный
 --local fmt = require("fmt")        -- это зарегестрированный Си модуль
 --local queue = require("apates_quest.scripts.queue")
 local menu = require("apates_quest.scripts.interface.main_menu")
+local gen_func1 = require("apates_quest.scripts.interface.gen_part1")
+local gen_func2 = require("apates_quest.scripts.interface.gen_part2")
+local gen_func3 = require("apates_quest.scripts.interface.gen_part3")
+
 -- было бы неплохо чистить как то эти функции, так как это require
 -- они хранятся во внутренней таблице, для того чтобы их почистить
 -- из этой таблице, нужно наверное завести еще одну функцию
@@ -53,16 +57,18 @@ local function world_map_generator_state_function(nk_ctx, _, _, local_table) -- 
   -- стейт сменится на следующий кадр, а в этом кадре можно пока что сохранить информацию с генератора
   if mg.is_finished() then
     generator_interfaces = nil
-    core.clear_module("apates_quest.scripts.interface.gen_part1")
-    core.clear_module("apates_quest.scripts.interface.gen_part2")
-    core.clear_module("apates_quest.scripts.interface.gen_part3")
+    -- core.clear_module("apates_quest.scripts.interface.gen_part1")
+    -- core.clear_module("apates_quest.scripts.interface.gen_part2")
+    -- core.clear_module("apates_quest.scripts.interface.gen_part3")
     return
   end
 
   if generator_interfaces == nil then
-    local gen_func1 = require("apates_quest.scripts.interface.gen_part1")
-    local gen_func2 = require("apates_quest.scripts.interface.gen_part2")
-    local gen_func3 = require("apates_quest.scripts.interface.gen_part3")
+    assert(require ~= nil)
+    assert(type(require) == "function")
+    --local gen_func1 = require("apates_quest.scripts.interface.gen_part1")
+    --local gen_func2 = require("apates_quest.scripts.interface.gen_part2")
+    --local gen_func3 = require("apates_quest.scripts.interface.gen_part3")
     generator_interfaces = {gen_func1, gen_func2, gen_func3}
   end
 
@@ -258,7 +264,7 @@ local function interface_func(nk_ctx, game_ctx, timer, local_table)
   assert(type(state_f) == "function")
   state_f(nk_ctx, game_ctx, timer, local_table)
 
-  if core.is_tile_valid(game_ctx.tile_index) and not interface_hovered then
+  if core.is_tile_index_valid(game_ctx.tile_index) and not interface_hovered then
     core.highlight_tile(game_ctx.tile_index, utils.make_color(0.9, 0.9, 0.0, 0.5))
     tooltip_func(nk_ctx, game_ctx, timer, local_table, tooltip_name)
   end

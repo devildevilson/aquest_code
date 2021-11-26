@@ -30,135 +30,169 @@
 --   end
 -- end
 
--- возвращаем список таблиц, в таблицах теперь не нужен id (???)
-return {
-  {
-    id = "biome_ocean", -- не забыть id, нужно ли к id добавлять "неймспейс" apates_quest/ ?
-    color = utils.make_color(0.2, 0.2, 0.8, 1.0),
-    -- на ворлд мапе наверное не нужно делать вид с бок и вид сверху для объектов биома
-    -- вполне можно сделать наверное 3 объекта, но тут большие проблемы с кешем графических процессоров
-    -- + я не уверен что это полезно, вряд ли их нужно разглядывать вообще
-    object1 = nil, object2 = nil,
-    min_scale1 = 0.0, max_scale1 = 0.0,
-    min_scale2 = 0.1, max_scale2 = 0.3,
-    density = 9.0,
-    height1 = 0.0, height2 = 0.0
-  },
-  {
-    id = "biome_ocean_glacier",
-    color = utils.make_color(0.8, 0.8, 1.0, 1.0),
-    object1 = nil, object2 = nil,
-    min_scale1 = 0.0, max_scale1 = 0.0,
-    min_scale2 = 0.0, max_scale2 = 0.0,
-    density = 0.0,
-    height1 = 0.0, height2 = 0.0
-  },
-  {
-    id = "biome_desert",
-    color = utils.make_color(0.914, 0.914, 0.2, 1.0),
-    object1 = nil, object2 = nil,
-    min_scale1 = 0.0, max_scale1 = 0.0,
-    min_scale2 = 0.0, max_scale2 = 0.0,
-    density = 0.0,
-    height1 = 0.0, height2 = 0.0
-  },
-  {
-    id = "biome_rain_forest",
+-- я вот что подумал, биомы можно разнообразить
+-- объекты на биомах могут обладать анимацией
+-- анимация - 3 текстурки которые мы тут указываем, для чего она нам?
+-- можем оформить берег (анимация разбивающихся волн), оформить воронку в океане
+-- является ли это анимацией текстурирования гекса? скорее всего
+-- анимация на обычных тайлах? (возможно какое нибудь особое здание)
+-- + на некоторых тайлах можно поставить источник частиц (например дымит вулкан)
+
+-- будет тогда 3 типа: 3 объекта, 3 фрейма анимации у объектов, 3 фрейма анимации у тайла
+
+local biome_rain_forest = {
+  id = "biome_rain_forest",
+  name_id = "biomes.biome_rain_forest.name",
+  description_id = "biomes.biome_rain_forest.desc",
+  base_speed = 1.0,
+  data = {
     color = utils.make_color(0.0, 0.7, 0.2, 1.0),
-    object1 = nil, object2 = "rain_tree",
-    min_scale1 = 0.0, max_scale1 = 0.0,
-    min_scale2 = 0.3, max_scale2 = 1.0,
     density = 9.0,
-    height1 = 0.0, height2 = 0.0
-  },
-  {
-    id = "biome_rocky",
-    color = utils.make_color(1.0, 0.2, 0.2, 1.0),
-    object1 = nil, object2 = nil,
-    min_scale1 = 0.0, max_scale1 = 0.0,
-    min_scale2 = 0.0, max_scale2 = 0.0,
-    density = 0.0,
-    height1 = 0.0, height2 = 0.0
-  },
-  {
-    id = "biome_plains",
-    color = utils.make_color(0.553, 0.769, 0.208, 1.0),
-    object1 = nil, object2 = nil,
-    min_scale1 = 0.0, max_scale1 = 0.0,
-    min_scale2 = 0.0, max_scale2 = 0.0,
-    density = 0.0,
-    height1 = 0.0, height2 = 0.0
-  },
-  {
-    id = "biome_swamp",
-    color = utils.make_color(0.0, 1.0, 0.0, 1.0),
-    object1 = nil, object2 = nil,
-    min_scale1 = 0.0, max_scale1 = 0.0,
-    min_scale2 = 0.0, max_scale2 = 0.0,
-    density = 0.0,
-    height1 = 0.0, height2 = 0.0
-  },
-  {
-    id = "biome_grassland",
-    color = utils.make_color(0.553, 0.769, 0.208, 1.0),
-    object1 = nil, object2 = nil,
-    min_scale1 = 0.0, max_scale1 = 0.0,
-    min_scale2 = 0.0, max_scale2 = 0.0,
-    density = 0.0,
-    height1 = 0.0, height2 = 0.0
-  },
-  {
-    id = "biome_deciduous_forest",
-    color = utils.make_color(0.0, 0.8, 0.0, 1.0),
-    object1 = nil, object2 = "deciduous_tree",
-    min_scale1 = 0.0, max_scale1 = 0.0,
-    min_scale2 = 0.0, max_scale2 = 0.0,
-    density = 0.0,
-    height1 = 0.0, height2 = 0.0
-  },
-  {
-    id = "biome_tundra",
-    color = utils.make_color(0.6, 0.6, 0.6, 1.0),
-    object1 = nil, object2 = nil,
-    min_scale1 = 0.0, max_scale1 = 0.0,
-    min_scale2 = 0.0, max_scale2 = 0.0,
-    density = 0.0,
-    height1 = 0.0, height2 = 0.0
-  },
-  {
-    id = "biome_land_glacier",
-    color = utils.make_color(0.914, 0.988, 1.0, 1.0),
-    object1 = nil, object2 = nil,
-    min_scale1 = 0.0, max_scale1 = 0.0,
-    min_scale2 = 0.0, max_scale2 = 0.0,
-    density = 0.0,
-    height1 = 0.0, height2 = 0.0
-  },
-  {
-    id = "biome_conifer_forest",
-    color = utils.make_color(0.0, 0.6, 0.0, 1.0),
-    object1 = nil, object2 = "coniferous_tree",
-    min_scale1 = 0.0, max_scale1 = 0.0,
-    min_scale2 = 0.0, max_scale2 = 0.0,
-    density = 0.0,
-    height1 = 0.0, height2 = 0.0
-  },
-  {
-    id = "biome_mountain",
-    color = utils.make_color(0.2, 0.2, 0.2, 1.0),
-    object1 = nil, object2 = nil,
-    min_scale1 = 0.0, max_scale1 = 0.0,
-    min_scale2 = 0.0, max_scale2 = 0.0,
-    density = 0.0,
-    height1 = 0.0, height2 = 0.0
-  },
-  {
-    id = "biome_snowy_mountain",
-    color = utils.make_color(0.914, 0.988, 1.0, 1.0),
-    object1 = nil, object2 = nil,
-    min_scale1 = 0.0, max_scale1 = 0.0,
-    min_scale2 = 0.0, max_scale2 = 0.0,
-    density = 0.0,
-    height1 = 0.0, height2 = 0.0
+    objects = { -- rendering data, maximum 3
+      { texture = "rain_tree", min_scale = 0.3, max_scale = 1.0, probability = 1.0 }
+    }
   }
+}
+
+local biome_ocean = {
+  id = "biome_ocean",
+  name_id = "biomes.biome_ocean.name",
+  description_id = "biomes.biome_ocean.desc",
+  attributes = { "water", },
+  base_speed = 1.0,
+  data = { color = utils.make_color(0.2, 0.2, 0.8, 1.0) }
+}
+
+local biome_ocean_glacier = {
+  id = "biome_ocean_glacier",
+  name_id = "biomes.biome_ocean_glacier.name",
+  description_id = "biomes.biome_ocean_glacier.desc",
+  attributes = { "winter", },
+  base_speed = 0.75,
+  data = { color = utils.make_color(0.8, 0.8, 1.0, 1.0) }
+}
+
+local biome_desert = {
+  id = "biome_desert",
+  name_id = "biomes.biome_desert.name",
+  description_id = "biomes.biome_desert.desc",
+  attributes = { "wasteland", },
+  base_speed = 1.0,
+  data = { color = utils.make_color(0.914, 0.914, 0.2, 1.0) }
+}
+
+local biome_rocky = {
+  id = "biome_rocky",
+  name_id = "biomes.biome_rocky.name",
+  description_id = "biomes.biome_rocky.desc",
+  base_speed = 1.0,
+  data = { color = utils.make_color(1.0, 0.2, 0.2, 1.0) }
+}
+
+local biome_plains = {
+  id = "biome_plains",
+  name_id = "biomes.biome_plains.name",
+  description_id = "biomes.biome_plains.desc",
+  base_speed = 1.0,
+  data = { color = utils.make_color(0.553, 0.769, 0.208, 1.0) }
+}
+
+local biome_swamp = {
+  id = "biome_swamp",
+  name_id = "biomes.biome_swamp.name",
+  description_id = "biomes.biome_swamp.desc",
+  base_speed = 0.75,
+  data = { color = utils.make_color(0.0, 1.0, 0.0, 1.0) }
+}
+
+local biome_grassland = {
+  id = "biome_grassland",
+  name_id = "biomes.biome_grassland.name",
+  description_id = "biomes.biome_grassland.desc",
+  base_speed = 1.0,
+  data = { color = utils.make_color(0.553, 0.769, 0.208, 1.0) }
+}
+
+local biome_deciduous_forest = {
+  id = "biome_deciduous_forest",
+  name_id = "biomes.biome_deciduous_forest.name",
+  description_id = "biomes.biome_deciduous_forest.desc",
+  base_speed = 1.0,
+  data = {
+    color = utils.make_color(0.0, 0.8, 0.0, 1.0),
+    density = 8.0,
+    objects = {
+      { texture = "deciduous_tree", min_scale = 0.3, max_scale = 1.0, probability = 1.0 }
+    }
+  }
+}
+
+-- тундра может быть и летняя и зимняя (не особо много вариаций)
+local biome_tundra = {
+  id = "biome_tundra",
+  name_id = "biomes.biome_tundra.name",
+  description_id = "biomes.biome_tundra.desc",
+  base_speed = 1.0,
+  data = { color = utils.make_color(0.6, 0.6, 0.6, 1.0) }
+}
+
+local biome_land_glacier = {
+  id = "biome_land_glacier",
+  name_id = "biomes.biome_land_glacier.name",
+  description_id = "biomes.biome_land_glacier.desc",
+  attributes = { "winter", },
+  base_speed = 0.75,
+  data = { color = utils.make_color(0.6, 0.6, 0.6, 1.0) }
+}
+
+local biome_conifer_forest = {
+  id = "biome_conifer_forest",
+  name_id = "biomes.biome_conifer_forest.name",
+  description_id = "biomes.biome_conifer_forest.desc",
+  base_speed = 1.0,
+  data = {
+    color = utils.make_color(0.0, 0.6, 0.0, 1.0),
+    density = 12.0,
+    objects = {
+      { texture = "coniferous_tree", min_scale = 0.3, max_scale = 1.0, probability = 1.0 }
+    }
+  }
+}
+
+local biome_mountain = {
+  id = "biome_mountain",
+  name_id = "biomes.biome_mountain.name",
+  description_id = "biomes.biome_mountain.desc",
+  attributes = { "not_passable" },
+  base_speed = 1.0,
+  data = { color = utils.make_color(0.2, 0.2, 0.2, 1.0) }
+}
+
+local biome_snowy_mountain = {
+  id = "biome_snowy_mountain",
+  name_id = "biomes.biome_snowy_mountain.name",
+  description_id = "biomes.biome_snowy_mountain.desc",
+  attributes = { "not_passable" },
+  base_speed = 1.0,
+  data = { color = utils.make_color(0.914, 0.988, 1.0, 1.0) }
+}
+
+-- возвращаем список таблиц, в таблицах теперь не нужен id (???)
+-- нужен, + к нему зададим имя, описание, аттрибуты, базовую скорость
+-- биомы должны быть строго в последовательном массиве !!! возможно нужно включить проверку последовательности данных
+return { -- maximum 255 biomes
+  biome_ocean,
+  biome_ocean_glacier,
+  biome_desert,
+  biome_rain_forest,
+  biome_rocky,
+  biome_plains,
+  biome_swamp,
+  biome_grassland,
+  biome_deciduous_forest,
+  biome_tundra,
+  biome_land_glacier,
+  biome_conifer_forest,
+  biome_mountain,
+  biome_snowy_mountain
 }

@@ -1,3 +1,6 @@
+--luacheck: no max line length
+--luacheck: ignore local_table
+
 -- показатели скорости супер плачевные, лучше разрешить здесь подключение либ через реквайр
 -- иначе получается абсолютный ужас по производительности, в релизном билде все выглядит гораздо лучше
 -- прежде всего проблемы создают методы из с++, там большой оверхед, но в релизном билде убирается
@@ -33,7 +36,7 @@ local function get_index_pair(index_pair)
   return (index_pair >> 32) & constants.uint32_max, index_pair & constants.uint32_max
 end
 
-function compute_boundary_edges(ctx, local_table)
+local function compute_boundary_edges(ctx, local_table)
   local function_timer = generator.timer_t.new("boundary edges computation")
   --collectgarbage("collect")
   local maxf = math.max
@@ -42,7 +45,7 @@ function compute_boundary_edges(ctx, local_table)
   local tiles_count = ctx.map:tiles_count()
   local pairs_set = utils.create_table(0, tiles_count)
 
-  local plates_count = local_table.final_plates_count
+  --local plates_count = local_table.final_plates_count
 
   local container = ctx.container
   utils.each_tile_neighbor(ctx, function(tile_index, neighbor_index)
@@ -82,20 +85,20 @@ function compute_boundary_edges(ctx, local_table)
   --   end
   -- end
 
-  -- найдет ли pairs все объекты в таблице? даже те что лежат в массиве таблицы
-  local pairs_counter = 0
-  for k, v in pairs(pairs_set) do pairs_counter = pairs_counter + 1 end
-  local pairs_counter_mem = pairs_counter
-  for i, v in ipairs(pairs_set) do pairs_counter = pairs_counter + 1 end
+  -- найдет ли pairs все объекты в таблице? даже те что лежат в массиве таблицы? да
+  local pairs_counter = utils.count(pairs_set)
+  --for _, _ in pairs(pairs_set) do pairs_counter = pairs_counter + 1 end
+  --local pairs_counter_mem = pairs_counter
+  --for i, v in ipairs(pairs_set) do pairs_counter = pairs_counter + 1 end
   -- assert(pairs_counter_mem == pairs_counter)
 
   print("edges count " .. pairs_counter)
-  print("edges count " .. pairs_counter_mem)
+  --print("edges count " .. pairs_counter_mem)
   assert(pairs_counter ~= 0)
 
   ctx.container:set_entity_count(types.entities.edge, pairs_counter)
   local edge_counter = 1
-  for k, v in pairs(pairs_set) do
+  for k, _ in pairs(pairs_set) do
     local first, second = get_index_pair(k)
 
     -- ctx.container:add_child(types.entities.edge, edge_counter, first)
@@ -106,9 +109,8 @@ function compute_boundary_edges(ctx, local_table)
     edge_counter = edge_counter + 1
   end
 
-  pairs_set = nil
+  --pairs_set = nil
   function_timer:finish()
-  function_timer = nil
 end -- compute_boundary_edges
 
 local function project(vector, normal)
@@ -131,7 +133,7 @@ local function calculate_axial_rotation(axis, rate, pos)
   return (dir / length) * (rate * position_axis_distance);
 end
 
-function compute_plate_boundary_stress(ctx, local_table)
+local function compute_plate_boundary_stress(ctx, local_table)
   local function_timer = generator.timer_t.new("plate boundary stresses computation")
   --collectgarbage("collect")
 
@@ -196,12 +198,11 @@ function compute_plate_boundary_stress(ctx, local_table)
   end
 
   function_timer:finish()
-  function_timer = nil
 end -- compute_plate_boundary_stress
 
 local function assign_distance_field(ctx, seeds, stops, distances)
-  local edges_count = ctx.container:entities_count(types.entities.edge)
-  local index_queue = utils.create_table(ctx.map:tiles_count(), 0)
+  --local edges_count = ctx.container:entities_count(types.entities.edge)
+  --local index_queue = utils.create_table(ctx.map:tiles_count(), 0)
   utils.int_random_queue(ctx, #seeds, function(index, queue_push)
     local edge_index = index
     if not seeds[edge_index] then return end
@@ -218,10 +219,11 @@ local function assign_distance_field(ctx, seeds, stops, distances)
     local current_edge, dist = utils.unpack_pair_u32f32(distances[data])
 
     for i = 1, tile.n_count do
-      local n_index = tile:get_neighbor_index(i)
+      local n_index = tile:get_neighbor_index(i) -- tile index
       local n_plate_idx = ctx.container:get_data_u32(types.entities.tile, n_index, types.properties.tile.plate_index)
       if current_plate_idx == n_plate_idx then
-        local id, n_dist = utils.unpack_pair_u32f32(distances[n_index])
+        -- edge index
+        local _, n_dist = utils.unpack_pair_u32f32(distances[n_index])
         if n_dist == 100000.0 and not stops[n_index] then
           distances[n_index] = utils.create_pair_u32f32(current_edge, dist + 1.0)
           queue_push(n_index)
@@ -264,14 +266,14 @@ local function assign_distance_field(ctx, seeds, stops, distances)
   -- end
 end
 
-function compute_plate_boundary_distances(ctx, local_table)
+local function compute_plate_boundary_distances(ctx, local_table)
   local function_timer = generator.timer_t.new("plate boundary distances computation")
   --collectgarbage("collect")
 
   -- найдем дальности от тайла к границам плиты
   local tiles_count = ctx.map:tiles_count()
   local edges_count = ctx.container:entities_count(types.entities.edge)
-  local plates_count = ctx.container:entities_count(types.entities.plate)
+  --local plates_count = ctx.container:entities_count(types.entities.plate)
   --local tile_index_queue = queue.new()
   local unique_tiles = utils.init_array(tiles_count, false) -- игнорируем тайлы на границе
   local edge_index_dist = utils.init_array(tiles_count, 1.0)
@@ -297,8 +299,8 @@ function compute_plate_boundary_distances(ctx, local_table)
     local point2 = maf.vector(ctx.map:get_point(tile2.center))
 
     local dist = point1:distance(point2) / 2
-    edge_index_dist[first_tile]  = utils.create_pair_u32f32(i, dist)
-    edge_index_dist[second_tile] = utils.create_pair_u32f32(i, dist)
+    edge_index_dist[first_tile]  = utils.create_pair_u32f32(index, dist)
+    edge_index_dist[second_tile] = utils.create_pair_u32f32(index, dist)
   end, function(data, queue_push)
     local tile = ctx.map:get_tile(data)
     local point1 = maf.vector(ctx.map:get_point(tile.center))
@@ -313,7 +315,7 @@ function compute_plate_boundary_distances(ctx, local_table)
         -- должно быть деление на 2 как в предыдущем? нет,
         -- тут мы находим растояние до ближайшей границы для каждого тайла
         local new_dist = point1:distance(point2) + dist
-        local edge_index2, dist2 = utils.unpack_pair_u32f32(edge_index_dist[n_index])
+        local _, dist2 = utils.unpack_pair_u32f32(edge_index_dist[n_index])
         if dist2 > new_dist then
           edge_index_dist[n_index] = utils.create_pair_u32f32(edge_index, new_dist)
           queue_push(n_index)
@@ -371,7 +373,7 @@ function compute_plate_boundary_distances(ctx, local_table)
   --   end
   -- end -- while
 
-  tile_index_queue = nil
+  --tile_index_queue = nil
   unique_tiles = nil
 
   for i = 1, #edge_index_dist do
@@ -564,36 +566,37 @@ function compute_plate_boundary_distances(ctx, local_table)
     ctx.container:set_data_f32(types.entities.tile, i, types.properties.tile.coastline_dist,  dist)
   end
 
-  -- for sanity
-  mountains = nil
-  oceans = nil
-  coastlines = nil
-  ocean_stops = nil
-  coastline_stops = nil
-  stops = nil
-  mountain_dist = nil
-  ocean_dist = nil
-  coastline_dist = nil
+  -- for sanity (luacheck cannot ignore it)
+  -- mountains = nil
+  -- oceans = nil
+  -- coastlines = nil
+  -- ocean_stops = nil
+  -- coastline_stops = nil
+  -- stops = nil
+  -- mountain_dist = nil
+  -- ocean_dist = nil
+  -- coastline_dist = nil
 
   function_timer:finish()
-  function_timer = nil
 end -- compute_plate_boundary_distances
 
 local function mix_val(x, y, val) return x + val * (y - x) end
 local function clamp(low, n, high) return math.min(math.max(n, low), high) end
 
-function calculate_vertex_elevation(ctx, local_table)
+local function calculate_vertex_elevation(ctx, local_table)
   local function_timer = generator.timer_t.new("vertex elevation computation")
   --collectgarbage("collect")
   local maxf = math.max
   local minf = math.min
   local absf = math.abs
 
+  ctx.noise:set_noise_type(utils.noiser.noise_type.NoiseType_Perlin)
+
   local noise_multiplier_local = local_table.userdata.noise_multiplier
   local tiles_count = ctx.map:tiles_count()
-  local tile_elevation = utils.create_table(tiles_count, -10)
+  local tile_elevation = utils.init_array(tiles_count, -10)
   for i = 1, tiles_count do
-    local accum_elevation = 0.0
+    local accum_elevation = 0.0 -- luacheck: ignore accum_elevation
     local elevations_count = 0
     local plate_index = ctx.container:get_data_u32(types.entities.tile, i, types.properties.tile.plate_index)
     local tile_index = i
@@ -757,9 +760,9 @@ function calculate_vertex_elevation(ctx, local_table)
 
   ctx.map:set_tiles_height(ctx.container, types.properties.tile.elevation)
   function_timer:finish()
-end
+end -- calculate_vertex_elevation
 
-function blur_tile_elevation(ctx, local_table)
+local function blur_tile_elevation(ctx, local_table)
   local function_timer = generator.timer_t.new("tile elevation bluring")
   --collectgarbage("collect")
 
@@ -771,7 +774,7 @@ function blur_tile_elevation(ctx, local_table)
   local water_ground_ratio_local = local_table.userdata.blur_water_ratio
   local iterations_count = local_table.userdata.blur_iterations_count
 
-  for iteration = 1, iterations_count do
+  for _ = 1, iterations_count do
     for i = 1, tiles_count do
       new_elevations[i] = ctx.container:get_data_f32(types.entities.tile, i, types.properties.tile.elevation)
     end
@@ -780,7 +783,7 @@ function blur_tile_elevation(ctx, local_table)
       local tile = ctx.map:get_tile(i)
       local old_elevation = new_elevations[i]
 
-      local accum_elevation = 0.0
+      local accum_elevation = 0.0 -- luacheck: ignore accum_elevation
       local accum_water = 0.0
       local accum_ground = 0.0
       for j = 1, tile.n_count do
@@ -819,9 +822,9 @@ function blur_tile_elevation(ctx, local_table)
   print("oceanic tiles after recompute " .. water_counter)
   print("oceanic tiles k               " .. (water_counter / ctx.map:tiles_count()))
   function_timer:finish()
-end
+end -- blur_tile_elevation
 
-function normalize_fractional_values(ctx, local_table, entity_id, property_id)
+local function normalize_fractional_values(ctx, local_table, entity_id, property_id)
   local function_timer = generator.timer_t.new("normalizing values")
   local maxf = math.max
   local minf = math.min
@@ -830,7 +833,7 @@ function normalize_fractional_values(ctx, local_table, entity_id, property_id)
   local minimum =  100000
   local maximum = -100000
   local entity_count = ctx.container:entities_count(entity_id)
-  local new_data = utils.init_array(entity_count, 0)
+  --local new_data = utils.init_array(entity_count, 0)
   for i = 1, entity_count do
     local data = ctx.container:get_data_f32(entity_id, i, property_id)
     minimum = minf(minimum, data)
@@ -854,8 +857,9 @@ function normalize_fractional_values(ctx, local_table, entity_id, property_id)
   function_timer:finish()
 end
 
-function normalize_tile_elevation(ctx, local_table)
+local function normalize_tile_elevation(ctx, local_table)
   normalize_fractional_values(ctx, local_table, types.entities.tile, types.properties.tile.elevation)
+  -- тут можно по слоям распределить высоты, мне нужно сделать воду ровной поверхностью
   ctx.map:set_tiles_height(ctx.container, types.properties.tile.elevation)
 end
 
@@ -863,7 +867,7 @@ local function mapper(value, smin, smax, dmin, dmax)
   return ((value - smin) / (smax - smin)) * (dmax - dmin) + dmin
 end
 
-function compute_tile_heat(ctx, local_table)
+local function compute_tile_heat(ctx, local_table)
   local function_timer = generator.timer_t.new("tiles heat computation")
   local maxf = math.max
   local minf = math.min
@@ -920,7 +924,7 @@ function compute_tile_heat(ctx, local_table)
   function_timer:finish()
 end
 
-function compute_tile_distances(ctx, local_table, predicate, index_property_id, dist_property_id)
+local function compute_tile_distances(ctx, local_table, predicate, index_property_id, dist_property_id)
   local function_timer = generator.timer_t.new("tile distances computation")
   local tiles_count = ctx.map:tiles_count()
   local ground_distance = utils.init_array(tiles_count, make_index_pair(constants.uint32_max, constants.uint32_max))
@@ -940,7 +944,7 @@ function compute_tile_distances(ctx, local_table, predicate, index_property_id, 
     local tile = ctx.map:get_tile(current_tile)
     for i = 1, tile.n_count do
       local n_index = tile:get_neighbor_index(i)
-      local ti, n_dist = get_index_pair(ground_distance[n_index])
+      local _, n_dist = get_index_pair(ground_distance[n_index])
       if n_dist == constants.uint32_max then
         ground_distance[n_index] = make_index_pair(index, dist + 1)
         index_queue:push_right(n_index)
@@ -957,18 +961,18 @@ function compute_tile_distances(ctx, local_table, predicate, index_property_id, 
   function_timer:finish()
 end
 
-function compute_tile_water_distances(ctx, local_table)
-  compute_tile_distances(ctx, local_table, function(ctx, local_table, index)
-    local h = ctx.container:get_data_f32(types.entities.tile, index, types.properties.tile.elevation)
+local function compute_tile_water_distances(ctx, local_table)
+  compute_tile_distances(ctx, local_table, function(context, local_table, index)
+    local h = context.container:get_data_f32(types.entities.tile, index, types.properties.tile.elevation)
     return h < 0.0
   end, types.properties.tile.water_index, types.properties.tile.water_dist)
 end
 
-function compute_tile_moisture(ctx, local_table)
+local function compute_tile_moisture(ctx, local_table)
   local function_timer = generator.timer_t.new("tiles moisture computation")
   local maxf = math.max
   local minf = math.min
-  local absf = math.abs
+  --local absf = math.abs
   --update_noise_seed(ctx);
 
   local tiles_count = ctx.map:tiles_count()
@@ -986,8 +990,8 @@ function compute_tile_moisture(ctx, local_table)
 
   for i = 1, tiles_count do
     wetness[i] = (wetness[i] - min_val) / (max_val - min_val)
-    local height = ctx.container:get_data_f32(types.entities.tile, i, types.properties.tile.elevation)
-    local heat   = ctx.container:get_data_f32(types.entities.tile, i, types.properties.tile.heat)
+    --local height = ctx.container:get_data_f32(types.entities.tile, i, types.properties.tile.elevation)
+    --local heat   = ctx.container:get_data_f32(types.entities.tile, i, types.properties.tile.heat)
     wetness[i] = wetness[i] * wetness[i] --  * heat
     --local dist_to_water = local_table["tiles"][i]["water_distance"]["dist"];
     local dist_to_water = ctx.container:get_data_u32(types.entities.tile, i, types.properties.tile.water_dist)
@@ -1039,13 +1043,12 @@ local function calcutate_biome(elevation, temperature, wetness)
     if temperature > 0.5 then return "biome_mountain"
     else return "biome_snowy_mountain" end
   end
-
-  return nil
 end
 
-local function setup_table(t, seasons)
+local function setup_table(t, _)
   for i = 1, #biomes_config do
-    local index = seasons:add_biome(biomes_config[i])
+    --local index = seasons:add_biome(biomes_config[i])
+    local index = i
 
     if t[biomes_config[i].id] ~= nil then
       error("Biome id collision " .. biomes_config[i].id)
@@ -1055,7 +1058,7 @@ local function setup_table(t, seasons)
   end
 end
 
-function create_biomes(ctx, local_table)
+local function create_biomes(ctx, local_table)
   local function_timer = generator.timer_t.new("biomes creation")
   -- так вот мы пришли к самому сложному на данный момент
   -- биомы в генераторе я задаю напрямую, а мне нужно пихать таблицу с биомами
@@ -1067,8 +1070,10 @@ function create_biomes(ctx, local_table)
   -- должен ли этот скрипт иметь возможность работать с файловой системой?
   -- (думаю, что только через require, который должен быть сильно модифицирован)
   utils.load_images("apates_quest/scripts/images_config.lua") -- добавляет скрипт, который вернет пачку таблиц
-  --utils.load_biomes("apates_quest/scripts/biomes_config.lua") -- вместо add_biome мы можем сделать load_biomes
+  utils.load_biomes("apates_quest/scripts/biomes_config.lua") -- вместо add_biome мы можем сделать load_biomes
   -- в эту функцию будем передавать путь до луа скрипта на загрузку
+
+  -- теперь биомы у меня грузятся из конфига
 
   local biome_table = {}
   setup_table(biome_table, ctx.seasons)
@@ -1082,13 +1087,25 @@ function create_biomes(ctx, local_table)
     local biome_id = calcutate_biome(elevation, temperature, wetness)
     assert(biome_id ~= nil)
 
-    --ctx.map:set_tile_biome(i, biome_id) -- к сожалению от этого придется отказаться
-
     local biome_data = biome_table[biome_id]
     if biome_data == nil then error("Could not find biome " .. biome_id) end
     ctx.seasons:set_tile_biome(season_index, i, biome_data.index)
-    ctx.container:set_data_u32(types.entities.tile, i, types.properties.tile.color, biome_data.t.color)
+    ctx.container:set_data_u32(types.entities.tile, i, types.properties.tile.color, biome_data.t.data.color)
   end
+
+  local maxf = math.max
+  local minf = math.min
+  local layers_count = 20
+  local layer_height = 1.0 / layers_count
+  for i = 1, tiles_count do
+    local h = ctx.container:get_data_f32(types.entities.tile, i, types.properties.tile.elevation)
+    local layer = maxf(minf(h / layer_height, layers_count), 0) -- -layers_count
+    layer = h < 0.0 and -1 or layer
+    local final_h = layer * layer_height
+    ctx.container:set_data_f32(types.entities.tile, i, types.properties.tile.elevation, final_h)
+  end
+
+  ctx.map:set_tiles_height(ctx.container, types.properties.tile.elevation)
 
   -- сразу цвета задать?
   ctx.map:set_tiles_color(ctx.container, types.properties.tile.color)
@@ -1116,3 +1133,16 @@ end
 -- каждый дополнительный тип информации для тайла требует 2мб памяти
 -- биомы по провинциям? возможно
 -- запретить добавлять биомы после заполения сезонов?
+
+return {
+  compute_boundary_edges = compute_boundary_edges,
+  compute_plate_boundary_stress = compute_plate_boundary_stress,
+  compute_plate_boundary_distances = compute_plate_boundary_distances,
+  calculate_vertex_elevation = calculate_vertex_elevation,
+  blur_tile_elevation = blur_tile_elevation,
+  normalize_tile_elevation = normalize_tile_elevation,
+  compute_tile_heat = compute_tile_heat,
+  compute_tile_water_distances = compute_tile_water_distances,
+  compute_tile_moisture = compute_tile_moisture,
+  create_biomes = create_biomes
+}

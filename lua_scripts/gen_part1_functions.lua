@@ -1,3 +1,5 @@
+--luacheck: no max line length
+
 -- первые три функции генерации карты, генерирует плиты и данные для плит
 -- в среднем работает за 30 секунд (ужас), не уверен как это будет выглядеть в будущем
 -- создание плит в функции generate_plates занимает больше всего времени, как можно ускорить?
@@ -13,41 +15,47 @@ local function bool_to_number(value)
   return value and 1 or 0
 end
 
-function setup_generator(ctx, local_table)
+local function setup_generator(ctx, local_table) -- luacheck: ignore local_table
   local function_timer = generator.timer_t.new("seting up generator")
   --collectgarbage("collect")
 
   local uint_t = generator.data_type.uint_t
   local float_t = generator.data_type.float_t
-  local int_t = generator.data_type.int_t
-
-  ctx.container:set_tile_template({
-    uint_t,  -- color,
-    uint_t,  -- plate_index,
-    uint_t,  -- edge_index,
-    float_t, -- edge_dist,
-    uint_t,  -- mountain_index,
-    float_t, -- mountain_dist,
-    uint_t,  -- ocean_index,
-    float_t, -- ocean_dist,
-    uint_t,  -- coastline_index,
-    float_t, -- coastline_dist,
-    uint_t,  -- water_index,
-    uint_t,  -- water_dist,
-    float_t, -- elevation,
-    float_t, -- heat,
-    float_t, -- moisture,
-    uint_t,  -- biome,
-    uint_t,  -- province_index,
-    uint_t,  -- culture_id,
-    uint_t,  -- country_index
-    uint_t,  -- duchie_index
-    uint_t,  -- kingship_index
-    uint_t   -- empire_index
-  })
+  --local int_t = generator.data_type.int_t
 
   do
-    local index = ctx.container:set_entity_template({
+    local t = {
+      uint_t,  -- color,
+      uint_t,  -- plate_index,
+      uint_t,  -- edge_index,
+      float_t, -- edge_dist,
+      uint_t,  -- mountain_index,
+      float_t, -- mountain_dist,
+      uint_t,  -- ocean_index,
+      float_t, -- ocean_dist,
+      uint_t,  -- coastline_index,
+      float_t, -- coastline_dist,
+      uint_t,  -- water_index,
+      uint_t,  -- water_dist,
+      float_t, -- elevation,
+      float_t, -- air_current
+      float_t, -- air_speed
+      float_t, -- heat,
+      float_t, -- moisture,
+      uint_t,  -- biome,
+      uint_t,  -- province_index,
+      uint_t,  -- culture_id,
+      uint_t,  -- country_index
+      uint_t,  -- duchie_index
+      uint_t,  -- kingship_index
+      uint_t   -- empire_index
+    }
+    assert(#t == types.properties.tile.count)
+    ctx.container:set_tile_template(t)
+  end
+
+  do
+    local t = {
       float_t, -- drift_axis,
       float_t, -- drift_axis1,
       float_t, -- drift_axis2,
@@ -58,13 +66,14 @@ function setup_generator(ctx, local_table)
       float_t, -- spin_rate,
       float_t, -- base_elevation,
       uint_t   -- oceanic
-    })
-
+    }
+    local index = ctx.container:set_entity_template(t)
+    assert(#t == types.properties.plate.count)
     assert(index == types.entities.plate)
   end
 
   do
-    local index = ctx.container:set_entity_template({
+    local t = {
       uint_t,  -- first_tile
       uint_t,  -- second_tile
       float_t, -- plate0_movement,
@@ -73,42 +82,90 @@ function setup_generator(ctx, local_table)
       float_t, -- plate1_movement,
       float_t, -- plate1_movement1,
       float_t  -- plate1_movement2,
-    })
-
+    }
+    local index = ctx.container:set_entity_template(t)
+    assert(#t == types.properties.edge.count)
     assert(index == types.entities.edge)
   end
 
   do
-    local index = ctx.container:set_entity_template({
+    local t = {
       uint_t, -- country_index,
-      uint_t  -- title_index
-    })
-
+      uint_t, -- title_index,
+      uint_t, -- culture_id,
+      uint_t  -- religion_id
+    }
+    local index = ctx.container:set_entity_template(t)
+    assert(#t == types.properties.province.count)
     assert(index == types.entities.province)
   end
 
   do
-    local index = ctx.container:set_entity_template({});
+    local t = {}
+    local index = ctx.container:set_entity_template(t);
+    assert(#t == types.properties.province_neighbors.count)
     assert(index == types.entities.province_neighbors)
   end
 
   do
-    local index = ctx.container:set_entity_template({});
+    local t = {}
+    local index = ctx.container:set_entity_template(t);
+    assert(#t == types.properties.culture.count)
     assert(index == types.entities.culture)
   end
 
   do
-    local index = ctx.container:set_entity_template({});
+    local t = {}
+    local index = ctx.container:set_entity_template(t);
+    assert(#t == types.properties.country.count)
     assert(index == types.entities.country)
   end
 
   do
-    local index = ctx.container:set_entity_template({
+    local t = {
       uint_t, -- parent
       uint_t, -- owner
-    })
-
+    }
+    local index = ctx.container:set_entity_template(t)
+    assert(#t == types.properties.title.count)
     assert(index == types.entities.title)
+  end
+
+  do
+    local t = {
+      float_t, -- outflow0
+      float_t, -- outflow01
+      float_t, -- outflow02
+      float_t, -- outflow1
+      float_t, -- outflow11
+      float_t, -- outflow12
+      float_t, -- outflow2
+      float_t, -- outflow21
+      float_t, -- outflow22
+      float_t, -- outflow3
+      float_t, -- outflow31
+      float_t, -- outflow32
+      float_t, -- outflow4
+      float_t, -- outflow41
+      float_t, -- outflow42
+      float_t, -- outflow5
+      float_t, -- outflow51
+      float_t, -- outflow52
+    }
+    local index = ctx.container:set_entity_template(t)
+    assert(#t == types.properties.air_current_outflows.count)
+    assert(index == types.entities.air_current_outflows)
+  end
+
+  do
+    local t = {
+      uint_t,  -- tile
+      float_t, -- strength
+      float_t, -- radius
+    }
+    local index = ctx.container:set_entity_template(t)
+    assert(#t == types.properties.air_whorls.count)
+    assert(index == types.entities.air_whorls)
   end
 
   -- тут создадим хранилища строк, хотя может и не тут
@@ -116,7 +173,7 @@ function setup_generator(ctx, local_table)
 
   -- долго считает, нужно придумать возможно толи 'map' функцию
   function_timer:finish()
-end
+end -- setup_generator
 
 local function mix_val(x, y, val)
   --return x * (1.0 - val) + y * val
@@ -132,7 +189,7 @@ local function get_index_pair(index_pair)
   return (index_pair >> 32) & constants.uint32_max, index_pair & constants.uint32_max
 end
 
-function generate_plates(ctx, local_table)
+local function generate_plates(ctx, local_table)
   local function_timer = generator.timer_t.new("plates generation")
   --collectgarbage("collect")
 
@@ -366,10 +423,10 @@ function generate_plates(ctx, local_table)
     local max_tiles_count = 0
     local min_tiles_count = 121523152
     for i = 1, #plate_tiles do
-      local tiles_count = #plate_tiles[i]
-      if tiles_count >= 2 then
-        max_tiles_count = maxf(max_tiles_count, tiles_count)
-        min_tiles_count = minf(min_tiles_count, tiles_count)
+      local plate_tiles_count = #plate_tiles[i]
+      if plate_tiles_count >= 2 then
+        max_tiles_count = maxf(max_tiles_count, plate_tiles_count)
+        min_tiles_count = minf(min_tiles_count, plate_tiles_count)
       end
     end
 
@@ -380,8 +437,8 @@ function generate_plates(ctx, local_table)
     local plates_union = utils.init_array(plates_count, false)
     for i = 1, #plate_tiles do
     repeat
-      local tiles_count = #plate_tiles[i]
-      if tiles_count < 2 then break end
+      local plate_tiles_count = #plate_tiles[i]
+      if plate_tiles_count < 2 then break end
 
       -- я хочу чтобы как можно больше плит соединились на полюсах
       -- для этого я беру небольшой коэффициент на основе y компоненты позиции корневого тайла
@@ -396,7 +453,7 @@ function generate_plates(ctx, local_table)
       assert(poles_k >= 0.2 and poles_k <= 0.8)
 
       -- и так же я хочу чтобы большие плиты не продолжали бесконечно соединятся
-      local k = (tiles_count - min_tiles_count) / (max_tiles_count - min_tiles_count)
+      local k = (plate_tiles_count - min_tiles_count) / (max_tiles_count - min_tiles_count)
       assert(k <= 1.0 and k >= 0.0)
       local inv_k = 1.0 - k
       local sum_inv_k = 0.6
@@ -423,7 +480,7 @@ function generate_plates(ctx, local_table)
 
       local plate_index = -1
       do
-        for key, value in pairs(next_plates[i]) do
+        for key, _ in pairs(next_plates[i]) do
           assert(type(key) == "number")
           -- первого соседа?
           if plates_union[key] then plate_index = key; break; end
@@ -438,8 +495,8 @@ function generate_plates(ctx, local_table)
       end
 
       local function append_table(table1, table2)
-        for _,value in ipairs(table2) do
-          table.insert(table1, value)
+        for index = 1, #table2 do
+          table.insert(table1, table2[index])
         end
       end
 
@@ -454,7 +511,7 @@ function generate_plates(ctx, local_table)
     -- обновляем индексы
     for i = 1, #plate_tiles do
       if #plate_tiles[i] >= 2 then
-        for j, value in ipairs(plate_tiles[i]) do tile_plate[value] = i end
+        for j = 1, #plate_tiles[i] do tile_plate[plate_tiles[i][j]] = i end
       end
     end
 
@@ -467,21 +524,21 @@ function generate_plates(ctx, local_table)
   local max_tiles_count = 0
   local min_tiles_count = 121523152
   local plates_counter = 0
-  for i, value in ipairs(plate_tiles) do
-    local tiles_count = #value
-    if tiles_count >= 2 then
-      max_tiles_count = maxf(max_tiles_count, tiles_count);
-      min_tiles_count = minf(min_tiles_count, tiles_count);
+  for i = 1, #plate_tiles do
+    local plate_tiles_count = #plate_tiles[i]
+    if plate_tiles_count >= 2 then
+      max_tiles_count = maxf(max_tiles_count, plate_tiles_count);
+      min_tiles_count = minf(min_tiles_count, plate_tiles_count);
       plates_counter = plates_counter + 1
     end
   end
 
   local united_plates = 0
   local plate_tiles_local = {}
-  for _, value in ipairs(plate_tiles) do
-    local tiles_count = #value
-    if tiles_count > 1 then
-      table.insert(plate_tiles_local, value)
+  for i = 1, #plate_tiles do
+    local plate_tiles_count = #plate_tiles[i]
+    if plate_tiles_count > 1 then
+      table.insert(plate_tiles_local, plate_tiles[i])
     else
       --print("small plate index " .. (i-1))
       --print("small plate tile  " .. value[1]-1)
@@ -489,7 +546,7 @@ function generate_plates(ctx, local_table)
     end
   end
 
-  plate_tiles = nil
+  --plate_tiles = nil
   print("united plates " .. united_plates)
   print("valid plates  " .. #plate_tiles_local)
   print("summ          " .. (united_plates + #plate_tiles_local))
@@ -520,8 +577,8 @@ function generate_plates(ctx, local_table)
   local_table.final_plates_count = #plate_tiles_local
   ctx.container:set_entity_count(types.entities.plate, local_table.final_plates_count);
   for i = 1, #plate_tiles_local do
-    for j, value in ipairs(plate_tiles_local[i]) do
-      ctx.container:add_child(types.entities.plate, i, value);
+    for j = 1, #plate_tiles_local[i] do
+      ctx.container:add_child(types.entities.plate, i, plate_tiles_local[i][j]);
     end
   end
 
@@ -530,14 +587,14 @@ function generate_plates(ctx, local_table)
   print("min tiles count       " .. min_tiles_count)
 
   tile_plate = nil
-  plate_tiles = nil
-  active_tile_indices = nil
-  unique_tiles = nil
+  -- plate_tiles = nil
+  -- active_tile_indices = nil
+  -- unique_tiles = nil
   function_timer:finish()
 end -- generate_plates
 
 -- выполняется примерно за 71 мс, более менее терпимо
-function generate_plate_datas(ctx, local_table)
+local function generate_plate_datas(ctx, local_table)
   local function_timer = generator.timer_t.new("plate datas generating")
   --collectgarbage("collect")
 
@@ -577,7 +634,7 @@ function generate_plate_datas(ctx, local_table)
   local max_continental_elevation = 0.5
   assert(ctx.container:entities_count(types.entities.plate) ~= 0)
 
-  for i = 1, plates_count do
+  for i = 1, plates_count do -- luacheck: ignore i
     -- взятие случайных плит: результат выгялит гораздо лучше
     local rand_plate_index = rand:index(#local_plates_indices)
     local plate_index = local_plates_indices[rand_plate_index]
@@ -614,8 +671,9 @@ function generate_plate_datas(ctx, local_table)
     local spin_axis = maf.vector(map:get_point(tile.center))
     spin_axis:normalize()
     local spin_rate = rand:closed(min_spin_rate, max_spin_rate)
-    local base_elevation = rand:closed(min_oceanic_elevation, max_oceanic_elevation)
-    if not oceanic then base_elevation = rand:closed(min_continental_elevation, max_continental_elevation) end
+    local base_elevation
+    if oceanic then base_elevation = rand:closed(min_oceanic_elevation, max_oceanic_elevation)
+    else base_elevation = rand:closed(min_continental_elevation, max_continental_elevation) end
 
     tectonic_plate_props[plate_index] = {
       drift_axis = drift_axis,
@@ -667,8 +725,14 @@ function generate_plate_datas(ctx, local_table)
   print("oceanic tiles after recompute " .. water_counter)
   print("oceanic tiles k               " .. water_counter / ctx.map:tiles_count())
 
-  tectonic_plate_props = nil
-  local_plates_indices = nil
+  -- tectonic_plate_props = nil
+  -- local_plates_indices = nil
   -- тяжело переписывать 6к строк =(
   function_timer:finish()
 end -- generate_plate_datas
+
+return {
+  setup_generator = setup_generator,
+  generate_plates = generate_plates,
+  generate_plate_datas = generate_plate_datas
+}

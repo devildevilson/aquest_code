@@ -41,7 +41,29 @@ return {
     },
     cultures = {
       english = {
-        names = { "John", "Elliot" } -- вот это нужно еще как то генерировать
+        name = "English",
+        description = "whats here?",
+        character_names = { -- вот это нужно еще как то генерировать, можно грузить с диска, потребуется os.lines
+          "ehnam khussan", "rharen ramum", "stongem Pridelight", "nuu Crowbane", "fozin barsk", "for stumitsk",
+          "gurbum Meadowdancer", "on Mourninghammer", "buerhoter zevrunskub", "do-nud jendet", "golmadoos chudegokya",
+          "gelvad vantonza", "lep chiem", "chuih ing", "dozescies ricobral", "rartul evurgu", "bhaser baka",
+          "jarded bistan", "irvidd Gloomwater", "beu Titantail", "visem mursk", "fom sirkirsk", "gromom Hallowedbash",
+          "orth Daymantle", "deru-duez najovuhk", "rar-veod vovuft", "brinolded gilzikuku", "gonrek trorgami",
+          "fuiy yi", "muing taom", "robrertir rorneme", "darnis dostulo", "bazud khakam", "rezur bheidam",
+          "sturstodd Oatbend", "grilledd Duskmore", "sedgef nog", "gram chenuz", "bremoth Skychaser",
+          "oth Marblehide", "ran-vad-koz veprundrak", "ho-vuh jenzuld", "dadjindak ilzarkyaku",
+          "fasdir nirira", "zium ziay", "qiy mian", "gridristol pergoldol", "hirvis costaldir"
+        }
+      },
+      culture1 = {
+        name = "Culture1",
+        description = "whats here?"
+      }
+    },
+    culture_groups = {
+      culture_group1 = {
+        name = "Culture group",
+        description = "whats here?",
       }
     }
   }

@@ -42,8 +42,9 @@ local function character_panel(ctx, character, window_bounds)
   local hovering_title = nil
   local realm = character.realm
   assert(realm ~= nil)
-  local titles_count = 0
-  core.each_title(realm, function(_) titles_count = titles_count + 1 end)
+  local titles_count = utils.count(realm.titles())
+  --for _ in realm.titles() do titles_count = titles_count + 1 end
+  --core.each_title(realm, function(_) titles_count = titles_count + 1 end)
 
   -- local main_title = faction.main_title
   -- if main_title.type == core.title_types.king then
@@ -92,7 +93,8 @@ local function character_panel(ctx, character, window_bounds)
           nk.layout_space_push(ctx, {max_str_width+title_counter*title_offset, 0, title_size, title_size})
           local title_bounds = nk.widget_bounds(ctx)
           interface.heraldy_image(ctx, title)
-          --if interface.heraldy_button(ctx, title) then print("pressed " .. title.id) end -- не работает (кнопка постоянно выдает 1)
+          -- не работает (кнопка постоянно выдает 1)
+          --if interface.heraldy_button(ctx, title) then print("pressed " .. title.id) end
           if ctx:is_mouse_hovering_rect(title_bounds) then hovering_title = title end
           title_counter = title_counter + 1
         end)

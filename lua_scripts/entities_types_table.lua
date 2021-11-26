@@ -1,4 +1,3 @@
--- тут бы тогда тоже сделать счетчик с единицы
 local counter_var = 1
 local function inc_counter()
   local cur = counter_var
@@ -14,14 +13,16 @@ local function reset_inc_counter()
 end
 
 local entities = {
-  tile               = reset_inc_counter(), -- 1
-  plate              = inc_counter(),
-  edge               = inc_counter(),
-  province           = inc_counter(),
-  province_neighbors = inc_counter(),
-  culture            = inc_counter(), -- 6
-  country            = inc_counter(),
-  title              = inc_counter()
+  tile                 = reset_inc_counter(), -- 1
+  plate                = inc_counter(),
+  edge                 = inc_counter(),
+  province             = inc_counter(),
+  province_neighbors   = inc_counter(),
+  culture              = inc_counter(), -- 6
+  country              = inc_counter(),
+  title                = inc_counter(),
+  air_current_outflows = inc_counter(),
+  air_whorls           = inc_counter()
 }
 
 local properties = {
@@ -39,17 +40,19 @@ local properties = {
     water_index      = inc_counter(), -- 11
     water_dist       = inc_counter(),
     elevation        = inc_counter(),
-    heat             = inc_counter(),
+    air_current      = inc_counter(),
+    air_speed        = inc_counter(),
+    heat             = inc_counter(), -- 16
     moisture         = inc_counter(),
-    biome            = inc_counter(), -- 16
+    biome            = inc_counter(),
     province_index   = inc_counter(),
     culture_id       = inc_counter(),
-    country_index    = inc_counter(),
+    country_index    = inc_counter(), -- 21
     duchie_index     = inc_counter(),
-    kingship_index   = inc_counter(), -- 21
+    kingship_index   = inc_counter(),
     empire_index     = inc_counter(),
 
-    count = inc_counter()-1 -- 22
+    count = inc_counter()-1 -- 24
   },
   plate = {
     drift_axis     = reset_inc_counter(), -- 1
@@ -75,16 +78,47 @@ local properties = {
     plate3_movement2 = inc_counter(),
     count            = inc_counter()-1 -- 8
   },
-  culture = { count = 0 },
   province = {
     country_index = reset_inc_counter(), -- 1
     title_index   = inc_counter(),
-    count         = inc_counter()-1 -- 2
+    culture_id    = inc_counter(),
+    religion_id   = inc_counter(),
+    count         = inc_counter()-1 -- 4
   },
+  province_neighbors = { count = 0 },
+  culture = { count = 0 },
+  country = { count = 0 },
   title = {
     parent = reset_inc_counter(), -- 1
     owner  = inc_counter(),
     count  = inc_counter()-1 -- 2
+  },
+  air_current_outflows = {
+    outflow0  = reset_inc_counter(), -- 1
+    outflow01 = inc_counter(),
+    outflow02 = inc_counter(),
+    outflow1  = inc_counter(),
+    outflow11 = inc_counter(),
+    outflow12 = inc_counter(), -- 6
+    outflow2  = inc_counter(),
+    outflow21 = inc_counter(),
+    outflow22 = inc_counter(),
+    outflow3  = inc_counter(),
+    outflow31 = inc_counter(), -- 11
+    outflow32 = inc_counter(),
+    outflow4  = inc_counter(),
+    outflow41 = inc_counter(),
+    outflow42 = inc_counter(),
+    outflow5  = inc_counter(), -- 16
+    outflow51 = inc_counter(),
+    outflow52 = inc_counter(),
+    count = inc_counter()-1 -- 18
+  },
+  air_whorls = {
+    tile     = reset_inc_counter(), -- 1
+    strength = inc_counter(),
+    radius   = inc_counter(),
+    count    = inc_counter()-1, -- 3
   }
 }
 

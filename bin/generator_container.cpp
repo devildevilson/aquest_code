@@ -3,9 +3,6 @@
 #include <cstring>
 #include <stdexcept>
 
-#define FROM_LUA_INDEX(index) (index-1)
-#define TO_LUA_INDEX(index) (index+1)
-
 namespace devils_engine {
   namespace map {
     namespace generator {

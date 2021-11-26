@@ -13,6 +13,7 @@
 #include "utils/lua_environment.h"
 #include "utils/localization_container.h"
 #include "utils/interface_container2.h"
+#include "utils/logging.h"
 
 #include "render/vulkan_hpp_header.h"
 #include "render/container.h"
@@ -23,6 +24,7 @@
 #include "render/shared_battle_structures.h"
 #include "render/battle_render_stages.h"
 #include "render/map_data.h"
+#include "render/render_mode_container.h"
 
 #include "map.h"
 #include "seasons.h"
@@ -40,21 +42,210 @@
 #include "heraldy_parser.h"
 #include "battle_context.h"
 
+#include "loading_defines.h"
+
 #include "core/context.h"
+#include "core/internal_lua_state.h"
+#include "core/structures_header.h"
+#include "core/generator_begin.h"
+
+#define STATIC_ARRAY_SIZE(arr) (sizeof(arr) / sizeof(arr[0]))
 
 namespace devils_engine {
   namespace systems {
+    struct loading_context {
+      systems::core_t* core;
+      systems::map_t* map;
+      systems::battle_t* battle;
+      systems::encounter_t* encounter;
+      
+      utils::data_string_container to_data;
+      utils::numeric_string_container heraldy_data_container; // отвалится
+      
+      std::unique_ptr<utils::world_serializator> world_data_container;
+      utils::world_serializator* world_data;
+      std::unique_ptr<sol::state> lua;
+      std::unique_ptr<sol::environment> env;
+      std::unique_ptr<render::vk_buffer_data_unique> vk_buffer;
+      size_t heraldy_layers_count;
+      size_t heraldy_layers_size;
+      bool create_map_tiles;
+      
+      inline loading_context() : 
+        core(global::get<systems::core_t>()), 
+        map(global::get<systems::map_t>()), 
+        battle(global::get<systems::battle_t>()), 
+        encounter(global::get<systems::encounter_t>()),
+        heraldy_layers_count(0),
+        heraldy_layers_size(0),
+        create_map_tiles(true)
+      {
+        global::get(&to_data);
+        global::get(&heraldy_data_container);
+        global::get(core->image_controller);
+        if (map != nullptr) {
+          global::get(map->core_context);
+          // создаем когда потребуется
+          //world_data.reset(new utils::world_serializator);
+        }
+      }
+      
+      inline ~loading_context() {
+        global::get(reinterpret_cast<utils::data_string_container*>(SIZE_MAX));
+        global::get(reinterpret_cast<utils::numeric_string_container*>(SIZE_MAX));
+        global::get(reinterpret_cast<render::image_controller*>(SIZE_MAX));
+        global::get(reinterpret_cast<core::context*>(SIZE_MAX));
+      }
+    };
+    
+    loading_context* create_loading_context() { return new loading_context; }
+    void destroy_loading_context(loading_context* ctx) { delete ctx; }
+    void common_advance(loading_context* ctx, utils::progress_container* prog, const loading_piece_p* funcs, const std::string_view* names, const size_t &count) {
+      for (size_t i = 0; i < count; ++i) {
+        prog->set_hint2(names[i]);
+        funcs[i](ctx);
+        prog->advance();
+      }
+      
+      assert(prog->finished());
+    }
+    
+#define LOADING_FUNC(name) void name(loading_context*);
+    LOADING_SAVED_WORLD_FUNC_LIST
+#undef LOADING_FUNC
+
+#define LOADING_FUNC(name) void name(loading_context*);
+    LOADING_GENERATED_MAP_FUNC_LIST
+#undef LOADING_FUNC
+
+#define LOADING_FUNC(name) void name(loading_context*);
+    LOADING_GENERATOR_FUNC_LIST
+#undef LOADING_FUNC
+    
+    namespace loading_main_menu {
+      const loading_piece_p funcs[] = {
+        
+      };
+      
+      const std::string_view names[] = {
+        
+      };
+      
+      const size_t func_count = STATIC_ARRAY_SIZE(funcs);
+      static_assert(STATIC_ARRAY_SIZE(funcs) == STATIC_ARRAY_SIZE(names));
+      
+      void advance(loading_context* ctx, utils::progress_container* prog) { common_advance(ctx, prog, funcs, names, func_count); }
+    }
+    
+    namespace loading_saved_world {
+      const loading_piece_p funcs[] = {
+#define LOADING_FUNC(name) &name,
+        LOADING_SAVED_WORLD_FUNC_LIST
+#undef LOADING_FUNC
+      };
+      
+      const std::string_view names[] = {
+#define LOADING_FUNC(name) #name,
+        LOADING_SAVED_WORLD_FUNC_LIST
+#undef LOADING_FUNC
+      };
+      
+      const size_t func_count = STATIC_ARRAY_SIZE(funcs);
+      static_assert(STATIC_ARRAY_SIZE(funcs) == STATIC_ARRAY_SIZE(names));
+      
+      void advance(loading_context* ctx, utils::progress_container* prog) { common_advance(ctx, prog, funcs, names, func_count); }
+    }
+    
+    namespace loading_generated_map {
+      const loading_piece_p funcs[] = {
+#define LOADING_FUNC(name) &name,
+        LOADING_GENERATED_MAP_FUNC_LIST
+#undef LOADING_FUNC
+      };
+      
+      const std::string_view names[] = {
+#define LOADING_FUNC(name) #name,
+        LOADING_GENERATED_MAP_FUNC_LIST
+#undef LOADING_FUNC
+      };
+      
+      const size_t func_count = STATIC_ARRAY_SIZE(funcs);
+      static_assert(STATIC_ARRAY_SIZE(funcs) == STATIC_ARRAY_SIZE(names));
+      
+      void advance(loading_context* ctx, utils::progress_container* prog) { common_advance(ctx, prog, funcs, names, func_count); }
+    }
+    
+    namespace loading_save_game {
+      const loading_piece_p funcs[] = {
+        
+      };
+      
+      const std::string_view names[] = {
+        
+      };
+      
+      const size_t func_count = STATIC_ARRAY_SIZE(funcs);
+      static_assert(STATIC_ARRAY_SIZE(funcs) == STATIC_ARRAY_SIZE(names));
+      
+      void advance(loading_context* ctx, utils::progress_container* prog) { common_advance(ctx, prog, funcs, names, func_count); }
+    }
+    
+    // нужно заполнить эти вещи, иначе отваливается загрузка, давно хотел но забыл мех
+    namespace loading_generator {
+      const loading_piece_p funcs[] = {
+#define LOADING_FUNC(name) &name,
+        LOADING_GENERATOR_FUNC_LIST
+#undef LOADING_FUNC
+      };
+      
+      const std::string_view names[] = {
+#define LOADING_FUNC(name) #name,
+        LOADING_GENERATOR_FUNC_LIST
+#undef LOADING_FUNC
+      };
+      
+      const size_t func_count = STATIC_ARRAY_SIZE(funcs);
+      static_assert(STATIC_ARRAY_SIZE(funcs) == STATIC_ARRAY_SIZE(names));
+      
+      void advance(loading_context* ctx, utils::progress_container* prog) { common_advance(ctx, prog, funcs, names, func_count); }
+    }
+    
+    namespace loading_battle {
+      const loading_piece_p funcs[] = {
+        
+      };
+      
+      const std::string_view names[] = {
+        
+      };
+      
+      const size_t func_count = STATIC_ARRAY_SIZE(funcs);
+      static_assert(STATIC_ARRAY_SIZE(funcs) == STATIC_ARRAY_SIZE(names));
+      
+      void advance(loading_context* ctx, utils::progress_container* prog) { common_advance(ctx, prog, funcs, names, func_count); }
+    }
+    
+    namespace loading_encounter {
+      const loading_piece_p funcs[] = {
+        
+      };
+      
+      const std::string_view names[] = {
+        
+      };
+      
+      const size_t func_count = STATIC_ARRAY_SIZE(funcs);
+      static_assert(STATIC_ARRAY_SIZE(funcs) == STATIC_ARRAY_SIZE(names));
+      
+      void advance(loading_context* ctx, utils::progress_container* prog) { common_advance(ctx, prog, funcs, names, func_count); }
+    }
+    
     void advance_progress(utils::progress_container* prog, const std::string &str) {
       prog->set_hint2(std::move(str));
       prog->advance();
     }
     
     std::array<std::pair<uint32_t, uint32_t>, MAX_BIOMES_COUNT> get_season_biomes_data(const systems::map_t* map_system) {
-      //auto map_system = global::get<systems::map_t>();
-//       auto opt = global::get<render::tile_optimizer>();
-      
-      //map_system->seasons->set_current(s);
-      
       std::array<std::pair<uint32_t, uint32_t>, MAX_BIOMES_COUNT> biomes_data;
       for (size_t i = 0; i < core::map::hex_count_d(core::map::detail_level); ++i) {
         const uint32_t index = map_system->seasons->get_tile_biome(map_system->seasons->current_season, i);
@@ -68,7 +259,6 @@ namespace devils_engine {
         current_offset += biomes_data[i].second * (PACKED_INDEX_COEF + 1);
       }
       
-      //opt->set_biome_tile_count(biomes_data);
       return biomes_data;
     }
     
@@ -91,130 +281,213 @@ namespace devils_engine {
 
     // сюда видимо бедт приходить какая таблица, по которой мы будем создавать генератор
     void setup_map_generator(const systems::map_t* map_data) {
-//     auto interface = global::get<systems::core_t>()->interface_container;
-//     ASSERT(interface != nullptr);
-//     auto ptr = new map::creator(interface);
-    auto ptr = map_data->map_creator;
-    ASSERT(ptr != nullptr);
-
-//     ptr->run_interface_script(global::root_directory() + "scripts/gen_part1.lua");
-//     ptr->run_interface_script(global::root_directory() + "scripts/gen_part2.lua");
-//     ptr->run_interface_script(global::root_directory() + "scripts/gen_part3.lua");
-    ptr->run_script(global::root_directory() + "scripts/gen_part1_functions.lua");
-    ptr->run_script(global::root_directory() + "scripts/gen_part2_functions.lua");
-    ptr->run_script(global::root_directory() + "scripts/gen_part3_functions.lua");
-//     ptr->run_interface_script(global::root_directory() + "scripts/generator_progress.lua");
-//     ptr->progress_interface("gen_progress");
-//     interface->register_function("gen_part1_fun", "gen_part1_fun"); // тут регистрировать функции?
-//     interface->register_function("gen_part2_fun", "gen_part2_fun");
-//     interface->register_function("gen_part3_fun", "gen_part3_fun");
-    
-    static const auto gen_func = [] (map::generator::context* ctx, sol::table &table, sol::function func) {
-      auto ret = func(ctx, table);
-      if (!ret.valid()) {
-        sol::error err = ret;
-        std::cout << err.what() << "\n";
-        throw std::runtime_error("There are lua errors");
+      auto ptr = map_data->map_creator;
+      ASSERT(ptr != nullptr);
+      
+      // теперь осталось понять откуда получить config_path, это должно лежать где то рядом с конфигом для интерфейса
+      const std::string config_path = global::root_directory() + "scripts/generator_config.lua";
+      
+      auto &lua = ptr->state();
+      auto &env = ptr->environment();
+      const auto ret = lua.script_file(config_path, env);
+      CHECK_ERROR_THROW(ret);
+      
+      if (ret.get_type() != sol::type::table) throw std::runtime_error("Bad return from config script");
+      
+      const auto config = ret.get<sol::table>();
+      const auto scripts_proxy = config["scripts"];
+      const auto steps_proxy = config["steps"];
+      if (!scripts_proxy.valid() || scripts_proxy.get_type() != sol::type::table) throw std::runtime_error("Invalid config 'scripts' data");
+      if (!steps_proxy.valid() || steps_proxy.get_type() != sol::type::table) throw std::runtime_error("Invalid config 'steps' data");
+      const auto scripts = scripts_proxy.get<sol::table>();
+      const auto steps = steps_proxy.get<sol::table>();
+      
+      struct step_data {
+        std::string name;
+        std::vector<std::pair<std::string, sol::function>> functions;
+      };
+      
+      std::vector<step_data> steps_array;
+      for (const auto &pair : steps) {
+        if (pair.second.get_type() != sol::type::table) continue;
+        
+        const auto table = pair.second.as<sol::table>();
+        const auto name_proxy = table["name"];
+        const auto functions_proxy = table["functions"];
+        if (!name_proxy.valid() || name_proxy.get_type() != sol::type::string) throw std::runtime_error("Invalid generator config step name data");
+        if (!functions_proxy.valid() || functions_proxy.get_type() != sol::type::table) throw std::runtime_error("Invalid generator config step functions data");
+        
+        const auto functions = functions_proxy.get<sol::table>();
+        steps_array.emplace_back();
+        steps_array.back().name = name_proxy;
+        for (const auto &pair : functions) {
+          if (pair.second.get_type() != sol::type::string) continue;
+          const auto f_name = pair.second.as<std::string>();
+          steps_array.back().functions.push_back(std::make_pair(f_name, sol::function(sol::nil)));
+        }
       }
-    };
-
-    {
-      auto func1 = ptr->get_func("setup_generator");
-      auto func2 = ptr->get_func("generate_plates");
-      auto func3 = ptr->get_func("generate_plate_datas");
       
-      const std::vector<map::generator_pair> pairs = {
-//         map::default_generator_pairs[0], // это бегин
-//         map::default_generator_pairs[1],
-//         map::default_generator_pairs[2],
-//         map::default_generator_pairs[3]
-        std::make_pair("seting up generator", std::bind(gen_func, std::placeholders::_1, std::placeholders::_2, func1)),
-        std::make_pair("generating plates", std::bind(gen_func, std::placeholders::_1, std::placeholders::_2, func2)),
-        std::make_pair("generating plate datas", std::bind(gen_func, std::placeholders::_1, std::placeholders::_2, func3))
+      for (const auto &pair : scripts) {
+        if (pair.second.get_type() != sol::type::string) continue;
+        const auto path = pair.second.as<std::string_view>();
+        const size_t pos = path.find('/');
+        if (pos == 0 || pos == std::string_view::npos) throw std::runtime_error("Invalid generator config script path " + std::string(path));
+        
+        const auto mod_name = path.substr(0, pos);
+        assert(mod_name == "apates_quest");
+        const auto script_path = path.substr(pos+1);
+        const auto final_path = global::root_directory() + std::string(script_path);
+        const auto ret = lua.script_file(final_path, env);
+        CHECK_ERROR_THROW(ret);
+        
+        if (ret.get_type() != sol::type::table) throw std::runtime_error("Bad return from generator functions script " + std::string(path));
+        
+        const auto func_table = ret.get<sol::table>();
+        for (auto &step : steps_array) {
+          for (auto &pair : step.functions) {
+            const auto proxy = func_table[pair.first];
+            if (!proxy.valid() || proxy.get_type() != sol::type::function) continue;
+            // throw std::runtime_error("Invalid function " + pair.first + " from script " + std::string(path));
+            pair.second = proxy;
+          }
+        }
+      }
+      
+      size_t counter = 0;
+      for (const auto &step : steps_array) {
+        for (const auto &pair : step.functions) {
+          if (pair.second.valid()) continue;
+          PRINT("Could not find generator function " + pair.first);
+          ++counter;
+        }
+      }
+      
+      if (counter != 0) throw std::runtime_error("Could not find " + std::to_string(counter) + " generator functions");
+      
+      static const auto gen_func = [] (map::generator::context* ctx, sol::table &table, sol::function func) {
+        auto ret = func(ctx, table);
+        CHECK_ERROR_THROW(ret);
       };
-      ptr->create("Tectonic plates generator", pairs);
-    }
-
-    {
-      auto func1 = ptr->get_func("compute_boundary_edges");
-      auto func2 = ptr->get_func("compute_plate_boundary_stress");
-      auto func3 = ptr->get_func("compute_plate_boundary_distances");
-      auto func4 = ptr->get_func("calculate_vertex_elevation");
-      auto func5 = ptr->get_func("blur_tile_elevation");
-      auto func6 = ptr->get_func("normalize_tile_elevation");
-      auto func7 = ptr->get_func("compute_tile_heat");
-      auto func8 = ptr->get_func("compute_tile_water_distances");
-      auto func9 = ptr->get_func("compute_tile_moisture");
-      auto func10 = ptr->get_func("create_biomes");
       
+      for (const auto &step : steps_array) {
+        std::vector<map::generator_pair> func_pairs;
+        for (const auto &pair : step.functions) {
+          func_pairs.emplace_back(pair.first, std::bind(gen_func, std::placeholders::_1, std::placeholders::_2, pair.second));
+        }
+        
+        ptr->create(step.name, func_pairs);
+      }
+    
+
+// //     ptr->run_interface_script(global::root_directory() + "scripts/gen_part1.lua");
+// //     ptr->run_interface_script(global::root_directory() + "scripts/gen_part2.lua");
+// //     ptr->run_interface_script(global::root_directory() + "scripts/gen_part3.lua");
+//     ptr->run_script(global::root_directory() + "scripts/gen_part1_functions.lua");
+//     ptr->run_script(global::root_directory() + "scripts/gen_part2_functions.lua");
+//     ptr->run_script(global::root_directory() + "scripts/gen_part3_functions.lua");
+// //     ptr->run_interface_script(global::root_directory() + "scripts/generator_progress.lua");
+// //     ptr->progress_interface("gen_progress");
+// //     interface->register_function("gen_part1_fun", "gen_part1_fun"); // тут регистрировать функции?
+// //     interface->register_function("gen_part2_fun", "gen_part2_fun");
+// //     interface->register_function("gen_part3_fun", "gen_part3_fun");
+// 
+//     {
+//       auto func1 = ptr->get_func("setup_generator");
+//       auto func2 = ptr->get_func("generate_plates");
+//       auto func3 = ptr->get_func("generate_plate_datas");
+//       
 //       const std::vector<map::generator_pair> pairs = {
-//         map::default_generator_pairs[4],
-//         map::default_generator_pairs[5],
-//         map::default_generator_pairs[6],
-//         map::default_generator_pairs[7],
-//         map::default_generator_pairs[8],
-//         map::default_generator_pairs[9],
-//         map::default_generator_pairs[10],
-//         map::default_generator_pairs[11],
-//         map::default_generator_pairs[12],
-//         map::default_generator_pairs[13]
+// //         map::default_generator_pairs[0], // это бегин
+// //         map::default_generator_pairs[1],
+// //         map::default_generator_pairs[2],
+// //         map::default_generator_pairs[3]
+//         std::make_pair("seting up generator", std::bind(gen_func, std::placeholders::_1, std::placeholders::_2, func1)),
+//         std::make_pair("generating plates", std::bind(gen_func, std::placeholders::_1, std::placeholders::_2, func2)),
+//         std::make_pair("generating plate datas", std::bind(gen_func, std::placeholders::_1, std::placeholders::_2, func3))
 //       };
-      
-      const std::vector<map::generator_pair> pairs = {
-        std::make_pair(map::default_generator_pairs[4].first, std::bind(gen_func, std::placeholders::_1, std::placeholders::_2, func1)),
-        std::make_pair(map::default_generator_pairs[5].first, std::bind(gen_func, std::placeholders::_1, std::placeholders::_2, func2)),
-        std::make_pair(map::default_generator_pairs[6].first, std::bind(gen_func, std::placeholders::_1, std::placeholders::_2, func3)),
-        std::make_pair(map::default_generator_pairs[7].first, std::bind(gen_func, std::placeholders::_1, std::placeholders::_2, func4)),
-        std::make_pair(map::default_generator_pairs[8].first, std::bind(gen_func, std::placeholders::_1, std::placeholders::_2, func5)),
-        std::make_pair(map::default_generator_pairs[9].first, std::bind(gen_func, std::placeholders::_1, std::placeholders::_2, func6)),
-        std::make_pair(map::default_generator_pairs[10].first, std::bind(gen_func, std::placeholders::_1, std::placeholders::_2, func7)),
-        std::make_pair(map::default_generator_pairs[11].first, std::bind(gen_func, std::placeholders::_1, std::placeholders::_2, func8)),
-        std::make_pair(map::default_generator_pairs[12].first, std::bind(gen_func, std::placeholders::_1, std::placeholders::_2, func9)),
-        std::make_pair(map::default_generator_pairs[13].first, std::bind(gen_func, std::placeholders::_1, std::placeholders::_2, func10))
-      };
-
-      ptr->create("Biomes generator", pairs);
-    }
-
-    {
-      auto func1 = ptr->get_func("generate_provinces");
-      auto func2 = ptr->get_func("province_postprocessing");
-      auto func3 = ptr->get_func("calculating_province_neighbors");
-      auto func4 = ptr->get_func("generate_cultures");
-      auto func5 = ptr->get_func("generate_countries");
-      auto func6 = ptr->get_func("generate_heraldy");
-      auto func7 = ptr->get_func("generate_titles");
-      auto func8 = ptr->get_func("generate_characters");
-      //auto func9 = ptr->get_func("generate_tech_level");
-      auto func9 = ptr->get_func("generate_cities");
-      
+//       ptr->create("Tectonic plates generator", pairs);
+//     }
+// 
+//     {
+//       auto func1 = ptr->get_func("compute_boundary_edges");
+//       auto func2 = ptr->get_func("compute_plate_boundary_stress");
+//       auto func3 = ptr->get_func("compute_plate_boundary_distances");
+//       auto func4 = ptr->get_func("calculate_vertex_elevation");
+//       auto func5 = ptr->get_func("blur_tile_elevation");
+//       auto func6 = ptr->get_func("normalize_tile_elevation");
+//       auto func7 = ptr->get_func("compute_tile_heat");
+//       auto func8 = ptr->get_func("compute_tile_water_distances");
+//       auto func9 = ptr->get_func("compute_tile_moisture");
+//       auto func10 = ptr->get_func("create_biomes");
+//       
+// //       const std::vector<map::generator_pair> pairs = {
+// //         map::default_generator_pairs[4],
+// //         map::default_generator_pairs[5],
+// //         map::default_generator_pairs[6],
+// //         map::default_generator_pairs[7],
+// //         map::default_generator_pairs[8],
+// //         map::default_generator_pairs[9],
+// //         map::default_generator_pairs[10],
+// //         map::default_generator_pairs[11],
+// //         map::default_generator_pairs[12],
+// //         map::default_generator_pairs[13]
+// //       };
+//       
 //       const std::vector<map::generator_pair> pairs = {
-//         map::default_generator_pairs[14],
-//         map::default_generator_pairs[15],
-//         map::default_generator_pairs[16],
-//         map::default_generator_pairs[17],
-//         map::default_generator_pairs[18],
-//         map::default_generator_pairs[22], // геральдики
-//         map::default_generator_pairs[19],
-//         map::default_generator_pairs[20],
-//         map::default_generator_pairs[21],
+//         std::make_pair(map::default_generator_pairs[4].first, std::bind(gen_func, std::placeholders::_1, std::placeholders::_2, func1)),
+//         std::make_pair(map::default_generator_pairs[5].first, std::bind(gen_func, std::placeholders::_1, std::placeholders::_2, func2)),
+//         std::make_pair(map::default_generator_pairs[6].first, std::bind(gen_func, std::placeholders::_1, std::placeholders::_2, func3)),
+//         std::make_pair(map::default_generator_pairs[7].first, std::bind(gen_func, std::placeholders::_1, std::placeholders::_2, func4)),
+//         std::make_pair(map::default_generator_pairs[8].first, std::bind(gen_func, std::placeholders::_1, std::placeholders::_2, func5)),
+//         std::make_pair(map::default_generator_pairs[9].first, std::bind(gen_func, std::placeholders::_1, std::placeholders::_2, func6)),
+//         std::make_pair(map::default_generator_pairs[10].first, std::bind(gen_func, std::placeholders::_1, std::placeholders::_2, func7)),
+//         std::make_pair(map::default_generator_pairs[11].first, std::bind(gen_func, std::placeholders::_1, std::placeholders::_2, func8)),
+//         std::make_pair(map::default_generator_pairs[12].first, std::bind(gen_func, std::placeholders::_1, std::placeholders::_2, func9)),
+//         std::make_pair(map::default_generator_pairs[13].first, std::bind(gen_func, std::placeholders::_1, std::placeholders::_2, func10))
 //       };
-      
-      const std::vector<map::generator_pair> pairs = {
-        std::make_pair(map::default_generator_pairs[14].first, std::bind(gen_func, std::placeholders::_1, std::placeholders::_2, func1)),
-        std::make_pair(map::default_generator_pairs[15].first, std::bind(gen_func, std::placeholders::_1, std::placeholders::_2, func2)),
-        std::make_pair(map::default_generator_pairs[16].first, std::bind(gen_func, std::placeholders::_1, std::placeholders::_2, func3)),
-        std::make_pair(map::default_generator_pairs[17].first, std::bind(gen_func, std::placeholders::_1, std::placeholders::_2, func4)),
-        std::make_pair(map::default_generator_pairs[18].first, std::bind(gen_func, std::placeholders::_1, std::placeholders::_2, func5)),
-        std::make_pair(map::default_generator_pairs[22].first, std::bind(gen_func, std::placeholders::_1, std::placeholders::_2, func6)),
-        std::make_pair(map::default_generator_pairs[19].first, std::bind(gen_func, std::placeholders::_1, std::placeholders::_2, func7)),
-        std::make_pair(map::default_generator_pairs[20].first, std::bind(gen_func, std::placeholders::_1, std::placeholders::_2, func9)),
-        std::make_pair(map::default_generator_pairs[21].first, std::bind(gen_func, std::placeholders::_1, std::placeholders::_2, func8)),
-        //std::make_pair(map::default_generator_pairs[13].first, std::bind(gen_func, std::placeholders::_1, std::placeholders::_2, func10))
-      };
-
-      ptr->create("Countries generator", pairs);
-    }
+// 
+//       ptr->create("Biomes generator", pairs);
+//     }
+// 
+//     {
+//       auto func1 = ptr->get_func("generate_provinces");
+//       auto func2 = ptr->get_func("province_postprocessing");
+//       auto func3 = ptr->get_func("calculating_province_neighbors");
+//       auto func4 = ptr->get_func("generate_cultures");
+//       auto func5 = ptr->get_func("generate_countries");
+//       auto func6 = ptr->get_func("generate_heraldy");
+//       auto func7 = ptr->get_func("generate_titles");
+//       auto func8 = ptr->get_func("generate_characters");
+//       //auto func9 = ptr->get_func("generate_tech_level");
+//       auto func9 = ptr->get_func("generate_cities");
+//       
+// //       const std::vector<map::generator_pair> pairs = {
+// //         map::default_generator_pairs[14],
+// //         map::default_generator_pairs[15],
+// //         map::default_generator_pairs[16],
+// //         map::default_generator_pairs[17],
+// //         map::default_generator_pairs[18],
+// //         map::default_generator_pairs[22], // геральдики
+// //         map::default_generator_pairs[19],
+// //         map::default_generator_pairs[20],
+// //         map::default_generator_pairs[21],
+// //       };
+//       
+//       const std::vector<map::generator_pair> pairs = {
+//         std::make_pair(map::default_generator_pairs[14].first, std::bind(gen_func, std::placeholders::_1, std::placeholders::_2, func1)),
+//         std::make_pair(map::default_generator_pairs[15].first, std::bind(gen_func, std::placeholders::_1, std::placeholders::_2, func2)),
+//         std::make_pair(map::default_generator_pairs[16].first, std::bind(gen_func, std::placeholders::_1, std::placeholders::_2, func3)),
+//         std::make_pair(map::default_generator_pairs[17].first, std::bind(gen_func, std::placeholders::_1, std::placeholders::_2, func4)),
+//         std::make_pair(map::default_generator_pairs[18].first, std::bind(gen_func, std::placeholders::_1, std::placeholders::_2, func5)),
+//         std::make_pair(map::default_generator_pairs[22].first, std::bind(gen_func, std::placeholders::_1, std::placeholders::_2, func6)),
+//         std::make_pair(map::default_generator_pairs[19].first, std::bind(gen_func, std::placeholders::_1, std::placeholders::_2, func7)),
+//         std::make_pair(map::default_generator_pairs[20].first, std::bind(gen_func, std::placeholders::_1, std::placeholders::_2, func9)),
+//         std::make_pair(map::default_generator_pairs[21].first, std::bind(gen_func, std::placeholders::_1, std::placeholders::_2, func8)),
+//         //std::make_pair(map::default_generator_pairs[13].first, std::bind(gen_func, std::placeholders::_1, std::placeholders::_2, func10))
+//       };
+// 
+//       ptr->create("Countries generator", pairs);
+//     }
   }
   
 //   void copy_structure_data(const core::city_type* data, const size_t &size, const size_t &offset, yavf::Buffer* buffer) {
@@ -241,12 +514,18 @@ namespace devils_engine {
     c->make_player();
     game::update_player(c);
     
-    auto title = c->realms[core::character::self]->titles;
+    auto title = c->self->titles;
+    auto next_title = c->self->titles;
     core::city* city = nullptr;
-    while (title != nullptr) {
-      title->heraldy = 1;
-      if (city == nullptr && title->type == core::titulus::type::city) city = title->get_city();
-      title = title->next;
+    while (next_title != nullptr) {
+      //next_title->heraldy = 0;
+      next_title->heraldy_container = {1, 2, 3};
+      next_title->heraldy_layers_count = 3;
+      if (city == nullptr && next_title->type() == core::titulus::type::city) {
+        ASSERT(next_title->city != nullptr);
+        city = next_title->city;
+      }
+      next_title = utils::ring::list_next<utils::list_type::titles>(next_title, title);
     }
     
     ASSERT(city != nullptr);
@@ -255,18 +534,18 @@ namespace devils_engine {
     auto map = global::get<systems::map_t>()->map;
 //     const auto data = map->get_tile_objects_indices(tile_index);
 //     map->set_tile_objects_indices(tile_index, glm::uvec4(data.x, 1, data.z, data.w));
-    {
-      std::unique_lock<std::mutex> lock(map->mutex);
-      map->set_tile_objects_index(city_tile_index, 1, 1);
-    }
+//     {
+//       std::unique_lock<std::mutex> lock(map->mutex);
+//       map->set_tile_objects_index(city_tile_index, 1, 1);
+//     }
     // сработало, и камера еще довольно удачно встает
     // камеру стоит расчитывать при старте карты
     
     // создаем две армии, пока что нет никакой принадлежности у армий
-    auto army1_token = ctx->create_army();
-    auto army2_token = ctx->create_army();
-    auto army1 = ctx->get_army(army1_token);
-    auto army2 = ctx->get_army(army2_token);
+    auto army1 = ctx->create_army();
+    auto army2 = ctx->create_army();
+//     auto army1 = ctx->get_army(army1_token);
+//     auto army2 = ctx->get_army(army2_token);
     // их нужно расположить рядом с городом игрока
     auto province = city->province;
     uint32_t army_tile1 = UINT32_MAX;
@@ -294,8 +573,8 @@ namespace devils_engine {
     army2->tile_index = army_tile2;
     
     {
-      const auto tile_data = map->get_tile(army_tile1);
-      const uint32_t point_index = tile_data.tile_indices.x;
+      const auto tile = ctx->get_entity<core::tile>(army_tile1);
+      const uint32_t point_index = tile->center;
       const glm::vec4 center = map->get_point(point_index);
       const glm::vec4 normal = glm::normalize(glm::vec4(glm::vec3(center), 0.0f));
       const float height = map->get_tile_height(army_tile1);
@@ -307,8 +586,8 @@ namespace devils_engine {
     }
     
     {
-      const auto tile_data = map->get_tile(army_tile2);
-      const uint32_t point_index = tile_data.tile_indices.x;
+      const auto tile = ctx->get_entity<core::tile>(army_tile2);
+      const uint32_t point_index = tile->center;
       const glm::vec4 center = map->get_point(point_index);
       const glm::vec4 normal = glm::normalize(glm::vec4(glm::vec3(center), 0.0f));
       const float height = map->get_tile_height(army_tile2);
@@ -325,91 +604,103 @@ namespace devils_engine {
     army1->set_img(view->get_image(0, false, false));
     army2->set_img(view->get_image(0, false, false));
     
+    {
+      auto ptr = ctx->get_tile_ptr(army1->tile_index);
+      ptr->army_token = army1->object_token;
+    }
+    
+    {
+      auto ptr = ctx->get_tile_ptr(army2->tile_index);
+      ptr->army_token = army2->object_token;
+    }
+    
     std::unique_lock<std::mutex> lock(map->mutex);
-    map->set_tile_objects_index(army_tile1, 4, army1->army_gpu_slot);
-    map->set_tile_objects_index(army_tile2, 4, army2->army_gpu_slot);
+//     map->set_tile_objects_index(army_tile1, 4, army1->army_gpu_slot);
+//     map->set_tile_objects_index(army_tile2, 4, army2->army_gpu_slot);
     
-    {
-      const uint32_t testing_tile = 317116;
-      const auto &tile_data = render::unpack_data(map->get_tile(testing_tile));
-      const uint32_t n_count = render::is_pentagon(tile_data) ? 5 : 6;
-      PRINT_VAR("tile index ", testing_tile)
-      PRINT_VAR("n_count    ", n_count)
-      for (uint32_t i = 0; i < n_count; ++i) {
-        const uint32_t n_index = tile_data.neighbors[i];
-        PRINT_VAR("neighbour  " + std::to_string(i), n_index)
-        const auto &n_tile_data = render::unpack_data(map->get_tile(n_index));
-        const uint32_t n_n_count = render::is_pentagon(tile_data) ? 5 : 6;
-        bool found = false;
-        for (uint32_t j = 0; j < n_n_count; ++j) {
-          const uint32_t n_index = n_tile_data.neighbors[j];
-          if (n_index == testing_tile) found = true;
-        }
-        
-        ASSERT(found);
-        UNUSED_VARIABLE(found);
-      }
-    }
-    
-    {
-      const uint32_t testing_tile = 318586;
-      const auto &tile_data = render::unpack_data(map->get_tile(testing_tile));
-      const uint32_t n_count = render::is_pentagon(tile_data) ? 5 : 6;
-      PRINT_VAR("tile index ", testing_tile)
-      PRINT_VAR("n_count    ", n_count)
-      for (uint32_t i = 0; i < n_count; ++i) {
-        const uint32_t n_index = tile_data.neighbors[i];
-        PRINT_VAR("neighbour  " + std::to_string(i), n_index)
-        const auto &n_tile_data = render::unpack_data(map->get_tile(n_index));
-        const uint32_t n_n_count = render::is_pentagon(tile_data) ? 5 : 6;
-        bool found = false;
-        for (uint32_t j = 0; j < n_n_count; ++j) {
-          const uint32_t n_index = n_tile_data.neighbors[j];
-          if (n_index == testing_tile) found = true;
-        }
-        
-        ASSERT(found);
-        UNUSED_VARIABLE(found);
-      }
-    }
+//     {
+//       const uint32_t testing_tile = 317116;
+//       const auto &tile_data = render::unpack_data(map->get_tile(testing_tile));
+//       const uint32_t n_count = render::is_pentagon(tile_data) ? 5 : 6;
+//       PRINT_VAR("tile index ", testing_tile)
+//       PRINT_VAR("n_count    ", n_count)
+//       for (uint32_t i = 0; i < n_count; ++i) {
+//         const uint32_t n_index = tile_data.neighbors[i];
+//         PRINT_VAR("neighbour  " + std::to_string(i), n_index)
+//         const auto &n_tile_data = render::unpack_data(map->get_tile(n_index));
+//         const uint32_t n_n_count = render::is_pentagon(tile_data) ? 5 : 6;
+//         bool found = false;
+//         for (uint32_t j = 0; j < n_n_count; ++j) {
+//           const uint32_t n_index = n_tile_data.neighbors[j];
+//           if (n_index == testing_tile) found = true;
+//         }
+//         
+//         ASSERT(found);
+//         UNUSED_VARIABLE(found);
+//       }
+//     }
+//     
+//     {
+//       const uint32_t testing_tile = 318586;
+//       const auto &tile_data = render::unpack_data(map->get_tile(testing_tile));
+//       const uint32_t n_count = render::is_pentagon(tile_data) ? 5 : 6;
+//       PRINT_VAR("tile index ", testing_tile)
+//       PRINT_VAR("n_count    ", n_count)
+//       for (uint32_t i = 0; i < n_count; ++i) {
+//         const uint32_t n_index = tile_data.neighbors[i];
+//         PRINT_VAR("neighbour  " + std::to_string(i), n_index)
+//         const auto &n_tile_data = render::unpack_data(map->get_tile(n_index));
+//         const uint32_t n_n_count = render::is_pentagon(tile_data) ? 5 : 6;
+//         bool found = false;
+//         for (uint32_t j = 0; j < n_n_count; ++j) {
+//           const uint32_t n_index = n_tile_data.neighbors[j];
+//           if (n_index == testing_tile) found = true;
+//         }
+//         
+//         ASSERT(found);
+//         UNUSED_VARIABLE(found);
+//       }
+//     }
   }
 
-  void copy_structure_data(const core::context* context, const size_t &offset, core::map* map, void* buffer) {
-    std::unordered_map<const core::city_type*, uint32_t> type_map;
-    auto buffer_data = reinterpret_cast<render::world_structure_t*>(buffer);
-    for (size_t i = 0; i < context->get_entity_count<core::city_type>(); ++i) {
-      const size_t index = offset+i;
-      auto city_type = context->get_entity<core::city_type>(i);
-      buffer_data[index].city_image_top = city_type->city_image_top;
-      buffer_data[index].city_image_face = city_type->city_image_face;
-      buffer_data[index].scale = city_type->scale;
-      buffer_data[index].heraldy_layer_index = 0;
-      
-      type_map[city_type] = index;
-    }
-    
-    for (size_t i = 0; i < context->get_entity_count<core::city>(); ++i) {
-      auto city = context->get_entity<core::city>(i);
-      const uint32_t struct_index = type_map[city->type];
-      const uint32_t tile_index = city->tile_index;
-      map->set_tile_structure_index(tile_index, struct_index);
-      auto title = city->title;
-      auto faction = title->owner;
-      core::titulus* first_city_title = nullptr;
-      auto first_title = faction->titles;
-      while (first_title != nullptr) {
-        if (first_title->type == core::titulus::type::city) first_city_title = first_title;
-        auto next = first_title->next;
-        first_title = next;
-      }
-      
-      //map->set_tile_objects_indices(tile_index, glm::uvec4(struct_index, title == first_city_title ? 0 : UINT32_MAX, 0, UINT32_MAX));
-      map->set_tile_objects_index(tile_index, 0, struct_index);
-      map->set_tile_objects_index(tile_index, 1, title == first_city_title ? 0 : UINT32_MAX);
-    }
-  }
+//   void copy_structure_data(const core::context* context, const size_t &offset, core::map* map, void* buffer) {
+//     std::unordered_map<const core::city_type*, uint32_t> type_map;
+//     auto buffer_data = reinterpret_cast<render::world_structure_t*>(buffer);
+//     for (size_t i = 0; i < context->get_entity_count<core::city_type>(); ++i) {
+//       const size_t index = offset+i;
+//       auto city_type = context->get_entity<core::city_type>(i);
+//       buffer_data[index].city_image_top = city_type->city_image_top;
+//       buffer_data[index].city_image_face = city_type->city_image_face;
+//       buffer_data[index].scale = city_type->scale;
+//       buffer_data[index].heraldy_layer_index = 0;
+//       
+//       type_map[city_type] = index;
+//     }
+//     
+//     for (size_t i = 0; i < context->get_entity_count<core::city>(); ++i) {
+//       auto city = context->get_entity<core::city>(i);
+//       const uint32_t struct_index = type_map[city->type];
+//       const uint32_t tile_index = city->tile_index;
+//       map->set_tile_structure_index(tile_index, struct_index);
+//       auto title = city->title;
+//       auto faction = title->owner;
+//       core::titulus* first_city_title = nullptr;
+//       auto first_title = faction->titles;
+//       auto next_title = faction->titles;
+//       while (next_title != nullptr) {
+//         if (next_title->type() == core::titulus::type::city) first_city_title = next_title;
+// //         auto next = first_title->next;
+// //         first_title = next;
+//         next_title = utils::ring::list_next<utils::list_type::titles>(next_title, first_title);
+//       }
+//       
+//       //map->set_tile_objects_indices(tile_index, glm::uvec4(struct_index, title == first_city_title ? 0 : UINT32_MAX, 0, UINT32_MAX));
+//       map->set_tile_objects_index(tile_index, 0, struct_index);
+//       map->set_tile_objects_index(tile_index, 1, title == first_city_title ? 0 : UINT32_MAX);
+//     }
+//   }
 
-    void find_border_points(core::map* map, const core::context* ctx) {
+    void find_border_points(core::map* map, core::context* ctx) {
       // возможно нужно найти первый граничный тайл, а потом обходить его соседей
       // тут можно поступить несколькими способами
       // 1) попытаться обойти тайлы правильно
@@ -492,7 +783,8 @@ namespace devils_engine {
       // кому еще соседи могут пригодиться?
 
   //     auto ctx = global::get<core::context>();
-
+      auto updater = global::get<render::tile_updater>();
+      
       std::vector<border_data2> borders;
       const uint32_t provinces_count = ctx->get_entity_count<core::province>();
       for (size_t i = 0; i < provinces_count; ++i) {
@@ -531,8 +823,15 @@ namespace devils_engine {
 
           // теперь у нас есть offset и border_count
           if (border_count == 0) continue;
+          
+          ASSERT(border_count <= render::border_size_mask);
+          ASSERT(offset < render::border_offset_mask);
+          const uint32_t packed_border_data = (border_count << 28) | (offset & render::border_offset_mask);
 
-          map->set_tile_border_data(tile_index, offset, border_count);
+//           map->set_tile_border_data(tile_index, offset, border_count);
+//           updater->update_borders_data(tile_index, packed_border_data);
+          auto tile = ctx->get_entity<core::tile>(tile_index);
+          tile->borders_data = packed_border_data;
         }
       }
 
@@ -545,7 +844,7 @@ namespace devils_engine {
         // нужно задать типы границ
         // по владельцам?
         auto title = ctx->get_entity<core::titulus>(i);
-        if (title->type == core::titulus::type::city) continue;
+        if (title->type() == core::titulus::type::city) continue;
   //       if (title->type == core::titulus::type::baron) continue;
         if (title->owner == nullptr) continue;
         if (title->owner->main_title != title) continue;
@@ -747,14 +1046,14 @@ namespace devils_engine {
           std::unordered_set<core::realm*> factions;
           auto liege1 = province->title->owner;
           while (liege1 != nullptr) {
-            factions.insert(liege1);
+            factions.insert(liege1.get());
             liege1 = liege1->liege;
           }
 
           bool found = false;
           auto liege2 = opposite_province->title->owner;
           while (liege2 != nullptr) {
-            found = found || factions.find(liege2) != factions.end();
+            found = found || factions.find(liege2.get()) != factions.end();
             liege2 = liege2->liege;
           }
 
@@ -800,6 +1099,8 @@ namespace devils_engine {
 //     const float layer_height = mountain_height / float(layers_count);
     void generate_tile_connections(core::map* map, dt::thread_pool* pool) {
       assert(false);
+      (void)map;
+      (void)pool;
 //       struct wall {
 //         uint32_t tile1;
 //         uint32_t tile2;
@@ -908,12 +1209,19 @@ namespace devils_engine {
       
       {
         for (size_t i = 0; i < core::map::hex_count_d(core::map::detail_level); ++i) {
-          core::tile t;
-          t.city = UINT32_MAX;
-          t.province = UINT32_MAX;
-          t.struct_index = UINT32_MAX;
-          t.height = map->get_tile_height(i);
-          ctx->set_tile(i, t);
+          const auto map_tile = map->get_tile_ptr(i);
+          auto tile = ctx->get_entity<core::tile>(i);
+          tile->center = map_tile->center;
+          tile->height = map_tile->height;
+          tile->texture = map_tile->texture;
+          tile->color = map_tile->color;
+          const uint32_t n_count = map_tile->neighbors[5] == UINT32_MAX ? 5 : 6;
+          for (uint32_t i = 0; i < n_count; ++i) {
+            tile->points[i] = map_tile->points[i];
+            tile->neighbors[i] = map_tile->neighbors[i];
+          }
+          
+          ASSERT(tile->neighbors_count() == n_count);
         }
       }
       
@@ -922,13 +1230,19 @@ namespace devils_engine {
         for (size_t i = 0; i < count; ++i) {
           auto city = ctx->get_entity<core::city>(i);
           ASSERT(city->title != nullptr);
-          ASSERT(city->title->count == 0);
-          city->title->create_children(1);
-          city->title->set_city(city);
+//           ASSERT(city->title->count == 0);
+//           city->title->create_children(1);
+//           city->title->set_city(city);
+          auto t = ctx->get_entity<core::titulus>(city->title->id);
+          ASSERT(t->t == core::titulus::type::city);
+          t->city = city;
           ASSERT(city->province != nullptr);
           ASSERT(city->province->cities_count < core::province::cities_max_game_count);
-          city->province->cities[city->province->cities_count] = city;
+          if (city->province->cities == nullptr) city->province->cities = city;
+          else utils::ring::list_radd<utils::list_type::province_cities>(city->province->cities, city);
+//           city->province->cities[city->province->cities_count] = city;
           ++city->province->cities_count;
+          if (city->province->capital == nullptr) city->province->capital = city;
           ASSERT(city->tile_index < core::map::hex_count_d(core::map::detail_level));
           tile_city_map[city->tile_index] = i;
         }
@@ -940,19 +1254,20 @@ namespace devils_engine {
           auto province = ctx->get_entity<core::province>(i);
           ASSERT(province->cities_count <= province->cities_max_count);
           ASSERT(province->title != nullptr);
-          ASSERT(province->title->count == 0);
-          province->title->create_children(1);
-          province->title->set_province(province);
+//           ASSERT(province->title->count == 0);
+//           province->title->create_children(1);
+//           province->title->set_province(province);
+          auto t = ctx->get_entity<core::titulus>(province->title->id);
+          ASSERT(t->t == core::titulus::type::baron);
+          t->province = province;
           ASSERT(!province->tiles.empty());
           for (const auto &tile_index : province->tiles) {
             auto itr = tile_city_map.find(tile_index);
             
-            core::tile t;
-            t.height = map->get_tile_height(tile_index);
-            t.province = i;
-            t.city = itr == tile_city_map.end() ? UINT32_MAX : itr->second;
-            t.struct_index = UINT32_MAX;
-            ctx->set_tile(tile_index, t);
+            const auto tile = ctx->get_tile_ptr(tile_index);
+            ASSERT(tile->province == UINT32_MAX);
+            tile->city = itr == tile_city_map.end() ? UINT32_MAX : itr->second;;
+            tile->province = i;
           }
         }
       }
@@ -970,15 +1285,18 @@ namespace devils_engine {
           auto itr = childs.find(title);
           if (itr == childs.end()) continue;
           const auto &childs_arr = itr->second;
-          ASSERT(title->childs == nullptr);
-          title->create_children(childs_arr.size());
-          if (childs_arr.size() == 1) {
-            title->set_child(0, childs_arr[0]);
-            continue;
-          }
-
-          for (size_t j = 0; j < childs_arr.size(); ++j) {
-            title->set_child(j, childs_arr[j]);
+          ASSERT(title->children == nullptr);
+          ASSERT(!childs_arr.empty());
+//           title->create_children(childs_arr.size());
+//           if (childs_arr.size() == 1) {
+//             title->set_child(0, childs_arr[0]);
+//             continue;
+//           }
+          
+          title->children = childs_arr[0];
+          for (size_t j = 1; j < childs_arr.size(); ++j) {
+            //title->set_child(j, childs_arr[j]);
+            utils::ring::list_radd<utils::list_type::sibling_titles>(title->children, childs_arr[0]);
           }
         }
       }
@@ -987,76 +1305,39 @@ namespace devils_engine {
         const size_t count = ctx->characters_count();
         std::unordered_map<core::realm*, std::vector<core::realm*>> vassals;
         std::unordered_map<core::realm*, std::vector<core::character*>> prisoners;
-        std::unordered_map<core::character*, std::vector<core::character*>> court;
+        std::unordered_map<core::realm*, std::vector<core::character*>> court;
         std::unordered_map<core::character*, std::vector<core::character*>> concubines;
         std::unordered_map<core::character*, std::vector<core::character*>> children;
         for (size_t i = 0; i < count; ++i) {
           auto character = ctx->get_character(i);
-          if (character->suzerain != nullptr) court[character->suzerain].push_back(character);
-          if (character->imprisoner != nullptr) prisoners[character->imprisoner].push_back(character);
-          if (character->realms[core::character::self] != nullptr && character->realms[core::character::self]->liege != nullptr) {
-            vassals[character->realms[core::character::self]->liege].push_back(character->realms[core::character::self]);
+          if (character->suzerain != nullptr) court[character->suzerain.get()].push_back(character);
+          if (character->imprisoner != nullptr) prisoners[character->imprisoner.get()].push_back(character);
+          if (character->self != nullptr && character->self->liege != nullptr) {
+            vassals[character->self->liege.get()].push_back(character->self.get());
           }
           if (character->family.owner != nullptr) concubines[character->family.owner].push_back(character);
           // братья сестры, нужно выбрать кого то из родителей и положить туда? как быть с полуродственниками?
           // скорее всего несколько супругов может быть только у правителей
           // предыдущих супругов я кажется пока не задаю, тогда нужно найти правителя
-          ASSERT(character->family.previous_consorts == nullptr);
+//           ASSERT(character->family.previous_consorts == nullptr);
           const bool has_parent1 = character->family.parents[0] != nullptr;
           const bool has_parent2 = character->family.parents[1] != nullptr;
           core::character* parent = nullptr;
           if (has_parent1 || has_parent2) {
-            if (parent == nullptr) parent = has_parent1 && has_parent2 && character->family.parents[0]->realms[core::character::self] != nullptr ? character->family.parents[0] : nullptr;
-            if (parent == nullptr) parent = has_parent1 && has_parent2 && character->family.parents[1]->realms[core::character::self] != nullptr ? character->family.parents[1] : nullptr;
+            if (parent == nullptr) parent = has_parent1 && has_parent2 && character->family.parents[0]->self != nullptr ? character->family.parents[0] : nullptr;
+            if (parent == nullptr) parent = has_parent1 && has_parent2 && character->family.parents[1]->self != nullptr ? character->family.parents[1] : nullptr;
             if (parent == nullptr) parent = has_parent1 ? character->family.parents[0] : nullptr;
             if (parent == nullptr) parent = has_parent2 ? character->family.parents[1] : nullptr;
           }
 
           if (parent != nullptr) children[parent].push_back(character);
-
-          for (size_t j = 0; j < core::character::relations::max_game_friends; ++j) {
-            auto char_friend = character->relations.friends[j];
-            if (char_friend == nullptr) continue;
-            size_t counter = 0;
-            for (size_t k = 0; k < core::character::relations::max_game_friends; ++k) {
-              auto char_char_friend = char_friend->relations.friends[j];
-              counter += size_t(char_char_friend != nullptr) + 500 * size_t(char_char_friend == character);
-              if (char_char_friend == character) break;
-            }
-
-            if (counter > 499) continue;
-            ASSERT(counter < core::character::relations::max_game_friends);
-            char_friend->relations.friends[counter] = character;
-          }
-
-          for (size_t j = 0; j < core::character::relations::max_game_friends; ++j) {
-            auto char_rival = character->relations.rivals[j];
-            if (char_rival == nullptr) continue;
-            size_t counter = 0;
-            for (size_t k = 0; k < core::character::relations::max_game_rivals; ++k) {
-              auto char_char_rival = char_rival->relations.rivals[j];
-              counter += size_t(char_char_rival != nullptr) + 500 * size_t(char_char_rival == character);
-              if (char_char_rival == character) break;
-            }
-
-            if (counter > 499) continue;
-            ASSERT(counter < core::character::relations::max_game_rivals);
-            char_rival->relations.rivals[counter] = character;
-          }
-
-          for (size_t j = 0; j < core::character::relations::max_game_lovers; ++j) {
-            auto char_lover = character->relations.lovers[j];
-            if (char_lover == nullptr) continue;
-            size_t counter = 0;
-            for (size_t k = 0; k < core::character::relations::max_game_lovers; ++k) {
-              auto char_char_lovar = char_lover->relations.lovers[j];
-              counter += size_t(char_char_lovar != nullptr) + 500 * size_t(char_char_lovar == character);
-              if (char_char_lovar == character) break;
-            }
-
-            if (counter > 499) continue;
-            ASSERT(counter < core::character::relations::max_game_lovers);
-            char_lover->relations.friends[counter] = character;
+          
+          // добавим всех знакомых
+          for (const auto &pair : character->relations.acquaintances) {
+            if (pair.first == nullptr) continue;
+            int32_t f, l;
+            if (pair.first->relations.is_acquaintance(character, &f, &l)) continue;
+            pair.first->relations.add_acquaintance(character, f, l);
           }
 
           if (character->family.consort != nullptr) {
@@ -1069,9 +1350,9 @@ namespace devils_engine {
         for (size_t i = 0; i < count; ++i) {
           auto character = ctx->get_character(i);
           // у персонажа может быть другая форма правления (но наверное в этом случае персонажи не будут считаться за вассалов)
-          auto faction = character->realms[core::character::self];
+          auto faction = character->self;
           if (faction == nullptr) continue;
-          auto itr = vassals.find(faction);
+          auto itr = vassals.find(faction.get());
           if (itr == vassals.end()) continue;
           const auto &vs = itr->second;
           for (size_t j = 0; j < vs.size(); ++j) {
@@ -1081,9 +1362,9 @@ namespace devils_engine {
 
         for (size_t i = 0; i < count; ++i) {
           auto character = ctx->get_character(i);
-          auto faction = character->realms[core::character::self];
+          auto faction = character->self;
           if (faction == nullptr) continue;
-          auto itr = prisoners.find(faction);
+          auto itr = prisoners.find(faction.get());
           if (itr == prisoners.end()) continue;
           const auto &ps = itr->second;
           for (size_t j = 0; j < ps.size(); ++j) {
@@ -1093,11 +1374,13 @@ namespace devils_engine {
 
         for (size_t i = 0; i < count; ++i) {
           auto character = ctx->get_character(i);
-          auto itr = court.find(character);
+          auto faction = character->self;
+          if (faction == nullptr) continue;
+          auto itr = court.find(faction.get());
           if (itr == court.end()) continue;
           const auto &cs = itr->second;
           for (size_t j = 0; j < cs.size(); ++j) {
-            character->add_courtier_raw(cs[j]);
+            faction->add_courtier_raw(cs[j]);
           }
         }
 
@@ -1129,7 +1412,24 @@ namespace devils_engine {
         
         for (size_t i = 0; i < count; ++i) {
           auto character = ctx->get_character(i);
-          auto faction = character->realms[core::character::self];
+          auto faction = character->self;
+          if (faction == nullptr) continue;
+          auto title = faction->titles;
+          auto next_title = faction->titles;
+          while (next_title != nullptr) {
+            if (next_title->type() == core::titulus::type::city) {
+              ASSERT(next_title->city != nullptr);
+              // наверное лучше титул держать, и задавать его при генерации
+              faction->set_capital(next_title->city);
+              break;
+            }
+            next_title = utils::ring::list_next<utils::list_type::titles>(next_title, title);
+          }
+        }        
+        
+        for (size_t i = 0; i < count; ++i) {
+          auto character = ctx->get_character(i);
+          auto faction = character->self;
           if (faction == nullptr) continue;
           faction->sort_titles();
         }
@@ -1148,21 +1448,20 @@ namespace devils_engine {
     void create_entities(core::context* ctx, map::creator::table_container_t* tables) {
       // это заполнить в валидации не выйдет (потому что string_view)
       // в провинции нет id
-      auto to_data = global::get<utils::data_string_container>();
+//       auto to_data = global::get<utils::data_string_container>();
 
       const auto &data = tables->get_tables(static_cast<size_t>(T::s_type));
       ctx->create_container<T>(data.size());
       for (size_t i = 0; i < data.size(); ++i) {
         auto ptr = ctx->get_entity<T>(i);
         ptr->id = data[i]["id"];
-        const size_t index = to_data->get(ptr->id);
-        if (index != SIZE_MAX) throw std::runtime_error("Found duplicate id " + ptr->id + " while parsing " + std::string(magic_enum::enum_name<core::structure>(T::s_type)) + " type data");
-        to_data->insert(ptr->id, i);
+//         const size_t index = to_data->get(ptr->id);
+//         if (index != SIZE_MAX) throw std::runtime_error("Found duplicate id " + ptr->id + " while parsing " + std::string(magic_enum::enum_name<core::structure>(T::s_type)) + " type data");
+//         to_data->insert(ptr->id, i);
       }
     }
 
-    void create_characters(core::context* ctx, map::creator::table_container_t* tables) {
-
+    std::vector<sol::table> create_characters(core::context* ctx, map::creator::table_container_t* tables) {
       const auto &data = tables->get_tables(static_cast<size_t>(core::structure::character));
       ASSERT(!data.empty());
       for (const auto &table : data) {
@@ -1188,10 +1487,15 @@ namespace devils_engine {
         // с другой стороны у меня локальные сиды на всех персах
         // да но они не будут меняться если я начинаю на тойже карте по нескольку раз
         // поэтому нужно придумать стейт глобальный
+        
+        // при загрузке сохранения стейты не очень полезны, но при этом не особ мешают, потому что должны быть заменены на данные из сохранения
         const size_t state1 = global::advance_state();
         const size_t state2 = global::advance_state();
         c->rng_state = {state1, state2};
+        c->static_state = global::advance_state();
       }
+      
+      return data;
     }
 
     template <typename T>
@@ -1220,295 +1524,295 @@ namespace devils_engine {
 //       }
 //     }
 
-    void validate_and_create_data(systems::map_t* map_systems, utils::progress_container* prog) { //systems::core_t* systems,
-      auto ctx = map_systems->core_context;
-      auto creator = map_systems->map_creator;
-//       auto tables = &creator->table_container();
-      utils::data_string_container string_container;
-      global::get(&string_container);
-      utils::numeric_string_container heraldy_container;
-      global::get(&heraldy_container);
-
-      //advance_progress(prog, "validating data"); // 1
-
-      //if ()
-
-      // создается сериализатор не здесь, а в креаторе
-//       utils::world_serializator cont;
-//       global::get(&cont);
-  //     const std::string_view test_name = "Test world 1\0";
-  //     const std::string_view test_tname = "test_world_1\0";
-  //     const std::string_view test_settings = "{}\0";
-      auto cont = creator->serializator_ptr();
-      cont->set_name(creator->get_world_name());
-      cont->set_technical_name(creator->get_folder_name());
-      cont->set_settings(creator->get_settings());
-      cont->set_rand_seed(creator->get_rand_seed());
-      cont->set_noise_seed(creator->get_noise_seed());
-
-//       const std::function<bool(const size_t &, sol::this_state, const sol::table&, utils::world_serializator*)> validation_funcs[] = {
-//         nullptr,                   // tile    : нужна ли тайлу валидация? я не уверен что хорошей идеей будет использовать луа таблицы для заполнения тайла
-//         utils::validate_province_and_save,  // province
-//         utils::validate_building_and_save,  // building_type,
-//         utils::validate_city_type_and_save, // city_type,
-//         utils::validate_city_and_save,      // city,
-//         nullptr,                   // trait,
-//         nullptr,                   // modificator,
-//         nullptr,                   // troop_type,
-//         nullptr,                   // decision,
-//         nullptr,                   // religion_group,
-//         nullptr,                   // religion,
-//         nullptr,                   // culture,
-//         nullptr,                   // law,
-//         nullptr,                   // event,
-//         utils::validate_title_and_save,     // titulus,
-//         utils::validate_character_and_save, // character,
-//         nullptr,                   // dynasty,
-//         nullptr,                   // faction,    // это и далее делать не нужно по идее
-//         nullptr,                   // hero_troop,
-//         nullptr,                   // army,
+//     void validate_and_create_data(systems::map_t* map_systems, utils::progress_container* prog) { //systems::core_t* systems,
+// //       auto ctx = map_systems->core_context;
+//       auto creator = map_systems->map_creator;
+// //       auto tables = &creator->table_container();
+//       utils::data_string_container string_container;
+//       global::get(&string_container);
+//       utils::numeric_string_container heraldy_container;
+//       global::get(&heraldy_container);
 // 
-//       };
+//       //advance_progress(prog, "validating data"); // 1
 // 
-//       global::get<utils::calendar>()->validate();
+//       //if ()
 // 
-//       auto &lua = creator->state();
-//       //ASSERT(lua != nullptr);
-//       
-//       // тут можно вызвать функцию лоад ворлд, ее естественно нужно немного переделать
-//       // данные мы уже распарсили и положили в ворлд дата, тут сократиться примерно 70% функции
+//       // создается сериализатор не здесь, а в креаторе
+// //       utils::world_serializator cont;
+// //       global::get(&cont);
+//   //     const std::string_view test_name = "Test world 1\0";
+//   //     const std::string_view test_tname = "test_world_1\0";
+//   //     const std::string_view test_settings = "{}\0";
+//       auto cont = creator->serializator_ptr();
+//       cont->set_name(creator->get_world_name());
+//       cont->set_technical_name(creator->get_folder_name());
+//       cont->set_settings(creator->get_settings());
+//       cont->set_rand_seed(creator->get_rand_seed());
+//       cont->set_noise_seed(creator->get_noise_seed());
 // 
-//   //     auto &tables = creator->table_container();
-//       const size_t count = static_cast<size_t>(core::structure::count);
-//       bool ret = true;
-//       for (size_t i = 0; i < count; ++i) {
-//         if (!validation_funcs[i]) continue;
-//         //const auto &data = tables->get_tables(static_cast<core::structure>(i));
-//         const auto &data = tables->get_tables(i);
-//         size_t counter = 0;
-//         for (const auto &table : data) {
-//           ret = ret && validation_funcs[i](counter, lua.lua_state(), table, &cont);
-//           ++counter;
-//         }
-//       }
+// //       const std::function<bool(const size_t &, sol::this_state, const sol::table&, utils::world_serializator*)> validation_funcs[] = {
+// //         nullptr,                   // tile    : нужна ли тайлу валидация? я не уверен что хорошей идеей будет использовать луа таблицы для заполнения тайла
+// //         utils::validate_province_and_save,  // province
+// //         utils::validate_building_and_save,  // building_type,
+// //         utils::validate_city_type_and_save, // city_type,
+// //         utils::validate_city_and_save,      // city,
+// //         nullptr,                   // trait,
+// //         nullptr,                   // modificator,
+// //         nullptr,                   // troop_type,
+// //         nullptr,                   // decision,
+// //         nullptr,                   // religion_group,
+// //         nullptr,                   // religion,
+// //         nullptr,                   // culture,
+// //         nullptr,                   // law,
+// //         nullptr,                   // event,
+// //         utils::validate_title_and_save,     // titulus,
+// //         utils::validate_character_and_save, // character,
+// //         nullptr,                   // dynasty,
+// //         nullptr,                   // faction,    // это и далее делать не нужно по идее
+// //         nullptr,                   // hero_troop,
+// //         nullptr,                   // army,
+// // 
+// //       };
+// // 
+// //       global::get<utils::calendar>()->validate();
+// // 
+// //       auto &lua = creator->state();
+// //       //ASSERT(lua != nullptr);
+// //       
+// //       // тут можно вызвать функцию лоад ворлд, ее естественно нужно немного переделать
+// //       // данные мы уже распарсили и положили в ворлд дата, тут сократиться примерно 70% функции
+// // 
+// //   //     auto &tables = creator->table_container();
+// //       const size_t count = static_cast<size_t>(core::structure::count);
+// //       bool ret = true;
+// //       for (size_t i = 0; i < count; ++i) {
+// //         if (!validation_funcs[i]) continue;
+// //         //const auto &data = tables->get_tables(static_cast<core::structure>(i));
+// //         const auto &data = tables->get_tables(i);
+// //         size_t counter = 0;
+// //         for (const auto &table : data) {
+// //           ret = ret && validation_funcs[i](counter, lua.lua_state(), table, &cont);
+// //           ++counter;
+// //         }
+// //       }
+// //       
+// //       //const auto &image_data = tables->get_tables(utils::table_container::additional_data::image);
+// //       const auto &image_data = tables->get_tables(static_cast<size_t>(utils::generator_table_container::additional_data::image));
+// //       size_t counter = 0;
+// //       for (const auto &table : image_data) {
+// //         ret = ret && utils::validate_image_and_save(counter, lua.lua_state(), table, &cont);
+// //         ++counter;
+// //       }
+// //       
+// //       //const auto &heraldy_data = tables->get_tables(utils::table_container::additional_data::heraldy);
+// //       const auto &heraldy_data = tables->get_tables(static_cast<size_t>(utils::generator_table_container::additional_data::heraldy));
+// //       for (size_t i = 0; i < heraldy_data.size(); ++i) {
+// //         const auto &table = heraldy_data[i];
+// //         ret = ret && utils::validate_heraldy_layer_and_save(i, lua.lua_state(), table, &cont);
+// //       }
+// //       
+// //       if (!ret) throw std::runtime_error("There is validation errors");
+// //       
+// //       auto device = global::get<systems::core_t>()->graphics_container->device;
+// //       
+// //       auto controller = global::get<systems::core_t>()->image_controller;
+// //       global::get(controller);
+// //       for (size_t i = 0; i < static_cast<size_t>(render::image_controller::image_type::count); ++i) {
+// //         //utils::load_images(controller, image_data, static_cast<uint32_t>(render::image_controller::image_type::system));
+// //         utils::load_images(controller, image_data, i);
+// //       }
+// //       //utils::load_biomes(controller, map_systems->seasons, tables->get_tables(utils::table_container::additional_data::biome));
+// //       utils::load_biomes(controller, map_systems->seasons, tables->get_tables(static_cast<size_t>(utils::generator_table_container::additional_data::biome)));
+// //       yavf::Buffer heraldy_tmp(device, yavf::BufferCreateInfo::buffer(16, VK_BUFFER_USAGE_TRANSFER_SRC_BIT), VMA_MEMORY_USAGE_CPU_ONLY);
+// //       utils::load_heraldy_layers(controller, heraldy_data, &heraldy_tmp);
+// //       
+// //       const auto &data = get_season_biomes_data(map_systems);
+// //       
+// //       map_systems->lock_map();
+// //       controller->update_set();
+// //       map_systems->map->copy_biomes(map_systems->seasons);
+// //       global::get<render::tile_optimizer>()->set_biome_tile_count(data);
+// //       map_systems->unlock_map();
+// //       
+// //       map_systems->map->set_tile_biome(map_systems->seasons);
+// // 
+// //       advance_progress(prog, "allocating memory"); // 2
+// // 
+// //       // нужно собрать инфу о дубликатах
+// //       create_entities_without_id<core::province>(ctx, tables);
+// //       create_entities<core::building_type>(ctx, tables);
+// //       create_entities<core::city_type>(ctx, tables);
+// //       create_entities_without_id<core::city>(ctx, tables);
+// //       create_entities<core::titulus>(ctx, tables);
+// //       create_characters(ctx, tables);
+// // 
+// //       advance_progress(prog, "creating entities"); // 3
+// // 
+// //       global::get(ctx);
+// // 
+// //       parse_entities<core::titulus>(ctx, tables, utils::parse_title);
+// //       parse_entities<core::province>(ctx, tables, utils::parse_province);
+// //       parse_entities<core::building_type>(ctx, tables, utils::parse_building);
+// //       parse_entities<core::city_type>(ctx, tables, utils::parse_city_type);
+// //       parse_entities<core::city>(ctx, tables, utils::parse_city);
+// //       parse_characters(ctx, tables, utils::parse_character);
+// //       parse_characters(ctx, tables, utils::parse_character_goverment);
+// //       // тут нужно еще соединить все полученные данные друг с другом
+// //       connect_game_data(map_systems->map, ctx);
+// // 
+// //       // по идее в этой точке все игровые объекты созданы
+// //       // и можно непосредственно переходить к геймплею
+// //       // если валидация и парсинг успешны это повод сохранить мир на диск
+// //       // это означает: сериализация данных карты + записать на диск все таблицы + сериализация персонажей и династий (первых)
+// //       // могу ли я сериализовать конкретные типы? скорее да чем нет,
+// //       // но при этом мне придется делать отдельный сериализатор для каждого типа
+// //       // понятное дело делать отдельный сериализатор не сруки
+// //       
+// //       {
+// //         auto buffers = global::get<render::buffers>();
+// //         const size_t structures_count = ctx->get_entity_count<core::city>();
+// //         const size_t structure_data_size = ctx->get_entity_count<core::city_type>() * sizeof(render::world_structure_t);
+// //         yavf::Buffer buf(device, yavf::BufferCreateInfo::buffer(structure_data_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT), VMA_MEMORY_USAGE_CPU_ONLY);
+// //         auto map = map_systems->map;
+// //         map_systems->lock_map();
+// //         copy_structure_data(ctx, 0, map, &buf);
+// //         map->structures->resize(structure_data_size);
+// //         buffers->heraldy->resize(heraldy_tmp.info().size);
+// //         
+// //         auto task = device->allocateTransferTask();
+// //         task->begin();
+// //         task->copy(&buf, map->structures);
+// //         task->copy(&heraldy_tmp, buffers->heraldy);
+// //         task->end();
+// //         task->start();
+// //         task->wait();
+// //         device->deallocate(task);
+// //         
+// //         global::get<render::tile_optimizer>()->set_max_structures_count(structures_count);
+// //         global::get<render::tile_optimizer>()->set_max_heraldy_count(structures_count);
+// //         map->flush_structures();
+// //         map_systems->unlock_map();
+// //       }
 //       
-//       //const auto &image_data = tables->get_tables(utils::table_container::additional_data::image);
-//       const auto &image_data = tables->get_tables(static_cast<size_t>(utils::generator_table_container::additional_data::image));
-//       size_t counter = 0;
-//       for (const auto &table : image_data) {
-//         ret = ret && utils::validate_image_and_save(counter, lua.lua_state(), table, &cont);
-//         ++counter;
-//       }
-//       
-//       //const auto &heraldy_data = tables->get_tables(utils::table_container::additional_data::heraldy);
-//       const auto &heraldy_data = tables->get_tables(static_cast<size_t>(utils::generator_table_container::additional_data::heraldy));
-//       for (size_t i = 0; i < heraldy_data.size(); ++i) {
-//         const auto &table = heraldy_data[i];
-//         ret = ret && utils::validate_heraldy_layer_and_save(i, lua.lua_state(), table, &cont);
-//       }
-//       
-//       if (!ret) throw std::runtime_error("There is validation errors");
-//       
-//       auto device = global::get<systems::core_t>()->graphics_container->device;
-//       
-//       auto controller = global::get<systems::core_t>()->image_controller;
-//       global::get(controller);
-//       for (size_t i = 0; i < static_cast<size_t>(render::image_controller::image_type::count); ++i) {
-//         //utils::load_images(controller, image_data, static_cast<uint32_t>(render::image_controller::image_type::system));
-//         utils::load_images(controller, image_data, i);
-//       }
-//       //utils::load_biomes(controller, map_systems->seasons, tables->get_tables(utils::table_container::additional_data::biome));
-//       utils::load_biomes(controller, map_systems->seasons, tables->get_tables(static_cast<size_t>(utils::generator_table_container::additional_data::biome)));
-//       yavf::Buffer heraldy_tmp(device, yavf::BufferCreateInfo::buffer(16, VK_BUFFER_USAGE_TRANSFER_SRC_BIT), VMA_MEMORY_USAGE_CPU_ONLY);
-//       utils::load_heraldy_layers(controller, heraldy_data, &heraldy_tmp);
-//       
-//       const auto &data = get_season_biomes_data(map_systems);
-//       
-//       map_systems->lock_map();
-//       controller->update_set();
-//       map_systems->map->copy_biomes(map_systems->seasons);
-//       global::get<render::tile_optimizer>()->set_biome_tile_count(data);
-//       map_systems->unlock_map();
-//       
-//       map_systems->map->set_tile_biome(map_systems->seasons);
+//       advance_progress(prog, "serializing world"); // 1
 // 
-//       advance_progress(prog, "allocating memory"); // 2
+//       cont->copy_seasons(map_systems->seasons);
+//       cont->set_world_matrix(map_systems->map->world_matrix);
 // 
-//       // нужно собрать инфу о дубликатах
-//       create_entities_without_id<core::province>(ctx, tables);
-//       create_entities<core::building_type>(ctx, tables);
-//       create_entities<core::city_type>(ctx, tables);
-//       create_entities_without_id<core::city>(ctx, tables);
-//       create_entities<core::titulus>(ctx, tables);
-//       create_characters(ctx, tables);
-// 
-//       advance_progress(prog, "creating entities"); // 3
-// 
-//       global::get(ctx);
-// 
-//       parse_entities<core::titulus>(ctx, tables, utils::parse_title);
-//       parse_entities<core::province>(ctx, tables, utils::parse_province);
-//       parse_entities<core::building_type>(ctx, tables, utils::parse_building);
-//       parse_entities<core::city_type>(ctx, tables, utils::parse_city_type);
-//       parse_entities<core::city>(ctx, tables, utils::parse_city);
-//       parse_characters(ctx, tables, utils::parse_character);
-//       parse_characters(ctx, tables, utils::parse_character_goverment);
-//       // тут нужно еще соединить все полученные данные друг с другом
-//       connect_game_data(map_systems->map, ctx);
-// 
-//       // по идее в этой точке все игровые объекты созданы
-//       // и можно непосредственно переходить к геймплею
-//       // если валидация и парсинг успешны это повод сохранить мир на диск
-//       // это означает: сериализация данных карты + записать на диск все таблицы + сериализация персонажей и династий (первых)
-//       // могу ли я сериализовать конкретные типы? скорее да чем нет,
-//       // но при этом мне придется делать отдельный сериализатор для каждого типа
-//       // понятное дело делать отдельный сериализатор не сруки
-//       
-//       {
-//         auto buffers = global::get<render::buffers>();
-//         const size_t structures_count = ctx->get_entity_count<core::city>();
-//         const size_t structure_data_size = ctx->get_entity_count<core::city_type>() * sizeof(render::world_structure_t);
-//         yavf::Buffer buf(device, yavf::BufferCreateInfo::buffer(structure_data_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT), VMA_MEMORY_USAGE_CPU_ONLY);
-//         auto map = map_systems->map;
-//         map_systems->lock_map();
-//         copy_structure_data(ctx, 0, map, &buf);
-//         map->structures->resize(structure_data_size);
-//         buffers->heraldy->resize(heraldy_tmp.info().size);
+//       for (size_t i = 0; i < core::map::hex_count_d(core::map::detail_level); ++i) {
+//         //const auto &d = ctx->get_tile(i);
+//         //cont->set_tile_data(i, {d.height, d.province}); // тут даже по идее ничего делать особо не нужно
 //         
-//         auto task = device->allocateTransferTask();
-//         task->begin();
-//         task->copy(&buf, map->structures);
-//         task->copy(&heraldy_tmp, buffers->heraldy);
-//         task->end();
-//         task->start();
-//         task->wait();
-//         device->deallocate(task);
-//         
-//         global::get<render::tile_optimizer>()->set_max_structures_count(structures_count);
-//         global::get<render::tile_optimizer>()->set_max_heraldy_count(structures_count);
-//         map->flush_structures();
-//         map_systems->unlock_map();
+//         //counter += size_t(d.province != UINT32_MAX);
+//         auto tile = map_systems->map->get_tile_ptr(i);
+//         cont->set_tile_data(i, {tile->height, UINT32_MAX});
 //       }
-      
-      advance_progress(prog, "serializing world"); // 1
-
-      cont->copy_seasons(map_systems->seasons);
-      cont->set_world_matrix(map_systems->map->world_matrix);
-
-      for (size_t i = 0; i < core::map::hex_count_d(core::map::detail_level); ++i) {
-        //const auto &d = ctx->get_tile(i);
-        //cont->set_tile_data(i, {d.height, d.province}); // тут даже по идее ничего делать особо не нужно
-        
-        //counter += size_t(d.province != UINT32_MAX);
-        auto tile = map_systems->map->get_tile_ptr(i);
-        cont->set_tile_data(i, {tile->height, UINT32_MAX});
-      }
-
-      cont->serialize(); //
-      
-      // вот это по идее не нужно, у меня грузится это все в loading_world
-      map_systems->world_name = cont->get_name();
-      map_systems->folder_name = cont->get_technical_name();
-      map_systems->generator_settings = cont->get_settings();
-      memcpy(map_systems->hash, cont->get_hash(), systems::map_t::hash_size);
-      
-      // тут нам не нужно создавать данные карты заново
-      loading_world(map_systems, prog, cont, false);
-
-      advance_progress(prog, "checking world"); // 9
-
-      utils::world_serializator test;
-      test.deserialize(global::root_directory() + "saves/" + creator->get_folder_name() + "/world_data");
-
-      ASSERT(test.get_name() == creator->get_world_name());
-      ASSERT(test.get_technical_name() == creator->get_folder_name());
-      ASSERT(test.get_settings() == creator->get_settings());
-      ASSERT(test.get_rand_seed() == creator->get_rand_seed());
-      ASSERT(test.get_noise_seed() == creator->get_noise_seed());
-
-//       ASSERT(tables->get_tables(utils::world_serializator::province).size() == cont.get_data_count(utils::world_serializator::province));
-//       ASSERT(tables->get_tables(utils::world_serializator::city_type).size() == cont.get_data_count(utils::world_serializator::city_type));
-//       ASSERT(tables->get_tables(utils::world_serializator::city).size() == cont.get_data_count(utils::world_serializator::city));
-//       ASSERT(tables->get_tables(utils::world_serializator::building_type).size() == cont.get_data_count(utils::world_serializator::building_type));
-//       ASSERT(tables->get_tables(utils::world_serializator::title).size() == cont.get_data_count(utils::world_serializator::title));
-//       ASSERT(tables->get_tables(utils::world_serializator::character).size() == cont.get_data_count(utils::world_serializator::character));
-
-  //     PRINT_VAR("size", tables->get_tables(core::structure::province).size())
-  //     PRINT_VAR("size", tables->get_tables(core::structure::city_type).size())
-  //     PRINT_VAR("size", tables->get_tables(core::structure::city).size())
-  //     PRINT_VAR("size", tables->get_tables(core::structure::building_type).size())
-  //     PRINT_VAR("size", tables->get_tables(core::structure::titulus).size())
-  //     PRINT_VAR("size", tables->get_tables(core::structure::character).size())
-  //
-  //     PRINT_VAR("size", cont.get_data_count(core::structure::province))
-  //     PRINT_VAR("size", cont.get_data_count(core::structure::city_type))
-  //     PRINT_VAR("size", cont.get_data_count(core::structure::city))
-  //     PRINT_VAR("size", cont.get_data_count(core::structure::building_type))
-  //     PRINT_VAR("size", cont.get_data_count(core::structure::titulus))
-  //     PRINT_VAR("size", cont.get_data_count(core::structure::character))
-
-      ASSERT(cont->get_data_count(utils::world_serializator::province) == test.get_data_count(utils::world_serializator::province));
-      ASSERT(cont->get_data_count(utils::world_serializator::city_type) == test.get_data_count(utils::world_serializator::city_type));
-      ASSERT(cont->get_data_count(utils::world_serializator::city) == test.get_data_count(utils::world_serializator::city));
-      ASSERT(cont->get_data_count(utils::world_serializator::building_type) == test.get_data_count(utils::world_serializator::building_type));
-      ASSERT(cont->get_data_count(utils::world_serializator::title) == test.get_data_count(utils::world_serializator::title));
-      ASSERT(cont->get_data_count(utils::world_serializator::character) == test.get_data_count(utils::world_serializator::character));
-
-      //PRINT(cont.get_data(var, i))
-  #define CHECK_CONTENT(var) for (uint32_t i = 0; i < cont->get_data_count(var); ++i) { ASSERT(cont->get_data(var, i) == test.get_data(var, i)); }
-      CHECK_CONTENT(utils::world_serializator::province)
-      CHECK_CONTENT(utils::world_serializator::city_type)
-      CHECK_CONTENT(utils::world_serializator::city)
-      CHECK_CONTENT(utils::world_serializator::building_type)
-      CHECK_CONTENT(utils::world_serializator::title)
-      CHECK_CONTENT(utils::world_serializator::character)
-
-      // кажется все правильно сериализуется и десериализуется
-      // сохранения должны храниться в папках с файлом world_data
-      // название папки - техническое название мира,
-      // техническое название мира - нужно зафорсить пользователя задать валидное техническое название
-      // (какнибудь бы упростить для пользователя это дело)
-      // что самое главное я могу оставить пока так как есть и это покроет почти всю сериализацию
-      // остается решить вопрос с климатом, хотя че тут решать: нужно выделить
-      // 64*500к или 128*500к памяти чтобы сохранить сезоны, сезонов по идее не имеет смысла делать больше чем размер массива на каждый тайл
-      // соответственно 64 сезона на каждый тайл, означает ли это что мы можем сохранить 4 тайла в одном чаре?
-      // в сохранениях видимо придется делать протомессадж для каждой сущности которую необходимо сохранить
-      // мне нужно еще придумать стендалоне сохранения: то есть сохранения в которых записаны данные мира дополнительно
-      //
-
-      global::get(reinterpret_cast<utils::data_string_container*>(SIZE_MAX));
-      global::get(reinterpret_cast<utils::numeric_string_container*>(SIZE_MAX));
-      global::get(reinterpret_cast<core::context*>(SIZE_MAX));
-      global::get(reinterpret_cast<render::image_controller*>(SIZE_MAX));
-      map_systems->render_modes->at(render::modes::biome)();
-    }
-
-  //   void create_interface(system_container_t &systems) {
-  //     systems.interface = systems.container.create<utils::interface>();
-  //     global::get(systems.interface);
-  //     systems.interface->init_constants();
-  //     systems.interface->init_input();
-  //   }
+// 
+//       cont->serialize(); //
+//       
+//       // вот это по идее не нужно, у меня грузится это все в loading_world
+//       map_systems->world_name = cont->get_name();
+//       map_systems->folder_name = cont->get_technical_name();
+//       map_systems->generator_settings = cont->get_settings();
+//       memcpy(map_systems->hash, cont->get_hash(), systems::map_t::hash_size);
+//       
+//       // тут нам не нужно создавать данные карты заново
+//       loading_world(map_systems, prog, cont, false);
+// 
+//       advance_progress(prog, "checking world"); // 9
+// 
+//       utils::world_serializator test;
+//       test.deserialize(global::root_directory() + "saves/" + creator->get_folder_name() + "/world_data");
+// 
+//       ASSERT(test.get_name() == creator->get_world_name());
+//       ASSERT(test.get_technical_name() == creator->get_folder_name());
+//       ASSERT(test.get_settings() == creator->get_settings());
+//       ASSERT(test.get_rand_seed() == creator->get_rand_seed());
+//       ASSERT(test.get_noise_seed() == creator->get_noise_seed());
+// 
+// //       ASSERT(tables->get_tables(utils::world_serializator::province).size() == cont.get_data_count(utils::world_serializator::province));
+// //       ASSERT(tables->get_tables(utils::world_serializator::city_type).size() == cont.get_data_count(utils::world_serializator::city_type));
+// //       ASSERT(tables->get_tables(utils::world_serializator::city).size() == cont.get_data_count(utils::world_serializator::city));
+// //       ASSERT(tables->get_tables(utils::world_serializator::building_type).size() == cont.get_data_count(utils::world_serializator::building_type));
+// //       ASSERT(tables->get_tables(utils::world_serializator::title).size() == cont.get_data_count(utils::world_serializator::title));
+// //       ASSERT(tables->get_tables(utils::world_serializator::character).size() == cont.get_data_count(utils::world_serializator::character));
+// 
+//   //     PRINT_VAR("size", tables->get_tables(core::structure::province).size())
+//   //     PRINT_VAR("size", tables->get_tables(core::structure::city_type).size())
+//   //     PRINT_VAR("size", tables->get_tables(core::structure::city).size())
+//   //     PRINT_VAR("size", tables->get_tables(core::structure::building_type).size())
+//   //     PRINT_VAR("size", tables->get_tables(core::structure::titulus).size())
+//   //     PRINT_VAR("size", tables->get_tables(core::structure::character).size())
+//   //
+//   //     PRINT_VAR("size", cont.get_data_count(core::structure::province))
+//   //     PRINT_VAR("size", cont.get_data_count(core::structure::city_type))
+//   //     PRINT_VAR("size", cont.get_data_count(core::structure::city))
+//   //     PRINT_VAR("size", cont.get_data_count(core::structure::building_type))
+//   //     PRINT_VAR("size", cont.get_data_count(core::structure::titulus))
+//   //     PRINT_VAR("size", cont.get_data_count(core::structure::character))
+// 
+//       ASSERT(cont->get_data_count(utils::world_serializator::province) == test.get_data_count(utils::world_serializator::province));
+//       ASSERT(cont->get_data_count(utils::world_serializator::city_type) == test.get_data_count(utils::world_serializator::city_type));
+//       ASSERT(cont->get_data_count(utils::world_serializator::city) == test.get_data_count(utils::world_serializator::city));
+//       ASSERT(cont->get_data_count(utils::world_serializator::building_type) == test.get_data_count(utils::world_serializator::building_type));
+//       ASSERT(cont->get_data_count(utils::world_serializator::title) == test.get_data_count(utils::world_serializator::title));
+//       ASSERT(cont->get_data_count(utils::world_serializator::character) == test.get_data_count(utils::world_serializator::character));
+// 
+//       //PRINT(cont.get_data(var, i))
+//   #define CHECK_CONTENT(var) for (uint32_t i = 0; i < cont->get_data_count(var); ++i) { ASSERT(cont->get_data(var, i) == test.get_data(var, i)); }
+//       CHECK_CONTENT(utils::world_serializator::province)
+//       CHECK_CONTENT(utils::world_serializator::city_type)
+//       CHECK_CONTENT(utils::world_serializator::city)
+//       CHECK_CONTENT(utils::world_serializator::building_type)
+//       CHECK_CONTENT(utils::world_serializator::title)
+//       CHECK_CONTENT(utils::world_serializator::character)
+// 
+//       // кажется все правильно сериализуется и десериализуется
+//       // сохранения должны храниться в папках с файлом world_data
+//       // название папки - техническое название мира,
+//       // техническое название мира - нужно зафорсить пользователя задать валидное техническое название
+//       // (какнибудь бы упростить для пользователя это дело)
+//       // что самое главное я могу оставить пока так как есть и это покроет почти всю сериализацию
+//       // остается решить вопрос с климатом, хотя че тут решать: нужно выделить
+//       // 64*500к или 128*500к памяти чтобы сохранить сезоны, сезонов по идее не имеет смысла делать больше чем размер массива на каждый тайл
+//       // соответственно 64 сезона на каждый тайл, означает ли это что мы можем сохранить 4 тайла в одном чаре?
+//       // в сохранениях видимо придется делать протомессадж для каждой сущности которую необходимо сохранить
+//       // мне нужно еще придумать стендалоне сохранения: то есть сохранения в которых записаны данные мира дополнительно
+//       //
+// 
+//       global::get(reinterpret_cast<utils::data_string_container*>(SIZE_MAX));
+//       global::get(reinterpret_cast<utils::numeric_string_container*>(SIZE_MAX));
+//       global::get(reinterpret_cast<core::context*>(SIZE_MAX));
+//       global::get(reinterpret_cast<render::image_controller*>(SIZE_MAX));
+//       map_systems->render_modes->at(render::modes::biome)();
+//     }
+// 
+//   //   void create_interface(system_container_t &systems) {
+//   //     systems.interface = systems.container.create<utils::interface>();
+//   //     global::get(systems.interface);
+//   //     systems.interface->init_constants();
+//   //     systems.interface->init_input();
+//   //   }
 
     void post_generation_work(systems::map_t* map_systems, systems::core_t* systems, utils::progress_container* prog) {
-      UNUSED_VARIABLE(systems);
-      //prog->set_hint1(std::string_view("Load map"));
-      //prog->set_max_value(8);
-      prog->set_hint2(std::string_view("starting"));
-
-      auto ctx = map_systems->core_context;
-
-  //     create_game_state();
-      validate_and_create_data(map_systems, prog); // создаем объекты
-      advance_progress(prog, "connecting tiles"); // 10
-      //generate_tile_connections(map_systems->map, global::get<dt::thread_pool>());
-      advance_progress(prog, "making borders"); // 11
-      find_border_points(map_systems->map, ctx); // после генерации нужно сделать много вещей
-      // по идее создать границы нужно сейчас, так как в титулах появились данные о цвете
-      
-      make_random_player_character();
-
-      advance_progress(prog, "ending"); // 12
+//       UNUSED_VARIABLE(systems);
+//       //prog->set_hint1(std::string_view("Load map"));
+//       //prog->set_max_value(8);
+//       prog->set_hint2(std::string_view("starting"));
+// 
+//       auto ctx = map_systems->core_context;
+// 
+//   //     create_game_state();
+//       validate_and_create_data(map_systems, prog); // создаем объекты
+//       advance_progress(prog, "connecting tiles"); // 10
+//       //generate_tile_connections(map_systems->map, global::get<dt::thread_pool>());
+//       advance_progress(prog, "making borders"); // 11
+//       find_border_points(map_systems->map, ctx); // после генерации нужно сделать много вещей
+//       // по идее создать границы нужно сейчас, так как в титулах появились данные о цвете
+//       
+//       make_random_player_character();
+// 
+//       advance_progress(prog, "ending"); // 12
 
       //create_interface(systems);
   //     systems.interface->init_types();
@@ -1529,7 +1833,8 @@ namespace devils_engine {
       map->world_matrix = mat1;
       auto pool = global::get<dt::thread_pool>();
       
-      if (make_tiles) map::make_tiles(mat1, map, pool);
+      if (make_tiles) core::make_tiles(mat1, map, pool);
+      // данные в карте пока еще лежат в памяти хоста
 
   //       ctx->container->set_entity_count(debug::entities::tile, map->tiles_count());
       map->set_status(core::map::status::valid);
@@ -1550,6 +1855,7 @@ namespace devils_engine {
     std::vector<sol::table> get_data_tables(
       const utils::world_serializator* w, 
       sol::state_view state, 
+      const sol::environment &env,
       const uint32_t &type, 
       const std::string_view &type_str, 
       const std::function<bool(const uint32_t&,const sol::table&)> validation_func
@@ -1557,7 +1863,12 @@ namespace devils_engine {
       std::vector<sol::table> tables;
       tables.reserve(w->get_data_count(type)*2);
       for (size_t i = 0; i < w->get_data_count(type); ++i) {
-        auto ret = state.script("return " + std::string(w->get_data(type, i)));
+        //auto ret = state.script("return " + std::string(w->get_data(type, i)), env);
+//         if (type == utils::world_serializator::province) {
+//           const auto str = w->get_data(type, i);
+//           PRINT_VAR("province " + std::to_string(i), str)
+//         }
+        auto ret = state.script(w->get_data(type, i), env, sol::detail::default_chunk_name(), sol::load_mode::text); // в виде скрипта: do local _={ данные };return _;end
         if (!ret.valid()) {
           sol::error err = ret;
           std::cout << err.what();
@@ -1582,11 +1893,11 @@ namespace devils_engine {
           const std::string final_script_path = global::root_directory() + "/" + std::string(script_path);
           // нужно еще указать энвайронмент, хотя с другой стороны, возможно просто в самом стейте отменить некоторые функции
           // но в любом случае нужно еще погрузить минимально необходимый набор функций
-          auto ret = state.script_file(final_script_path);
+          auto ret = state.script_file(final_script_path, env, sol::load_mode::text);
           if (!ret.valid()) {
             sol::error err = ret;
             std::cout << err.what();
-            throw std::runtime_error("Could not load " + std::string(type_str) + " table");
+            throw std::runtime_error("Could not load " + std::string(type_str) + " data file " + final_script_path);
           }
           
           size_t counter = 0;
@@ -1601,6 +1912,173 @@ namespace devils_engine {
             tables.push_back(final_t);
           }
         } else tables.push_back(t); // сгенерированная таблица данных
+      }
+      
+      return tables;
+    }
+    
+    std::vector<sol::table> get_data_tables_from_sequential_array(
+      const utils::world_serializator* w, 
+      sol::state_view state, 
+      const sol::environment &env,
+      const uint32_t &type, 
+      const std::string_view &type_str, 
+      const std::function<bool(const uint32_t&,const sol::table&)> validation_func
+    ) {
+      std::vector<sol::table> tables;
+      tables.reserve(w->get_data_count(type)*2);
+      for (size_t i = 0; i < w->get_data_count(type); ++i) {
+        //auto ret = state.script("return " + std::string(w->get_data(type, i)), env);
+//         if (type == utils::world_serializator::province) {
+//           const auto str = w->get_data(type, i);
+//           PRINT_VAR("province " + std::to_string(i), str)
+//         }
+        auto ret = state.script(w->get_data(type, i), env, sol::detail::default_chunk_name(), sol::load_mode::text); // в виде скрипта: do local _={ данные };return _;end
+        if (!ret.valid()) {
+          sol::error err = ret;
+          std::cout << err.what();
+          throw std::runtime_error("Could not load " + std::string(type_str) + " table");
+        }
+        
+        sol::table t = ret;
+        // тут нам было бы неплохо проверить что это за таблица
+        const bool table_string = t[1].valid() && t[1].get_type() == sol::type::string && t.size() == 1;
+        if (table_string) { // таблица-путь, подгрузим скрипт
+          if (type == utils::world_serializator::biome) throw std::runtime_error("Removed biome table scripts");
+          
+          const std::string path = t[1];
+          // путь вида "*название мода*/*путь до скрипта*"
+          std::string_view mod_name;
+          std::string_view script_path;
+          parse_script_path(path, mod_name, script_path);
+          if (mod_name.empty() || script_path.empty()) throw std::runtime_error("Path " + path + " is not a valid script path");
+          // проверим есть ли такой мод, и проверим есть ли такой файл в моде
+          // еще нужно проверить является ли этот путь относительным
+          ASSERT(mod_name == "apates_quest");
+          const std::string final_script_path = global::root_directory() + "/" + std::string(script_path);
+          // нужно еще указать энвайронмент, хотя с другой стороны, возможно просто в самом стейте отменить некоторые функции
+          // но в любом случае нужно еще погрузить минимально необходимый набор функций
+          auto ret = state.script_file(final_script_path, env, sol::load_mode::text);
+          if (!ret.valid()) {
+            sol::error err = ret;
+            std::cout << err.what();
+            throw std::runtime_error("Could not load " + std::string(type_str) + " data file " + final_script_path);
+          }
+          
+          size_t counter = 0;
+          sol::table data_tables = ret;
+          for (const auto &obj : data_tables) {
+            if (obj.first.get_type() != sol::type::number) continue;
+            if (obj.second.get_type() != sol::type::table) continue;
+            
+            const size_t cur_index = obj.first.as<double>();
+            if (cur_index != counter+1) throw std::runtime_error("Biomes table indices are not sequential. Use string keys to store additional data");
+            
+            sol::table final_t = obj.second.as<sol::table>();
+            const bool valid = validation_func(counter, final_t);
+            ++counter;
+            if (!valid) throw std::runtime_error("Invalid " + std::string(type_str) + " table in script " + path);
+            tables.push_back(final_t);
+          }
+        } else tables.push_back(t); // сгенерированная таблица данных
+      }
+      
+      return tables;
+    }
+    
+    std::vector<sol::table> get_heraldy_data_tables(
+      const utils::world_serializator* w, 
+      core::internal_lua_state* internal, 
+      const std::function<bool(const uint32_t&,const sol::table&)> validation_func
+    ) {
+      const uint32_t type = utils::world_serializator::heraldy_layer;
+      std::vector<sol::table> tables;
+      tables.reserve(w->get_data_count(type)*2);
+      for (size_t i = 0; i < w->get_data_count(type); ++i) {  
+        //auto ret = internal->lua.script("return " + std::string(w->get_data(type, i)), internal->env);
+        auto ret = internal->lua.script(w->get_data(type, i), internal->env, sol::detail::default_chunk_name(), sol::load_mode::text); // в виде скрипта: do local _={ данные };return _;end
+        if (!ret.valid()) {
+          sol::error err = ret;
+          std::cout << err.what();
+          throw std::runtime_error("Could not load heraldy table");
+        }
+        
+        sol::table t = ret;
+        // тут нам было бы неплохо проверить что это за таблица
+        const bool table_string = t[1].valid() && t[1].get_type() == sol::type::string && t.size() == 1;
+        if (table_string) { // таблица-путь, подгрузим скрипт
+          if (type == utils::world_serializator::biome) throw std::runtime_error("Removed biome table scripts");
+          
+          const std::string path = t[1];
+          // путь вида "*название мода*/*путь до скрипта*"
+          std::string_view mod_name;
+          std::string_view script_path;
+          parse_script_path(path, mod_name, script_path);
+          if (mod_name.empty() || script_path.empty()) throw std::runtime_error("Path " + path + " is not a valid script path");
+          // проверим есть ли такой мод, и проверим есть ли такой файл в моде
+          // еще нужно проверить является ли этот путь относительным
+          ASSERT(mod_name == "apates_quest");
+          const std::string final_script_path = global::root_directory() + "/" + std::string(script_path);
+          // нужно еще указать энвайронмент, хотя с другой стороны, возможно просто в самом стейте отменить некоторые функции
+          // но в любом случае нужно еще погрузить минимально необходимый набор функций
+          auto ret = internal->lua.script_file(final_script_path, internal->env, sol::load_mode::text);
+          if (!ret.valid()) {
+            sol::error err = ret;
+            std::cout << err.what();
+            throw std::runtime_error("Could not load heraldy data file " + final_script_path);
+          }
+          
+          size_t counter = 0;
+          sol::table data_tables = ret;
+          for (const auto &pair : data_tables) {
+            if (pair.first.get_type() == sol::type::number) {
+              if (pair.second.get_type() != sol::type::table) 
+                throw std::runtime_error("Heraldy layers data expected to be in array part of the table");
+              
+              // еще одна вложенность отсутствует
+              const auto h_t = pair.second.as<sol::table>();
+              const bool valid = validation_func(counter, h_t);
+              ++counter;
+              if (!valid) throw std::runtime_error("Invalid heraldy table in script " + path);
+              tables.push_back(h_t);
+              continue;
+            }
+            
+            if (pair.first.get_type() == sol::type::string) {
+              if (pair.second.get_type() != sol::type::function) 
+                 throw std::runtime_error("Heraldy gen functions expected to be in dictionary part of the table");
+              const auto name = pair.first.as<std::string>();
+              const auto func = pair.second.as<sol::function>();
+              const auto proxy = internal->gen_funcs_table[name];
+              if (proxy.valid()) throw std::runtime_error("Heraldy gen function " + name + " is already exists");
+              internal->gen_funcs_table[name] = func;
+              continue;
+            }
+          }
+        } else {
+          for (const auto &pair : t) {
+            if (pair.first.get_type() == sol::type::number) {
+              if (pair.second.get_type() != sol::type::table) 
+                throw std::runtime_error("Heraldy layers data expected to be in array part of the table");
+              // тут еще одно вложение должно быть, или нет, зачем оно нужно?
+              
+              const auto h_t = pair.second.as<sol::table>();
+              tables.push_back(h_t);
+              continue;
+            }
+            
+            if (pair.first.get_type() == sol::type::string) {
+              if (pair.second.get_type() != sol::type::function) 
+                 throw std::runtime_error("Heraldy gen functions expected to be in dictionary part of the table");
+              const auto name = pair.first.as<std::string>();
+              const auto func = pair.second.as<sol::function>();
+              const auto proxy = internal->gen_funcs_table[name];
+              if (proxy.valid()) throw std::runtime_error("Heraldy gen function " + name + " is already exists");
+              internal->gen_funcs_table[name] = func;
+              continue;
+            }
+          }
+        }
       }
       
       return tables;
@@ -1632,11 +2110,54 @@ namespace devils_engine {
 //       }
 //     }
     
+//     template <typename T>
+//     void create_entity_without_id(
+//       core::context* ctx, 
+//       const utils::world_serializator* world, 
+//       sol::state_view state, 
+//       const sol::environment &env,
+//       const uint32_t &world_type, 
+//       const std::string_view &world_type_str,
+//       const std::function<bool(const uint32_t&,const sol::table&)> validation_func
+//     ) {
+//       // с новым типом таблиц придется парсить сначала все таблицы, потом создавать энтити
+//       // потом опять парсить, и ужа зполнять данными, ну тип это все равно загрузка
+//       
+//       const auto &tables = get_data_tables(world, state, env, world_type, world_type_str, validation_func);
+//       ctx->create_container<T>(tables.size());
+//     }
+//     
+//     template <typename T>
+//     void create_entity(
+//       core::context* ctx, 
+//       utils::data_string_container* to_data, 
+//       const utils::world_serializator* world, 
+//       sol::state_view state,
+//       const sol::environment &env,
+//       const uint32_t &world_type, 
+//       const std::string_view &world_type_str,
+//       const std::function<bool(const uint32_t&,const sol::table&)> validation_func
+//     ) {
+//       const auto &tables = get_data_tables(world, state, env, world_type, world_type_str, validation_func);
+//       ctx->create_container<T>(tables.size());
+//       for (size_t i = 0; i < tables.size(); ++i) {
+//         const sol::table &t = tables[i];
+//         auto proxy = t["id"];
+//         ASSERT(proxy.valid());
+// 
+//         std::string_view str = proxy.get<std::string_view>();
+//         auto ptr = ctx->get_entity<T>(i);
+//         ptr->id = str;
+//         to_data->insert(ptr->id, i);
+//       }
+//     }
+    
     template <typename T>
-    void create_entity_without_id(
+    std::vector<sol::table> create_entity_without_id(
       core::context* ctx, 
       const utils::world_serializator* world, 
       sol::state_view state, 
+      const sol::environment &env,
       const uint32_t &world_type, 
       const std::string_view &world_type_str,
       const std::function<bool(const uint32_t&,const sol::table&)> validation_func
@@ -1644,21 +2165,23 @@ namespace devils_engine {
       // с новым типом таблиц придется парсить сначала все таблицы, потом создавать энтити
       // потом опять парсить, и ужа зполнять данными, ну тип это все равно загрузка
       
-      const auto &tables = get_data_tables(world, state, world_type, world_type_str, validation_func);
+      const auto &tables = get_data_tables(world, state, env, world_type, world_type_str, validation_func);
       ctx->create_container<T>(tables.size());
+      return tables;
     }
     
     template <typename T>
-    void create_entity(
+    std::vector<sol::table> create_entity(
       core::context* ctx, 
       utils::data_string_container* to_data, 
       const utils::world_serializator* world, 
       sol::state_view state,
+      const sol::environment &env,
       const uint32_t &world_type, 
       const std::string_view &world_type_str,
       const std::function<bool(const uint32_t&,const sol::table&)> validation_func
     ) {
-      const auto &tables = get_data_tables(world, state, world_type, world_type_str, validation_func);
+      const auto &tables = get_data_tables(world, state, env, world_type, world_type_str, validation_func);
       ctx->create_container<T>(tables.size());
       for (size_t i = 0; i < tables.size(); ++i) {
         const sol::table &t = tables[i];
@@ -1670,6 +2193,8 @@ namespace devils_engine {
         ptr->id = str;
         to_data->insert(ptr->id, i);
       }
+      
+      return tables;
     }
 
 //     void create_characters(core::context* ctx, const utils::world_serializator* world, sol::state_view tmp_state) {
@@ -1704,8 +2229,8 @@ namespace devils_engine {
 //       }
 //     }
 
-    void create_characters(core::context* ctx, const utils::world_serializator* world, sol::state_view state) {
-      const auto &tables = get_data_tables(world, state, utils::world_serializator::character, "character", utils::validate_character);
+    std::vector<sol::table> create_characters(core::context* ctx, const utils::world_serializator* world, sol::state_view state, const sol::environment &env) {
+      const auto &tables = get_data_tables(world, state, env, utils::world_serializator::character, "character", core::validate_character);
       for (size_t i = 0; i < tables.size(); ++i) {
         const sol::table &t = tables[i];
 
@@ -1730,7 +2255,10 @@ namespace devils_engine {
         const size_t state3 = global::advance_state();
         const size_t state4 = global::advance_state();
         c->rng_state = {state1, state2, state3, state4};
+        c->static_state = global::advance_state();
       }
+      
+      return tables;
     }
 
 //     template <typename T>
@@ -1771,12 +2299,13 @@ namespace devils_engine {
       core::context* ctx, 
       const utils::world_serializator* world, 
       sol::state_view state,
+      const sol::environment &env,
       const uint32_t &world_type, 
       const std::string_view &world_type_str,
       const std::function<bool(const uint32_t&,const sol::table&)> validation_func, 
       const std::function<void(T*, const sol::table&)> &parsing_func
     ) {
-      const auto &tables = get_data_tables(world, state, world_type, world_type_str, validation_func);
+      const auto &tables = get_data_tables(world, state, env, world_type, world_type_str, validation_func);
       for (size_t i = 0; i < tables.size(); ++i) {
         const sol::table &t = tables[i];
         auto ptr = ctx->get_entity<T>(i);
@@ -1784,18 +2313,45 @@ namespace devils_engine {
       }
     }
 
-    void parse_character(core::context* ctx, const utils::world_serializator* world, sol::state_view state) {
-      const auto &tables = get_data_tables(world, state, utils::world_serializator::character, "character", utils::validate_character);
+    void parse_character(core::context* ctx, const utils::world_serializator* world, sol::state_view state, const sol::environment &env) {
+      const auto &tables = get_data_tables(world, state, env, utils::world_serializator::character, "character", core::validate_character);
       for (size_t i = 0; i < tables.size(); ++i) {
         const sol::table &t = tables[i];
         auto ptr = ctx->get_character(i);
-        utils::parse_character(ptr, t);
+        core::parse_character(ptr, t);
       }
       
       for (size_t i = 0; i < tables.size(); ++i) {
         const sol::table &t = tables[i];
         auto ptr = ctx->get_character(i);
-        utils::parse_character_goverment(ptr, t);
+        core::parse_character_goverment(ptr, t);
+      }
+    }
+    
+    template <typename T>
+    void parse_entities(
+      core::context* ctx, 
+      const std::vector<sol::table> &tables,
+      const std::function<void(T*, const sol::table&)> &parsing_func
+    ) {
+      for (size_t i = 0; i < tables.size(); ++i) {
+        const sol::table &t = tables[i];
+        auto ptr = ctx->get_entity<T>(i);
+        parsing_func(ptr, t);
+      }
+    }
+
+    void parse_character(core::context* ctx, const std::vector<sol::table> &tables) {
+      for (size_t i = 0; i < tables.size(); ++i) {
+        const sol::table &t = tables[i];
+        auto ptr = ctx->get_character(i);
+        core::parse_character(ptr, t);
+      }
+      
+      for (size_t i = 0; i < tables.size(); ++i) {
+        const sol::table &t = tables[i];
+        auto ptr = ctx->get_character(i);
+        core::parse_character_goverment(ptr, t);
       }
     }
     
@@ -1904,178 +2460,215 @@ namespace devils_engine {
     }
 
     //void loading_world(systems::map_t* map_systems, utils::progress_container* prog, const std::string &world_path) {
-    void loading_world(systems::map_t* map_systems, utils::progress_container* prog, const utils::world_serializator* world_data, const bool create_map_tiles) {
-      //ASSERT(!world_path.empty());
-      advance_progress(prog, "preparation"); // 1
-      //utils::world_serializator world_data;
-      //world_data.deserialize(world_path);
-      utils::data_string_container to_data;
-      global::get(&to_data);
-      utils::numeric_string_container heraldy_data_container;
-      global::get(&heraldy_data_container);
-      global::get(map_systems->core_context);
-
-      map_systems->world_name = world_data->get_name();
-      map_systems->folder_name = world_data->get_technical_name();
-      map_systems->generator_settings = world_data->get_settings();
-      static_assert(systems::map_t::hash_size == utils::world_serializator::hash_size);
-      memcpy(map_systems->hash, world_data->get_hash(), systems::map_t::hash_size);
-      // и что собственно теперь? мы должны парсить таблицы и заполнять данные в типах
-      // create, parse, connect, end
-
-      map_systems->map->world_matrix = world_data->get_world_matrix();
-      
-      // это нужно только если мы создаем карту заново
-      advance_progress(prog, "creating earth"); // 2
-      // нужно создать непосредственно core map
-      load_map_data(map_systems->map, world_data, create_map_tiles);
-      
-      auto graphics_container = global::get<systems::core_t>()->graphics_container;
-      sol::state lua;
-      lua.open_libraries(sol::lib::base, sol::lib::string, sol::lib::table, sol::lib::bit32, sol::lib::math, sol::lib::utf8); // sol::lib::coroutine // корутины не нужны
-//       utils::setup_lua_safe_utils(lua);
-//       utils::setup_lua_loading_functions(lua);
-//       utils::setup_lua_constants(lua);
-      utils::world_map_loading::setup_lua(lua);
-      
-      // мне тут нужен энвайронмент, там нужно удалить рандомность у математики + в этом конкретном случае не делать 
-      // где бы функцию для энвайронмента сделать?
-      // нужно добавить несколько функций из утилс
-      sol::environment env(lua, sol::create);
-      utils::make_environment(lua, env);
-      // тут наверное пригодятся и реквайр и ио линес
-      
-      advance_progress(prog, "loading images"); // 3
-//       const auto image_data = get_images_tables(world_data, lua);
-//       const auto heraldies_data = get_heraldy_layers_tables(world_data, lua);
-      auto controller = global::get<systems::core_t>()->image_controller;
-      global::get(controller);
-      
-      // тут у нас появляются два типа таблиц: таблица описание, таблица путь
-      {
-        const auto image_data = get_data_tables(world_data, lua, utils::world_serializator::image, "image", utils::validate_image);
-        // было бы неплохо избавиться от этого, но нужно сортануть таблицы
-        for (size_t i = 0; i < static_cast<size_t>(render::image_controller::image_type::count); ++i) {
-          //utils::load_images(controller, image_data, static_cast<uint32_t>(render::image_controller::image_type::system));
-          utils::load_images(controller, image_data, i);
-        }
-      }
-      
-      auto device = graphics_container->vulkan->device;
-      auto allocator = graphics_container->vulkan->buffer_allocator;
-      size_t heraldy_layers_size = 0;
-      render::vk_buffer_data_unique heraldy_tmp(nullptr, nullptr, nullptr, nullptr);
-      {
-        const auto heraldies_data = get_data_tables(world_data, lua, utils::world_serializator::heraldy_layer, "heraldy", utils::validate_heraldy_layer);
-        const auto layers_buffer = utils::load_heraldy_layers(controller, heraldies_data);
-        heraldy_layers_size = layers_buffer.size() * sizeof(layers_buffer[0]);
-        heraldy_tmp = render::create_buffer_unique(allocator, render::buffer(
-          heraldy_layers_size, vk::BufferUsageFlagBits::eTransferSrc
-        ), vma::MemoryUsage::eCpuOnly);
-        
-        memcpy(heraldy_tmp.ptr, layers_buffer.data(), heraldy_layers_size);
-      }
-      
-      {
-        const auto biomes_data = get_data_tables(world_data, lua, utils::world_serializator::biome, "biome", utils::validate_biome);
-        utils::load_biomes(controller, map_systems->seasons, biomes_data);
-        
-        map_systems->seasons->validate();
-      }
-      
-      {
-        //load_localization(world_data, lua, global::get<systems::core_t>()->loc);
-        auto inter = global::get<systems::core_t>()->interface_container.get();
-        load_localization(world_data, inter->lua, inter->env, global::get<systems::core_t>()->loc.get());
-      }
-
-      advance_progress(prog, "creating entities"); // 4
-      create_entity_without_id<core::province>(map_systems->core_context, world_data, lua, utils::world_serializator::province, "province", utils::validate_province);
-      create_entity<core::building_type>(map_systems->core_context, &to_data, world_data, lua, utils::world_serializator::building_type, "building_type", utils::validate_building_type);
-      create_entity<core::city_type>(map_systems->core_context, &to_data, world_data, lua, utils::world_serializator::city_type, "city_type", utils::validate_city_type);
-      create_entity_without_id<core::city>(map_systems->core_context, world_data, lua, utils::world_serializator::city, "city", utils::validate_city);
-      create_entity<core::titulus>(map_systems->core_context, &to_data, world_data, lua, utils::world_serializator::title, "title", utils::validate_title);
-  //     map_systems->core_context->create_container<core::province>(world_data.get_data_count(core::structure::province));
-  //     map_systems->core_context->create_container<core::building_type>(world_data.get_data_count(core::structure::building_type));
-  //     map_systems->core_context->create_container<core::city_type>(world_data.get_data_count(core::structure::city_type));
-  //     map_systems->core_context->create_container<core::city>(world_data.get_data_count(core::structure::city));
-  //     map_systems->core_context->create_container<core::titulus>(world_data.get_data_count(core::structure::titulus));
-      //map_systems->core_context->create_container<core::character>(world_data.get_data_count(core::structure::character));
-      create_characters(map_systems->core_context, world_data, lua);
-
-      advance_progress(prog, "parsing entities"); // 5
-      parse_entities<core::titulus>(map_systems->core_context, world_data, lua, utils::world_serializator::title, "title", utils::validate_title, utils::parse_title);
-      parse_entities<core::province>(map_systems->core_context, world_data, lua, utils::world_serializator::province, "province", utils::validate_province, utils::parse_province);
-      parse_entities<core::building_type>(map_systems->core_context, world_data, lua, utils::world_serializator::building_type, "building_type", utils::validate_building_type, utils::parse_building);
-      parse_entities<core::city_type>(map_systems->core_context, world_data, lua, utils::world_serializator::city_type, "city_type", utils::validate_city_type, utils::parse_city_type);
-      parse_entities<core::city>(map_systems->core_context, world_data, lua, utils::world_serializator::city, "city", utils::validate_city, utils::parse_city);
-      parse_character(map_systems->core_context, world_data, lua);
-      // тут нужно еще соединить все полученные данные друг с другом
-      advance_progress(prog, "connecting game data"); // 6
-      connect_game_data(map_systems->map, map_systems->core_context);
-      // тут тупое копирование для того чтобы это работало нужно расположить данные так же как они были до сохранения
-      // это зависит от расположения картинок в массиве и по идее это расположение не изменяется
-      // мы можем просто добавить таблицы биомов в сохранку
-      
-      advance_progress(prog, "preparing biomes"); // 7
-      //world_data->fill_seasons(map_systems->seasons);
-      
-      const auto &data = get_season_biomes_data(map_systems);
-      
-      {
-        auto buffers = global::get<render::buffers>();
-        auto ctx = map_systems->core_context;
-        const size_t structures_count = ctx->get_entity_count<core::city>();
-        const size_t structure_data_size = ctx->get_entity_count<core::city_type>() * sizeof(render::world_structure_t);
-        auto buf = render::create_buffer_unique(allocator, render::buffer(
-          structure_data_size, vk::BufferUsageFlagBits::eTransferSrc
-        ), vma::MemoryUsage::eCpuOnly);
-        auto map = map_systems->map;
-        map_systems->lock_map();
-        controller->update_set();
-        map_systems->map->copy_biomes(map_systems->seasons);
-        global::get<render::tile_optimizer>()->set_biome_tile_count(data);
-        
-        copy_structure_data(ctx, 0, map, buf.ptr);
-        map->resize_structures_buffer(structure_data_size);
-        ASSERT(heraldy_layers_size != 0);
-        buffers->resize_heraldy_buffer(heraldy_layers_size);
-        
-        auto pool = graphics_container->vulkan->transfer_command_pool;
-        auto queue = graphics_container->vulkan->graphics;
-        auto fence = graphics_container->vulkan->transfer_fence;
-        render::do_command(device, pool, queue, fence, [&] (vk::CommandBuffer task) {
-          const vk::BufferCopy c1{0, 0, structure_data_size};
-          const vk::BufferCopy c2{0, 0, heraldy_layers_size};
-          const vk::CommandBufferBeginInfo info(vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
-          task.begin(info);
-          task.copyBuffer(buf.handle, map->data->structures.handle, c1);
-          task.copyBuffer(heraldy_tmp.handle, buffers->heraldy.handle, c2);
-          task.end();
-        });
-        
-        global::get<render::tile_optimizer>()->set_max_structures_count(structures_count);
-        global::get<render::tile_optimizer>()->set_max_heraldy_count(structures_count);
-        map->flush_structures();
-        map_systems->unlock_map();
-      }
-      
-      map_systems->map->set_tile_biome(map_systems->seasons);
-
-      map_systems->render_modes->at(render::modes::biome)();
-      global::get(reinterpret_cast<utils::data_string_container*>(SIZE_MAX));
-      global::get(reinterpret_cast<core::context*>(SIZE_MAX));
-      global::get(reinterpret_cast<render::image_controller*>(SIZE_MAX));
-      global::get(reinterpret_cast<utils::numeric_string_container*>(SIZE_MAX));
-
-      //advance_progress(prog, "filling tile connections");
-      //generate_tile_connections(map_systems->map, global::get<dt::thread_pool>()); // это теперь не нужно
-      advance_progress(prog, "creating borders"); // 8
-      find_border_points(map_systems->map, map_systems->core_context); // после генерации нужно сделать много вещей
-      
-      const size_t mem = map_systems->core_context->compute_data_memory();
-      std::cout << "game data takes " << mem << " bytes (" << ((double(mem) / 1024.0) / 1024.0) << " mb)" << "\n";
-    }
+//     void loading_world(systems::map_t* map_systems, utils::progress_container* prog, const utils::world_serializator* world_data, const bool create_map_tiles) {
+//       //ASSERT(!world_path.empty());
+//       advance_progress(prog, "preparation"); // 1
+//       //utils::world_serializator world_data;
+//       //world_data.deserialize(world_path);
+//       utils::data_string_container to_data;
+//       global::get(&to_data);
+//       utils::numeric_string_container heraldy_data_container;
+//       global::get(&heraldy_data_container);
+//       global::get(map_systems->core_context);
+// 
+//       map_systems->world_name = world_data->get_name();
+//       map_systems->folder_name = world_data->get_technical_name();
+//       map_systems->generator_settings = world_data->get_settings();
+//       static_assert(systems::map_t::hash_size == utils::world_serializator::hash_size);
+//       memcpy(map_systems->hash, world_data->get_hash(), systems::map_t::hash_size);
+//       // и что собственно теперь? мы должны парсить таблицы и заполнять данные в типах
+//       // create, parse, connect, end
+// 
+//       map_systems->map->world_matrix = world_data->get_world_matrix();
+//       
+//       // это нужно только если мы создаем карту заново
+//       advance_progress(prog, "creating earth"); // 2
+//       // нужно создать непосредственно core map
+//       load_map_data(map_systems->map, world_data, create_map_tiles);
+//       
+//       auto graphics_container = global::get<systems::core_t>()->graphics_container;
+//       sol::state lua;
+//       lua.open_libraries(sol::lib::base, sol::lib::string, sol::lib::table, sol::lib::bit32, sol::lib::math, sol::lib::utf8); // sol::lib::coroutine // корутины не нужны
+// //       utils::setup_lua_safe_utils(lua);
+// //       utils::setup_lua_loading_functions(lua);
+// //       utils::setup_lua_constants(lua);
+//       utils::world_map_loading::setup_lua(lua);
+//       
+//       // мне тут нужен энвайронмент, там нужно удалить рандомность у математики + в этом конкретном случае не делать 
+//       // где бы функцию для энвайронмента сделать?
+//       // нужно добавить несколько функций из утилс
+//       sol::environment env(lua, sol::create);
+//       utils::make_environment(lua, env);
+//       // тут наверное пригодятся и реквайр и ио линес
+//       
+//       advance_progress(prog, "loading images"); // 3
+// //       const auto image_data = get_images_tables(world_data, lua);
+// //       const auto heraldies_data = get_heraldy_layers_tables(world_data, lua);
+//       auto controller = global::get<systems::core_t>()->image_controller;
+//       global::get(controller);
+//       
+//       // тут у нас появляются два типа таблиц: таблица описание, таблица путь
+//       {
+//         const auto image_data = get_data_tables(world_data, lua, env, utils::world_serializator::image, "image", utils::validate_image);
+//         // было бы неплохо избавиться от этого, но нужно сортануть таблицы
+//         for (size_t i = 0; i < static_cast<size_t>(render::image_controller::image_type::count); ++i) {
+//           //utils::load_images(controller, image_data, static_cast<uint32_t>(render::image_controller::image_type::system));
+//           utils::load_images(controller, image_data, i);
+//         }
+//       }
+//       
+//       // геральдику будем грузить с помощью специального стейта
+//       auto internal_state = global::get<systems::core_t>()->internal.get();
+//       auto device = graphics_container->vulkan->device;
+//       auto allocator = graphics_container->vulkan->buffer_allocator;
+//       size_t heraldy_layers_count = 0;
+//       size_t heraldy_layers_size = 0;
+//       render::vk_buffer_data_unique heraldy_tmp(nullptr, nullptr, nullptr, nullptr);
+//       {
+//         //const auto heraldies_data = get_data_tables(world_data, lua, utils::world_serializator::heraldy_layer, "heraldy", utils::validate_heraldy_layer);
+//         const auto heraldies_data = get_heraldy_data_tables(world_data, internal_state, utils::validate_heraldy_layer);
+//         const auto layers_buffer = utils::load_heraldy_layers(controller, heraldies_data);
+//         heraldy_layers_size = layers_buffer.size() * sizeof(layers_buffer[0]);
+//         heraldy_tmp = render::create_buffer_unique(allocator, render::buffer(
+//           heraldy_layers_size, vk::BufferUsageFlagBits::eTransferSrc
+//         ), vma::MemoryUsage::eCpuOnly);
+//         
+//         memcpy(heraldy_tmp.ptr, layers_buffer.data(), heraldy_layers_size);
+//         heraldy_layers_count = layers_buffer.size();
+//       }
+//       
+//       (void)heraldy_layers_count;
+//       
+//       {
+//         const auto biomes_data = get_data_tables(world_data, lua, env, utils::world_serializator::biome, "biome", utils::validate_biome);
+//         utils::load_biomes(controller, map_systems->seasons, biomes_data);
+//         
+//         map_systems->seasons->validate();
+//       }
+//       
+//       {
+//         //load_localization(world_data, lua, global::get<systems::core_t>()->loc);
+//         auto inter = global::get<systems::core_t>()->interface_container.get();
+//         load_localization(world_data, inter->lua, inter->env, global::get<systems::core_t>()->loc.get());
+//       }
+// 
+//       advance_progress(prog, "creating entities"); // 4
+//       create_entity<core::culture_group>(map_systems->core_context, &to_data, world_data, lua, env, utils::world_serializator::culture_group, "culture_group", core::validate_culture_group);
+//       create_entity<core::religion_group>(map_systems->core_context, &to_data, world_data, lua, env, utils::world_serializator::religion_group, "religion_group", core::validate_religion_group);
+//       create_entity<core::culture>(map_systems->core_context, &to_data, world_data, lua, env, utils::world_serializator::culture, "culture", core::validate_culture);
+//       create_entity<core::religion>(map_systems->core_context, &to_data, world_data, lua, env, utils::world_serializator::religion, "religion", core::validate_religion);
+//       create_entity<core::building_type>(map_systems->core_context, &to_data, world_data, lua, env, utils::world_serializator::building_type, "building_type", core::validate_building_type);
+//       create_entity<core::city_type>(map_systems->core_context, &to_data, world_data, lua, env, utils::world_serializator::city_type, "city_type", core::validate_city_type);
+//       create_entity<core::titulus>(map_systems->core_context, &to_data, world_data, lua, env, utils::world_serializator::title, "title", core::validate_title);
+//       create_entity_without_id<core::province>(map_systems->core_context, world_data, lua, env, utils::world_serializator::province, "province", core::validate_province);
+//       create_entity_without_id<core::city>(map_systems->core_context, world_data, lua, env, utils::world_serializator::city, "city", core::validate_city);
+//       create_characters(map_systems->core_context, world_data, lua, env);
+//       
+//       advance_progress(prog, "parsing entities"); // 5
+//       parse_entities<core::culture_group>(map_systems->core_context, world_data, lua, env, utils::world_serializator::culture_group, "culture_group", core::validate_culture_group, core::parse_culture_group);
+//       parse_entities<core::religion_group>(map_systems->core_context, world_data, lua, env, utils::world_serializator::religion_group, "religion_group", core::validate_religion_group, core::parse_religion_group);
+//       parse_entities<core::culture>(map_systems->core_context, world_data, lua, env, utils::world_serializator::culture, "culture", core::validate_culture, core::parse_culture);
+//       parse_entities<core::religion>(map_systems->core_context, world_data, lua, env, utils::world_serializator::religion, "religion", core::validate_religion, core::parse_religion);
+//       parse_entities<core::titulus>(map_systems->core_context, world_data, lua, env, utils::world_serializator::title, "title", core::validate_title, core::parse_title);
+//       parse_entities<core::province>(map_systems->core_context, world_data, lua, env, utils::world_serializator::province, "province", core::validate_province, core::parse_province);
+//       parse_entities<core::building_type>(map_systems->core_context, world_data, lua, env, utils::world_serializator::building_type, "building_type", core::validate_building_type, core::parse_building);
+//       parse_entities<core::city_type>(map_systems->core_context, world_data, lua, env, utils::world_serializator::city_type, "city_type", core::validate_city_type, core::parse_city_type);
+//       parse_entities<core::city>(map_systems->core_context, world_data, lua, env, utils::world_serializator::city, "city", core::validate_city, core::parse_city);
+//       parse_character(map_systems->core_context, world_data, lua, env);
+//       // тут нужно еще соединить все полученные данные друг с другом
+//       advance_progress(prog, "connecting game data"); // 6
+//       connect_game_data(map_systems->map, map_systems->core_context);
+//       // тут тупое копирование для того чтобы это работало нужно расположить данные так же как они были до сохранения
+//       // это зависит от расположения картинок в массиве и по идее это расположение не изменяется
+//       // мы можем просто добавить таблицы биомов в сохранку
+//       
+//       advance_progress(prog, "preparing biomes"); // 7
+//       //world_data->fill_seasons(map_systems->seasons);
+//       
+//       const auto &data = get_season_biomes_data(map_systems);
+//       
+//       auto buffers = global::get<render::buffers>();
+// //       std::vector<uint32_t> buffer_mem = {3, 1, 2, 3};
+// //       size_t heraldy_indices_count = buffer_mem.size();
+// //       for (const auto &data : buffers->new_indices) {
+// //         assert(data.title != nullptr || data.dynasty != nullptr);
+// //         
+// //         // возможно хорошей идеей будет соединить каким либо образом титул и династию
+// //         // в том плане что они используют довольно много сходных данных
+// //         if (data.title != nullptr) data.title->heraldy = heraldy_indices_count;
+// //         if (data.dynasty != nullptr) assert(false);
+// //         
+// //         heraldy_indices_count += data.indices.size()+1;
+// //         assert(data.title->heraldy == buffer_mem.size());
+// //         buffer_mem.push_back(data.indices.size());
+// //         for (const auto &idx : data.indices) { buffer_mem.push_back(idx); }
+// //       }
+//       
+//       {
+// //         const size_t heraldy_indices_buffer_size = align_to(heraldy_indices_count * sizeof(uint32_t), 16);
+//         auto ctx = map_systems->core_context;
+//         const size_t structures_count = ctx->get_entity_count<core::city>();
+//         const size_t structure_data_size = ctx->get_entity_count<core::city_type>() * sizeof(render::world_structure_t);
+//         auto buf = render::create_buffer_unique(allocator, render::buffer(
+//           structure_data_size, vk::BufferUsageFlagBits::eTransferSrc
+//         ), vma::MemoryUsage::eCpuOnly);
+//         
+// //         auto buf_idx = render::create_buffer_unique(allocator, render::buffer(
+// //           heraldy_indices_buffer_size, vk::BufferUsageFlagBits::eTransferSrc
+// //         ), vma::MemoryUsage::eCpuOnly);
+// //         
+// //         memcpy(buf_idx.ptr, buffer_mem.data(), buffer_mem.size() * sizeof(buffer_mem[0]));
+//         
+//         auto map = map_systems->map;
+//         map_systems->lock_map();
+//         controller->update_set();
+//         map_systems->map->copy_biomes(map_systems->seasons);
+//         global::get<render::tile_optimizer>()->set_biome_tile_count(data);
+//         
+//         copy_structure_data(ctx, 0, map, buf.ptr);
+//         map->resize_structures_buffer(structure_data_size);
+//         ASSERT(heraldy_layers_size != 0);
+//         buffers->resize_heraldy_buffer(heraldy_layers_size);
+// //         buffers->resize_heraldy_indices_buffer(heraldy_indices_buffer_size, buffer_mem.size());
+//         
+//         auto pool = graphics_container->vulkan->transfer_command_pool;
+//         auto queue = graphics_container->vulkan->graphics;
+//         auto fence = graphics_container->vulkan->transfer_fence;
+//         render::do_command(device, pool, queue, fence, [&] (vk::CommandBuffer task) {
+//           const vk::BufferCopy c1{0, 0, structure_data_size};
+//           const vk::BufferCopy c2{0, 0, heraldy_layers_size};
+// //           const vk::BufferCopy c3{0, 0, heraldy_indices_buffer_size};
+//           const vk::CommandBufferBeginInfo info(vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
+//           task.begin(info);
+//           task.copyBuffer(buf.handle, map->data->structures.handle, c1);
+//           task.copyBuffer(heraldy_tmp.handle, buffers->heraldy.handle, c2);
+// //           task.copyBuffer(buf_idx.handle, buffers->heraldy_indices.handle, c3);
+//           task.end();
+//         });
+//         
+//         global::get<render::tile_optimizer>()->set_max_structures_count(structures_count);
+//         // тут нужно учесть еще армии и героев, по идее теперь должно хватить на все вообще
+//         global::get<render::tile_optimizer>()->set_max_heraldy_count(structures_count + core::context::armies_max_count + core::context::hero_troops_max_count);
+//         map->flush_structures();
+//         map_systems->unlock_map();
+//       }
+//       
+//       map_systems->map->set_tile_biome(map_systems->seasons);
+// 
+//       map_systems->render_modes->at(render::modes::biome)();
+//       global::get(reinterpret_cast<utils::data_string_container*>(SIZE_MAX));
+//       global::get(reinterpret_cast<core::context*>(SIZE_MAX));
+//       global::get(reinterpret_cast<render::image_controller*>(SIZE_MAX));
+//       global::get(reinterpret_cast<utils::numeric_string_container*>(SIZE_MAX));
+// 
+//       //advance_progress(prog, "filling tile connections");
+//       //generate_tile_connections(map_systems->map, global::get<dt::thread_pool>()); // это теперь не нужно
+//       advance_progress(prog, "creating borders"); // 8
+//       find_border_points(map_systems->map, map_systems->core_context); // после генерации нужно сделать много вещей
+//       
+//       const size_t mem = map_systems->core_context->compute_data_memory();
+//       std::cout << "game data takes " << mem << " bytes (" << ((double(mem) / 1024.0) / 1024.0) << " mb)" << "\n";
+//     }
 
     void from_menu_to_create_map(utils::progress_container* prog) {
       // тут по идее нам нужно создать мап системы
@@ -2102,7 +2695,7 @@ namespace devils_engine {
     }
 
     void from_menu_to_map(utils::progress_container* prog) {
-      auto base_systems = global::get<systems::core_t>();
+//       auto base_systems = global::get<systems::core_t>();
       auto map_systems = global::get<systems::map_t>();
 //       prog->set_max_value(11);
 //       prog->set_hint1(std::string_view("Load world"));
@@ -2131,7 +2724,7 @@ namespace devils_engine {
       
       world_data.fill_seasons(map_systems->seasons);
       // мы должны выбрать: либо загрузка мира, либо загрузка сохранения (там загрузка мира тоже будет)
-      loading_world(map_systems, prog, &world_data, true);
+//       loading_world(map_systems, prog, &world_data, true);
 //       ASSERT(false);
       make_random_player_character();
       map_systems->load_world.clear();
@@ -2477,6 +3070,391 @@ namespace devils_engine {
       global::get(reinterpret_cast<utils::data_string_container*>(SIZE_MAX));
       
       ASSERT(prog->finished());
+    }
+    
+    void validate_seasons(loading_context* loading_ctx) {
+      auto map_systems = loading_ctx->map;
+      auto ctx = loading_ctx->map->core_context;
+      map_systems->seasons->validate();
+      
+      size_t counter = 0;
+      const size_t biomes_count = ctx->get_entity_count<core::biome>();
+      for (size_t i = 0; i < map_systems->seasons->seasons_count; ++i) {
+        for (size_t tile_index = 0; tile_index < core::map::hex_count_d(core::map::detail_level); ++tile_index) {
+          const uint32_t index = map_systems->seasons->get_tile_biome(i, tile_index);
+          if (index >= biomes_count) {
+            PRINT("Tile " + std::to_string(tile_index) + " biome index " + std::to_string(index) + " is larger than created biomes count " + std::to_string(biomes_count));
+            ++counter;
+          }
+        }
+      }
+      
+      if (counter != 0) throw std::runtime_error("Found " + std::to_string(counter) + " tiles with invalid biome index");
+    }
+    
+    // эта функция запускается при загрузке карты
+    void deserialize_world(loading_context* loading_ctx) {
+      loading_ctx->map->setup_rendering_modes();
+      ASSERT(!loading_ctx->map->load_world.empty());
+      
+      loading_ctx->world_data_container.reset(new utils::world_serializator);
+      loading_ctx->world_data = loading_ctx->world_data_container.get();
+      loading_ctx->world_data->deserialize(loading_ctx->map->load_world);
+      
+      const size_t mem = loading_ctx->world_data->count_memory();
+      std::cout << "world data takes " << mem << " bytes (" << ((double(mem) / 1024.0) / 1024.0) << " mb)" << "\n";
+      
+      loading_ctx->world_data->fill_seasons(loading_ctx->map->seasons);
+      loading_ctx->create_map_tiles = true;
+    }
+    
+    // эта функция запускается при загрузке карты и после генерации карты
+    void preparation(loading_context* loading_ctx) {
+      auto map_systems = loading_ctx->map;
+      // ворлд дату нужно тут брать из мап креатора
+      // starting() и deserialize_world() используются в соответствующих загрузках (после генерации, сгенерированная)
+      //loading_ctx->world_data = map_systems->map_creator->serializator_ptr();
+//       auto world_data = loading_ctx->world_data.get();
+      auto world_data = loading_ctx->world_data;
+      ASSERT(world_data != nullptr);
+      map_systems->world_name = world_data->get_name();
+      map_systems->folder_name = world_data->get_technical_name();
+      map_systems->generator_settings = world_data->get_settings();
+      static_assert(systems::map_t::hash_size == utils::world_serializator::hash_size);
+      memcpy(map_systems->hash, world_data->get_hash(), systems::map_t::hash_size);
+      // и что собственно теперь? мы должны парсить таблицы и заполнять данные в типах
+      // create, parse, connect, end
+
+      map_systems->map->world_matrix = world_data->get_world_matrix();
+    }
+    
+    void creating_earth(loading_context* loading_ctx) {
+      auto map_systems = loading_ctx->map;
+      auto world_data = loading_ctx->world_data;
+      // нужно создать непосредственно core map
+      load_map_data(map_systems->map, world_data, loading_ctx->create_map_tiles);
+      
+      loading_ctx->lua.reset(new sol::state);
+      loading_ctx->lua->open_libraries(sol::lib::base, sol::lib::string, sol::lib::table, sol::lib::bit32, sol::lib::math, sol::lib::utf8); // sol::lib::coroutine // корутины не нужны
+      utils::world_map_loading::setup_lua(*loading_ctx->lua);
+      
+      // мне тут нужен энвайронмент, там нужно удалить рандомность у математики + в этом конкретном случае не делать 
+      // где бы функцию для энвайронмента сделать?
+      // нужно добавить несколько функций из утилс
+      loading_ctx->env.reset(new sol::environment(*loading_ctx->lua, sol::create));
+      utils::make_environment(*loading_ctx->lua, *loading_ctx->env);
+      // тут наверное пригодятся и реквайр и ио линес
+    }
+    
+    // нужно разделить эту функцию, помимо картинок тут грузится локализация, геральдика, биомы
+    void loading_images(loading_context* loading_ctx) {
+      auto world_data = loading_ctx->world_data;
+      auto lua = loading_ctx->lua.get();
+      auto controller = loading_ctx->core->image_controller;
+      auto graphics_container = loading_ctx->core->graphics_container;
+      auto map_systems = loading_ctx->map;
+      auto ctx = loading_ctx->map->core_context;
+      auto env = loading_ctx->env.get();
+      
+      // тут у нас появляются два типа таблиц: таблица описание, таблица путь
+      {
+        const auto image_data = get_data_tables(world_data, *lua, *env, utils::world_serializator::image, "image", utils::validate_image);
+        // было бы неплохо избавиться от этого, но нужно сортануть таблицы
+        for (size_t i = 0; i < static_cast<size_t>(render::image_controller::image_type::count); ++i) {
+          //utils::load_images(controller, image_data, static_cast<uint32_t>(render::image_controller::image_type::system));
+          utils::load_images(controller, image_data, i);
+        }
+      }
+      
+      {
+        auto inter = global::get<systems::core_t>()->interface_container.get();
+        load_localization(world_data, inter->lua, inter->env, global::get<systems::core_t>()->loc.get());
+      }
+      
+      loading_ctx->vk_buffer.reset(new render::vk_buffer_data_unique(nullptr, nullptr, nullptr, nullptr));
+      auto heraldy_tmp = loading_ctx->vk_buffer.get();
+      
+      // геральдику будем грузить с помощью специального стейта
+      auto internal_state = global::get<systems::core_t>()->internal.get();
+      auto allocator = graphics_container->vulkan->buffer_allocator;
+      {
+        const auto heraldies_data = get_heraldy_data_tables(world_data, internal_state, utils::validate_heraldy_layer);
+        const auto layers_buffer = utils::load_heraldy_layers(controller, heraldies_data);
+        loading_ctx->heraldy_layers_size = layers_buffer.size() * sizeof(layers_buffer[0]);
+        *heraldy_tmp = render::create_buffer_unique(allocator, render::buffer(
+          loading_ctx->heraldy_layers_size, vk::BufferUsageFlagBits::eTransferSrc
+        ), vma::MemoryUsage::eCpuOnly);
+        
+        memcpy(heraldy_tmp->ptr, layers_buffer.data(), loading_ctx->heraldy_layers_size);
+        loading_ctx->heraldy_layers_count = layers_buffer.size();
+      }
+      
+      {
+//         const auto biomes_data = get_data_tables(world_data, *lua, *env, utils::world_serializator::biome, "biome", utils::validate_biome);
+//         utils::load_biomes(controller, map_systems->seasons, biomes_data);
+        
+        const auto &biomes_data = get_data_tables_from_sequential_array(world_data, *lua, *env, utils::world_serializator::biome, "biome", core::validate_biome);
+        ctx->create_container<core::biome>(biomes_data.size());
+        parse_entities<core::biome>(map_systems->core_context, biomes_data, core::parse_biome); // id у биома задается здесь
+        
+        validate_seasons(loading_ctx);
+      }
+    }
+    
+    void creating_entities(loading_context* loading_ctx) {
+      auto map_systems = loading_ctx->map;
+      auto world_data = loading_ctx->world_data;
+      auto to_data = &loading_ctx->to_data;
+      auto lua = loading_ctx->lua.get();
+      auto env = loading_ctx->env.get();
+      
+      map_systems->core_context->create_container<core::tile>(core::map::hex_count_d(core::map::detail_level));
+      
+      // нам бы все эти вещи спихнуть в одну функцию + env
+      const auto &religion_group_tables = create_entity<core::religion_group>(
+        map_systems->core_context, to_data, world_data, *lua, *env, 
+        utils::world_serializator::religion_group, "religion_group", core::validate_religion_group
+      );
+      const auto &culture_group_tables = create_entity<core::culture_group>(
+        map_systems->core_context, to_data, world_data, *lua, *env, 
+        utils::world_serializator::culture_group, "culture_group", core::validate_culture_group
+      );
+      const auto &religion_tables = create_entity<core::religion>(
+        map_systems->core_context, to_data, world_data, *lua, *env, 
+        utils::world_serializator::religion, "religion", core::validate_religion
+      );
+      const auto &culture_tables = create_entity<core::culture>(
+        map_systems->core_context, to_data, world_data, *lua, *env, 
+        utils::world_serializator::culture, "culture", core::validate_culture
+      );
+      const auto &building_type_tables = create_entity<core::building_type>(
+        map_systems->core_context, to_data, world_data, *lua, *env, 
+        utils::world_serializator::building_type, "building_type", core::validate_building_type
+      );
+      const auto &city_type_tables = create_entity<core::city_type>(map_systems->core_context, to_data, world_data, *lua, *env, utils::world_serializator::city_type, "city_type", core::validate_city_type);
+      const auto &titulus_tables = create_entity<core::titulus>(map_systems->core_context, to_data, world_data, *lua, *env, utils::world_serializator::title, "title", core::validate_title);
+      const auto &province_tables = create_entity_without_id<core::province>(map_systems->core_context, world_data, *lua, *env, utils::world_serializator::province, "province", core::validate_province);
+      const auto &city_tables = create_entity_without_id<core::city>(map_systems->core_context, world_data, *lua, *env, utils::world_serializator::city, "city", core::validate_city);
+      const auto &character_tables = create_characters(map_systems->core_context, world_data, *lua, *env);
+      
+      map_systems->core_context->fill_id_maps();
+      
+      parse_entities<core::religion_group>(map_systems->core_context, religion_group_tables, core::parse_religion_group);
+      parse_entities<core::culture_group>(map_systems->core_context, culture_group_tables, core::parse_culture_group);
+      parse_entities<core::religion>(map_systems->core_context, religion_tables, core::parse_religion);
+      parse_entities<core::culture>(map_systems->core_context, culture_tables, core::parse_culture);
+      
+      parse_entities<core::building_type>(map_systems->core_context, building_type_tables, core::parse_building);
+      parse_entities<core::titulus>(map_systems->core_context, titulus_tables, core::parse_title);
+      parse_entities<core::city_type>(map_systems->core_context, city_type_tables, core::parse_city_type);
+      parse_entities<core::province>(map_systems->core_context, province_tables, core::parse_province);
+      parse_entities<core::city>(map_systems->core_context, city_tables, core::parse_city);
+      parse_character(map_systems->core_context, character_tables);
+    }
+    
+    void connecting_game_data(loading_context* loading_ctx) {
+      auto map_systems = loading_ctx->map;
+      connect_game_data(map_systems->map, map_systems->core_context);
+    }
+    
+    std::vector<render::biome_data_t> get_biomes_data(loading_context* loading_ctx) {
+      auto ctx = loading_ctx->map->core_context;
+      const size_t count = ctx->get_entity_count<core::biome>();
+      assert(count < core::seasons::maximum_biomes);
+      std::vector<render::biome_data_t> biomes(count);
+      for (size_t i = 0; i < count; ++i) {
+        const auto biome = ctx->get_entity<core::biome>(i);
+        biomes[i] = biome->data;
+      }
+      return biomes;
+    }
+    
+    void preparing_biomes(loading_context* loading_ctx) {
+      auto map_systems = loading_ctx->map;
+      auto graphics_container = loading_ctx->core->graphics_container;
+      auto device = graphics_container->vulkan->device;
+//       auto allocator = graphics_container->vulkan->buffer_allocator;
+      auto controller = loading_ctx->core->image_controller;
+      size_t heraldy_layers_size = loading_ctx->heraldy_layers_size;
+      
+      const auto &data = get_season_biomes_data(map_systems);
+      
+      auto buffers = global::get<render::buffers>();
+      
+      const auto &biomes_data = get_biomes_data(loading_ctx);
+      
+      {
+        auto ctx = map_systems->core_context;
+        const size_t structures_count = ctx->get_entity_count<core::city>();
+//         const size_t structure_data_size = structures_count * sizeof(render::world_structure_t);
+//         auto buf = render::create_buffer_unique(allocator, render::buffer(
+//           structure_data_size, vk::BufferUsageFlagBits::eTransferSrc
+//         ), vma::MemoryUsage::eCpuOnly);
+        
+//         auto map = map_systems->map;
+        map_systems->lock_map();
+        controller->update_set();
+        map_systems->map->copy_biomes(biomes_data);
+        global::get<render::tile_optimizer>()->set_biome_tile_count(data);
+        
+//         copy_structure_data(ctx, 0, map, buf.ptr);
+//         map->resize_structures_buffer(structure_data_size);
+        ASSERT(heraldy_layers_size != 0);
+        buffers->resize_heraldy_buffer(heraldy_layers_size);
+        
+        auto pool = graphics_container->vulkan->transfer_command_pool;
+        auto queue = graphics_container->vulkan->graphics;
+        auto fence = graphics_container->vulkan->transfer_fence;
+        render::do_command(device, pool, queue, fence, [&] (vk::CommandBuffer task) {
+//           const vk::BufferCopy c1{0, 0, structure_data_size};
+          const vk::BufferCopy c2{0, 0, heraldy_layers_size};
+          const vk::CommandBufferBeginInfo info(vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
+          task.begin(info);
+//           task.copyBuffer(buf.handle, map->data->structures.handle, c1);
+          task.copyBuffer(loading_ctx->vk_buffer->handle, buffers->heraldy.handle, c2);
+          task.end();
+        });
+        
+        global::get<render::tile_optimizer>()->set_max_structures_count(structures_count);
+        global::get<render::tile_updater>()->setup_default(graphics_container);
+        // тут нужно учесть еще армии и героев, по идее теперь должно хватить на все вообще
+        // теперь это тут не нужно
+        //global::get<render::tile_optimizer>()->set_max_heraldy_count(structures_count + core::context::armies_max_count + core::context::hero_troops_max_count);
+//         map->flush_structures();
+        map_systems->unlock_map();
+      }
+      
+      map_systems->map->set_tile_biome(map_systems->seasons);
+      for (size_t i = 0; i < map_systems->map->tiles_count(); ++i) {
+        const uint32_t index = map_systems->seasons->get_tile_biome(map_systems->seasons->current_season, i);
+        auto tile = map_systems->core_context->get_entity<core::tile>(i);
+        tile->biome_index = index;
+      }
+      
+      {
+        utils::time_log log("copying data to gpu");
+        map_systems->map->flush_data();
+      }
+      
+      // все данные уже в гпу памяти
+    }
+    
+    void creating_borders(loading_context* loading_ctx) {
+      auto map_systems = loading_ctx->map;
+      find_border_points(map_systems->map, map_systems->core_context); // после генерации нужно сделать много вещей
+      
+      map_systems->render_modes->at(render::modes::biome)();
+      
+      const size_t mem = map_systems->core_context->compute_data_memory();
+      std::cout << "game data takes " << mem << " bytes (" << ((double(mem) / 1024.0) / 1024.0) << " mb)" << "\n";
+    }
+    
+    void make_player(loading_context* loading_ctx) {
+      auto map_systems = loading_ctx->map;
+      
+      make_random_player_character();
+      map_systems->load_world.clear();
+      map_systems->load_world.shrink_to_fit();
+    }
+    
+    void starting(loading_context* loading_ctx) {
+      auto t = global::get<render::tile_optimizer>();
+      t->set_border_rendering(false);
+      
+      auto map_systems = loading_ctx->map;
+      auto creator = map_systems->map_creator;
+      auto cont = creator->serializator_ptr();
+      cont->set_name(creator->get_world_name());
+      cont->set_technical_name(creator->get_folder_name());
+      cont->set_settings(creator->get_settings());
+      cont->set_rand_seed(creator->get_rand_seed());
+      cont->set_noise_seed(creator->get_noise_seed());
+      // стартинг должен быть только после генерации
+      loading_ctx->world_data = cont;
+    }
+    
+    void serializing_world(loading_context* loading_ctx) {
+      auto map_systems = loading_ctx->map;
+      auto creator = map_systems->map_creator;
+      auto cont = creator->serializator_ptr();
+      
+      cont->copy_seasons(map_systems->seasons);
+      cont->set_world_matrix(map_systems->map->world_matrix);
+
+      for (size_t i = 0; i < core::map::hex_count_d(core::map::detail_level); ++i) {
+        //const auto &d = ctx->get_tile(i);
+        //cont->set_tile_data(i, {d.height, d.province}); // тут даже по идее ничего делать особо не нужно
+        
+        //counter += size_t(d.province != UINT32_MAX);
+        auto tile = map_systems->map->get_tile_ptr(i);
+        cont->set_tile_data(i, {tile->height, UINT32_MAX});
+      }
+
+      cont->serialize(); //
+      
+      // вот это по идее не нужно, у меня грузится это все в loading_world
+      map_systems->world_name = cont->get_name();
+      map_systems->folder_name = cont->get_technical_name();
+      map_systems->generator_settings = cont->get_settings();
+      memcpy(map_systems->hash, cont->get_hash(), systems::map_t::hash_size);
+      
+      loading_ctx->create_map_tiles = false;
+    }
+    
+    void checking_world(loading_context* loading_ctx) {
+      auto map_systems = loading_ctx->map;
+      auto creator = map_systems->map_creator;
+      auto cont = creator->serializator_ptr();
+      
+      utils::world_serializator test;
+      test.deserialize(global::root_directory() + "saves/" + creator->get_folder_name() + "/world_data");
+
+      ASSERT(test.get_name() == creator->get_world_name());
+      ASSERT(test.get_technical_name() == creator->get_folder_name());
+      ASSERT(test.get_settings() == creator->get_settings());
+      ASSERT(test.get_rand_seed() == creator->get_rand_seed());
+      ASSERT(test.get_noise_seed() == creator->get_noise_seed());
+
+      ASSERT(cont->get_data_count(utils::world_serializator::province) == test.get_data_count(utils::world_serializator::province));
+      ASSERT(cont->get_data_count(utils::world_serializator::city_type) == test.get_data_count(utils::world_serializator::city_type));
+      ASSERT(cont->get_data_count(utils::world_serializator::city) == test.get_data_count(utils::world_serializator::city));
+      ASSERT(cont->get_data_count(utils::world_serializator::building_type) == test.get_data_count(utils::world_serializator::building_type));
+      ASSERT(cont->get_data_count(utils::world_serializator::title) == test.get_data_count(utils::world_serializator::title));
+      ASSERT(cont->get_data_count(utils::world_serializator::character) == test.get_data_count(utils::world_serializator::character));
+
+      //PRINT(cont.get_data(var, i))
+  #define CHECK_CONTENT(var) for (uint32_t i = 0; i < cont->get_data_count(var); ++i) { ASSERT(cont->get_data(var, i) == test.get_data(var, i)); }
+      CHECK_CONTENT(utils::world_serializator::province)
+      CHECK_CONTENT(utils::world_serializator::city_type)
+      CHECK_CONTENT(utils::world_serializator::city)
+      CHECK_CONTENT(utils::world_serializator::building_type)
+      CHECK_CONTENT(utils::world_serializator::title)
+      CHECK_CONTENT(utils::world_serializator::character)
+
+      // кажется все правильно сериализуется и десериализуется
+      // сохранения должны храниться в папках с файлом world_data
+      // название папки - техническое название мира,
+      // техническое название мира - нужно зафорсить пользователя задать валидное техническое название
+      // (какнибудь бы упростить для пользователя это дело)
+      // что самое главное я могу оставить пока так как есть и это покроет почти всю сериализацию
+      // остается решить вопрос с климатом, хотя че тут решать: нужно выделить
+      // 64*500к или 128*500к памяти чтобы сохранить сезоны, сезонов по идее не имеет смысла делать больше чем размер массива на каждый тайл
+      // соответственно 64 сезона на каждый тайл, означает ли это что мы можем сохранить 4 тайла в одном чаре?
+      // в сохранениях видимо придется делать протомессадж для каждой сущности которую необходимо сохранить
+      // мне нужно еще придумать стендалоне сохранения: то есть сохранения в которых записаны данные мира дополнительно
+      //
+    }
+    
+    void ending(loading_context* loading_ctx) {
+      auto map_systems = loading_ctx->map;
+      map_systems->destroy_map_generator();
+    }
+    
+    void gen_prepare(loading_context* loading_ctx) {
+      auto map_systems = loading_ctx->map;
+      ASSERT(map_systems != nullptr);
+      map_systems->setup_rendering_modes();
+      map_systems->start_rendering();
     }
   }
 }

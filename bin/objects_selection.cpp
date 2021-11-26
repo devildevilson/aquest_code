@@ -2,6 +2,7 @@
 
 #include "core_structures.h"
 #include "utils/interface_container.h"
+#include "utils/utility.h"
 
 namespace devils_engine {
   namespace utils {

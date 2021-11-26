@@ -683,17 +683,6 @@ namespace devils_engine {
           [&] (vk::CommandBuffer task) {
             const vk::CommandBufferBeginInfo info(vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
             task.begin(info);
-//             for (const auto &concrete_data : concrete_datas) {
-//               for (const auto &copy_data : concrete_data.copy_datas) {
-//                 const vk::ImageSubresourceRange range1{vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1};
-//                 const auto [b1_info, src1, dst1] = render::make_image_memory_barrier(copy_data.src, vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferSrcOptimal, range1);
-//                 task.pipelineBarrier(src1, dst1, vk::DependencyFlagBits::eByRegion, nullptr, nullptr, b1_info);
-//                 
-//                 const vk::ImageSubresourceRange range2{vk::ImageAspectFlagBits::eColor, 0, 1, 0, copy_data.dst_layers_count};
-//                 const auto [b2_info, src2, dst2] = render::make_image_memory_barrier(copy_data.dst, vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal, range2);
-//                 task.pipelineBarrier(src2, dst2, vk::DependencyFlagBits::eByRegion, nullptr, nullptr, b2_info);
-//               }
-//             }
             
             for (const auto &concrete_data : concrete_datas) {
               for (const auto &copy_data : concrete_data.copy_datas) {
@@ -721,15 +710,7 @@ namespace devils_engine {
                 }
               }
             }
-            
-//             for (const auto &concrete_data : concrete_datas) {
-//               for (const auto &copy_data : concrete_data.copy_datas) {
-//                 const vk::ImageSubresourceRange range1{vk::ImageAspectFlagBits::eColor, 0, 1, 0, copy_data.dst_layers_count};
-//                 const auto [b1_info, src1, dst1] = render::make_image_memory_barrier(copy_data.dst, vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eShaderReadOnlyOptimal, range1);
-//                 task.pipelineBarrier(src1, dst1, vk::DependencyFlagBits::eByRegion, nullptr, nullptr, b1_info);
-//               }
-//             }
-            
+
             task.end();
           }
         );
@@ -795,74 +776,75 @@ namespace devils_engine {
 //       auto to_data = global::get<utils::data_string_container>();
 //       auto ctx = global::get<core::context>();
       
-      size_t counter = 0;
-      for (const auto &table : biome_tables) {
-        if (!table["color"].valid()) throw std::runtime_error("Bad biome table");
-        
-        render::biome_data_t b;
-        if (auto texture_proxy = table["texture"]; texture_proxy.valid()) {
-          const std::string_view str = texture_proxy.get<std::string_view>();
-//           PRINT(str)
-          std::string_view img_id;
-          uint32_t layer;
-          bool mirror_u;
-          bool mirror_v;
-          const bool ret = render::parse_image_id(str, img_id, layer, mirror_u, mirror_v);
-          if (!ret) throw std::runtime_error("Bad texture id " + std::string(str));
-          const auto image_id = std::string(img_id);
-          auto view = controller->get_view(image_id);
-          if (layer >= view->count) throw std::runtime_error("Image pack " + image_id + " does not have " + std::to_string(layer) + " amount of images");
-          b.texture = view->get_image(layer, mirror_u, mirror_v);
-        } else b.texture = { GPU_UINT_MAX };
-        
-        {
-          render::color_t c;
-          c.container = table["color"];
-          b.color = c;
-        }
-        
-        if (auto texture_proxy = table["object1"]; texture_proxy.valid()) {
-          const std::string_view str = texture_proxy.get<std::string_view>();
-          std::string_view img_id;
-          uint32_t layer;
-          bool mirror_u;
-          bool mirror_v;
-          const bool ret = render::parse_image_id(str, img_id, layer, mirror_u, mirror_v);
-          if (!ret) throw std::runtime_error("Bad texture id " + std::string(str));
-          const auto image_id = std::string(img_id);
-          auto view = controller->get_view(image_id);
-          if (layer >= view->count) throw std::runtime_error("Image pack " + image_id + " does not have " + std::to_string(layer) + " amount of images");
-          b.object_texture1 = view->get_image(layer, mirror_u, mirror_v);
-        } else b.object_texture1 = { GPU_UINT_MAX };
-        
-        if (auto texture_proxy = table["object2"]; texture_proxy.valid()) {
-          const std::string_view str = texture_proxy.get<std::string_view>();
-          std::string_view img_id;
-          uint32_t layer;
-          bool mirror_u;
-          bool mirror_v;
-          const bool ret = render::parse_image_id(str, img_id, layer, mirror_u, mirror_v);
-          if (!ret) throw std::runtime_error("Bad texture id " + std::string(str));
-          const auto image_id = std::string(img_id);
-          auto view = controller->get_view(image_id);
-          if (layer >= view->count) throw std::runtime_error("Image pack " + image_id + " does not have " + std::to_string(layer) + " amount of images");
-          b.object_texture2 = view->get_image(layer, mirror_u, mirror_v);
-        } else b.object_texture2 = { GPU_UINT_MAX };
-        
-        b.min_scale1 = parse_number("min_scale1", table, 0.0);
-        b.max_scale1 = parse_number("max_scale1", table, 0.0);
-        b.min_scale2 = parse_number("min_scale2", table, 0.0);
-        b.max_scale2 = parse_number("max_scale2", table, 0.0);
-        b.density = parse_number("density", table, 0.0);
-        
-        ASSERT(counter < MAX_BIOMES_COUNT);
-        seasons->create_biome(counter, b);
-        ++counter;
-      }
-      
-      ASSERT(counter != 0);
-      if (seasons->biomes_count != 0) { ASSERT(seasons->biomes_count == counter); }
-      seasons->biomes_count = counter;
+      // теперь отдельным энтити
+//       size_t counter = 0;
+//       for (const auto &table : biome_tables) {
+//         if (!table["color"].valid()) throw std::runtime_error("Bad biome table");
+//         
+//         render::biome_data_t b;
+//         if (auto texture_proxy = table["texture"]; texture_proxy.valid()) {
+//           const std::string_view str = texture_proxy.get<std::string_view>();
+// //           PRINT(str)
+//           std::string_view img_id;
+//           uint32_t layer;
+//           bool mirror_u;
+//           bool mirror_v;
+//           const bool ret = render::parse_image_id(str, img_id, layer, mirror_u, mirror_v);
+//           if (!ret) throw std::runtime_error("Bad texture id " + std::string(str));
+//           const auto image_id = std::string(img_id);
+//           auto view = controller->get_view(image_id);
+//           if (layer >= view->count) throw std::runtime_error("Image pack " + image_id + " does not have " + std::to_string(layer) + " amount of images");
+//           b.texture = view->get_image(layer, mirror_u, mirror_v);
+//         } else b.texture = { GPU_UINT_MAX };
+//         
+//         {
+//           render::color_t c;
+//           c.container = table["color"];
+//           b.color = c;
+//         }
+//         
+//         if (auto texture_proxy = table["object1"]; texture_proxy.valid()) {
+//           const std::string_view str = texture_proxy.get<std::string_view>();
+//           std::string_view img_id;
+//           uint32_t layer;
+//           bool mirror_u;
+//           bool mirror_v;
+//           const bool ret = render::parse_image_id(str, img_id, layer, mirror_u, mirror_v);
+//           if (!ret) throw std::runtime_error("Bad texture id " + std::string(str));
+//           const auto image_id = std::string(img_id);
+//           auto view = controller->get_view(image_id);
+//           if (layer >= view->count) throw std::runtime_error("Image pack " + image_id + " does not have " + std::to_string(layer) + " amount of images");
+//           b.object_texture1 = view->get_image(layer, mirror_u, mirror_v);
+//         } else b.object_texture1 = { GPU_UINT_MAX };
+//         
+//         if (auto texture_proxy = table["object2"]; texture_proxy.valid()) {
+//           const std::string_view str = texture_proxy.get<std::string_view>();
+//           std::string_view img_id;
+//           uint32_t layer;
+//           bool mirror_u;
+//           bool mirror_v;
+//           const bool ret = render::parse_image_id(str, img_id, layer, mirror_u, mirror_v);
+//           if (!ret) throw std::runtime_error("Bad texture id " + std::string(str));
+//           const auto image_id = std::string(img_id);
+//           auto view = controller->get_view(image_id);
+//           if (layer >= view->count) throw std::runtime_error("Image pack " + image_id + " does not have " + std::to_string(layer) + " amount of images");
+//           b.object_texture2 = view->get_image(layer, mirror_u, mirror_v);
+//         } else b.object_texture2 = { GPU_UINT_MAX };
+//         
+//         b.min_scale1 = parse_number("min_scale1", table, 0.0);
+//         b.max_scale1 = parse_number("max_scale1", table, 0.0);
+//         b.min_scale2 = parse_number("min_scale2", table, 0.0);
+//         b.max_scale2 = parse_number("max_scale2", table, 0.0);
+//         b.density = parse_number("density", table, 0.0);
+//         
+//         ASSERT(counter < MAX_BIOMES_COUNT);
+//         seasons->create_biome(counter, b);
+//         ++counter;
+//       }
+//       
+//       ASSERT(counter != 0);
+//       if (seasons->biomes_count != 0) { ASSERT(seasons->biomes_count == counter); }
+//       seasons->biomes_count = counter;
     }
     
     size_t add_biome(const sol::table &table) {

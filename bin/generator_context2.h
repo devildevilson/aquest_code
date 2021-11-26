@@ -14,7 +14,7 @@ namespace dt {
   class thread_pool;
 }
 
-class FastNoise;
+class FastNoiseLite;
 
 namespace devils_engine {
   namespace core {
@@ -85,7 +85,7 @@ namespace devils_engine {
       struct context {
         map::generator::container* container;
         utils::random_engine_st* random;
-        FastNoise* noise;
+        FastNoiseLite* noise;
         core::map* map;
         core::seasons* seasons;
         utils::localization* loc;

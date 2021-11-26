@@ -141,6 +141,7 @@ namespace devils_engine {
       map(const create_info &info);
       ~map();
       
+      // это дело нужно вынести куда? в контекст? там ближе всего эти вещи
       uint32_t cast_ray(const utils::ray &ray, float &ray_dist) const;
       bool intersect_container(const uint32_t &tri_index, const utils::ray &ray) const;
       bool intersect_tri(const glm::vec4 &v0, const glm::vec4 &v1, const glm::vec4 &v2, const utils::ray &ray, float &t) const;
@@ -179,28 +180,28 @@ namespace devils_engine {
       void set_tile_height(const uint32_t &tile_index, const float &tile_hight);
       void set_tile_height_lua(const uint32_t &tile_index, const float &tile_hight);
       void set_tile_border_data(const uint32_t &tile_index, const uint32_t &offset, const uint32_t &size);
-      void set_tile_connections_data(const uint32_t &tile_index, const uint32_t &offset, const uint32_t &size);
+//       void set_tile_connections_data(const uint32_t &tile_index, const uint32_t &offset, const uint32_t &size);
       
-      uint32_t get_tile_objects_index(const uint32_t &tile_index, const uint32_t &data_index) const;
-      void set_tile_objects_index(const uint32_t &tile_index, const uint32_t &data_index, const uint32_t &data);
-      bool tile_objects_index_comp_swap(const uint32_t &tile_index, const uint32_t &data_index, uint32_t &comp, const uint32_t &data);
+//       uint32_t get_tile_objects_index(const uint32_t &tile_index, const uint32_t &data_index) const;
+//       void set_tile_objects_index(const uint32_t &tile_index, const uint32_t &data_index, const uint32_t &data);
+//       bool tile_objects_index_comp_swap(const uint32_t &tile_index, const uint32_t &data_index, uint32_t &comp, const uint32_t &data);
       
-      uint32_t allocate_army_data();
-      void release_army_data(const uint32_t &index);
-      void set_army_pos(const uint32_t &index, const glm::vec3 &pos);
-      void set_army_image(const uint32_t &index, const render::image_t &img);
-      glm::vec3 get_army_pos(const uint32_t &index) const;
-      render::image_t get_army_image(const uint32_t &index) const;
+//       uint32_t allocate_army_data();
+//       void release_army_data(const uint32_t &index);
+//       void set_army_pos(const uint32_t &index, const glm::vec3 &pos);
+//       void set_army_image(const uint32_t &index, const render::image_t &img);
+//       glm::vec3 get_army_pos(const uint32_t &index) const;
+//       render::image_t get_army_image(const uint32_t &index) const;
       
       float get_tile_height(const uint32_t &tile_index) const;
       float get_tile_height_lua(const uint32_t &tile_index) const;
       
-      void copy_biomes(const seasons* s);
+      void copy_biomes(const std::vector<render::biome_data_t> &biomes);
       void set_tile_biome(const seasons* s);
       
-      void set_tile_structure_index(const uint32_t &tile_index, const uint32_t &struct_index);
+//       void set_tile_structure_index(const uint32_t &tile_index, const uint32_t &struct_index);
       
-      void resize_structures_buffer(const size_t &size);
+//       void resize_structures_buffer(const size_t &size);
       
       void copy_main_map_data(
         const std::vector<render::light_map_tile_t> &tiles,

@@ -16,7 +16,7 @@
 #include "generator_context2.h"
 #include "generator_container.h"
 #include "map.h"
-#include "FastNoise.h"
+#include "Cpp/FastNoiseLite.h"
 #include "data_parser.h"
 #include "game_time.h"
 #include "seasons.h"

@@ -1,6 +1,5 @@
 #include "camera.h"
 
-#include "utils/ecs.h"
 #include "utils/globals.h"
 #include "render/targets.h"
 #include "render/window.h"

@@ -1,7 +1,9 @@
-#ifndef TILES_FUNCS_H
-#define TILES_FUNCS_H
+#ifndef DEVILS_ENGINE_CORE_TILES_FUNCS_H
+#define DEVILS_ENGINE_CORE_TILES_FUNCS_H
 
 #include <cstdint>
+
+// нужно ли мне это?
 
 namespace devils_engine {
   namespace core {

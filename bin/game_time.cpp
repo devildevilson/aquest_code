@@ -14,7 +14,7 @@ namespace devils_engine {
     static calendar::date load_start_date;
     static calendar::date load_current_date;
     
-    calendar::calendar() : m_name_str(SIZE_MAX), m_week_days_count(7), m_start_day(INT64_MAX), m_current_turn(SIZE_MAX), m_years_days(SIZE_MAX) {}
+    calendar::calendar() : m_name_str(SIZE_MAX), m_week_days_count(7), m_start_day(INT64_MAX), m_current_turn(SIZE_MAX), m_year_days(SIZE_MAX) {}
     void calendar::set_start_date(const int32_t &year, const uint32_t &month, const uint32_t &day) {
       load_start_date = calendar::date(year, month, day);
     }
@@ -49,10 +49,10 @@ namespace devils_engine {
     }
     
     calendar::date calendar::convert_days_to_date(const int64_t &days) const {
-      ASSERT(m_years_days != SIZE_MAX);
-      const int32_t cur_year = std::abs(days) / m_years_days;
-      size_t current_year_day = std::abs(days) - cur_year * m_years_days;
-      ASSERT(current_year_day < m_years_days);
+      ASSERT(m_year_days != SIZE_MAX);
+      const int32_t cur_year = std::abs(days) / m_year_days;
+      size_t current_year_day = std::abs(days) - cur_year * m_year_days;
+      ASSERT(current_year_day < m_year_days);
       uint32_t month_index = 0;
       for (; month_index < m_months.size() && current_year_day > m_months[month_index].days_count; ++month_index) {
         current_year_day -= m_months[month_index].days_count;
@@ -71,9 +71,13 @@ namespace devils_engine {
       
       const bool before_zero = date.year() < 0;
       days_count = before_zero ? -days_count : days_count;
-      days_count += date.year() * m_years_days; // это количество дней прошедшее от 0 года
+      days_count += date.year() * m_year_days; // это количество дней прошедшее от 0 года
       if (before_zero) {ASSERT(days_count < 0);}
       return std::abs(m_start_day) + days_count;
+    }
+    
+    size_t calendar::days_to_years(const size_t &days) const {
+      return days / m_year_days;
     }
     
     void calendar::validate() {
@@ -93,9 +97,9 @@ namespace devils_engine {
         PRINT("Missing game current date")
       }
       
-      m_years_days = 0;
+      m_year_days = 0;
       for (const auto &data : m_months) {
-        m_years_days += data.days_count;
+        m_year_days += data.days_count;
       }
       
       m_start_day = convert_date_to_days(load_start_date);

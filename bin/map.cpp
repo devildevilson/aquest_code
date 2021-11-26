@@ -17,6 +17,9 @@
 #include "utils/works_utils.h"
 #include "utils/globals.h"
 #include "utils/utility.h"
+#include "utils/systems.h"
+
+#include "core/context.h"
 
 #define MAP_CONTAINER_DESCRIPTOR_POOL_NAME "map_container_descriptor_pool"
 
@@ -50,7 +53,7 @@ namespace devils_engine {
       const size_t tiles_count = hex_count_d(detail_level);
 //       const uint32_t tile_indices_count = std::ceil(float(tiles_count)/float(4));
       const size_t tile_indices_size = align_to(tiles_count * sizeof(uint32_t), 16);
-      const size_t army_data_size = sizeof(render::army_data_t) * maximum_army_count;
+//       const size_t army_data_size = sizeof(render::army_data_t) * maximum_army_count;
       
       auto allocator = data->allocator;
       auto device = data->device;
@@ -62,33 +65,34 @@ namespace devils_engine {
       ), vma::MemoryUsage::eCpuOnly, "map::accel_triangles");
       data->biomes.create(allocator, render::buffer(
         sizeof(render::packed_biome_data_t)*MAX_BIOMES_COUNT, 
+//         16, // не всегда нужны все 255 биомов, а может ладно, пусть будет 16кб памяти?
         vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst
       ), vma::MemoryUsage::eGpuOnly, "map::biomes");
       data->tile_indices.create(allocator, render::buffer(
         tile_indices_size, 
         vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferSrc
       ), vma::MemoryUsage::eCpuOnly, "map::tile_indices");
-      data->structures.create(allocator, render::buffer(
-        sizeof(glm::uvec4), 
-        vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst
-      ), vma::MemoryUsage::eGpuOnly, "map::structures");
-      data->tile_object_indices.create(allocator, render::buffer(
-        sizeof(c_tile_data) * tiles_count, 
-        vk::BufferUsageFlagBits::eStorageBuffer
-      ), vma::MemoryUsage::eCpuOnly, "map::tile_object_indices");
-      data->army_data_buffer.create(allocator, render::buffer(army_data_size, vk::BufferUsageFlagBits::eStorageBuffer), vma::MemoryUsage::eCpuOnly, "map::army_data_buffer");
+//       data->structures.create(allocator, render::buffer(
+//         sizeof(glm::uvec4), 
+//         vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst
+//       ), vma::MemoryUsage::eGpuOnly, "map::structures");
+//       data->tile_object_indices.create(allocator, render::buffer(
+//         sizeof(c_tile_data) * tiles_count, 
+//         vk::BufferUsageFlagBits::eStorageBuffer
+//       ), vma::MemoryUsage::eCpuOnly, "map::tile_object_indices");
+//       data->army_data_buffer.create(allocator, render::buffer(army_data_size, vk::BufferUsageFlagBits::eStorageBuffer), vma::MemoryUsage::eCpuOnly, "map::army_data_buffer");
       
       memset(data->tile_indices.ptr, 0, tile_indices_size);
-      using array_data_type = c_tile_data;
-      auto object_indices = reinterpret_cast<array_data_type*>(data->tile_object_indices.ptr);
-      const uint32_t vec_count = sizeof(array_data_type) / sizeof(glm::uvec4);
-      for (size_t i = 0; i < tiles_count; ++i) {
-        for (uint32_t j = 0; j < vec_count; ++j) {
-          for (uint32_t k = 0; k < 4; ++k) {
-            object_indices[i].data[j][k] = GPU_UINT_MAX;
-          }
-        }
-      }
+//       using array_data_type = c_tile_data;
+//       auto object_indices = reinterpret_cast<array_data_type*>(data->tile_object_indices.ptr);
+//       const uint32_t vec_count = sizeof(array_data_type) / sizeof(glm::uvec4);
+//       for (size_t i = 0; i < tiles_count; ++i) {
+//         for (uint32_t j = 0; j < vec_count; ++j) {
+//           for (uint32_t k = 0; k < 4; ++k) {
+//             object_indices[i].data[j][k] = GPU_UINT_MAX;
+//           }
+//         }
+//       }
       
       size_t accum = 0;
       for (uint32_t i = 0; i < detail_level; ++i) {
@@ -241,6 +245,8 @@ namespace devils_engine {
       const bool ret = m->intersect_container(tri_index, ray);
       if (!ret) return UINT32_MAX;
       
+      auto ctx = global::get<systems::map_t>()->core_context;
+      
       const map::triangle &tri = m->triangles[tri_index];
       
       const uint32_t level = tri.current_level;
@@ -252,20 +258,22 @@ namespace devils_engine {
           // тут нужно проверить дальность до тайла + проверить пересечение со стенками
           // нужно ли чекать ближайший треугольник? не уверен что это необходимо
           
-          const auto &tile_data = render::unpack_data(m->get_tile(tile_index));
-          const float height = tile_data.height;
-          const uint32_t p_count = render::is_pentagon(tile_data) ? 5 : 6;
-          const uint32_t point_a_index = tile_data.center;
-          const uint32_t height_layer = render::compute_height_layer(height);
-          const float final_height = render::layer_height * height_layer;
-          const float computed_height = final_height * render::render_tile_height;
+          const auto tile = ctx->get_entity<core::tile>(tile_index);
           
-          glm::vec4 center = m->get_point(point_a_index);
-          glm::vec4 center_height = center + glm::normalize(glm::vec4(glm::vec3(center), 0.0f)) * (computed_height);
+          const uint32_t p_count = tile->neighbors_count();
+//           const uint32_t point_a_index = tile->center;
+          const float height = tile->height;
+//           const uint32_t height_layer = render::compute_height_layer(height);
+//           const float final_height = render::layer_height * height_layer;
+//           const float computed_height = final_height * render::render_tile_height;
+          const float computed_height = height;
+          
+//           glm::vec4 center = m->get_point(point_a_index);
+//           glm::vec4 center_height = center + glm::normalize(glm::vec4(glm::vec3(center), 0.0f)) * (computed_height);
           glm::vec4 local_points[6];
           glm::vec4 local_points_height[6];
           for (uint32_t j = 0; j < p_count; ++j) {
-            const uint32_t point1_index = tile_data.points[j];
+            const uint32_t point1_index = tile->points[j];
             const glm::vec4 point = m->get_point(point1_index);
             const glm::vec4 point_normal = glm::vec4(glm::vec3(point) / map::world_radius, 0.0f);
             const glm::vec4 point_height = point + point_normal * (computed_height);
@@ -273,21 +281,49 @@ namespace devils_engine {
             local_points_height[j] = point_height;
           }
           
-          for (uint32_t j = 0; j < p_count; ++j) {
-            const uint32_t b_index = j;
-            const uint32_t c_index = (j+1)%p_count;
+          // проверяем теугольники тайла, возможно имеет смысл брать треугольники как при рендеринге - меньше треугольников
+          static const uint32_t indices_hex[] = {0, 1, 5, 2, 4, 3};
+          static const uint32_t indices_pen[] = {0, 1, 4, 2, 3};
+          uint32_t index1 = 0;
+          uint32_t index2 = 1;
+          uint32_t index3 = 2;
+          for (uint32_t j = 0; j < p_count-2; ++j) {
+            const uint32_t final_index1 = p_count == 6 ? indices_hex[index1] : indices_pen[index1];
+            const uint32_t final_index2 = p_count == 6 ? indices_hex[index2] : indices_pen[index2];
+            const uint32_t final_index3 = p_count == 6 ? indices_hex[index3] : indices_pen[index3];
             
-            ASSERT(c_index < p_count);
+            const auto point1 = local_points_height[final_index1];
+            const auto point2 = local_points_height[final_index2];
+            const auto point3 = local_points_height[final_index3];
             
             float dist = MAX_VALUE;
-//               const bool ret = intersect_tri(get_point(point_a_index), get_point(point_b_index), get_point(point_c_index), ray, dist);
-            const bool ret = m->intersect_tri(center_height, local_points_height[b_index], local_points_height[c_index], ray, dist);
+            const bool ret = m->intersect_tri(point1, point2, point3, ray, dist);
             if (ret && dist < final_tile_dist) {
               final_tile_index = tile_index;
               final_tile_dist = dist;
-              //break;
+              break;
             }
+            
+            index1 = index2;
+            index2 = index3;
+            index3 = (index3+1)%p_count;
           }
+          
+//           for (uint32_t j = 0; j < p_count; ++j) {
+//             const uint32_t b_index = j;
+//             const uint32_t c_index = (j+1)%p_count;
+//             
+//             ASSERT(c_index < p_count);
+//             
+//             float dist = MAX_VALUE;
+// //               const bool ret = intersect_tri(get_point(point_a_index), get_point(point_b_index), get_point(point_c_index), ray, dist);
+//             const bool ret = m->intersect_tri(center_height, local_points_height[b_index], local_points_height[c_index], ray, dist);
+//             if (ret && dist < final_tile_dist) {
+//               final_tile_index = tile_index;
+//               final_tile_dist = dist;
+//               //break;
+//             }
+//           }
           
           if (final_tile_index != UINT32_MAX) {
             distance = final_tile_dist;
@@ -349,11 +385,7 @@ namespace devils_engine {
       return global_index;
     }
 
-    uint32_t map::cast_ray(const utils::ray &ray, float &ray_dist) const {
-//       static const std::function<uint32_t(const utils::ray &ray, const uint32_t &tri_index, float &distance)> reck = [this] (const utils::ray &ray, const uint32_t &tri_index, float &distance) {
-//         
-//       };
-      
+    uint32_t map::cast_ray(const utils::ray &ray, float &ray_dist) const {      
       size_t current_detail_level = 0;
       
       float dist = MAX_VALUE;
@@ -848,6 +880,8 @@ namespace devils_engine {
     }
     
     const render::light_map_tile_t map::get_tile(const uint32_t &index) const {
+      if (data->tiles.ptr == nullptr) throw std::runtime_error("Attempt to get gpu data directly");
+      
       ASSERT(index < tiles_count());
 //       std::unique_lock<std::mutex> lock(mutex);
       const auto tiles_arr = reinterpret_cast<render::light_map_tile_t*>(data->tiles.ptr);
@@ -855,12 +889,14 @@ namespace devils_engine {
     }
     
     const render::map_tile_t* map::get_tile_ptr(const uint32_t &index) const {
+      if (data->tiles.ptr == nullptr) throw std::runtime_error("Attempt to get gpu data directly");
       if (index >= tiles_count()) return nullptr;
       auto tiles_arr = reinterpret_cast<render::map_tile_t*>(data->tiles.ptr);
       return &tiles_arr[index];
     }
     
     render::map_tile_t* map::get_tile_ptr(const uint32_t &index) {
+      if (data->tiles.ptr == nullptr) throw std::runtime_error("Attempt to get gpu data directly");
       if (index >= tiles_count()) return nullptr;
       auto tiles_arr = reinterpret_cast<render::map_tile_t*>(data->tiles.ptr);
       return &tiles_arr[index];
@@ -900,26 +936,30 @@ namespace devils_engine {
     }
     
     void map::set_tile_data(const devils_engine::map::tile* tile, const uint32_t &index) {
+      if (data->tiles.ptr == nullptr) throw std::runtime_error("Attempt to set gpu data directly");
+      
       ASSERT(index < tiles_count());
       std::unique_lock<std::mutex> lock(mutex);
       
       auto tiles_arr = reinterpret_cast<render::light_map_tile_t*>(data->tiles.ptr);
       const render::map_tile_t map_tile{
-        tile->index,
-        {GPU_UINT_MAX},
-        {GPU_UINT_MAX},
-        0.0f,
         {tile->neighbours[0].points[0], tile->neighbours[1].points[0], tile->neighbours[2].points[0], tile->neighbours[3].points[0], tile->neighbours[4].points[0], tile->neighbours[5].points[0]},
         {tile->neighbours[0].index, tile->neighbours[1].index, tile->neighbours[2].index, tile->neighbours[3].index, tile->neighbours[4].index, tile->neighbours[5].index},
+        tile->index,
+        0.0f,
         GPU_UINT_MAX,
+        0,
+        {GPU_UINT_MAX},
+        {GPU_UINT_MAX},
         GPU_UINT_MAX,
-        GPU_UINT_MAX,
-        0
+        GPU_UINT_MAX
       };
       tiles_arr[index] = pack_data(map_tile);
     }
     
     void map::set_point_data(const glm::vec3 &point, const uint32_t &index) {
+      if (data->tiles.ptr == nullptr) throw std::runtime_error("Attempt to set gpu data directly");
+      
       ASSERT(index < points_count());
       assert(false); // нужно наверное просто удалить
       std::unique_lock<std::mutex> lock(mutex);
@@ -952,9 +992,9 @@ namespace devils_engine {
       dsu.begin(2, 0, vk::DescriptorType::eStorageBuffer).buffer(data->points.handle);
       dsu.begin(3, 0, vk::DescriptorType::eStorageBuffer).buffer(data->accel_triangles.handle);
       dsu.begin(4, 0, vk::DescriptorType::eStorageBuffer).buffer(data->tile_indices.handle);
-      dsu.begin(5, 0, vk::DescriptorType::eStorageBuffer).buffer(data->structures.handle);
-      dsu.begin(6, 0, vk::DescriptorType::eStorageBuffer).buffer(data->tile_object_indices.handle);
-      dsu.begin(7, 0, vk::DescriptorType::eStorageBuffer).buffer(data->army_data_buffer.handle);
+//       dsu.begin(5, 0, vk::DescriptorType::eStorageBuffer).buffer(data->structures.handle);
+//       dsu.begin(6, 0, vk::DescriptorType::eStorageBuffer).buffer(data->tile_object_indices.handle);
+//       dsu.begin(7, 0, vk::DescriptorType::eStorageBuffer).buffer(data->army_data_buffer.handle);
       dsu.update();
     }
     
@@ -964,10 +1004,13 @@ namespace devils_engine {
       const size_t accel_size = sizeof(render::packed_fast_triangle_t)*accel_triangles_count;
       const uint32_t tiles_count = hex_count_d(detail_level);
       const size_t tile_indices_size = align_to(tiles_count * sizeof(uint32_t), 16);
+      const size_t tiles_size = align_to(tiles_count * sizeof(render::map_tile_t), 16);
       const size_t points_size = sizeof(glm::vec4)*points_count_d(detail_level);
+      render::vk_buffer_data tiles_gpu;
       render::vk_buffer_data accel_triangles_gpu;
       render::vk_buffer_data tile_indices_gpu;
       render::vk_buffer_data points_gpu;
+      tiles_gpu.create(data->allocator, render::buffer(tiles_size, vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst), vma::MemoryUsage::eGpuOnly, "map::tiles_gpu");
       accel_triangles_gpu.create(data->allocator, render::buffer(accel_size, vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst), vma::MemoryUsage::eGpuOnly, "map::accel_triangles_gpu");
       tile_indices_gpu.create(data->allocator, render::buffer(tile_indices_size, vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst), vma::MemoryUsage::eGpuOnly, "map::tile_indices_gpu");
       points_gpu.create(data->allocator, render::buffer(points_size, vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst), vma::MemoryUsage::eGpuOnly, "map::points_gpu");
@@ -980,33 +1023,29 @@ namespace devils_engine {
       auto fence = render_container->vulkan->transfer_fence;
       
       render::do_command(device, pool, queue, fence, [&] (vk::CommandBuffer task) {
-        const vk::BufferCopy c1{
-          0, 0, accel_size
-        };
-        
-        const vk::BufferCopy c2{
-          0, 0, tile_indices_size
-        };
-        
-        const vk::BufferCopy c3{
-          0, 0, points_size
-        };
+        const vk::BufferCopy c1{ 0, 0, accel_size };
+        const vk::BufferCopy c2{ 0, 0, tile_indices_size };
+        const vk::BufferCopy c3{ 0, 0, points_size };
+        const vk::BufferCopy c4{ 0, 0, tiles_size };
         
         const vk::CommandBufferBeginInfo b_info(vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
         task.begin(b_info);
         task.copyBuffer(data->accel_triangles.handle, accel_triangles_gpu.handle, c1);
         task.copyBuffer(data->tile_indices.handle, tile_indices_gpu.handle, c2);
         task.copyBuffer(data->points.handle, points_gpu.handle, c3);
+        task.copyBuffer(data->tiles.handle, tiles_gpu.handle, c4);
         task.end();
       });
       
       data->accel_triangles.destroy(data->allocator);
       data->tile_indices.destroy(data->allocator);
       data->points.destroy(data->allocator);
+      data->tiles.destroy(data->allocator);
       
       data->accel_triangles = accel_triangles_gpu;
       data->tile_indices = tile_indices_gpu;
       data->points = points_gpu;
+      data->tiles = tiles_gpu;
       
       update_set();
     }
@@ -1039,6 +1078,7 @@ namespace devils_engine {
     }
     
     void map::flush_structures() {
+      assert(false);
       render::descriptor_set_updater dsu(&data->device);
       dsu.currentSet(data->tiles_set).begin(5, 0, vk::DescriptorType::eStorageBuffer).buffer(data->structures.handle).update();
     }
@@ -1054,24 +1094,30 @@ namespace devils_engine {
 //     }
 
     void map::set_tile_color(const uint32_t &tile_index, const render::color_t &color) {
+      if (data->tiles.ptr == nullptr) throw std::runtime_error("Attempt to set gpu data directly");
+      
       ASSERT(tile_index < tiles_count());
       std::unique_lock<std::mutex> lock(mutex);
-      auto tiles_arr = reinterpret_cast<render::light_map_tile_t*>(data->tiles.ptr);
-      tiles_arr[tile_index].tile_indices.z = color.container;
+      auto tiles_arr = reinterpret_cast<render::map_tile_t*>(data->tiles.ptr);
+      tiles_arr[tile_index].color = color;
     }
     
     void map::set_tile_texture(const uint32_t &tile_index, const render::image_t &texture) {
+      if (data->tiles.ptr == nullptr) throw std::runtime_error("Attempt to set gpu data directly");
+      
       ASSERT(tile_index < tiles_count());
       std::unique_lock<std::mutex> lock(mutex);
-      auto tiles_arr = reinterpret_cast<render::light_map_tile_t*>(data->tiles.ptr);
-      tiles_arr[tile_index].tile_indices.y = texture.container;
+      auto tiles_arr = reinterpret_cast<render::map_tile_t*>(data->tiles.ptr);
+      tiles_arr[tile_index].texture = texture;
     }
     
     void map::set_tile_height(const uint32_t &tile_index, const float &tile_hight) {
+      if (data->tiles.ptr == nullptr) throw std::runtime_error("Attempt to set gpu data directly");
+      
       ASSERT(tile_index < tiles_count());
       std::unique_lock<std::mutex> lock(mutex);
-      auto tiles_arr = reinterpret_cast<render::light_map_tile_t*>(data->tiles.ptr);
-      tiles_arr[tile_index].tile_indices.w = glm::floatBitsToUint(tile_hight);
+      auto tiles_arr = reinterpret_cast<render::map_tile_t*>(data->tiles.ptr);
+      tiles_arr[tile_index].height = tile_hight;
     }
     
     void map::set_tile_height_lua(const uint32_t &tile_index, const float &tile_hight) {
@@ -1079,162 +1125,174 @@ namespace devils_engine {
     }
     
     void map::set_tile_border_data(const uint32_t &tile_index, const uint32_t &offset, const uint32_t &size) {
+      if (data->tiles.ptr == nullptr) throw std::runtime_error("Attempt to set gpu data directly");
+      
       ASSERT(tile_index < tiles_count());
       ASSERT(size <= render::border_size_mask);
       ASSERT(offset < render::border_offset_mask);
       const uint32_t packed_border_data = (size << 28) | (offset & render::border_offset_mask);
       std::unique_lock<std::mutex> lock(mutex);
-      auto tiles_arr = reinterpret_cast<render::light_map_tile_t*>(data->tiles.ptr);
-      tiles_arr[tile_index].packed_data4[0] = packed_border_data;
+      auto tiles_arr = reinterpret_cast<render::map_tile_t*>(data->tiles.ptr);
+      tiles_arr[tile_index].borders_data = packed_border_data;
     }
     
-    void map::set_tile_connections_data(const uint32_t &tile_index, const uint32_t &offset, const uint32_t &size) {
-      ASSERT(tile_index < tiles_count());
-      ASSERT(size <= render::connections_size_mask);
-      ASSERT(offset < render::connections_offset_mask);
-      const uint32_t packed_connections_data = (size << 28) | (offset & render::connections_offset_mask);
-      std::unique_lock<std::mutex> lock(mutex);
-      auto tiles_arr = reinterpret_cast<render::light_map_tile_t*>(data->tiles.ptr);
-      tiles_arr[tile_index].packed_data4[1] = packed_connections_data;
-    }
+//     void map::set_tile_connections_data(const uint32_t &tile_index, const uint32_t &offset, const uint32_t &size) {
+//       ASSERT(tile_index < tiles_count());
+//       ASSERT(size <= render::connections_size_mask);
+//       ASSERT(offset < render::connections_offset_mask);
+//       const uint32_t packed_connections_data = (size << 28) | (offset & render::connections_offset_mask);
+//       std::unique_lock<std::mutex> lock(mutex);
+//       auto tiles_arr = reinterpret_cast<render::light_map_tile_t*>(data->tiles.ptr);
+//       tiles_arr[tile_index].packed_data4[1] = packed_connections_data;
+//     }
     
-    uint32_t map::get_tile_objects_index(const uint32_t &tile_index, const uint32_t &data_index) const {
-      //using array_data_type = render::additional_data_t;
-      using array_data_type = c_tile_data;
-      
-      ASSERT(tile_index < tiles_count());
-      const uint32_t data_count = sizeof(array_data_type) / sizeof(uint32_t);
-      ASSERT(data_index < data_count);
-      UNUSED_VARIABLE(data_count);
-      const uint32_t lesser_data_count = sizeof(glm::uvec4) / sizeof(uint32_t);
-      auto array = reinterpret_cast<array_data_type*>(data->tile_object_indices.ptr);
-      
-      const uint32_t index1 = data_index / lesser_data_count;
-      const uint32_t index2 = data_index % lesser_data_count;
-      
-      return array[tile_index].data[index1][index2];
-    }
-    
-    void map::set_tile_objects_index(const uint32_t &tile_index, const uint32_t &data_index, const uint32_t &data) {
-      //using array_data_type = render::additional_data_t;
-      using array_data_type = c_tile_data;
-      
-      ASSERT(tile_index < tiles_count());
-      const uint32_t data_count = sizeof(array_data_type) / sizeof(uint32_t);
-      ASSERT(data_index < data_count);
-      UNUSED_VARIABLE(data_count);
-      const uint32_t lesser_data_count = sizeof(glm::uvec4) / sizeof(uint32_t);
-      
-      auto array = reinterpret_cast<array_data_type*>(this->data->tile_object_indices.ptr);
-      const uint32_t index1 = data_index / lesser_data_count;
-      const uint32_t index2 = data_index % lesser_data_count;
-      
-      array[tile_index].data[index1][index2] = data;
-    }
-    
-    bool map::tile_objects_index_comp_swap(const uint32_t &tile_index, const uint32_t &data_index, uint32_t &comp, const uint32_t &data) {
-      using array_data_type = c_tile_data;
-      
-      ASSERT(tile_index < tiles_count());
-      const uint32_t data_count = sizeof(array_data_type) / sizeof(uint32_t);
-      ASSERT(data_index < data_count);
-      UNUSED_VARIABLE(data_count);
-      const uint32_t lesser_data_count = sizeof(glm::uvec4) / sizeof(uint32_t);
-      
-      auto array = reinterpret_cast<array_data_type*>(this->data->tile_object_indices.ptr);
-      const uint32_t index1 = data_index / lesser_data_count;
-      const uint32_t index2 = data_index % lesser_data_count;
-      
-      return array[tile_index].data[index1][index2].compare_exchange_strong(comp, data);
-    }
-    
-    uint32_t map::allocate_army_data() {
-      auto data_ptr = reinterpret_cast<render::army_data_t*>(data->army_data_buffer.ptr);
-      if (free_army_slot != UINT32_MAX) {
-        const uint32_t next_index = glm::floatBitsToUint(data_ptr[free_army_slot].data.w);
-        const uint32_t current_index = free_army_slot;
-        free_army_slot = next_index;
-        
-        data_ptr[current_index].data = glm::vec4(0.0f, 0.0f, 0.0f, glm::uintBitsToFloat(UINT32_MAX));
-        return current_index;
-      }
-      
-      const uint32_t current_index = armies_count;
-      ++armies_count;
-      
-      if (armies_count >= maximum_army_count) throw std::runtime_error("Too many armies");
-      
-      data_ptr[current_index].data = glm::vec4(0.0f, 0.0f, 0.0f, glm::uintBitsToFloat(UINT32_MAX));
-      return current_index;
-    }
-    
-    void map::release_army_data(const uint32_t &index) {
-      const size_t army_data_size = sizeof(render::army_data_t) * maximum_army_count;
-      ASSERT(index * sizeof(render::army_data_t) < army_data_size);
-      ASSERT(index < armies_count);
-      auto data_ptr = reinterpret_cast<render::army_data_t*>(data->army_data_buffer.ptr);
-      data_ptr[index].data.w = glm::uintBitsToFloat(free_army_slot);
-      free_army_slot = index;
-    }
-    
-    void map::set_army_pos(const uint32_t &index, const glm::vec3 &pos) {
-      const size_t army_data_size = sizeof(render::army_data_t) * maximum_army_count;
-      ASSERT(index * sizeof(render::army_data_t) < army_data_size); 
-      ASSERT(index < armies_count);
-      auto data_ptr = reinterpret_cast<render::army_data_t*>(data->army_data_buffer.ptr);
-      data_ptr[index].data.x = pos.x;
-      data_ptr[index].data.y = pos.y;
-      data_ptr[index].data.z = pos.z;
-    }
-    
-    void map::set_army_image(const uint32_t &index, const render::image_t &img) {
-      const size_t army_data_size = sizeof(render::army_data_t) * maximum_army_count;
-      ASSERT(index * sizeof(render::army_data_t) < army_data_size); 
-      ASSERT(index < armies_count);
-      auto data_ptr = reinterpret_cast<render::army_data_t*>(data->army_data_buffer.ptr);
-      data_ptr[index].data.w = glm::uintBitsToFloat(img.container);
-    }
-    
-    glm::vec3 map::get_army_pos(const uint32_t &index) const {
-      const size_t army_data_size = sizeof(render::army_data_t) * maximum_army_count;
-      ASSERT(index * sizeof(render::army_data_t) < army_data_size); 
-      ASSERT(index < armies_count);
-      auto data_ptr = reinterpret_cast<render::army_data_t*>(data->army_data_buffer.ptr);
-      return glm::vec3(data_ptr[index].data.x, data_ptr[index].data.y, data_ptr[index].data.z);
-    }
-    
-    render::image_t map::get_army_image(const uint32_t &index) const {
-      const size_t army_data_size = sizeof(render::army_data_t) * maximum_army_count;
-      ASSERT(index * sizeof(render::army_data_t) < army_data_size); 
-      ASSERT(index < armies_count);
-      auto data_ptr = reinterpret_cast<render::army_data_t*>(data->army_data_buffer.ptr);
-      return {glm::floatBitsToUint(data_ptr[index].data.w)};
-    }
+//     uint32_t map::get_tile_objects_index(const uint32_t &tile_index, const uint32_t &data_index) const {
+//       //using array_data_type = render::additional_data_t;
+//       using array_data_type = c_tile_data;
+//       
+//       ASSERT(tile_index < tiles_count());
+//       const uint32_t data_count = sizeof(array_data_type) / sizeof(uint32_t);
+//       ASSERT(data_index < data_count);
+//       UNUSED_VARIABLE(data_count);
+//       const uint32_t lesser_data_count = sizeof(glm::uvec4) / sizeof(uint32_t);
+//       auto array = reinterpret_cast<array_data_type*>(data->tile_object_indices.ptr);
+//       
+//       const uint32_t index1 = data_index / lesser_data_count;
+//       const uint32_t index2 = data_index % lesser_data_count;
+//       
+//       return array[tile_index].data[index1][index2];
+//     }
+//     
+//     void map::set_tile_objects_index(const uint32_t &tile_index, const uint32_t &data_index, const uint32_t &data) {
+//       //using array_data_type = render::additional_data_t;
+//       using array_data_type = c_tile_data;
+//       
+//       ASSERT(tile_index < tiles_count());
+//       const uint32_t data_count = sizeof(array_data_type) / sizeof(uint32_t);
+//       ASSERT(data_index < data_count);
+//       UNUSED_VARIABLE(data_count);
+//       const uint32_t lesser_data_count = sizeof(glm::uvec4) / sizeof(uint32_t);
+//       
+//       auto array = reinterpret_cast<array_data_type*>(this->data->tile_object_indices.ptr);
+//       const uint32_t index1 = data_index / lesser_data_count;
+//       const uint32_t index2 = data_index % lesser_data_count;
+//       
+//       array[tile_index].data[index1][index2] = data;
+//     }
+//     
+//     bool map::tile_objects_index_comp_swap(const uint32_t &tile_index, const uint32_t &data_index, uint32_t &comp, const uint32_t &data) {
+//       using array_data_type = c_tile_data;
+//       
+//       ASSERT(tile_index < tiles_count());
+//       const uint32_t data_count = sizeof(array_data_type) / sizeof(uint32_t);
+//       ASSERT(data_index < data_count);
+//       UNUSED_VARIABLE(data_count);
+//       const uint32_t lesser_data_count = sizeof(glm::uvec4) / sizeof(uint32_t);
+//       
+//       auto array = reinterpret_cast<array_data_type*>(this->data->tile_object_indices.ptr);
+//       const uint32_t index1 = data_index / lesser_data_count;
+//       const uint32_t index2 = data_index % lesser_data_count;
+//       
+//       return array[tile_index].data[index1][index2].compare_exchange_strong(comp, data);
+//     }
+//     
+//     uint32_t map::allocate_army_data() {
+//       auto data_ptr = reinterpret_cast<render::army_data_t*>(data->army_data_buffer.ptr);
+//       if (free_army_slot != UINT32_MAX) {
+//         const uint32_t next_index = glm::floatBitsToUint(data_ptr[free_army_slot].data.w);
+//         const uint32_t current_index = free_army_slot;
+//         free_army_slot = next_index;
+//         
+//         data_ptr[current_index].data = glm::vec4(0.0f, 0.0f, 0.0f, glm::uintBitsToFloat(UINT32_MAX));
+//         return current_index;
+//       }
+//       
+//       const uint32_t current_index = armies_count;
+//       ++armies_count;
+//       
+//       if (armies_count >= maximum_army_count) throw std::runtime_error("Too many armies");
+//       
+//       data_ptr[current_index].data = glm::vec4(0.0f, 0.0f, 0.0f, glm::uintBitsToFloat(UINT32_MAX));
+//       return current_index;
+//     }
+//     
+//     void map::release_army_data(const uint32_t &index) {
+//       const size_t army_data_size = sizeof(render::army_data_t) * maximum_army_count;
+//       ASSERT(index * sizeof(render::army_data_t) < army_data_size);
+//       ASSERT(index < armies_count);
+//       auto data_ptr = reinterpret_cast<render::army_data_t*>(data->army_data_buffer.ptr);
+//       data_ptr[index].data.w = glm::uintBitsToFloat(free_army_slot);
+//       free_army_slot = index;
+//     }
+//     
+//     void map::set_army_pos(const uint32_t &index, const glm::vec3 &pos) {
+//       const size_t army_data_size = sizeof(render::army_data_t) * maximum_army_count;
+//       ASSERT(index * sizeof(render::army_data_t) < army_data_size); 
+//       ASSERT(index < armies_count);
+//       auto data_ptr = reinterpret_cast<render::army_data_t*>(data->army_data_buffer.ptr);
+//       data_ptr[index].data.x = pos.x;
+//       data_ptr[index].data.y = pos.y;
+//       data_ptr[index].data.z = pos.z;
+//     }
+//     
+//     void map::set_army_image(const uint32_t &index, const render::image_t &img) {
+//       const size_t army_data_size = sizeof(render::army_data_t) * maximum_army_count;
+//       ASSERT(index * sizeof(render::army_data_t) < army_data_size); 
+//       ASSERT(index < armies_count);
+//       auto data_ptr = reinterpret_cast<render::army_data_t*>(data->army_data_buffer.ptr);
+//       data_ptr[index].data.w = glm::uintBitsToFloat(img.container);
+//     }
+//     
+//     glm::vec3 map::get_army_pos(const uint32_t &index) const {
+//       const size_t army_data_size = sizeof(render::army_data_t) * maximum_army_count;
+//       ASSERT(index * sizeof(render::army_data_t) < army_data_size); 
+//       ASSERT(index < armies_count);
+//       auto data_ptr = reinterpret_cast<render::army_data_t*>(data->army_data_buffer.ptr);
+//       return glm::vec3(data_ptr[index].data.x, data_ptr[index].data.y, data_ptr[index].data.z);
+//     }
+//     
+//     render::image_t map::get_army_image(const uint32_t &index) const {
+//       const size_t army_data_size = sizeof(render::army_data_t) * maximum_army_count;
+//       ASSERT(index * sizeof(render::army_data_t) < army_data_size); 
+//       ASSERT(index < armies_count);
+//       auto data_ptr = reinterpret_cast<render::army_data_t*>(data->army_data_buffer.ptr);
+//       return {glm::floatBitsToUint(data_ptr[index].data.w)};
+//     }
     
     float map::get_tile_height(const uint32_t &tile_index) const {
+      if (data->tiles.ptr == nullptr) throw std::runtime_error("Attempt to get gpu data directly");
+      
       ASSERT(tile_index < tiles_count());
       std::unique_lock<std::mutex> lock(mutex);
-      auto tiles_arr = reinterpret_cast<render::light_map_tile_t*>(data->tiles.ptr);
-      return glm::uintBitsToFloat(tiles_arr[tile_index].tile_indices.w);
+      auto tiles_arr = reinterpret_cast<render::map_tile_t*>(data->tiles.ptr);
+      return glm::uintBitsToFloat(tiles_arr[tile_index].height);
     }
     
     float map::get_tile_height_lua(const uint32_t &tile_index) const {
       return get_tile_height(tile_index-1);
     }
     
-    void map::copy_biomes(const seasons* s) {
-      const size_t biomes_size = sizeof(render::biome_data_t)*MAX_BIOMES_COUNT;
+    void map::copy_biomes(const std::vector<render::biome_data_t> &biomes) {
+      //const size_t biomes_size = sizeof(render::biome_data_t)*MAX_BIOMES_COUNT;
+      const size_t biomes_size = sizeof(render::biome_data_t)*biomes.size();
       auto device = render_container->vulkan->device;
       auto physical_device = render_container->vulkan->physical_device;
       const auto [buf, mem] = render::create_buffer_unique(
         device, 
         physical_device, 
-        render::buffer(sizeof(render::packed_biome_data_t)*MAX_BIOMES_COUNT, vk::BufferUsageFlagBits::eTransferSrc), 
+        render::buffer(biomes_size, vk::BufferUsageFlagBits::eTransferSrc), 
         vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent
       );
       
+//       auto allocator = data->allocator;
+//       data->biomes.destroy(allocator);
+//       data->biomes.create(allocator, render::buffer(
+//         biomes_size,
+//         vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst
+//       ), vma::MemoryUsage::eGpuOnly, "map::biomes");
+      
       auto ptr = device.mapMemory(mem.get(), 0, VK_WHOLE_SIZE);
-      memcpy(ptr, s->biomes, biomes_size);
+      memcpy(ptr, biomes.data(), biomes_size);
       
       vk::Buffer staging_b = buf.get();
       render::do_command(
@@ -1253,33 +1311,39 @@ namespace devils_engine {
         task.end();
         }
       );
+      
+      device.unmapMemory(mem.get());
     }
     
     void map::set_tile_biome(const seasons* s) {
+      if (data->tiles.ptr == nullptr) throw std::runtime_error("Attempt to set gpu data directly");
+      
       std::unique_lock<std::mutex> lock(mutex);
-      auto tiles_arr = reinterpret_cast<render::light_map_tile_t*>(data->tiles.ptr);
+      auto tiles_arr = reinterpret_cast<render::map_tile_t*>(data->tiles.ptr);
       for (size_t i = 0; i < tiles_count(); ++i) {
         const uint8_t index = s->get_tile_biome(s->current_season, i);
-        const uint32_t mask = 0x00ffffff;
-        const uint32_t final_container = uint32_t(index) << 24 | mask;
-        tiles_arr[i].packed_data4[2] = final_container;
+//         const uint32_t mask = 0x00ffffff;
+//         const uint32_t final_container = uint32_t(index) << 24 | mask;
+        tiles_arr[i].biome_index = index;
       }
     }
     
-    void map::set_tile_structure_index(const uint32_t &tile_index, const uint32_t &struct_index) {
-      ASSERT(tile_index < tiles_count());
-      ASSERT(struct_index < render::maximum_structure_types);
-      auto tiles_arr = reinterpret_cast<render::light_map_tile_t*>(data->tiles.ptr);
-      const uint8_t biome_index = uint8_t(tiles_arr[tile_index].packed_data4[2] >> 24);
-      tiles_arr[tile_index].packed_data4[2] = uint32_t(biome_index) << 24 | struct_index;
-    }
+//     void map::set_tile_structure_index(const uint32_t &tile_index, const uint32_t &struct_index) {
+//       assert(false);
+//       ASSERT(tile_index < tiles_count());
+//       ASSERT(struct_index < render::maximum_structure_types);
+//       auto tiles_arr = reinterpret_cast<render::light_map_tile_t*>(data->tiles.ptr);
+//       const uint8_t biome_index = uint8_t(tiles_arr[tile_index].packed_data4[2] >> 24);
+//       tiles_arr[tile_index].packed_data4[2] = uint32_t(biome_index) << 24 | struct_index;
+//     }
     
-    void map::resize_structures_buffer(const size_t &size) {
-      data->structures.destroy(data->allocator);
-      data->structures.create(data->allocator, render::buffer(
-        size, vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst
-      ), vma::MemoryUsage::eGpuOnly);
-    }
+//     void map::resize_structures_buffer(const size_t &size) {
+//       assert(false);
+//       data->structures.destroy(data->allocator);
+//       data->structures.create(data->allocator, render::buffer(
+//         size, vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst
+//       ), vma::MemoryUsage::eGpuOnly);
+//     }
     
     void map::copy_main_map_data(
       const std::vector<render::light_map_tile_t> &tiles,

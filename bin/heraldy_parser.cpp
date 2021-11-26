@@ -2,6 +2,7 @@
 
 #include "render/vulkan_hpp_header.h"
 #include "render/image_controller.h"
+#include "render/targets.h"
 
 #include "utils/globals.h"
 #include "utils/table_container.h"
@@ -113,7 +114,8 @@ namespace devils_engine {
     }
     
     std::vector<render::packed_heraldy_layer_t> load_heraldy_layers(render::image_controller* controller, const std::vector<sol::table> &heraldy_tables) {
-      auto to_data = global::get<utils::numeric_string_container>();
+//       auto to_data = global::get<utils::numeric_string_container>();
+      auto buffers_struct = global::get<render::buffers>();
 //       utils::numeric_string_container local_container;
 //       auto to_data = &local_container;
       
@@ -122,10 +124,10 @@ namespace devils_engine {
       // только раз сделать а потом использовать,
       // лучше всего использовать какой то стринг контейнер дополнительный
 //       std::unordered_map<std::string, uint32_t> layers_map;
-      for (size_t i = 0; i < heraldy_tables.size(); ++i) {
-        const auto str = heraldy_tables[i]["id"];
-        to_data->insert(str, i);
-      }
+//       for (size_t i = 0; i < heraldy_tables.size(); ++i) {
+//         const auto str = heraldy_tables[i]["id"];
+//         to_data->insert(str, i);
+//       }
       
       // тут нужно получить доступ к буферу
 //       const size_t heraldy_buffer_size = heraldy_tables.size() * sizeof(render::packed_heraldy_layer_t);
@@ -166,13 +168,13 @@ namespace devils_engine {
           l.stencil = view->get_image(layer, mirror_u, mirror_v);
         }
         
-        if (auto proxy = table["next_layer"]; proxy.valid()) {
-          const std::string next_id = proxy;
-          const size_t index = to_data->get(next_id);
-          if (index == SIZE_MAX) throw std::runtime_error("Could not find heraldy layer " + next_id);
-          if (index >= UINT32_MAX) throw std::runtime_error("Bad heraldy layer " + next_id);
-          l.next_layer = index;
-        }
+//         if (auto proxy = table["next_layer"]; proxy.valid()) {
+//           const std::string next_id = proxy;
+//           const size_t index = to_data->get(next_id);
+//           if (index == SIZE_MAX) throw std::runtime_error("Could not find heraldy layer " + next_id);
+//           if (index >= UINT32_MAX) throw std::runtime_error("Bad heraldy layer " + next_id);
+//           l.next_layer = index;
+//         }
         
         if (auto proxy = table["colors"]; proxy.valid()) {
           const sol::table color_table = proxy;
@@ -218,7 +220,12 @@ namespace devils_engine {
           l.stencil_type = l.stencil_type | (CONTINUE_LAYER_BIT * uint32_t(data));
         }
         
+        std::string str = table["id"];
         arr[i] = render::pack_heraldy_data(l);
+        
+        const auto itr = buffers_struct->heraldy_layers_map.find(str);
+        if (itr != buffers_struct->heraldy_layers_map.end()) throw std::runtime_error("Heraldy layer with id " + str + " is already exists");
+        buffers_struct->heraldy_layers_map.emplace(std::move(str), i);
       }
       
       return buffer;

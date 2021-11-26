@@ -7,7 +7,6 @@
 #include "utils/input.h"
 #include "utils/logging.h"
 #include "utils/frame_time.h"
-#include "utils/ecs.h"
 #include "utils/thread_pool.h"
 #include "utils/random_engine.h"
 #include "utils/utility.h"
@@ -28,7 +27,7 @@
 #include "utils/deferred_tasks.h"
 #include "utils/lua_initialization.h"
 //#include "utils/perlin.h"
-#include "FastNoise.h"
+//#include "Cpp/FastNoiseLite.h"
 
 #include "render/window.h"
 #include "render/render.h"
@@ -49,10 +48,14 @@
 #include "ai/ai_system.h"
 #include "ai/path_container.h"
 
-#include "script/script_header.h"
+#include "script/header.h"
+#include "script/context.h"
 
 #include "core/context.h"
 #include "core/structures_header.h"
+#include "core/stats_table.h"
+#include "core/traits_modifier_attributes_arrays.h"
+#include "core/declare_structures_table.h"
 
 #include "figures.h"
 #include "camera.h"
@@ -134,7 +137,9 @@ namespace devils_engine {
   void border_points_test(const std::vector<glm::vec4> &array);
 
   void update(const size_t &time);
+  void update_map_objects();
 
+  void pre_sync();
   void sync(utils::frame_time &frame_time, const size_t &time);
   //void sync(utils::frame_time &frame_time, const size_t &time, std::future<void> &rendering_future);
   

@@ -3,7 +3,8 @@
 #include "utils/globals.h"
 #include "fmt/format.h"
 #include "generator_system2.h"
-#include "map_generators2.h"
+// #include "map_generators2.h"
+#include "core/generator_begin.h"
 // #include "utils/random_engine.h"
 // #include "FastNoise.h"
 #include "generator_container.h"
@@ -121,16 +122,7 @@ namespace devils_engine {
       ctx.pool = global::get<dt::thread_pool>();
 
       table["userdata"] = lua.create_table();
-      //global::get(&m_table_container);
-      global::get(&lua);
-      
-      // не учитывает к сожалению 0x нотацию, хотя можно сделать
-      // не, 0x нотация нинужна
-//       const std::string_view &test_str = "0000000000000000";
-//       ASSERT(get_seed_from_string(test_str) == 0);
-//       const std::string_view &test_str2 = "000000000000000f";
-//       ASSERT(get_seed_from_string(test_str2) == 15);
-//       ASSERT(get_string_from_seed(get_seed_from_string(test_str2)) == test_str2);
+//       global::get(&lua);
 
       const std::string path = global::root_directory() + "scripts/";
       {
@@ -140,9 +132,23 @@ namespace devils_engine {
         }
         
         serpent = ret.as<sol::table>();
-        auto proxy = serpent["line"];
+        auto proxy = serpent["dump"];
         if (!proxy.valid() || proxy.get_type() != sol::type::function) throw std::runtime_error("Bad serpent table");
         serpent_line = proxy.get<sol::function>();
+        serpent_opts = lua.create_table_with(
+          "compact", true,
+          "fatal", true,
+          //"sparse", true,
+          "nohuge", true,
+          "nocode", true,
+          "sortkeys", false,
+          "comment", false,
+          "valtypeignore", lua.create_table_with(
+            "function", true,
+            "thread", true,
+            "userdata", true
+          )
+        );
       }
       
       utils::world_map_generation::setup_lua(lua);
@@ -166,7 +172,7 @@ namespace devils_engine {
 
       //global::get<table_container_t>(reinterpret_cast<table_container_t*>(SIZE_MAX));
       global::get<utils::world_serializator>(reinterpret_cast<utils::world_serializator*>(SIZE_MAX));
-      global::get<sol::state>(reinterpret_cast<sol::state*>(SIZE_MAX));
+//       global::get<sol::state>(reinterpret_cast<sol::state*>(SIZE_MAX));
       global::get<utils::world_map_string_container>(reinterpret_cast<utils::world_map_string_container*>(SIZE_MAX));
       //ASSERT(global::get<table_container_t>() == nullptr);
       ASSERT(global::get<utils::world_serializator>() == nullptr);
@@ -177,7 +183,8 @@ namespace devils_engine {
 //       interface->register_function(interface_name, interface_name);
       std::vector<map::generator_pair> final_pairs;
       // это первый степ, мы можем сюда добавить функцию бегин
-      if (steps.empty()) final_pairs.push_back(map::default_generator_pairs[0]);
+      //if (steps.empty()) final_pairs.push_back(map::default_generator_pairs[0]);
+      if (steps.empty()) final_pairs.push_back(map::generator_pair("begin", core::begin));
 
       final_pairs.insert(final_pairs.end(), pairs.begin(), pairs.end());
       auto step = steps_pool.create(step_name, final_pairs);
@@ -297,6 +304,10 @@ namespace devils_engine {
     sol::state & creator::state() {
       return lua;
     }
+    
+    sol::environment & creator::environment() {
+      return env_lua;
+    }
 
     utils::world_serializator* creator::serializator_ptr() {
       return &serializator;
@@ -312,13 +323,13 @@ namespace devils_engine {
       if (!t.valid() || t.empty()) return "";
       if (t.lua_state() != lua) throw std::runtime_error("Table from another state");
       
-      auto opts = lua.create_table_with(
-        "compact", true,
-        "fatal",   true, 
-        "comment", false
-      );
+//       auto opts = lua.create_table_with(
+//         "compact", true,
+//         "fatal",   true, 
+//         "comment", false
+//       );
       
-      auto ret = serpent_line(t, opts);
+      auto ret = serpent_line(t, serpent_opts);
       if (!ret.valid()) {
         sol::error err = ret;
         std::cout << err.what();
@@ -330,7 +341,8 @@ namespace devils_engine {
     }
     
     sol::table creator::deserialize_table(const std::string &str) {
-      auto ret = lua.script("return " + str);
+      //auto ret = lua.script("return " + str);
+      auto ret = lua.script(str); // теперь строка хранится в виде скрипта (do local _={};return _;end)
       if (!ret.valid()) {
         sol::error err = ret;
         std::cout << err.what();

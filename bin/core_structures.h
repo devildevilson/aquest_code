@@ -7,14 +7,7 @@
 #include <functional>
 #include <array>
 #include <atomic>
-// #include "character.h"
-#include "render/shared_structures.h"
-// #include "data_parser.h"
-#include "utils/bit_field.h"
-#include "utils/traits_modifier_attribs.h"
-#include "utils/string_bank.h"
 #include "core/declare_structures.h"
-#include "script/script_header.h"
 
 // на каждый чих нужно придумать иконки
 

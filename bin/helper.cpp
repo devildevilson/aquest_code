@@ -607,20 +607,20 @@ namespace devils_engine {
     (void)time;
     (void)loading;
     
-    static const utils::id modes[] = {
-      utils::id::get("biome_render_mode"),
-      utils::id::get("cultures_render_mode"),
-      utils::id::get("culture_groups_render_mode"),
-      utils::id::get("religions_render_mode"),
-      utils::id::get("religion_groups_render_mode"),
-      utils::id::get("provinces_render_mode"),
-      utils::id::get("countries_render_mode"),
-      utils::id::get("duchies_render_mode"),
-      utils::id::get("kingdoms_render_mode"),
-      utils::id::get("empires_render_mode"),
-    };
-
-    static_assert(sizeof(modes) / sizeof(modes[0]) == render::modes::count);
+//     static const utils::id modes[] = {
+//       utils::id::get("biome_render_mode"),
+//       utils::id::get("cultures_render_mode"),
+//       utils::id::get("culture_groups_render_mode"),
+//       utils::id::get("religions_render_mode"),
+//       utils::id::get("religion_groups_render_mode"),
+//       utils::id::get("provinces_render_mode"),
+//       utils::id::get("countries_render_mode"),
+//       utils::id::get("duchies_render_mode"),
+//       utils::id::get("kingdoms_render_mode"),
+//       utils::id::get("empires_render_mode"),
+//     };
+// 
+//     static_assert(sizeof(modes) / sizeof(modes[0]) == render::modes::count);
 
     //static const utils::id escape = utils::id::get("escape");
     static const utils::id border_render = utils::id::get("border_render");
@@ -668,17 +668,19 @@ namespace devils_engine {
             auto p = game::get_player();
             ASSERT(p != nullptr);
             //if (p == nullptr) continue;
-            auto title = p->realms[core::character::self]->titles;
-            while (title != nullptr) {
-              if (title->type == core::titulus::type::city) break;
-              title = title->next;
+            auto title = p->self->titles;
+            auto next_title = title;
+            while (next_title != nullptr) {
+              if (next_title->type() == core::titulus::type::city) break;
+              next_title = utils::ring::list_next<utils::list_type::titles>(next_title, title);
             }
             
             ASSERT(title != nullptr);
             
-            auto city = title->get_city();
+            auto city = title->city;
             auto map = global::get<systems::map_t>()->map;
-            const uint32_t point_index = map->get_tile(city->tile_index).tile_indices.x;
+            auto ctx = global::get<systems::map_t>()->core_context;
+            const uint32_t point_index = ctx->get_entity<core::tile>(city->tile_index)->center;
             const auto point = map->get_point(point_index);
             camera->set_end_point(glm::vec3(point));
             continue;
@@ -1165,7 +1167,9 @@ namespace devils_engine {
     auto map_system = global::get<systems::map_t>();
     if (map_system->is_init()) {
       ASSERT(map_system->core_context != nullptr);
-      map_system->core_context->update_armies(time);
+      map_system->core_context->update_armies(time, [] (const size_t &time, core::army* army) {
+        army->update(time);
+      });
     }
     
     //game::advance_state();
@@ -1226,36 +1230,198 @@ namespace devils_engine {
 //     }
   }
   
-  void sync(utils::frame_time &frame_time, const size_t &time) { // , std::future<void> &rendering_future
+//   glm::vec4 get_heraldy_pos(const glm::vec4 &tile_center, const float &tile_height, const float &zoom, const glm::mat4 &matrix) {
+//     const glm::vec4 cam_right =  glm::vec4(matrix[0][0], matrix[1][0], matrix[2][0], 0.0f);
+//     
+//     const float offset_k = glm::mix(0.0f, 1.0f, glm::clamp((zoom - 0.2f) * 3.0f, 0.0f, 1.0f));
+//     const glm::vec4 normal = glm::vec4(glm::normalize(glm::vec3(tile_center)), 0.0f);
+//     return tile_center + normal * tile_height * render::render_tile_height + cam_right * offset_k * 5.0f;
+//   }
+  
+  bool check_heraldy_hovering(
+    const glm::vec4 &tile_center, 
+    const float &tile_height, 
+    const float &zoom, 
+    const glm::mat4 &matrix, 
+    const float &scale, 
+    const glm::vec4 &cam_pos, 
+    const glm::vec4 &cursor_dir, 
+    float &dist
+  ) {
+    const glm::vec4 default_size = glm::vec4(0.5f, 0.5f, 0.5f, 0.0f);
+    
+    const glm::vec4 center = render::get_heraldy_pos(tile_center, tile_height, zoom, matrix);
+    const glm::vec4 size = default_size * scale;
+    
+    const bool intersect = render::test_ray_aabb(cam_pos, cursor_dir, center, size, dist);
+    return intersect;
+  }
+  
+  void update_map_objects() {
+    auto map_systems = global::get<systems::map_t>();
+    if (!map_systems->is_init()) return;
+    
+    // эта функция может попасть на создание объектов в другом потоке
+    // при загрузке она нам не нужна
+    
+    auto game_ctx = global::get<systems::core_t>()->game_ctx;
+    if (game_ctx->is_loading()) return;
+    
+//     std::cout << "copy wait start" << "\n";
+    const auto tp = std::chrono::steady_clock::now();
+    auto copy = global::get<render::static_copy_array<16>>();
+    while (!copy->end()) { 
+      std::this_thread::sleep_for(std::chrono::microseconds(1)); 
+      const auto end = std::chrono::steady_clock::now() - tp;
+      const size_t mcs = std::chrono::duration_cast<std::chrono::microseconds>(end).count();
+      if (mcs > ONE_SECOND) throw std::runtime_error("Long copy");
+    }
+//     std::cout << "copy wait end" << "\n";
+    
+    // рисуются вещи через одно место, исправить
+    // исправил, нужно понять че делать с геральдикой
+    // я думаю что статическая геральдика это самый нормальный способ
+    
+    // обходим все города и армии
+    auto ctx = map_systems->core_context;
+    auto buffers = map_systems->world_buffers;
+    auto map = map_systems->map;
+    auto camera = global::get<render::buffers>();
+    auto struct_render = global::get<render::tile_structure_render>();
+    auto armies_render = global::get<render::armies_render>();
+    auto heraldies_render = global::get<render::heraldies_render>();
+    float min_dist = 100000.0f;
+    uint32_t min_index = UINT32_MAX;
+    const uint32_t cities_count = ctx->get_entity_count<core::city>();
+    for (size_t i = 0; i < cities_count; ++i) {
+      const auto city = ctx->get_entity<core::city>(i);
+      const uint32_t tile = city->tile_index;
+      const bool rendered = buffers->get_map_renderable(tile);
+      //const bool explored = buffers->get_map_exploration(tile);
+      const bool explored = true;
+      if (!explored || !rendered) continue;
+      
+      const auto tile_ptr = map->get_tile_ptr(tile);
+      const glm::vec4 center = map->get_point(tile_ptr->center);
+      const glm::vec4 camera_dir = camera->get_dir();
+      const float dot = glm::dot(glm::normalize(glm::vec4(glm::vec3(center), 0.0f)), camera_dir);
+      if (dot >= 0.0f) continue; // чет не сильно помогло, причем даже в очевидном случае
+      
+      const render::tile_structure_render::structure_data data{
+        tile,
+        city->type->city_image_face,
+        1.5f
+      };
+      struct_render->add(data);
+      
+      // далее мы проверяем геральдику
+      // если этот город столица реалма, то над ним нужно нарисовать геральдику с рамкой
+      // помимо этого нужно посчитать пересечение геральдики и луча от мышки
+      
+      const auto title = city->title;
+      // нам нужно взять максимальный титул у владельца, пока так нарисуем
+      const auto owner = title->owner;
+      // как взять столицу? нужно добавить указатель в реалм 
+      if (city != owner->capital) continue;
+      
+      // по тайлу, зуму и матрице камеры мы по идее можем расчитать позицию геральдики
+      // по позиции найдем пересечение с лучем
+      
+      const render::heraldies_render::heraldy_data hdata{
+        tile,
+        title->heraldy_container.data(),
+        title->heraldy_layers_count,
+        GPU_UINT_MAX, // что тут? должен быть глобальный конфиг для этих вещей
+        render::image_t{GPU_UINT_MAX},
+        1.5f,
+        1.5f
+      };
+      heraldies_render->add(hdata);
+      
+      // геральдика рисуется плохо, геральдика видна из-за гор и округлости земли
+      // нужно выбрать либо статическое расположение над городом, как в цк2,
+      // либо как нибудь расположить билборд геральдики поверх города (или рядом)
+      // самый простой способ - это конечно статика, билборд наверное не получится из-за шара земли
+      
+      const glm::mat4 view = camera->get_view();
+      const glm::vec4 pos = camera->get_pos();
+      const glm::vec4 dir = camera->get_cursor_dir();
+      const float zoom = camera->get_zoom();
+      float dist = 1000000.0f;
+      const bool hover = check_heraldy_hovering(center, tile_ptr->height, zoom, view, 1.0f, pos, dir, dist);
+      
+      if (hover && dist < min_dist) {
+        min_dist = dist;
+        min_index = i;
+      }
+    }
+    
+    // как обойти армии? хороший вопрос, проблема в том что в массиве армий будут дырки
+    // дырки? они возникают потому что у нас хранятся кое какие данные в буфере армий
+    // зачем мне теперь этот буфер? теперь данные армии передаются в рендер каждый кадр
+    // другое дело что дырки все равно есть потому что составляю токен для армии, как распределены дырки?
+    // скорее всего неравномерно, сильно это ударит по производительности? возможно нет
+    const size_t armies_count = ctx->get_army_container_size();
+    for (size_t i = 0; i < armies_count; ++i) {
+      auto army = ctx->get_army_raw(i);
+      if (army == nullptr) continue;
+      
+      const uint32_t tile_index = army->tile_index;
+      const bool rendered = buffers->get_map_renderable(tile_index);
+//       const bool explored = buffers->get_map_exploration(tile_index);
+//       const bool visible = buffers->get_map_visibility(tile_index);
+      const bool explored = true;
+      const bool visible = true;
+      
+      if (!explored || !rendered || !visible) continue;
+      
+      // нужно ли это здесь?
+//       const auto tile_ptr = map->get_tile_ptr(tile_index);
+//       const glm::vec4 center = map->get_point(tile_ptr->center);
+//       const glm::vec4 camera_dir = camera->get_dir();
+//       const float dot = glm::dot(glm::vec4(glm::vec3(center), 0.0f), camera_dir);
+//       if (dot >= 0.0f) continue;
+      
+      const render::armies_render::army_data data{
+        army->get_pos(),
+        render::image_t{GPU_UINT_MAX},
+        1.5f
+      };
+      armies_render->add(data);
+      
+      // геральдика 
+    }
+  }
+  
+  // незнаю все таки как сделать вычисление чего нибудь полезного во время рендера
+  // хотелось повычислять города/армии, но чет не могу разобраться с логикой
+  // что нужно? нужно пока рисую на экране, пихнуть в буфер данные, 
+  // данных может оказаться больше чем размер буфера, поэтому его придется пересоздать
+  // может быть что на один кадр пропадут все армии/города/геральдики при пересоздании буфера
+  // может это и ладно?
+  void update_render() {
+    auto render_slots = global::get<systems::core_t>()->render_slots;
+    // копирование где? должно быть где то повыше, поставил повыше в stages.cpp
+    render_slots->update(global::get<render::container>());
+    update_map_objects();
+    global::get<render::task_start>()->wait();
+    render_slots->clear();
+  }
+  
+  void pre_sync() {
+    auto m = get_map_mutex();
+    if (m != nullptr) {
+      std::unique_lock<std::mutex> lock(*m);
+      update_render();
+    } else {
+      update_render();
+    }
+  }
+  
+  void sync(utils::frame_time &frame_time, const size_t &time) {
     frame_time.end();
     
-    static const auto lambda = [] () {
-      auto base_systems = global::get<systems::core_t>();
-      auto m = get_map_mutex();
-      if (m != nullptr) {
-        std::unique_lock<std::mutex> lock(*m);
-        base_systems->render_slots->update(global::get<render::container>());
-        global::get<render::task_start>()->wait();
-        global::get<systems::core_t>()->render_slots->clear();
-      } else {
-        base_systems->render_slots->update(global::get<render::container>());
-        global::get<render::task_start>()->wait();
-        global::get<systems::core_t>()->render_slots->clear();
-      }
-    };
-    
-    lambda();
-
-//     {
-// //       utils::time_log log("task waiting");
-//       global::get<render::task_start>()->wait();
-//       //global::get<render::stage_container>()->clear();
-//       global::get<systems::core_t>()->render_slots->clear();
-//       //global::get<systems::map_t>()->unlock_map();
-//       unlock_rendering();
-//     }
-    
-    //if (rendering_future.valid()) rendering_future.wait();
+    pre_sync();
 
     size_t mcs = 0;
     while (mcs < time) {
@@ -1327,24 +1493,40 @@ end
       // ну эт несложно если разделить списки на несколько и работать с ними отдельно
       // в принципе нужно будет разделить списки хотя бы на типы таргетов с которыми они работают
       
-      const auto lua_ret = lua.script(lua_func);
-      if (!lua_ret.valid()) {
-        sol::error err = lua_ret;
-        std::cout << err.what();
-        throw std::runtime_error("There is lua errors");
-      }
+//       const auto lua_ret = lua.script(lua_func);
+//       if (!lua_ret.valid()) {
+//         sol::error err = lua_ret;
+//         std::cout << err.what();
+//         throw std::runtime_error("There is lua errors");
+//       }
+      
+      const auto draw_func = [] (const script::draw_data* dd) -> bool {
+        std::string nesting(" ", dd->nest_level);
+        
+        std::cout << nesting << "decision " << dd->id << "\n";
+        std::cout << nesting << "method   " << dd->method_name << "\n";
+        std::cout << nesting << "cur func " << dd->function_name << "\n";
+        std::cout << nesting << "cur type " << core::structure_data::names[dd->current.type] << "\n";
+        if (dd->value.get_type() == script::object::type::number) std::cout << nesting << "val type " << "number" << "\n";
+        else if (dd->value.valid()) std::cout << nesting << "val type " << core::structure_data::names[dd->value.type] << "\n";
+      };
       
       // нужно передать сюда персонажа
       script::context ctx;
-      sol::function f = lua_ret;
-      ctx.itr_func = &f;
-      ctx.root = script::target_t{static_cast<uint32_t>(core::character::s_type), c, SIZE_MAX};
-      d.iterate_conditions(&ctx);
-      d.iterate_actions(&ctx);
+      ctx.id = d.id;
+      ctx.type = 0;
+      ctx.root = ctx.current = script::object(c);
+      ctx.draw_function = draw_func;
       
-      ctx.itr_func = nullptr;
+      ctx.method_name = "condition";
+      d.condition.draw(&ctx);
+      ctx.method_name = "effect";
+      d.effect.draw(&ctx);
+      
       const float before_money = c->resources.get(core::character_resources::money);
-      d.run(&ctx);
+      if (d.condition.compute(&ctx)) {
+        d.effect.compute(&ctx);
+      }
       const float after_money = c->resources.get(core::character_resources::money);
       
       PRINT_VAR("before_money", before_money)
@@ -1401,191 +1583,192 @@ end
 // //     }
 //   }
   
-  void recompute_army_pos(core::army* army) {
-    auto map = global::get<systems::map_t>()->map;
-    
-    const auto tile_data = map->get_tile(army->tile_index);
-    const uint32_t point_index = tile_data.tile_indices.x;
-    const glm::vec4 center = map->get_point(point_index);
-    const glm::vec4 normal = glm::normalize(glm::vec4(glm::vec3(center), 0.0f));
-    const float height = map->get_tile_height(army->tile_index);
-    const uint32_t height_layer = render::compute_height_layer(height);
-    const float final_height = render::layer_height * height_layer;
-    
-    const glm::vec4 final_point = center + normal * (final_height * render::render_tile_height + 1.0f);
-    army->set_pos(glm::vec3(final_point));
-  }
+//   void recompute_army_pos(core::army* army) {
+//     auto map = global::get<systems::map_t>()->map;
+//     
+//     const auto tile_data = map->get_tile(army->tile_index);
+//     const uint32_t point_index = tile_data.tile_indices.x;
+//     const glm::vec4 center = map->get_point(point_index);
+//     const glm::vec4 normal = glm::normalize(glm::vec4(glm::vec3(center), 0.0f));
+//     const float height = map->get_tile_height(army->tile_index);
+//     const uint32_t height_layer = render::compute_height_layer(height);
+//     const float final_height = render::layer_height * height_layer;
+//     
+//     const glm::vec4 final_point = center + normal * (final_height * render::render_tile_height + 1.0f);
+//     army->set_pos(glm::vec3(final_point));
+//   }
   
   void advance_army(core::army* army) {
-    // тут мы продвигаем армию до конца пока не кончится ходы
-    // по идее примерно такую же функцию нужно сделать для игроковых армий
-    // но там нужно обновлять положение каждый кадр
-    // это по идее значит что мы еще не нашли путь, хотя навреное нужно добавить что то еще к этому
-    //if (army->path == nullptr) return;
-//     auto tp = std::chrono::steady_clock::now();
-//     while (army->path == nullptr) {
-//       std::this_thread::sleep_for(CHRONO_TIME_TYPE(1));
-//       auto end = std::chrono::steady_clock::now() - tp;
-//       auto mcs = std::chrono::duration_cast<CHRONO_TIME_TYPE>(end).count();
-//       if (mcs >= ONE_SECOND*5) throw std::runtime_error("finding too long");
-//     }
-    
-    ai::path_container* tmp_ptr = army->path;
-    if (reinterpret_cast<size_t>(tmp_ptr) == SIZE_MAX) return; // неудалось найти путь
-    
-//     ASSERT(army->start_tile != army->path[0].tile_path[0].tile);
-    
-    auto map = global::get<systems::map_t>()->map;
-    
-//     const uint32_t first_tile = army->tile_index;
-//     uint32_t current_tile = army->tile_index;
-//     render::map_tile_t tile_data = render::unpack_data(map->get_tile(current_tile));
-//     uint32_t current_height_layer = render::compute_height_layer(tile_data.height);
-    
-    //ASSERT(army->current_path < army->path_size);
-
-    if (army->path_size == 0) return;
-    
-    if (army->current_path == army->path_size) {
-      // теперь тут удобнее сделать путь со стартовым тайлом
-      return;
-    }
-    
-    const uint32_t prev_container = (army->current_path) / ai::path_container::container_size;
-    const uint32_t prev_index     = (army->current_path) % ai::path_container::container_size;
-    const float current_cost = army->current_path == 0 ? 0.0f : ai::advance_container(army->path, prev_container)->tile_path[prev_index].cost;
-    // у нас есть представление о стоимости прохода, не нужно дополнительно пересчитывать
-    // тут нужно проверить первый пехеод, если не хватает очков то выходим из функции
-    size_t next_current_path = army->current_path;
-    for (; next_current_path < army->path_size; ++next_current_path) { // тут мы должны получить место куда встанет армия
-      // проверяем не вышли ли мы за пределы передвижения армии
-      const uint32_t container = next_current_path / ai::path_container::container_size;
-      const uint32_t index     = next_current_path % ai::path_container::container_size;
-      
-      //const float next_tile_cost = army->path[container].tile_path[index].cost - current_cost;
-      const float next_tile_cost = ai::advance_container(army->path, container)->tile_path[index].cost - current_cost;
-      //const uint32_t next_tile = army->path[container].tile_path[index].tile;
-      
-      if (next_tile_cost >= 32535) break;
-    }
-    
-    //army->current_path = next_current_path;
-    //const uint32_t new_container = (next_current_path) / ai::path_container::container_size;
-    //const uint32_t new_index     = (next_current_path) % ai::path_container::container_size;
-    //const uint32_t new_tile      = ai::advance_container(army->path, new_container)->tile_path[new_index].tile;
-    
-    // теперь пытаемся поставить армию в next_current_path
-    uint32_t tmp = UINT32_MAX;
-    //bool ret = map->tile_objects_index_comp_swap(new_tile, 4, tmp, army->army_gpu_slot);
-    bool ret = false;
-
-    while (!ret && next_current_path > army->current_path) {
-      --next_current_path;
-      
-      const uint32_t new_container = (next_current_path) / ai::path_container::container_size;
-      const uint32_t new_index     = (next_current_path) % ai::path_container::container_size;
-      const uint32_t new_tile      = ai::advance_container(army->path, new_container)->tile_path[new_index].tile;
-      
-      tmp = UINT32_MAX;
-      ret = map->tile_objects_index_comp_swap(new_tile, 4, tmp, army->army_gpu_slot);
-    }
-    
-    if (!ret && next_current_path == army->current_path) {
-      // по идее мы ничего не добились, можно выходить
-      return;
-    }
-    
-    const uint32_t final_container = (next_current_path) / ai::path_container::container_size;
-    const uint32_t final_index     = (next_current_path) % ai::path_container::container_size;
-    const uint32_t final_tile      = ai::advance_container(army->path, final_container)->tile_path[final_index].tile;
-    
-    tmp = army->army_gpu_slot;
-    map->tile_objects_index_comp_swap(army->tile_index, 4, tmp, UINT32_MAX);
-    ASSERT(map->get_tile_objects_index(army->tile_index, 4) == UINT32_MAX);
-    army->tile_index = final_tile;
-    // вычитаем стоимость пути
-    army->current_path = next_current_path+1;
-    
-//     while (true) {
-//       const uint32_t last_speed = army->current_stats[core::army_stats::speed].uval; // спид наверное будет масштабом 10 или мож больше
-//       const size_t current_path = army->current_path;
-//       const uint32_t container = current_path / ai::path_container::container_size;
-//       const uint32_t index     = current_path % ai::path_container::container_size;
-//       
-//       const uint32_t next_tile = army->path[container].tile_path[index].tile;
-//       
-//       const auto next_tile_data = render::unpack_data(map->get_tile(next_tile));
-//       
-//       // тут нужно расчитать стоимость перехода с тайла на тайл
-//       // нужно учесть наличие дороги, биом в конечном тайле, подъем
-//       
-//       const uint32_t next_height_layer = render::compute_height_layer(next_tile_data.height);
-//       const uint32_t height_difference = current_height_layer > next_height_layer ? 0 : next_height_layer-current_height_layer;
-//       
-//       // тут нужно выбрать подходящий масштаб, я думаю что это 100 (можно на 1000)
-//       // то есть каждый тайл по умолчанию стоит 100, как добавить веса
-//       // возможно делать по 10 за разницу в высоте, с другой стороны на какую то 
-//       // высоту взобраться мы не можем (разница 3?) а значит наверное нужно умножить на 25 примерно?
-//       const uint32_t move_cost = 100 + height_difference * 25;
-//       
-//       //if (last_speed < move_cost) break;
-//       
-//       //army->current_stats[core::army_stats::speed].uval -= move_cost;
-//       army->tile_index = next_tile;
-//       ++army->current_path;
-//       
-//       current_tile = army->tile_index;
-//       tile_data = render::unpack_data(map->get_tile(current_tile));
-//       current_height_layer = render::compute_height_layer(tile_data.height);
-//       
-//       //if (current_tile == army->end_tile) break;
-//       if (army->current_path == army->path_size) break;
-//     }
+    assert(false);
+//     // тут мы продвигаем армию до конца пока не кончится ходы
+//     // по идее примерно такую же функцию нужно сделать для игроковых армий
+//     // но там нужно обновлять положение каждый кадр
+//     // это по идее значит что мы еще не нашли путь, хотя навреное нужно добавить что то еще к этому
+//     //if (army->path == nullptr) return;
+// //     auto tp = std::chrono::steady_clock::now();
+// //     while (army->path == nullptr) {
+// //       std::this_thread::sleep_for(CHRONO_TIME_TYPE(1));
+// //       auto end = std::chrono::steady_clock::now() - tp;
+// //       auto mcs = std::chrono::duration_cast<CHRONO_TIME_TYPE>(end).count();
+// //       if (mcs >= ONE_SECOND*5) throw std::runtime_error("finding too long");
+// //     }
 //     
-//     // нужно обновить кто где находится
-//     // путь может закончится на том тайле где уже кто то есть
-//     // здесь мы будем видимо откатывать позицию, нужно ли искать путь в обход текущих позиций?
-//     // было бы неплохо что такое сделать в будущем, но пока ладно
+//     ai::path_container* tmp_ptr = army->path;
+//     if (reinterpret_cast<size_t>(tmp_ptr) == SIZE_MAX) return; // неудалось найти путь
 //     
-//     // в общем нужно делать все вместе поиск пути и перемещение
-//     // или скорее поиск пути 
+// //     ASSERT(army->start_tile != army->path[0].tile_path[0].tile);
 //     
-//     // тут надо добавить атомарную версию функции, каст к атомарным - это неизвестное поведение
-//     // че делать, с другой стороны мы не копируем а прост кстатим память
-// //     const uint32_t index = map->get_tile_objects_index(army->tile_index, 4);
-// //     if (index == UINT32_MAX) map->set_tile_objects_index(army->tile_index, 4, army->army_gpu_slot);
+//     auto map = global::get<systems::map_t>()->map;
+//     
+// //     const uint32_t first_tile = army->tile_index;
+// //     uint32_t current_tile = army->tile_index;
+// //     render::map_tile_t tile_data = render::unpack_data(map->get_tile(current_tile));
+// //     uint32_t current_height_layer = render::compute_height_layer(tile_data.height);
+//     
+//     //ASSERT(army->current_path < army->path_size);
 // 
-//     if (army->current_path == 0) return;
-// 
-//     uint32_t tmp = army->army_gpu_slot;
-//     ASSERT(map->tile_objects_index_comp_swap(first_tile, 4, tmp, UINT32_MAX)); // это нужно наверное сделать в конце
-//     tmp = UINT32_MAX;
-//     bool ret = map->tile_objects_index_comp_swap(army->tile_index, 4, tmp, army->army_gpu_slot);
-//     if (army->current_path == 1) {
-//       if (!ret) ASSERT(ret = map->tile_objects_index_comp_swap(first_tile, 4, tmp, army->army_gpu_slot));
-//     } else {
-//       size_t current_path = army->current_path-1; // 
-//       while (!ret && current_path > 0) {
-//         --current_path;
-//         const uint32_t container = current_path / ai::path_container::container_size;
-//         const uint32_t index     = current_path % ai::path_container::container_size;
-//         const uint32_t next_tile = army->path[container].tile_path[index].tile;
-//         tmp = UINT32_MAX;
-//         ret = map->tile_objects_index_comp_swap(next_tile, 4, tmp, army->army_gpu_slot);
-//         army->tile_index = next_tile;
-//       }
-//       
-//       ASSERT(current_path != 0);
+//     if (army->path_size == 0) return;
+//     
+//     if (army->current_path == army->path_size) {
+//       // теперь тут удобнее сделать путь со стартовым тайлом
+//       return;
 //     }
-    
-    // не знаю на сколько целесообразно вообще передвигать армии в многопотоке
-    // с другой стороны движение армий - это разреженные задачи и пересекаются армии настолько редко
-    // что зачем просиживать это время верно? с третьей стороны эту задачу было бы неплохо сделать в отдельном потоке
-    // а в это время пока сделать другие задачи (там поиск жены и проч) 
-    // прохождение пути еще требует догонять армию, поэтому целесообразнее будет реально сбросить задачу на отдельный поток
-    // и тогда необязательно приводить к другому типу данные
-    
-    recompute_army_pos(army);
+//     
+//     const uint32_t prev_container = (army->current_path) / ai::path_container::container_size;
+//     const uint32_t prev_index     = (army->current_path) % ai::path_container::container_size;
+//     const float current_cost = army->current_path == 0 ? 0.0f : ai::advance_container(army->path, prev_container)->tile_path[prev_index].cost;
+//     // у нас есть представление о стоимости прохода, не нужно дополнительно пересчитывать
+//     // тут нужно проверить первый пехеод, если не хватает очков то выходим из функции
+//     size_t next_current_path = army->current_path;
+//     for (; next_current_path < army->path_size; ++next_current_path) { // тут мы должны получить место куда встанет армия
+//       // проверяем не вышли ли мы за пределы передвижения армии
+//       const uint32_t container = next_current_path / ai::path_container::container_size;
+//       const uint32_t index     = next_current_path % ai::path_container::container_size;
+//       
+//       //const float next_tile_cost = army->path[container].tile_path[index].cost - current_cost;
+//       const float next_tile_cost = ai::advance_container(army->path, container)->tile_path[index].cost - current_cost;
+//       //const uint32_t next_tile = army->path[container].tile_path[index].tile;
+//       
+//       if (next_tile_cost >= 32535) break;
+//     }
+//     
+//     //army->current_path = next_current_path;
+//     //const uint32_t new_container = (next_current_path) / ai::path_container::container_size;
+//     //const uint32_t new_index     = (next_current_path) % ai::path_container::container_size;
+//     //const uint32_t new_tile      = ai::advance_container(army->path, new_container)->tile_path[new_index].tile;
+//     
+//     // теперь пытаемся поставить армию в next_current_path
+//     uint32_t tmp = UINT32_MAX;
+//     //bool ret = map->tile_objects_index_comp_swap(new_tile, 4, tmp, army->army_gpu_slot);
+//     bool ret = false;
+// 
+//     while (!ret && next_current_path > army->current_path) {
+//       --next_current_path;
+//       
+//       const uint32_t new_container = (next_current_path) / ai::path_container::container_size;
+//       const uint32_t new_index     = (next_current_path) % ai::path_container::container_size;
+//       const uint32_t new_tile      = ai::advance_container(army->path, new_container)->tile_path[new_index].tile;
+//       
+//       tmp = UINT32_MAX;
+//       ret = map->tile_objects_index_comp_swap(new_tile, 4, tmp, army->army_gpu_slot);
+//     }
+//     
+//     if (!ret && next_current_path == army->current_path) {
+//       // по идее мы ничего не добились, можно выходить
+//       return;
+//     }
+//     
+//     const uint32_t final_container = (next_current_path) / ai::path_container::container_size;
+//     const uint32_t final_index     = (next_current_path) % ai::path_container::container_size;
+//     const uint32_t final_tile      = ai::advance_container(army->path, final_container)->tile_path[final_index].tile;
+//     
+//     tmp = army->army_gpu_slot;
+//     map->tile_objects_index_comp_swap(army->tile_index, 4, tmp, UINT32_MAX);
+//     ASSERT(map->get_tile_objects_index(army->tile_index, 4) == UINT32_MAX);
+//     army->tile_index = final_tile;
+//     // вычитаем стоимость пути
+//     army->current_path = next_current_path+1;
+//     
+// //     while (true) {
+// //       const uint32_t last_speed = army->current_stats[core::army_stats::speed].uval; // спид наверное будет масштабом 10 или мож больше
+// //       const size_t current_path = army->current_path;
+// //       const uint32_t container = current_path / ai::path_container::container_size;
+// //       const uint32_t index     = current_path % ai::path_container::container_size;
+// //       
+// //       const uint32_t next_tile = army->path[container].tile_path[index].tile;
+// //       
+// //       const auto next_tile_data = render::unpack_data(map->get_tile(next_tile));
+// //       
+// //       // тут нужно расчитать стоимость перехода с тайла на тайл
+// //       // нужно учесть наличие дороги, биом в конечном тайле, подъем
+// //       
+// //       const uint32_t next_height_layer = render::compute_height_layer(next_tile_data.height);
+// //       const uint32_t height_difference = current_height_layer > next_height_layer ? 0 : next_height_layer-current_height_layer;
+// //       
+// //       // тут нужно выбрать подходящий масштаб, я думаю что это 100 (можно на 1000)
+// //       // то есть каждый тайл по умолчанию стоит 100, как добавить веса
+// //       // возможно делать по 10 за разницу в высоте, с другой стороны на какую то 
+// //       // высоту взобраться мы не можем (разница 3?) а значит наверное нужно умножить на 25 примерно?
+// //       const uint32_t move_cost = 100 + height_difference * 25;
+// //       
+// //       //if (last_speed < move_cost) break;
+// //       
+// //       //army->current_stats[core::army_stats::speed].uval -= move_cost;
+// //       army->tile_index = next_tile;
+// //       ++army->current_path;
+// //       
+// //       current_tile = army->tile_index;
+// //       tile_data = render::unpack_data(map->get_tile(current_tile));
+// //       current_height_layer = render::compute_height_layer(tile_data.height);
+// //       
+// //       //if (current_tile == army->end_tile) break;
+// //       if (army->current_path == army->path_size) break;
+// //     }
+// //     
+// //     // нужно обновить кто где находится
+// //     // путь может закончится на том тайле где уже кто то есть
+// //     // здесь мы будем видимо откатывать позицию, нужно ли искать путь в обход текущих позиций?
+// //     // было бы неплохо что такое сделать в будущем, но пока ладно
+// //     
+// //     // в общем нужно делать все вместе поиск пути и перемещение
+// //     // или скорее поиск пути 
+// //     
+// //     // тут надо добавить атомарную версию функции, каст к атомарным - это неизвестное поведение
+// //     // че делать, с другой стороны мы не копируем а прост кстатим память
+// // //     const uint32_t index = map->get_tile_objects_index(army->tile_index, 4);
+// // //     if (index == UINT32_MAX) map->set_tile_objects_index(army->tile_index, 4, army->army_gpu_slot);
+// // 
+// //     if (army->current_path == 0) return;
+// // 
+// //     uint32_t tmp = army->army_gpu_slot;
+// //     ASSERT(map->tile_objects_index_comp_swap(first_tile, 4, tmp, UINT32_MAX)); // это нужно наверное сделать в конце
+// //     tmp = UINT32_MAX;
+// //     bool ret = map->tile_objects_index_comp_swap(army->tile_index, 4, tmp, army->army_gpu_slot);
+// //     if (army->current_path == 1) {
+// //       if (!ret) ASSERT(ret = map->tile_objects_index_comp_swap(first_tile, 4, tmp, army->army_gpu_slot));
+// //     } else {
+// //       size_t current_path = army->current_path-1; // 
+// //       while (!ret && current_path > 0) {
+// //         --current_path;
+// //         const uint32_t container = current_path / ai::path_container::container_size;
+// //         const uint32_t index     = current_path % ai::path_container::container_size;
+// //         const uint32_t next_tile = army->path[container].tile_path[index].tile;
+// //         tmp = UINT32_MAX;
+// //         ret = map->tile_objects_index_comp_swap(next_tile, 4, tmp, army->army_gpu_slot);
+// //         army->tile_index = next_tile;
+// //       }
+// //       
+// //       ASSERT(current_path != 0);
+// //     }
+//     
+//     // не знаю на сколько целесообразно вообще передвигать армии в многопотоке
+//     // с другой стороны движение армий - это разреженные задачи и пересекаются армии настолько редко
+//     // что зачем просиживать это время верно? с третьей стороны эту задачу было бы неплохо сделать в отдельном потоке
+//     // а в это время пока сделать другие задачи (там поиск жены и проч) 
+//     // прохождение пути еще требует догонять армию, поэтому целесообразнее будет реально сбросить задачу на отдельный поток
+//     // и тогда необязательно приводить к другому типу данные
+//     
+//     recompute_army_pos(army);
   }
   
   std::mutex* get_map_mutex() {

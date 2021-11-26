@@ -50,7 +50,7 @@ namespace devils_engine {
       uint32_t m_week_days_count;
       int64_t m_start_day;
       std::atomic<size_t> m_current_turn;
-      size_t m_years_days;
+      size_t m_year_days;
       std::vector<month_data> m_months;
       
       calendar();
@@ -71,6 +71,8 @@ namespace devils_engine {
       size_t convert_date_to_turn(const struct date &date) const;
       date convert_days_to_date(const int64_t &days) const;
       int64_t convert_date_to_days(const struct date &date) const;
+      
+      size_t days_to_years(const size_t &days) const;
       
       void validate();
     };

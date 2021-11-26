@@ -9,7 +9,7 @@
 #include "utils/typeless_container.h"
 #include "utils/memory_pool.h"
 #include "utils/random_engine.h"
-#include "FastNoise.h"
+#include "Cpp/FastNoiseLite.h"
 #include "utils/table_container.h"
 #include "utils/battle_map_enum.h"
 #include "utils/serializator_helper.h"
@@ -65,6 +65,7 @@ namespace devils_engine {
       sol::function get_func(const std::string_view &name, const bool remove_global = true);
       
       sol::state & state();
+      sol::environment & environment();
       utils::world_serializator* serializator_ptr();
       std::string get_world_name() const;
       std::string get_folder_name() const;
@@ -87,6 +88,7 @@ namespace devils_engine {
       sol::table table;
       sol::table serpent;
       sol::function serpent_line;
+      sol::table serpent_opts;
       
       systems::generator gen;
       
@@ -101,7 +103,7 @@ namespace devils_engine {
       utils::memory_pool<step, sizeof(step)*10> steps_pool;
       std::vector<step*> steps;
       utils::random_engine_st random;
-      FastNoise noise;
+      FastNoiseLite noise;
       // вместо контейнера нужен сериализатор
       utils::world_serializator serializator;
       sol::table interface_table;

@@ -112,7 +112,7 @@ world_structure_t unpack(const uvec4 data);
 void set_indices_borders_buffer(const uint index, const uint offset);
 void set_indices_walls_buffer(const uint index, const uint offset);
 void set_indices_armies_buffer(const uint index, const uint offset);
-bool test_ray_aabb(const vec4 ray_pos, const vec4 ray_dir, const vec4 box_center, const vec4 box_extents, inout float dist);
+//bool test_ray_aabb(const vec4 ray_pos, const vec4 ray_dir, const vec4 box_center, const vec4 box_extents, inout float dist);
 
 layout(local_size_x = WORK_GROUP, local_size_y = 1, local_size_z = 1) in;
 
@@ -359,32 +359,32 @@ void set_indices_armies_buffer(const uint index, const uint offset) {
   // objects_indices[vec_index].index[slot_index] = GPU_UINT_MAX;
 }
 
-bool test_ray_aabb(const vec4 ray_pos, const vec4 ray_dir, const vec4 box_center, const vec4 box_extents, inout float dist) {
-  const vec4 box_max = box_center + box_extents;
-  const vec4 box_min = box_center - box_extents;
-
-  const vec4 ray_inv_dir = 1.0f / ray_dir;
-  float t1 = (box_min[0] - ray_pos[0])*ray_inv_dir[0];
-  float t2 = (box_max[0] - ray_pos[0])*ray_inv_dir[0];
-
-  float tmin = min(t1, t2);
-  float tmax = max(t1, t2);
-
-  for (int i = 1; i < 3; ++i) {
-      t1 = (box_min[i] - ray_pos[i])*ray_inv_dir[i];
-      t2 = (box_max[i] - ray_pos[i])*ray_inv_dir[i];
-
-      tmin = max(tmin, min(min(t1, t2), tmax));
-      tmax = min(tmax, max(max(t1, t2), tmin));
-  }
-
-  const bool ret = tmax > max(tmin, 0.0f);
-  dist = ret ? tmax : dist;
-  return ret;
-  // if (tmax > glm::max(tmin, 0.0f)) {
-  //   dist = tmin > 0.0f ? tmin : tmax;
-  //   return true;
-  // }
-  //
-  // return false;
-}
+// bool test_ray_aabb(const vec4 ray_pos, const vec4 ray_dir, const vec4 box_center, const vec4 box_extents, inout float dist) {
+//   const vec4 box_max = box_center + box_extents;
+//   const vec4 box_min = box_center - box_extents;
+//
+//   const vec4 ray_inv_dir = 1.0f / ray_dir;
+//   float t1 = (box_min[0] - ray_pos[0])*ray_inv_dir[0];
+//   float t2 = (box_max[0] - ray_pos[0])*ray_inv_dir[0];
+//
+//   float tmin = min(t1, t2);
+//   float tmax = max(t1, t2);
+//
+//   for (int i = 1; i < 3; ++i) {
+//       t1 = (box_min[i] - ray_pos[i])*ray_inv_dir[i];
+//       t2 = (box_max[i] - ray_pos[i])*ray_inv_dir[i];
+//
+//       tmin = max(tmin, min(min(t1, t2), tmax));
+//       tmax = min(tmax, max(max(t1, t2), tmin));
+//   }
+//
+//   const bool ret = tmax > max(tmin, 0.0f);
+//   dist = ret ? tmax : dist;
+//   return ret;
+//   // if (tmax > glm::max(tmin, 0.0f)) {
+//   //   dist = tmin > 0.0f ? tmin : tmax;
+//   //   return true;
+//   // }
+//   //
+//   // return false;
+// }

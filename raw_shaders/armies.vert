@@ -4,11 +4,18 @@
 #include "../render/shared_structures.h"
 #include "../utils/shared_mathematical_constant.h"
 
+// const vec4 object_points[] = {
+//   vec4(-1.0f, 2.0f, 0.0f, 1.0f),
+//   vec4( 1.0f, 2.0f, 0.0f, 1.0f),
+//   vec4(-1.0f, 0.0f, 0.0f, 1.0f),
+//   vec4( 1.0f, 0.0f, 0.0f, 1.0f)
+// };
+
 const vec4 object_points[] = {
-  vec4(-1.0f, 2.0f, 0.0f, 1.0f),
-  vec4( 1.0f, 2.0f, 0.0f, 1.0f),
-  vec4(-1.0f, 0.0f, 0.0f, 1.0f),
-  vec4( 1.0f, 0.0f, 0.0f, 1.0f)
+  vec4(-0.5f, 1.0f, 0.0f, 1.0f),
+  vec4( 0.5f, 1.0f, 0.0f, 1.0f),
+  vec4(-0.5f, 0.0f, 0.0f, 1.0f),
+  vec4( 0.5f, 0.0f, 0.0f, 1.0f)
 };
 
 const vec2 object_uv[] = {
@@ -23,7 +30,6 @@ layout(set = 0, binding = 0) uniform camera_uniform {
   mat4 view;
   vec4 pos;
   vec4 dir;
-  uvec4 dim;
 } camera;
 
 layout(set = 0, binding = 1) uniform matrices_uniform {
@@ -70,7 +76,10 @@ out gl_PerVertex {
   vec4 gl_Position;
 };
 
-layout(location = 0) in uint current_index;
+//layout(location = 0) in uint current_index;
+layout(location = 0) in vec3 army_pos;
+layout(location = 1) in uint img;
+layout(location = 2) in float obj_scale;
 layout(location = 0) out flat image_t out_image;
 layout(location = 1) out flat color_t in_biom_color;
 layout(location = 2) out vec2 out_uv;
@@ -81,24 +90,26 @@ mat4 rotate(const mat4 mat, const float angle, const vec4 normal);
 mat4 scale(const mat4 mat, const vec4 vec);
 
 void main() {
-  const uint army_index  = current_index;
+  //const uint army_index  = current_index;
   const uint point_index = gl_VertexIndex; // [0,3]
   //const uint army_index  = gl_VertexIndex / PACKED_INDEX_COEF;
   //const uint point_index = gl_VertexIndex % PACKED_INDEX_COEF; // [0,3]
 
-  const army_data_t army = army_datas[army_index];
-  const vec4 pos = vec4(army.data.xyz, 1.0f);
-  const uint image_container = floatBitsToUint(army.data.w);
-  const float obj_scale = 1.5f;
+  //const army_data_t army = army_datas[army_index];
+  //const vec4 pos = vec4(army.data.xyz, 1.0f);
+  //const uint image_container = floatBitsToUint(army.data.w);
+  const vec4 pos = vec4(army_pos, 1.0f);
+  //const float obj_scale = scale;
 
   const mat4 translaion = translate(mat4(1.0f), pos);
   const mat3 rot = mat3(camera_matrices.invView);
   const mat4 rotation = mat4(rot);
-  const mat4 scaling = scale(rotation, vec4(obj_scale, -obj_scale, obj_scale, 0.0f));
+  //const mat4 scaling = scale(rotation, vec4(obj_scale, -obj_scale, obj_scale, 0.0f));
 
-  gl_Position = camera.viewproj * translaion * scaling * (object_points[point_index]);
+  gl_Position = camera.viewproj * translaion * rotation * (object_points[point_index] * obj_scale); // scaling
   out_uv = object_uv[point_index];
-  out_image.container = image_container;
+  //out_image.container = image_container;
+  out_image.container = img;
   in_biom_color.container = 0;
   in_tile_height = 0.0f;
 

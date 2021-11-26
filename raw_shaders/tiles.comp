@@ -13,7 +13,6 @@ layout(set = 0, binding = 0) uniform Camera {
   mat4 view;
   vec4 pos;
   vec4 dir;
-  uvec4 dim;
 } camera;
 
 layout(std140, set = 1, binding = 0) readonly buffer tiles_buffer {
@@ -90,6 +89,18 @@ layout(std140, set = 2, binding = 6) buffer heraldies_indices_buffer {
   instance_data_t heraldies_indices[];
 };
 
+layout(std140, set = 3, binding = 0) buffer rendering_stat_buffer {
+  uvec4 rendering_data[];
+};
+
+layout(std140, set = 3, binding = 1) readonly buffer explored_stat_buffer {
+  uvec4 exploration_data[];
+};
+
+layout(std140, set = 3, binding = 2) readonly buffer visible_stat_buffer {
+  uvec4 visibility_data[];
+};
+
 #define FAR_PLANE 256.0f
 #define WORK_GROUP 256
 
@@ -98,6 +109,10 @@ vec4 get_triangle_dir(const vec4 a, const vec4 b, const vec4 c);
 bool triangle_frustum_test(const vec4 a, const vec4 b, const vec4 c, const frustum_t frustum);
 uint get_accel_triangle_tile_index(const uint index);
 world_structure_t unpack(const uvec4 data);
+
+void set_rendering_state(const uint tile_index);
+bool get_exploration_state(const uint tile_index);
+bool get_visibility_state(const uint tile_index);
 
 layout(local_size_x = WORK_GROUP, local_size_y = 1, local_size_z = 1) in;
 
@@ -143,8 +158,11 @@ void main() {
   const uint max_dispatch = uint(ceil(float(structures_data.w) / float(WORK_GROUP)));
   atomicMax(dispatch_indirect.x, max_dispatch);
 
+  // имеет смысл добавить проверку каждого тайла, но кеш сдохнет конечно
+  // ко всему прочему нужно будет два раза проходить цикл
   for (uint i = 0; i < new_tiles_count; ++i) {
     const uint tile_index = get_accel_triangle_tile_index(triangle.data[0] + i);
+    set_rendering_state(tile_index);
     const uint offset = hexagon_offset + new_indices_offset + i;
     const uint vec_index = offset / 4;
     const uint slot_index = offset % 4;
@@ -153,6 +171,7 @@ void main() {
 
   if (bool(triangle.data[2])) {
     const uint tile_index = get_accel_triangle_tile_index(triangle.data[0] + triangle.data[1] - 1);
+    set_rendering_state(tile_index);
     const uint pentagon_offset = atomicAdd(pen_tiles_indirect.y, 1);
     const uint vec_index = pentagon_offset / 4;
     const uint slot_index = pentagon_offset % 4;
@@ -192,74 +211,79 @@ void main() {
   // }
 
   // borders_data.z должно указывать нужно ли пропускать рендер границ
-  if (bool(borders_data[2]) && borders_indices_count != 0) {
-    for (uint i = 0; i < triangle.data[1]; ++i) {
-      const uint tile_index = get_accel_triangle_tile_index(triangle.data[0] + i);
-      const uint borders_data = tiles[tile_index].packed_data4[0];
-      if (borders_data == GPU_UINT_MAX) continue;
-
-      const uint size = (borders_data >> 28) & border_size_mask;
-      const uint offset = borders_data & border_offset_mask;
-      const uint index_offset = atomicAdd(borders_indirect.y, size); // *(PACKED_INDEX_COEF+1)
-
-      for (uint j = 0; j < size; ++j) { // каждую границу добавляем отдельно
-        const uint index = index_offset + j; // *(PACKED_INDEX_COEF+1)
-        const uint border_index = offset + j;
-        const uint packed_index = border_index; // * PACKED_INDEX_COEF
-        //for (uint k = 0; k < PACKED_INDEX_COEF; ++k) {
-          const uint final_index = index;
-          const uint vec_index = final_index / 4;
-          const uint slot_index = final_index % 4;
-          borders_indices[vec_index].index[slot_index] = packed_index;
-        //}
-
-        // const uint final_index = index + PACKED_INDEX_COEF;
-        // const uint vec_index = final_index / 4;
-        // const uint slot_index = final_index % 4;
-        // borders_indices[vec_index].index[slot_index] = GPU_UINT_MAX;
-      }
-    }
-  }
+  // if (bool(borders_data[2]) && borders_indices_count != 0) {
+  //   for (uint i = 0; i < triangle.data[1]; ++i) {
+  //     const uint tile_index = get_accel_triangle_tile_index(triangle.data[0] + i);
+  //     //const uint borders_data = tiles[tile_index].packed_data4[0];
+  //     const uint borders_data = tiles[tile_index].packed_data[4][2];
+  //     const bool explored = get_exploration_state(tile_index);
+  //     if (!explored || borders_data == GPU_UINT_MAX) continue;
+  //
+  //     const uint size = (borders_data >> 28) & border_size_mask;
+  //     const uint offset = borders_data & border_offset_mask;
+  //     const uint index_offset = atomicAdd(borders_indirect.y, size); // *(PACKED_INDEX_COEF+1)
+  //
+  //     for (uint j = 0; j < size; ++j) { // каждую границу добавляем отдельно
+  //       const uint index = index_offset + j; // *(PACKED_INDEX_COEF+1)
+  //       const uint border_index = offset + j;
+  //       const uint packed_index = border_index; // * PACKED_INDEX_COEF
+  //       //for (uint k = 0; k < PACKED_INDEX_COEF; ++k) {
+  //         const uint final_index = index;
+  //         const uint vec_index = final_index / 4;
+  //         const uint slot_index = final_index % 4;
+  //         borders_indices[vec_index].index[slot_index] = packed_index;
+  //       //}
+  //
+  //       // const uint final_index = index + PACKED_INDEX_COEF;
+  //       // const uint vec_index = final_index / 4;
+  //       // const uint slot_index = final_index % 4;
+  //       // borders_indices[vec_index].index[slot_index] = GPU_UINT_MAX;
+  //     }
+  //   }
+  // }
 
   // составляем индексы для объектов на тайле
-  for (uint i = 0; i < triangle.data[1]; ++i) {
-    const uint tile_index = get_accel_triangle_tile_index(triangle.data[0] + i);
-    //const uint biome_index = tiles[tile_index].packed_data4[2];
-    const uint biome_index = tiles[tile_index].packed_data4[2] >> 24;
-
-    const biome_data_t biome = unpack_data(packed_biome_datas[biome_index]);
-
-    const float density = biome.density;
-    const uint instances = uint(max(density, 1.0f));
-
-    // может как то преобразовать? у меня tile_index может быть равен 0
-    // так что в любом случае надо что то сделать с индексом
-    // кажется с новым prng нам не нужно об этом думать
-    const uint prng_state = prng(tile_index);
-    const float val_norm = 1.0f - prng_normalize(prng_state);
-    //const float val_norm = 1.0f;
-    if (val_norm > density || !is_image_valid(biome.object_texture2)) continue;
-
-    const uint offset = biome_objects_data[biome_index].objects_data[1];
-
-    const uint place = atomicAdd(biome_objects_data[biome_index].objects_indirect[0], PACKED_INDEX_COEF+1);
-    biome_objects_data[biome_index].objects_indirect[1] = instances;
-    biome_objects_data[biome_index].objects_indirect[2] = offset;
-
-    const uint packed_tile_index = tile_index * PACKED_INDEX_COEF;
-    const uint index = offset + place;
-    for (uint j = 0; j < PACKED_INDEX_COEF; ++j) {
-      const uint final_index = index + j;
-      const uint vec_index = final_index / 4;
-      const uint slot_index = final_index % 4;
-      objects_indices[vec_index].index[slot_index] = packed_tile_index + j;
-    }
-
-    const uint final_index = index + PACKED_INDEX_COEF;
-    const uint vec_index = final_index / 4;
-    const uint slot_index = final_index % 4;
-    objects_indices[vec_index].index[slot_index] = GPU_UINT_MAX;
-  }
+  // for (uint i = 0; i < triangle.data[1]; ++i) {
+  //   const uint tile_index = get_accel_triangle_tile_index(triangle.data[0] + i);
+  //   //const uint biome_index = tiles[tile_index].packed_data4[2] >> 24;
+  //   //const uint biome_index = tiles[tile_index].packed_data4[2];
+  //   const uint biome_index = tiles[tile_index].packed_data[4][3];
+  //
+  //   const biome_data_t biome = unpack_data(packed_biome_datas[biome_index]);
+  //
+  //   const float density = biome.density;
+  //   const uint instances = uint(max(density, 1.0f));
+  //
+  //   const bool explored = get_exploration_state(tile_index);
+  //
+  //   // может как то преобразовать? у меня tile_index может быть равен 0
+  //   // так что в любом случае надо что то сделать с индексом
+  //   // кажется с новым prng нам не нужно об этом думать
+  //   const uint prng_state = prng(tile_index);
+  //   const float val_norm = 1.0f - prng_normalize(prng_state);
+  //   //const float val_norm = 1.0f;
+  //   if (density == 0.0f || !explored || val_norm > density) continue; // || !is_image_valid(biome.object_texture2)
+  //
+  //   const uint offset = biome_objects_data[biome_index].objects_data[1];
+  //
+  //   const uint place = atomicAdd(biome_objects_data[biome_index].objects_indirect[0], PACKED_INDEX_COEF+1);
+  //   biome_objects_data[biome_index].objects_indirect[1] = instances;
+  //   biome_objects_data[biome_index].objects_indirect[2] = offset;
+  //
+  //   const uint packed_tile_index = tile_index * PACKED_INDEX_COEF;
+  //   const uint index = offset + place;
+  //   for (uint j = 0; j < PACKED_INDEX_COEF; ++j) {
+  //     const uint final_index = index + j;
+  //     const uint vec_index = final_index / 4;
+  //     const uint slot_index = final_index % 4;
+  //     objects_indices[vec_index].index[slot_index] = packed_tile_index + j;
+  //   }
+  //
+  //   const uint final_index = index + PACKED_INDEX_COEF;
+  //   const uint vec_index = final_index / 4;
+  //   const uint slot_index = final_index % 4;
+  //   objects_indices[vec_index].index[slot_index] = GPU_UINT_MAX;
+  // }
 }
 
 float distance2(const vec4 a, const vec4 b) {
@@ -319,4 +343,34 @@ world_structure_t unpack(const uvec4 data) {
   abc.scale = uintBitsToFloat(data[2]);
   abc.heraldy_layer_index = data[3];
   return abc;
+}
+
+void set_rendering_state(const uint tile_index) {
+  const uint piece_size = 4 * 32;
+  const uint array_index = tile_index / piece_size;
+  const uint bit_index = tile_index % piece_size;
+  const uint vec_index = bit_index / 32;
+  const uint final_bit_index = bit_index % 32;
+  const uint mask = 1 << final_bit_index;
+  atomicOr(rendering_data[array_index][vec_index], mask);
+}
+
+bool get_exploration_state(const uint tile_index) {
+  const uint piece_size = 4 * 32;
+  const uint array_index = tile_index / piece_size;
+  const uint bit_index = tile_index % piece_size;
+  const uint vec_index = bit_index / 32;
+  const uint final_bit_index = bit_index % 32;
+  const uint mask = 1 << final_bit_index;
+  return (exploration_data[array_index][vec_index] & mask) == mask;
+}
+
+bool get_visibility_state(const uint tile_index) {
+  const uint piece_size = 4 * 32;
+  const uint array_index = tile_index / piece_size;
+  const uint bit_index = tile_index % piece_size;
+  const uint vec_index = bit_index / 32;
+  const uint final_bit_index = bit_index % 32;
+  const uint mask = 1 << final_bit_index;
+  return (visibility_data[array_index][vec_index] & mask) == mask;
 }

@@ -27,8 +27,12 @@ layout(set = 0, binding = 0) uniform Camera {
   mat4 view;
   vec4 pos;
   vec4 dir;
-  uvec4 dim;
 } camera;
+
+layout(set = 0, binding = 2) uniform common_uniform {
+  vec4 cursor_dir;
+  uvec4 dim;
+} additional;
 
 layout(std140, set = 1, binding = 0) readonly buffer border_datas {
   border_data datas[];
@@ -45,7 +49,9 @@ layout(std140, set = 3, binding = 0) readonly buffer tiles_buffer {
 // наверное из вершинного буфера приходят индексы
 layout(location = 0) in uint current_index;
 // тип границы?
-//layout(location = 0) out vec4 out_vert;
+layout(location = 0) out vec2 out_uv;
+layout(location = 1) out flat color_t out_color1;
+layout(location = 2) out flat color_t out_color2;
 
 out gl_PerVertex {
   vec4 gl_Position;
@@ -65,46 +71,52 @@ void main() {
   current_data.points[0].w = 1.0f;
 
   const uint tile_index = floatBitsToUint(current_data.dirs[0].w);
-  const float tile_height = uintBitsToFloat(tiles[tile_index].tile_indices.w);
+  const float tile_height = uintBitsToFloat(tiles[tile_index].packed_data[3][1]);
   //const float layer_height = mountain_height / float(layers_count);
   //const uint height_layer = tile_height < 0.0f ? 0 : (tile_height >= mountain_height ? layers_count : uint(tile_height / layer_height));
   //const float layer_height = 1.0f / float(layers_count);
-  const uint height_layer = compute_height_layer(tile_height);
-  const float final_height = layer_height * height_layer;
+  //const uint height_layer = compute_height_layer(tile_height);
+  //const float final_height = layer_height * height_layer;
+  const float final_height = tile_height;
 
   // пытаюсь смоделировать депт биас
   // похоже что эта функция недоступна на большинстве мобильных устройств
   // 0.1f - нормальный отступ на большом удалении от земли
   // близко появляются ошибки
-  const float zoom = uintBitsToFloat(camera.dim.z);
+  const float zoom = uintBitsToFloat(additional.dim.z);
   const float depth_mod = mix(0.05f, 0.15f, zoom);
 
+  // type.data[1] - изображение, не используется
+  out_color1.container = type.data[0];
+  out_color2.container = type.data[2];
   switch (index_border) {
     case 0: {
       const vec4 up = normalize(vec4(current_data.points[0].xyz, 0.0f));
       gl_Position = camera.viewproj * (current_data.points[0] + up * final_height * render_tile_height + up * depth_mod);
+      out_uv = vec2(0.0f, 0.0f);
       break;
     }
 
-    //case 2:
     case 2: {
       const vec4 up = normalize(vec4(current_data.points[0].xyz, 0.0f));
-      const vec4 dir = vec4(current_data.dirs[0].x, current_data.dirs[0].y, current_data.dirs[0].z, 0.0f);
+      const vec4 dir = vec4(current_data.dirs[0].xyz, 0.0f);
       gl_Position = camera.viewproj * (current_data.points[0] + up * final_height * render_tile_height + dir * thickness + up * depth_mod);
+      out_uv = vec2(0.0f, 1.0f);
       break;
     }
 
-    //case 1:
     case 1: {
       const vec4 up = normalize(vec4(current_data.points[1].xyz, 0.0f));
       gl_Position = camera.viewproj * (current_data.points[1] + up * final_height * render_tile_height + up * depth_mod);
+      out_uv = vec2(1.0f, 0.0f);
       break;
     }
 
     case 3: {
       const vec4 up = normalize(vec4(current_data.points[1].xyz, 0.0f));
-      const vec4 dir = vec4(current_data.dirs[1].x, current_data.dirs[1].y, current_data.dirs[1].z, 0.0f);
+      const vec4 dir = vec4(current_data.dirs[1].xyz, 0.0f);
       gl_Position = camera.viewproj * (current_data.points[1] + up * final_height * render_tile_height + dir * thickness + up * depth_mod);
+      out_uv = vec2(1.0f, 1.0f);
       break;
     }
   }

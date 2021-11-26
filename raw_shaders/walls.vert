@@ -15,7 +15,6 @@ layout(set = 0, binding = 0) uniform Camera {
   mat4 view;
   vec4 pos;
   vec4 dir;
-  uvec4 dim;
 } camera;
 
 layout(std140, set = 2, binding = 0) readonly buffer walls_datas {
@@ -53,8 +52,8 @@ void main() {
   const uint point1_index = wall_data[2];
   const uint point2_index = wall_data[3];
 
-  const float tile_height1 = uintBitsToFloat(tiles[tile1_index].tile_indices.w);
-  const float tile_height2 = uintBitsToFloat(tiles[tile2_index].tile_indices.w);
+  const float tile_height1 = uintBitsToFloat(tiles[tile1_index].packed_data[3][1]);
+  const float tile_height2 = uintBitsToFloat(tiles[tile2_index].packed_data[3][1]);
 
   //const float layer_height1 = 1.0f / float(layers_count);
   const uint height_layer1 = compute_height_layer(tile_height1);
@@ -104,7 +103,7 @@ void main() {
   out_tile_height = tile_height1;
   //out_biom_index = tiles[tile1_index].tile_indices.y;
   color_t color;
-  color.container = tiles[tile1_index].tile_indices.z;
+  color.container = tiles[tile1_index].packed_data[4][1];
   const float r = get_color_r(color) * 0.85f; // возможно чуть побольше значения сделать
   const float g = get_color_g(color) * 0.85f;
   const float b = get_color_b(color) * 0.85f;

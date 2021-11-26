@@ -23,7 +23,6 @@ layout(set = 0, binding = 0) uniform camera_uniform {
   mat4 view;
   vec4 pos;
   vec4 dir;
-  uvec4 dim;
 } camera;
 
 layout(set = 0, binding = 1) uniform matrices_uniform {
@@ -33,6 +32,11 @@ layout(set = 0, binding = 1) uniform matrices_uniform {
   mat4 invView;
   mat4 invViewProj;
 } camera_matrices;
+
+layout(set = 0, binding = 2) uniform common_uniform {
+  vec4 cursor_dir;
+  uvec4 dim;
+} additional;
 
 layout(std140, set = 2, binding = 0) readonly buffer tiles_buffer {
   light_map_tile_t tiles[];
@@ -66,9 +70,13 @@ out gl_PerVertex {
   vec4 gl_Position;
 };
 
-layout(location = 0) in uint current_index;
+layout(location = 0) in uint tile_index;
+layout(location = 1) in uint offset;
+layout(location = 2) in uint shield_layer;
+layout(location = 3) in float img_scale;
 layout(location = 0) out flat uint out_layer_index;
-layout(location = 1) out vec2 out_uv;
+layout(location = 1) out flat uint out_shield_layer_index;
+layout(location = 2) out vec2 out_uv;
 
 mat4 translate(const mat4 mat, const vec4 vec);
 mat4 rotate(const mat4 mat, const float angle, const vec4 normal);
@@ -76,14 +84,13 @@ mat4 scale(const mat4 mat, const vec4 vec);
 world_structure_t unpack(const uvec4 data);
 
 void main() {
-  const uint tile_index  = current_index;
   const uint point_index = gl_VertexIndex; // [0,3]
   //const uint tile_index  = gl_VertexIndex / PACKED_INDEX_COEF;
   //const uint point_index = gl_VertexIndex % PACKED_INDEX_COEF; // [0,3]
 
   const light_map_tile_t tile = tiles[tile_index];
-  const float tile_height = uintBitsToFloat(tile.tile_indices.w);
-  const vec4 center = tile_points[tile.tile_indices.x];
+  const float tile_height = uintBitsToFloat(tile.packed_data[3][1]);
+  const vec4 center = tile_points[tile.packed_data[3][0]];
   const vec4 normal = vec4(normalize(center.xyz), 0.0f);
 
   //const mat4 tans_view = transpose(camera.view);
@@ -91,7 +98,7 @@ void main() {
   const vec4 cam_up    = -vec4(camera_matrices.view[0][1], camera_matrices.view[1][1], camera_matrices.view[2][1], 0.0f);
   //const vec4 cam_forw  = -vec4(camera_matrices.view[0][2], camera_matrices.view[1][2], camera_matrices.view[2][2], 0.0f);
 
-  const uint heraldy_layer_index = additional_indices[tile_index].data[0].y;
+  //const uint heraldy_layer_index = additional_indices[tile_index].data[0].y;
   // const uint structure_index = tiles[tile_index].packed_data4.z & maximum_structure_types;
   // const world_structure_t structure_data = unpack(world_structures[structure_index]);
   // const uint heraldy_layer_index = structure_data.heraldy_layer_index;
@@ -102,12 +109,13 @@ void main() {
   // можно ли как то это сделать в шейдере?
 
   // размер зависит от дальности
-  const uint height_layer = compute_height_layer(tile_height);
-  const float final_height = layer_height * height_layer;
-  const float zoom = uintBitsToFloat(camera.dim.z);
-  const float obj_scale = mix(0.5f, 1.0f, zoom); // размер один и тот же? вряд ли
+  //const uint height_layer = compute_height_layer(tile_height);
+  //const float final_height = layer_height * height_layer;
+  const float final_height = tile_height;
+  const float zoom = uintBitsToFloat(additional.dim.z);
+  const float obj_scale = mix(0.5f, 1.0f, zoom) * img_scale; // размер один и тот же? вряд ли
   const float dist = mix(1.0f, 10.0f, zoom); // независимые государства повыше?
-  const vec4 point = center + normal * (final_height * render_tile_height) + cam_up * dist;
+  const vec4 point = center + normal * final_height * render_tile_height + cam_up * dist;
   const mat4 translaion = translate(mat4(1.0f), point);
   const mat3 rot = mat3(camera_matrices.invView);
   const mat4 rotation = mat4(rot);
@@ -115,7 +123,9 @@ void main() {
 
   gl_Position = camera.viewproj * translaion * scaling * (object_points[point_index]);
   out_uv = object_uv[point_index];
-  out_layer_index = heraldy_layer_index;
+  //out_layer_index = heraldy_layer_index;
+  out_layer_index = offset;
+  out_shield_layer_index = shield_layer;
 }
 
 mat4 translate(const mat4 mat, const vec4 vec) {

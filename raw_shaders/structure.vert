@@ -5,17 +5,17 @@
 #include "../utils/shared_mathematical_constant.h"
 
 // const vec4 object_points[] = {
-//   vec4(-1.0f, 1.0f, 0.0f, 1.0f),
-//   vec4( 1.0f, 1.0f, 0.0f, 1.0f),
-//   vec4(-1.0f,-1.0f, 0.0f, 1.0f),
-//   vec4( 1.0f,-1.0f, 0.0f, 1.0f)
+//   vec4(-1.0f, 2.0f, 0.0f, 1.0f),
+//   vec4( 1.0f, 2.0f, 0.0f, 1.0f),
+//   vec4(-1.0f, 0.0f, 0.0f, 1.0f),
+//   vec4( 1.0f, 0.0f, 0.0f, 1.0f)
 // };
 
 const vec4 object_points[] = {
-  vec4(-1.0f, 2.0f, 0.0f, 1.0f),
-  vec4( 1.0f, 2.0f, 0.0f, 1.0f),
-  vec4(-1.0f, 0.0f, 0.0f, 1.0f),
-  vec4( 1.0f, 0.0f, 0.0f, 1.0f)
+  vec4(-0.5f, 1.0f, 0.0f, 1.0f),
+  vec4( 0.5f, 1.0f, 0.0f, 1.0f),
+  vec4(-0.5f, 0.0f, 0.0f, 1.0f),
+  vec4( 0.5f, 0.0f, 0.0f, 1.0f)
 };
 
 const vec2 object_uv[] = {
@@ -30,7 +30,6 @@ layout(set = 0, binding = 0) uniform camera_uniform {
   mat4 view;
   vec4 pos;
   vec4 dir;
-  uvec4 dim;
 } camera;
 
 layout(set = 0, binding = 1) uniform matrices_uniform {
@@ -40,6 +39,11 @@ layout(set = 0, binding = 1) uniform matrices_uniform {
   mat4 invView;
   mat4 invViewProj;
 } camera_matrices;
+
+layout(set = 0, binding = 2) uniform common_uniform {
+  vec4 cursor_dir;
+  uvec4 dim;
+} additional;
 
 layout(std140, set = 2, binding = 0) readonly buffer tiles_buffer {
   light_map_tile_t tiles[];
@@ -68,7 +72,9 @@ out gl_PerVertex {
   vec4 gl_Position;
 };
 
-layout(location = 0) in uint current_index;
+layout(location = 0) in uint tile_index;
+layout(location = 1) in uint img;
+layout(location = 2) in float obj_scale;
 layout(location = 0) out flat image_t out_biom_texture;
 layout(location = 1) out flat color_t out_biom_color;
 layout(location = 2) out vec2 out_uv;
@@ -80,28 +86,27 @@ mat4 scale(const mat4 mat, const vec4 vec);
 world_structure_t unpack(const uvec4 data);
 
 void main() {
-  const uint tile_index  = current_index;
   const uint point_index = gl_VertexIndex; // [0, 3]
-  //const uint tile_index  = gl_VertexIndex / PACKED_INDEX_COEF;
-  //const uint point_index = gl_VertexIndex % PACKED_INDEX_COEF; // [0, 3]
 
-  const vec4 center = tile_points[tiles[tile_index].tile_indices.x];
+  const vec4 center = tile_points[tiles[tile_index].packed_data[3][0]];
   const vec4 normal = vec4(normalize(center.xyz), 0.0f);
 
-  const float tile_height = uintBitsToFloat(tiles[tile_index].tile_indices.w);
-  const uint height_layer = compute_height_layer(tile_height);
-  const float final_height = layer_height * height_layer;
+  const float tile_height = uintBitsToFloat(tiles[tile_index].packed_data[3][1]);
+  //const uint height_layer = compute_height_layer(tile_height);
+  //const float final_height = layer_height * height_layer;
+  const float final_height = tile_height;
 
-  const uint structure_index = additional_indices[tile_index].data[0].x;
+  //const uint structure_index = additional_indices[tile_index].data[0].x;
   //const uint structure_index = tiles[tile_index].packed_data4[2] & maximum_structure_types;
-  const world_structure_t structure = unpack(world_structures[structure_index]);
-  const float obj_scale = structure.scale; // плохое изображение
+  //const world_structure_t structure = unpack(world_structures[structure_index]);
+  //const float obj_scale = structure.scale; // плохое изображение
+  //const float obj_scale = scale; // плохое изображение
   //const float obj_scale = 2.0f; // приходит неправильный скейл
 
   // все что тут нужно сделать это:
   // вспомнить как сделать дум спрайты
   // сделать пару матриц
-  const float zoom = uintBitsToFloat(camera.dim[2]);
+  const float zoom = uintBitsToFloat(additional.dim.z);
 
   const vec4 point = center + normal * (final_height * render_tile_height); //  + obj_scale/2.0f
   const mat4 translaion = translate(mat4(1.0f), point);
@@ -109,14 +114,16 @@ void main() {
     const mat3 rot = mat3(camera_matrices.invView);
     const mat4 rotation = mat4(rot); // говорят что этого достаточно
     const mat4 scaling = scale(rotation, vec4(obj_scale, -obj_scale, obj_scale, 0.0f));
-    gl_Position = camera.viewproj * translaion * scaling * (object_points[point_index]);
+    gl_Position = camera.viewproj * translaion * scaling * (object_points[point_index]); // obj_scale
     out_uv = object_uv[point_index];
 
-  if (zoom > 0.3f) {
-    out_biom_texture = structure.city_image_top;
-  } else {
-    out_biom_texture = structure.city_image_face;
-  }
+  out_biom_texture.container = img; // одно изображение?
+
+  // if (zoom > 0.3f) {
+  //   out_biom_texture = structure.city_image_top;
+  // } else {
+  //   out_biom_texture = structure.city_image_face;
+  // }
 
   // } else {
   //   // кажется толку с этого не очень много, разве что все равно полезно сменить изображение

@@ -9,7 +9,6 @@ layout(set = 0, binding = 0) uniform Camera {
   mat4 view;
   vec4 pos;
   vec4 dir;
-  uvec4 dim;
 } camera;
 
 layout(std140, set = 1, binding = 0) readonly buffer tiles_buffer {
@@ -38,8 +37,9 @@ void main() {
   //const bool is_pentagon = tile_index < 12;
   const vec3 n = point.xyz / WORLD_RADIUS_CONSTANT;
 
-  const uint height_layer = compute_height_layer(tile.height);
-  const float final_height = layer_height * height_layer;
+  //const uint height_layer = compute_height_layer(tile.height);
+  //const float final_height = layer_height * height_layer;
+  const float final_height = tile.height;
   const float computed_height = final_height * render_tile_height + 0.3f;
 
   gl_Position = camera.viewproj * (point + vec4(n, 0.0f) * computed_height);

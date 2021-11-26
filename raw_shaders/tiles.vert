@@ -34,7 +34,6 @@ layout(set = 0, binding = 0) uniform Camera {
   mat4 view;
   vec4 pos;
   vec4 dir;
-  uvec4 dim;
 } camera;
 
 layout(std140, set = 2, binding = 0) readonly buffer tiles_buffer {
@@ -100,11 +99,13 @@ void main() {
   // const float layer_height = mountain_height / float(layers_count);
   // const uint height_layer = tile.height < 0.0f ? 0 : (tile.height >= mountain_height ? layers_count : uint(tile.height / layer_height));
   //const float layer_height = 1.0f / float(layers_count);
-  const uint height_layer = compute_height_layer(tile.height);
-  const float final_height = rendering_walls && basement_point ? 0.0f : layer_height * height_layer;
+  //const uint height_layer = compute_height_layer(tile.height);
+  //const float final_height = rendering_walls && basement_point ? 0.0f : layer_height * height_layer;
+  const float final_height = rendering_walls && basement_point ? -1.0f : tile.height;
 
   //const float final_height = tile.height < 0.0f ? 0.0f : tile.height;
-  gl_Position = camera.viewproj * (point + vec4(n, 0.0f) * final_height * render_tile_height); // возможно не 10, а еще чуть чуть поменьше
+  //gl_Position = camera.viewproj * (point + vec4(n, 0.0f) * final_height * render_tile_height); // возможно не 10, а еще чуть чуть поменьше
+  gl_Position = camera.viewproj * (point + vec4(n, 0.0f) * final_height * render_tile_height);
   //gl_Position = camera.viewproj * point;
   //out_uv = uv * 100.0f; // наверное на что нибудь нужно умножить
   out_uv = rendering_walls ? walls_uv : tile_uv;

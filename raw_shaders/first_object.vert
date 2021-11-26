@@ -2,13 +2,14 @@
 
 #extension GL_GOOGLE_include_directive : enable
 #include "../render/shared_structures.h"
+#include "../render/shared_render_utility.h"
 #include "../utils/shared_mathematical_constant.h"
 
 const vec4 object_points[] = {
-  vec4(-1.0f, 1.0f, 0.0f, 1.0f),
-  vec4( 1.0f, 1.0f, 0.0f, 1.0f),
-  vec4(-1.0f,-1.0f, 0.0f, 1.0f),
-  vec4( 1.0f,-1.0f, 0.0f, 1.0f)
+  vec4(-0.5f, 0.5f, 0.0f, 1.0f),
+  vec4( 0.5f, 0.5f, 0.0f, 1.0f),
+  vec4(-0.5f,-0.5f, 0.0f, 1.0f),
+  vec4( 0.5f,-0.5f, 0.0f, 1.0f)
 };
 
 const vec2 object_uv[] = {
@@ -23,7 +24,6 @@ layout(set = 0, binding = 0) uniform camera_uniform {
   mat4 view;
   vec4 pos;
   vec4 dir;
-  uvec4 dim;
 } camera;
 
 layout(set = 0, binding = 1) uniform matrices_uniform {
@@ -33,6 +33,11 @@ layout(set = 0, binding = 1) uniform matrices_uniform {
   mat4 invView;
   mat4 invViewProj;
 } camera_matrices;
+
+layout(set = 0, binding = 2) uniform common_uniform {
+  vec4 cursor_dir;
+  uvec4 dim;
+} additional;
 
 layout(std140, set = 2, binding = 0) readonly buffer tiles_buffer {
   light_map_tile_t tiles[];
@@ -65,6 +70,8 @@ layout(location = 3) out flat float out_tile_height;
 
 const float objects_radius = 1.2f;
 
+float angle_vec(const vec4 v1, const vec4 v2);
+float minimum_distance_sqr(const vec4 s1, const vec4 s2, const vec4 point);
 mat4 translate(const mat4 mat, const vec4 vec);
 mat4 rotate(const mat4 mat, const float angle, const vec4 normal);
 mat4 scale(const mat4 mat, const vec4 vec);
@@ -73,17 +80,16 @@ void main() {
   const uint tile_index  = gl_VertexIndex / PACKED_INDEX_COEF;
   const uint point_index = gl_VertexIndex % PACKED_INDEX_COEF;
   const uint instance_index = gl_InstanceIndex;
-  const vec4 center = tile_points[tiles[tile_index].tile_indices.x];
+  const map_tile_t tile = unpack_data(tiles[tile_index]);
+  const vec4 center = tile_points[tile.center];
+  const vec4 first_point = tile_points[tile.points[0]];
   uint prng_state = prng(tile_index);
-  uint prng_state1 = prng(instance_index);
-  prng_state ^= prng_state1; // вроде как работает неплохо
-  // for (uint i = 1; i < instance_index+1; ++i) { // увеличиваем стейт
-  //   prng_state = prng(prng_state);
-  // }
-
-  const uint additional = prng(prng_state);
+  const uint prng_state1 = prng(instance_index);
+  //prng_state ^= prng_state1; // вроде как работает неплохо
+  prng_state = prng2(prng_state, prng_state1);
   const float val_norm1 = prng_normalize(prng_state);
-  const float val_norm2 = prng_normalize(additional);
+  prng_state = prng(prng_state);
+  const float val_norm2 = prng_normalize(prng_state);
   const vec4 normal = vec4(normalize(center.xyz), 0.0f); // центр к сожалению стоит чуть ближе чем обычные точки
   // нужно найти точку на тайле, мы можем легко найти точку в квадрате
   // но лучше будет искать точку в радиусе
@@ -95,9 +101,10 @@ void main() {
 
   // что на что теперь нужно умножить чтобы получить точку на плоскости?
 
-  const float tile_height = uintBitsToFloat(tiles[tile_index].tile_indices.w);
-  const uint height_layer = compute_height_layer(tile_height);
-  const float final_height = layer_height * height_layer;
+  const float tile_height = tile.height;
+  //const uint height_layer = compute_height_layer(tile_height);
+  //const float final_height = layer_height * height_layer;
+  const float final_height = tile_height;
 
   vec4 x, y;
   if (abs(normal.x) < EPSILON && abs(normal.y) < EPSILON) {
@@ -111,29 +118,88 @@ void main() {
   // первый объект - это объект у которого только одна степерь свободы (как у объектов в думе)
   // второй объект - это объект у которого две степени свободы (билборд) (потестировав, я не уверен нужно ли мне первый тип объектов теперь вообще)
   // сейчас пока что мы сделаем второй объект
-  const uint biome_index = tiles[tile_index].packed_data4[2] >> 24;
+  // решил изменить подход: теперь 3 объекта с какой то вероятностью появляются на биоме
+  // вообще я еще думал что эти данные можно еще использовать для анимаций
+  // я передаю время в юниформ буфер, а время каждого состояния можно положить например в пробабилити
+  const uint biome_index = tile.biome_index >> 24;
   const biome_data_t biome = unpack_data(packed_biome_datas[biome_index]);
-  const float min_scale = biome.min_scale2;
-  const float max_scale = biome.max_scale2;
-  const uint scale_num = prng(additional);
-  const float obj_scale = mix(min_scale, max_scale, prng_normalize(scale_num));
 
-  // тут нужно вычислить несколько матриц
-  const vec4 point = center + x * cos_num + y * sin_num + normal * (final_height * render_tile_height + obj_scale/2); // как то вот так выглядит неплохо
-  mat4 translaion = translate(mat4(1.0f), point);
+  float sum = 0.0f;
+  for (uint i = 0; i < map_biome_objects_count; ++i) { sum += biome.probabilities[i]; }
+  prng_state = prng(prng_state);
+  const float prob = prng_normalize(prng_state) * sum;
+
+  uint index = 0;
+  for (float cumulative = 0.0f; index < map_biome_objects_count && cumulative <= prob; cumulative += biome.probabilities[index], ++index);
+  index -= 1; // index всегда будет стартовать от 1, из-за особенностей условий в цикле выше
+
+  const image_t img = biome.object_textures[index];
+  const float min_scale = biome.scales[index].x;
+  const float max_scale = biome.scales[index].y;
+  prng_state = prng(prng_state);
+  const float obj_scale = mix(min_scale, max_scale, prng_normalize(prng_state));
+
+  // еще я думал что можно добавить дороги, а это означает что нужно проверить дальность с 6 прямыми
+  // прямые как задаются? двумя точками... можно упростить задачу если найти в каком треугольнике находится точка
+  // это ищется видимо по углу
+
+  const vec4 point = center + x * cos_num + y * sin_num;
+
+  // const uint n_count = tile.points[5] == GPU_UINT_MAX ? 5 : 6;
+  // const float external_tile_angle = PI_2 / n_count;
+  // float angle = angle_vec(first_point - center, point - center);         // angle = [0,PI]
+  // angle = cos_num < 0.0f ? angle + PI : angle; /* sin_num or cos_num? */ // angle = [0,2PI]
+  // uint tri_index = 0;
+  // for (float cumulative_angle = 0.0f; tri_index < n_count && cumulative_angle <= angle; cumulative_angle += external_tile_angle, ++tri_index);
+  // tri_index -= 1;
+  // // есть ли в треугольнике tri_index тайла дорога, проверим дистанцию до нее
+  // const vec4 tri_point1 = tile_points[tile.points[tri_index]];
+  // const vec4 tri_point2 = tile_points[tile.points[(tri_index+1)%n_count]];
+  // const float dist_sqr = minimum_distance_sqr(center, (tri_point1+tri_point2) / 2.0f, point);
+  // dist_sqr - квадрат расстояния до дороги, с чем мы его сравниваем?
+  // во первых нас интересует наличие дороги, а во вторых сравниваем с квадратом половины толщины дороги
+  // (const_road_thickness / 2.0f) * (const_road_thickness / 2.0f)
+
+  const vec4 final_point = point + normal * (final_height * render_tile_height + obj_scale);
+
+  mat4 translaion = translate(mat4(1.0f), final_point);
   const mat3 rot = mat3(camera_matrices.invView);
   mat4 rotation = mat4(rot); // говорят что этого достаточно
   mat4 scaling = scale(rotation, vec4(obj_scale, -obj_scale, obj_scale, 0.0f)); // по идее так объекты должны стоять "на ногах"
 
   gl_Position = camera.viewproj * translaion * scaling * (object_points[point_index]);
   out_uv = object_uv[point_index];
-  out_biom_texture = biome.object_texture2;
+  out_biom_texture = img;
 
   // почти сделал биомы, нужно поискать текстурки, сделать камеру, кволити оф лайф в общем себе немного сделать
   // с этим способом у меня скорее всего возникнут проблемы с производительностью
   // нужно начинать делать какую то оптимизацию (в смысле ограничивать частоту кадров, дальность прорисовки и прочее и прочее)
   // а для этого нужно делать настройки, теперь когда я подгружаю текстуры, я могу приступать к отрисовке гербов
   // короче еще много нужно сделать
+}
+
+float minimum_distance_sqr(const vec4 s1, const vec4 s2, const vec4 point) {
+  // Return minimum distance between line segment vw and point p
+  const vec4 dir = s2-s1;
+  const float l2 = dot(dir, dir);  // i.e. |w-v|^2 -  avoid a sqrt
+  // impossible in this case
+  //if (abs(l2) < EPSILON) return distance(point, s1);   // s1 == s2 case
+  // Consider the line extending the segment, parameterized as v + t (w - v).
+  // We find projection of point p onto the line.
+  // It falls where t = [(p-v) . (w-v)] / |w-v|^2
+  // We clamp t from [0,1] to handle points outside the segment vw.
+  const float t = max(0, min(1, dot(point - s1, dir) / l2));
+  const vec4 projection = s1 + t * dir;  // Projection falls on the segment
+  //return distance(point, projection); // can avoid a sqrt
+  const vec4 p_dir = projection - point;
+  return dot(p_dir, p_dir);
+}
+
+float angle_vec(const vec4 v1, const vec4 v2) {
+  const float l1 = dot(v1, v1); // ???
+  const float l2 = dot(v2, v2); // ???
+  const float d = dot(v1, v2);
+  return acos(d / sqrt(l1 * l2));
 }
 
 mat4 translate(const mat4 mat, const vec4 vec) {

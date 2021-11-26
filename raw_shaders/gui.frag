@@ -46,7 +46,7 @@ void main() {
     case IMAGE_TYPE_HERALDY: { // геральдика
       // тут мы передаем индекс геральдики в функцию
       const uint heraldy_index = in_data;
-      const vec4 heraldy_color = get_heraldy_color(heraldy_index, in_uv);
+      const vec4 heraldy_color = get_heraldy_color(heraldy_index, in_uv, GPU_UINT_MAX);
 
       fragment_color = color * heraldy_color;
       break;
@@ -58,7 +58,9 @@ void main() {
       break;
     }
 
-    // что то еще?
+    // что то еще? да должна добавиться текстура похожая на отдельный слой геральдики
+    // то есть текстура и к ней 4 цвета, для чего? может быть легкий способ задизайнить интерфейс
+    //
 
     default: fragment_color = color;
   }

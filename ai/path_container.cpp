@@ -2,7 +2,7 @@
 
 #include "utils/assert.h"
 #include <cstring>
-#include "utils/astar_search.h"
+#include "utils/astar_search_mt.h"
 #include "core/army.h"
 #include "core/hero_troop.h"
 
@@ -28,21 +28,16 @@ namespace devils_engine {
       return cont;
     }
     
-    path_managment::path_managment(const uint32_t &finder_count) : 
-      tmp_path(nullptr), 
-      path_size(0), 
-      start(UINT32_MAX), 
-      end(UINT32_MAX), 
-//       current_status(path_managment::status::idle), 
+    path_managment::path_managment(const uint32_t &finders_count) : 
       task_id(1),
-      finders(new utils::astar_search[finder_count]) 
+      finder(new utils::astar_search_mt(finders_count)) 
     {}
     
     path_managment::~path_managment() {
-      delete [] finders;
+      delete finder;
     }
     
-    void path_managment::find_path(core::army* army, const uint32_t &start, const uint32_t &end) {
+    void path_managment::find_path(path_finding_data* object, const uint32_t &start, const uint32_t &end, const utils::user_data &data, const vertex_cost_f &func) {
       auto pool = global::get<dt::thread_pool>();
       
       // по всей видимости придется пихать сюда все выделение
@@ -52,12 +47,7 @@ namespace devils_engine {
       // как интересно это сделано в других играх? мы если статус переносим в армии, то нам ни к чему атомик_бул
       // мы просто обойдем все объекты и поставим там стоп
       
-      if (army->has_path()) free_path(army->path);
-      army->path = nullptr;
-      army->start_tile = start;
-      army->end_tile = end;
-      army->path_size = 0;
-      pool->submitbase([this, army, start, end] () {
+      pool->submitbase([this, object, start = start, end = end, data = data, func = func] () {
         size_t local_task_id = task_id.fetch_add(1);
         if (local_task_id == 0) local_task_id = task_id.fetch_add(1);
         
@@ -65,58 +55,35 @@ namespace devils_engine {
         // если идентификаторы не совпадают, то выходим
         // так по идее ничего не нужно будет ждать слава богам хаоса
         
-        utils::atomic_max(army->path_task, local_task_id);
+        utils::atomic_max(object->path_task, local_task_id);
+        if (object->path_task != local_task_id) return;
         
-        if (army->path_task != local_task_id) return;
+        auto old_path = object->path.exchange(nullptr);
+        if (old_path != nullptr && old_path != reinterpret_cast<path_container*>(SIZE_MAX)) free_path(old_path);
+        object->start_tile = start;
+        object->end_tile = end;
+        object->path_size = 0;
                        
         PRINT("find army path")
         
         size_t path_size = 0;
-        auto path = find_path_raw(&army->path_task, start, end, local_task_id, path_size);
-        if (army->path_task != local_task_id) return;
-        army->path_task = 0;
+        auto path = find_path_raw(&object->path_task, start, end, local_task_id, data, func, path_size);
+        if (object->path_task != local_task_id) { 
+          if (path_size != 0) free_path(path);
+          return; 
+        }
+        object->path_task = 0;
         
         path = path == nullptr ? reinterpret_cast<decltype(path)>(SIZE_MAX) : path;
         
         // как посчитать? добавить еще переменных в путь?
         // тут по идее нужно просто добавить в путь данные о весах
         
-        army->path_size = path_size;
-        army->current_path = 0;
-        army->start_tile = UINT32_MAX;
-        army->end_tile = UINT32_MAX;
-        army->path = path; // если путь не найден то здесь будет нуллптр, нужно придумать какой то другой способ отличить готовый путь от ненайденного
-//         current_status = status::finish;
-//         army->path_state = core::path_finding_state::idle;
-        //army->path_task = 0; // или не надо? может сбить код выше
-        
-        // после поиска пути мы просто должны расчитать какой путь мы можем пройти и его стоимость
-        // затем, когда игрок нажимает на кнопку, единственное что мы делаем это вычитаем стоимость 
-        // и ставим армию в верное положение, здесь только одна проблема как учесть тайл на котором кто то будет стоять?
-      });
-    }
-    
-    void path_managment::find_path(core::hero_troop* troop, const uint32_t &start, const uint32_t &end) {
-      auto pool = global::get<dt::thread_pool>();
-      
-//       current_status = status::finding_path;
-      troop->path = nullptr;
-      pool->submitbase([this, troop, start, end] () {
-        const size_t local_task_id = task_id.fetch_add(1);
-        utils::atomic_max(troop->path_task, local_task_id);
-        
-        if (troop->path_task != local_task_id) return;
-        size_t path_size = 0;
-        auto path = find_path_raw(&troop->path_task, start, end, local_task_id, path_size);
-        if (troop->path_task != local_task_id) return;
-        path = path == nullptr ? reinterpret_cast<decltype(path)>(SIZE_MAX) : path;
-        
-        troop->start_tile = start;
-        troop->end_tile = end;
-        troop->path_size = path_size;
-        troop->current_path = 0;
-        troop->path = path;
-//         current_status = status::finish;
+        object->path_size = path_size;
+        object->current_path = 0;
+        object->start_tile = UINT32_MAX;
+        object->end_tile = UINT32_MAX;
+        object->path = path; // если путь не найден то здесь будет нуллптр, нужно придумать какой то другой способ отличить готовый путь от ненайденного
       });
     }
     
@@ -135,88 +102,77 @@ namespace devils_engine {
     // + так мы можем по идее прикинуть пути так чтобы они не заканчивались на одном тайле все
 //     void path_managment::choosed_path() { choosed_tile = true; }
 
-    path_container* path_managment::find_path_raw(const uint32_t &start, const uint32_t &end, size_t &path_size) {
+    path_container* path_managment::find_path_raw(const uint32_t &start, const uint32_t &end, const utils::user_data &data, const vertex_cost_f &func, size_t &path_size) {
       std::atomic<size_t> tmp(0);
-      return find_path_raw(&tmp, start, end, 0, path_size);
+      return find_path_raw(&tmp, start, end, 0, data, func, path_size);
     }
     
-    path_container* path_managment::find_path_raw(const std::atomic<size_t>* task_id_container, const uint32_t &start, const uint32_t &end, const size_t &current_task_id, size_t &path_size) {
-      auto pool = global::get<dt::thread_pool>();
-      const uint32_t id = pool->thread_index(std::this_thread::get_id());
+    path_container* path_managment::find_path_raw(
+      const std::atomic<size_t>* task_id_container, 
+      const uint32_t &start, const uint32_t &end, 
+      const size_t &current_task_id, 
+      const utils::user_data &data,
+      const vertex_cost_f &func,
+      size_t &path_size
+    ) {
+      auto searcher = finder;
+      searcher->set(start, end, data, func);
       
-      auto searcher = &finders[id];
-      searcher->set(start, end, [] (const uint32_t &tile_index1, const uint32_t &tile_index2) -> bool {
-        auto map = global::get<systems::map_t>()->map;
-//         const auto &tile_data1 = render::unpack_data(map->get_tile(tile_index1));
-        const auto &tile_data2 = render::unpack_data(map->get_tile(tile_index2));
-        
-        if (tile_data2.height > 0.5f) return false; // на гору подняться нельзя
-        if (tile_data2.height < 0.0f) return false; // по воде пройти пока тоже нельзя
-        
-        (void)tile_index1;
-        return true;
-      });
-      
-      size_t counter = 0;
-//       bool ignore_status = false;
-      auto status = utils::astar_search::state::searching;
-      while (status == utils::astar_search::state::searching) {
+      auto status = utils::astar_search_mt::state::searching;
+      while (status == utils::astar_search_mt::state::searching) {
         if (*task_id_container != current_task_id) searcher->cancel();
         status = searcher->step();
-        ++counter;
-        PRINT_VAR("step counter", counter)
+        PRINT_VAR("step counter", searcher->step_count())
       }
       
       path_size = 0;
-      if (status == utils::astar_search::state::failed) return nullptr;
+      if (status == utils::astar_search_mt::state::failed) return nullptr;
       
-      if (status != utils::astar_search::state::succeeded) {
+      if (status != utils::astar_search_mt::state::succeeded) {
         throw std::runtime_error("Searching error");
       }
       
-      auto solution_array = searcher->solution();
-      const size_t final_path_size = solution_array.size();
+      uint32_t counter = 0;
+      uint32_t final_size = 0;
+      auto cur_node = searcher->solution_start();
       auto path_start = path_pool.create();
-      auto tmp = path_start;
-      for (uint32_t i = 0, counter = 0; i < solution_array.size(); ++i, ++counter) {
+      auto cur_path = path_start;
+      while (cur_node != nullptr) {
         if (counter >= path_container::container_size) {
           auto ptr = path_pool.create();
-          tmp->next = ptr;
-          tmp = ptr;
+          cur_path->next = ptr;
+          cur_path = ptr;
           counter = 0;
         }
         
-        // тут желательно сохранять не g, а стоимость с тайла на тайл
-        tmp->tile_path[counter].cost = solution_array[i]->g;
-        tmp->tile_path[counter].tile = solution_array[i]->tile_index;
+        cur_path->tile_path[counter].cost = cur_node->g;
+        cur_path->tile_path[counter].tile = cur_node->tile_index;
+        cur_node = cur_node->child;
+        
+        ++counter;
+        ++final_size;
       }
+      
+//       const auto &solution_array = searcher->solution();
+//       const size_t final_path_size = solution_array.size();
+//       auto path_start = path_pool.create();
+//       auto tmp = path_start;
+//       for (uint32_t i = 0, counter = 0; i < solution_array.size(); ++i, ++counter) {
+//         if (counter >= path_container::container_size) {
+//           auto ptr = path_pool.create();
+//           tmp->next = ptr;
+//           tmp = ptr;
+//           counter = 0;
+//         }
+//         
+//         // тут желательно сохранять не g, а стоимость с тайла на тайл
+//         tmp->tile_path[counter].cost = solution_array[i]->g;
+//         tmp->tile_path[counter].tile = solution_array[i]->tile_index;
+//       }
       
       searcher->free_solution();
       
-      // кажется тайлы строго расположены дрг за другом по стоимости
-      // нужно ли тут что то считать? мне кажется что врядли
-//       auto first_container = path_start;
-//       for (size_t i = 0; i < final_path_size; ++i) {
-//         //const size_t container_index = i / ai::path_container::container_size;
-//         const size_t piece_index = i % ai::path_container::container_size;
-//         PRINT_VAR("cost: ", first_container->tile_path[piece_index].cost)
-//         
-//         if (piece_index == ai::path_container::container_size-1) first_container = first_container->next;
-//       }
-      
-//       army->path_size = solution_array.size();
-//       army->path = path_start;
-      
-      // в других стратегиях сразу считалось что мы можем пройти, а что нет
-      // тут так же имеет смысл сделать, чтобы потом просто выставить армию на нужный тайл
-      // так можно не пихать отдельную работу в другую задачу
-      // + ко всему у нас сразу там хранится стоимость которую можно использовать 
-      // нужно просто добавить переменную с ходом и где то под рукой иметь функцию весов
-      // (это должна быть одна и таже функция что и веса для поиска)
-      // хотя наверное она мне не потребуется
-      
-//       (void)army;
-      path_size = final_path_size;
+      path_size = final_size;
       return path_start;
     }
   }

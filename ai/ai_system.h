@@ -10,7 +10,7 @@ namespace devils_engine {
   namespace systems {
     class ai {
     public:
-      inline ai(const size_t &size) : container(size) {}
+      inline ai(const size_t &size) : container(size, 8) {}
       inline ~ai() {
         for (auto s : sub_systems) {
           container.destroy(s);

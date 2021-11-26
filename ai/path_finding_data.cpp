@@ -2,9 +2,10 @@
 
 #include "utils/globals.h"
 #include "utils/systems.h"
-#include "bin/map.h"
+// #include "bin/map.h"
 #include "core/army.h"
 #include "core/hero_troop.h"
+#include "core/context.h"
 
 namespace devils_engine {
   namespace ai {
@@ -25,7 +26,8 @@ namespace devils_engine {
       if (start >= unit->path_size) return 0;
       if (!unit->has_path()) return 0;
       
-      auto map = global::get<systems::map_t>()->map;
+//       auto map = global::get<systems::map_t>()->map;
+      auto ctx = global::get<systems::map_t>()->core_context;
       const uint32_t current_container = start / ai::path_container::container_size;
       const uint32_t current_index     = start % ai::path_container::container_size;
       const float current_cost = ai::advance_container(unit->path, current_container)->tile_path[current_index].cost;
@@ -67,11 +69,18 @@ namespace devils_engine {
         const uint32_t container = (next_path_index-1) / ai::path_container::container_size;
         const uint32_t index     = (next_path_index-1) % ai::path_container::container_size;
         const uint32_t next_tile_index = ai::advance_container(unit->path, container)->tile_path[index].tile;
-        const uint32_t another_army_index = map->get_tile_objects_index(next_tile_index, 4);
-        const uint32_t structure_index = map->get_tile_objects_index(next_tile_index, 0);
-        const bool has_not_another_army = another_army_index == UINT32_MAX;
+        auto tile = ctx->get_tile_ptr(next_tile_index);
+        //const uint32_t another_army_index = map->get_tile_objects_index(next_tile_index, 4);
+        //const uint32_t structure_index = map->get_tile_objects_index(next_tile_index, 0);
+        //const bool has_not_another_army = another_army_index == UINT32_MAX;
+        //const bool has_not_structure = structure_index == UINT32_MAX;
+        const size_t another_army_token = tile->army_token;
+        const uint32_t city_index = tile->city;
+        const uint32_t structure_index = tile->struct_index;
+        const bool has_not_another_army = another_army_token == SIZE_MAX;
+        const bool has_not_city = city_index == UINT32_MAX;
         const bool has_not_structure = structure_index == UINT32_MAX;
-        if (has_not_another_army && has_not_structure) break;
+        if (has_not_another_army && has_not_structure && has_not_city) break;
         --next_path_index;
       }
       

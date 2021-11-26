@@ -39,10 +39,11 @@ namespace devils_engine {
       // и либо начать строительство либо не найти подходящее здание
 
       std::vector<core::city*> cities;
-      auto current_title = c->realms[core::character::self]->titles;
-      while (current_title != nullptr) {
-        if (current_title->type == core::titulus::type::city) cities.push_back(current_title->get_city());
-        current_title = current_title->next;
+      auto current_title = c->self->titles;
+      auto next_title = current_title;
+      while (next_title != nullptr) {
+        if (next_title->type() == core::titulus::type::city) cities.push_back(next_title->city);
+        next_title = utils::ring::list_next<utils::list_type::titles>(next_title, current_title);
       }
 
       std::vector<double[core::city_type::maximum_buildings]> probabilities(cities.size());
@@ -60,8 +61,8 @@ namespace devils_engine {
 
         auto city_type = city->type;
         for (size_t i = 0; i < core::city_type::maximum_buildings && city_type->buildings[i] != nullptr; ++i) {
-          if (city->complited_buildings.get(i)) continue;
-          if (!city->available_buildings.get(i)) continue;
+          if (city->constructed(i)) continue;
+          if (!city->available(i)) continue;
 
           // вот здание которое мы можем построить
           // нам нужно как то понять что мы будем строить именно это здание
@@ -74,13 +75,7 @@ namespace devils_engine {
           // вероятность строительства дорогого здания с достаточным количеством денег больше чем дешевого с достаточным
 
           auto building = city_type->buildings[i];
-          float cost = 0.0f;
-          for (size_t j = 0; j < core::building_type::maximum_stat_modifiers; ++j) {
-            if (building->mods[j].type != core::unit_type::character) continue;
-            if (building->mods[j].stat != core::character_resources::money) continue; // думаю что нужно вытащить стоимость
-            cost = building->mods[j].mod.fval;
-            break;
-          }
+          const float cost = building->money_cost;
 
           float money_k = cost / money;
           float inv_k = 1.0f - money_k;

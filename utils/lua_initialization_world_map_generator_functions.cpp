@@ -1,16 +1,14 @@
 #include "lua_initialization_hidden.h"
 
 #include "bin/image_parser.h"
-#include "bin/data_parser.h"
+// #include "bin/data_parser.h"
 #include "bin/heraldy_parser.h"
 #include "magic_enum_header.h"
 #include "serializator_helper.h"
 #include "systems.h"
 #include "bin/map_creator.h"
 #include "globals.h"
-
-#define TO_LUA_INDEX(index) ((index)+1)
-#define FROM_LUA_INDEX(index) ((index)-1)
+#include "core/structures_header.h"
 
 namespace devils_engine {
   namespace utils {
@@ -43,6 +41,13 @@ namespace devils_engine {
     // ресайз, сет
     
     #define ADD_FUNC(type) size_t add_##type##2(const sol::table &t) {                                \
+      const bool ret = core::validate_##type(global::get<world_serializator>()->get_data_count(world_serializator::type), t); \
+      if (!ret) throw std::runtime_error(std::string(#type) + " validation error");                   \
+      std::string value = serialize_table(t);                                                         \
+      return TO_LUA_INDEX(global::get<world_serializator>()->add_data(world_serializator::type, std::move(value))); \
+    }
+    
+    #define ADD_FUNC2(type) size_t add_##type##2(const sol::table &t) {                                \
       const bool ret = validate_##type(global::get<world_serializator>()->get_data_count(world_serializator::type), t); \
       if (!ret) throw std::runtime_error(std::string(#type) + " validation error");                   \
       std::string value = serialize_table(t);                                                         \
@@ -57,8 +62,8 @@ namespace devils_engine {
       global::get<world_serializator>()->add_data(world_serializator::type, std::move(value));     \
     }
     
-    ADD_FUNC(image)
-    ADD_FUNC(heraldy_layer)
+    ADD_FUNC2(image)
+    ADD_FUNC2(heraldy_layer)
     ADD_FUNC(biome)
     ADD_FUNC(province)
     ADD_FUNC(building_type)
@@ -68,9 +73,10 @@ namespace devils_engine {
 //     ADD_FUNC(modificator)
 //     ADD_FUNC(troop_type)
 //     ADD_FUNC(decision)
-//     ADD_FUNC(religion_group)
-//     ADD_FUNC(religion)
-//     ADD_FUNC(culture)
+    ADD_FUNC(religion_group)
+    ADD_FUNC(religion)
+    ADD_FUNC(culture_group)
+    ADD_FUNC(culture)
 //     ADD_FUNC(law)
 //     ADD_FUNC(event)
     ADD_FUNC(title)
@@ -88,9 +94,10 @@ namespace devils_engine {
 //     LOAD_FUNC(modificator)
 //     LOAD_FUNC(troop_type)
 //     LOAD_FUNC(decision)
-//     LOAD_FUNC(religion_group)
-//     LOAD_FUNC(religion)
-//     LOAD_FUNC(culture)
+    LOAD_FUNC(religion_group)
+    LOAD_FUNC(religion)
+    LOAD_FUNC(culture_group)
+    LOAD_FUNC(culture)
 //     LOAD_FUNC(law)
 //     LOAD_FUNC(event)
     LOAD_FUNC(title)
@@ -135,17 +142,21 @@ namespace devils_engine {
       
       SET_UTILS_ADD_FUNC(image)
       SET_UTILS_ADD_FUNC(heraldy_layer)
-//       SET_UTILS_ADD_FUNC(biome)
+      SET_UTILS_ADD_FUNC(biome)
       SET_UTILS_ADD_FUNC(province)
       SET_UTILS_ADD_FUNC(building_type)
       SET_UTILS_ADD_FUNC(city_type)
       SET_UTILS_ADD_FUNC(city)
       SET_UTILS_ADD_FUNC(title)
       SET_UTILS_ADD_FUNC(character)
+      SET_UTILS_ADD_FUNC(culture)
+      SET_UTILS_ADD_FUNC(culture_group)
+      SET_UTILS_ADD_FUNC(religion)
+      SET_UTILS_ADD_FUNC(religion_group)
       
       SET_UTILS_LOAD_FUNC(image)
       SET_UTILS_LOAD_FUNC(heraldy_layer)
-//       SET_UTILS_LOAD_FUNC(biome)
+      SET_UTILS_LOAD_FUNC(biome)
       SET_UTILS_LOAD_FUNC(province)
       SET_UTILS_LOAD_FUNC(building_type)
       SET_UTILS_LOAD_FUNC(city_type)
@@ -153,13 +164,17 @@ namespace devils_engine {
       utils.set_function("load_cities", &load_city2);
       SET_UTILS_LOAD_FUNC(title)
       SET_UTILS_LOAD_FUNC(character)
+      SET_UTILS_LOAD_FUNC(culture)
+      SET_UTILS_LOAD_FUNC(culture_group)
+      SET_UTILS_LOAD_FUNC(religion)
+      SET_UTILS_LOAD_FUNC(religion_group)
       
       utils.set_function("resize_characters", [] (const size_t &size) {
         return global::get<world_serializator>()->resize_data(world_serializator::character, size);
       });
       
       utils.set_function("set_character", [] (const uint32_t &index, const sol::table &t) {
-        const bool ret = validate_character(FROM_LUA_INDEX(index), t);
+        const bool ret = core::validate_character(FROM_LUA_INDEX(index), t);
         if (!ret) throw std::runtime_error("character validation error");
         std::string value = serialize_table(t);
         return global::get<world_serializator>()->set_data(world_serializator::character, FROM_LUA_INDEX(index), value);

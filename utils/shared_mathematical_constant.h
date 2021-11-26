@@ -7,8 +7,8 @@
 #define PI_Q (PI / 4.0)     /* 0.78539816339744830962 */
 #define PI_E (PI / 8.0)
 
-#define DEG_TO_RAD(deg) ((deg * PI) / 180.0)
-#define RAD_TO_DEG(rad) ((rad * 180.0) / PI)
+#define DEG_TO_RAD(deg) (((deg) * PI) / 180.0)
+#define RAD_TO_DEG(rad) (((rad) * 180.0) / PI)
 
 #define EPSILON 0.000001f
 #define PASSABLE_ANGLE_DEGREE 45.0f
@@ -21,5 +21,13 @@
 
 #define MINIMUM_FRUSTUM_DIST 150.0
 #define MAXIMUM_FRUSTUM_DIST 256.0
+
+#ifdef __cplusplus
+  #include <limits>
+  namespace devils_engine {
+    constexpr double dNAN = std::numeric_limits<double>::quiet_NaN();
+    constexpr float fNAN = std::numeric_limits<float>::quiet_NaN();
+  }
+#endif
 
 #endif

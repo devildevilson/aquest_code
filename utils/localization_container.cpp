@@ -2,8 +2,12 @@
 
 #include <array>
 #include <iostream>
+#include <charconv>
 #include "shared_mathematical_constant.h"
 #include "assert.h"
+#include "constexpr_funcs.h"
+
+// имеет смысл поискать число в ключе, и тогда мы можем избавиться от чисел в персонаж
 
 namespace std {
   template <>
@@ -18,21 +22,26 @@ namespace devils_engine {
   namespace localization {
     const size_t unpacked_array_size = 64;
     
-    size_t unpack_keys(const std::string_view &keys, std::array<std::string_view, unpacked_array_size> &unpacked_keys) {
-      size_t array_size = 0;
-      size_t pos = 0;
-      while (pos != std::string::npos) {
-        const size_t new_pos = keys.find('.', pos);
-        const auto str = keys.substr(pos, new_pos-pos);
-        const size_t index = array_size;
-        if (index >= unpacked_array_size) throw std::runtime_error("Maximum table depth is " + std::to_string(unpacked_array_size));
-        ++array_size;
-        unpacked_keys[index] = str;
-        pos = new_pos == std::string::npos ? new_pos : new_pos+1;
-      }
-      
-      return array_size;
+    bool check_number(const std::string_view &str, double &num) {
+      const auto res = std::from_chars(str.begin(), str.end(), num);
+      return res.ec != std::errc::invalid_argument && res.ec != std::errc::result_out_of_range;
     }
+    
+//     size_t unpack_keys(const std::string_view &keys, std::array<std::string_view, unpacked_array_size> &unpacked_keys) {
+//       size_t array_size = 0;
+//       size_t pos = 0;
+//       while (pos != std::string::npos) {
+//         const size_t new_pos = keys.find('.', pos);
+//         const auto str = keys.substr(pos, new_pos-pos);
+//         const size_t index = array_size;
+//         if (index >= unpacked_array_size) throw std::runtime_error("Maximum table depth is " + std::to_string(unpacked_array_size));
+//         ++array_size;
+//         unpacked_keys[index] = str;
+//         pos = new_pos == std::string::npos ? new_pos : new_pos+1;
+//       }
+//       
+//       return array_size;
+//     }
     
     container::locale::locale() : container(0) {}
     container::locale::locale(const std::string_view &str_locale) : container(0) {
@@ -90,38 +99,64 @@ namespace devils_engine {
       }
       
       std::array<std::string_view, unpacked_array_size> unpacked_keys;
-      const size_t size = unpack_keys(key, unpacked_keys);
+      const size_t size = divide_token(key, ".", unpacked_array_size, unpacked_keys.data());
+      //const size_t size = unpack_keys(key, unpacked_keys);
       
       sol::table &base_table = itr->second;
       for (size_t i = 0; i < size-1; ++i) {
-        auto proxy = base_table[unpacked_keys[i]];
-        if (proxy.valid() && proxy.get_type() != sol::type::table) throw std::runtime_error("Bad value type. Key " + std::string(unpacked_keys[i]));
+        const auto current_key = unpacked_keys[i];
+        
+        double num = 0.0;
+        if (check_number(current_key, num)) {
+          auto proxy = base_table[num];
+          if (proxy.valid() && proxy.get_type() != sol::type::table) throw std::runtime_error("Bad value type. Key " + std::string(current_key));
+          base_table = proxy.get<sol::table>();
+          continue;
+        }
+        
+        auto proxy = base_table[current_key];
+        if (proxy.valid() && proxy.get_type() != sol::type::table) throw std::runtime_error("Bad value type. Key " + std::string(current_key));
         base_table = proxy.get_or_create<sol::table>();
       }
       
       const auto &last_key = unpacked_keys.back();
+      double num = 0.0;
+      if (check_number(last_key, num)) { base_table[num] = obj; return; }
       base_table[last_key] = obj;
     }
     
     sol::object container::get(const locale &loc, const std::string_view &key) {
-      auto nil_object = sol::make_object(v, sol::nil);
-      if (key.empty()) return nil_object;
+      if (key.empty()) return sol::object(sol::nil);
       
       auto itr = localization.find(loc);
-      if (itr == localization.end()) return nil_object;
+      if (itr == localization.end()) return sol::object(sol::nil);
       
       std::array<std::string_view, unpacked_array_size> unpacked_keys;
-      const size_t size = unpack_keys(key, unpacked_keys);
+      const size_t size = divide_token(key, ".", unpacked_array_size, unpacked_keys.data());
+      //const size_t size = unpack_keys(key, unpacked_keys);
       
       sol::table &base_table = itr->second;
       for (size_t i = 0; i < size-1; ++i) {
-        auto proxy = base_table[unpacked_keys[i]];
-        if (!proxy.valid()) return nil_object;
-        if (proxy.valid() && proxy.get_type() != sol::type::table) return nil_object;
+        const auto current_key = unpacked_keys[i];
+        
+        double num = 0.0;
+        if (check_number(current_key, num)) {
+          auto proxy = base_table[num];
+          if (!proxy.valid()) return sol::object(sol::nil);
+          if (proxy.valid() && proxy.get_type() != sol::type::table) return sol::object(sol::nil);
+          base_table = proxy.get<sol::table>();
+          continue;
+        }
+        
+        auto proxy = base_table[current_key];
+        if (!proxy.valid()) return sol::object(sol::nil);
+        if (proxy.valid() && proxy.get_type() != sol::type::table) return sol::object(sol::nil);
         base_table = proxy.get<sol::table>();
       }
       
       const auto &last_key = unpacked_keys.back();
+      double num = 0.0;
+      if (check_number(last_key, num)) return base_table[num];
       return base_table[last_key];
     }
     
@@ -134,7 +169,7 @@ namespace devils_engine {
       for (const auto &pair : localization) {
         const std::string loc_key = std::string(pair.first.str());
         const std::string table = f(pair.second);
-        container += loc_key + "=" + table;
+        container += loc_key + "=" + table + ",";
       }
       
       container += "}";

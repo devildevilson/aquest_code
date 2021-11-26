@@ -1,6 +1,8 @@
 #ifndef QUEST_STATES_H
 #define QUEST_STATES_H
 
+#include <string_view>
+#include <functional>
 #include "quest_state.h"
 
 namespace sol {
@@ -9,12 +11,18 @@ namespace sol {
 
 namespace devils_engine {
   namespace utils {
+    typedef void (*loading_piece_p) ();
+    using loading_function = std::function<void(const std::string &, const size_t &, quest_state*, quest_state*)>;
+    
     class main_menu_loading_state : public quest_state {
     public:
       main_menu_loading_state();
       void enter(quest_state* prev_state) override;
       uint32_t update(const size_t &time, quest_state* prev_state) override;
       void clean(quest_state* next_state) override;
+//     private:
+//       static const std::string_view step_names[];
+//       static const loading_function steps[];
     };
     
     class main_menu_state : public quest_state {
@@ -31,6 +39,9 @@ namespace devils_engine {
       void enter(quest_state* prev_state) override;
       uint32_t update(const size_t &time, quest_state* prev_state) override;
       void clean(quest_state* next_state) override;
+//     private:
+//       static const std::string_view step_names[];
+//       static const loading_function steps[];
     };
     
     class map_creation_state : public quest_state {

@@ -6,9 +6,6 @@
 #include "globals.h"
 #include "battle_map_enum.h"
 
-#define FROM_LUA_INDEX(index) (index-1)
-#define TO_LUA_INDEX(index) (index+1)
-
 namespace devils_engine {
   namespace utils {
     void set_tiles_color(core::map* self, const sol::table t) {

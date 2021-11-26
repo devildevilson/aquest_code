@@ -43,6 +43,7 @@ namespace devils_engine {
       double closed(const double &min, const double &max);
       bool probability(const double &val);
       double gaussian_distribution(const double &mean, const double &dev);
+      size_t weighted_distribution(const size_t &size, const double* weights);
     };
   }
 }

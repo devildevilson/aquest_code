@@ -89,9 +89,23 @@ namespace devils_engine {
         }
         
         serpent = ret.as<sol::table>();
-        auto proxy = serpent["line"];
+        auto proxy = serpent["dump"];
         if (!proxy.valid() || proxy.get_type() != sol::type::function) throw std::runtime_error("Bad serpent table");
         serpent_line = proxy.get<sol::function>();
+        serpent_opts = lua.create_table_with(
+          "compact", true,
+          "fatal", true,
+          //"sparse", true,
+          "nohuge", true,
+          "nocode", true,
+          "sortkeys", false,
+          "comment", false,
+          "valtypeignore", lua.create_table_with(
+            "function", true,
+            "thread", true,
+            "userdata", true
+          )
+        );
       }
     }
     
@@ -181,13 +195,13 @@ namespace devils_engine {
       if (!t.valid() || t.empty()) return "";
       if (t.lua_state() != lua) throw std::runtime_error("Table from another state");
       
-      auto opts = lua.create_table_with(
-        "compact", true,
-        "fatal",   true, 
-        "comment", false
-      );
+//       auto opts = lua.create_table_with(
+//         "compact", true,
+//         "fatal",   true, 
+//         "comment", false
+//       );
       
-      auto ret = serpent_line(t, opts);
+      auto ret = serpent_line(t, serpent_opts);
       if (!ret.valid()) {
         sol::error err = ret;
         std::cout << err.what();
@@ -199,7 +213,8 @@ namespace devils_engine {
     }
     
     sol::table interface_container::deserialize_table(const std::string &str) {
-      auto ret = lua.script("return " + str);
+      //auto ret = lua.script("return " + str);
+      auto ret = lua.script(str); // теперь строка хранится в виде скрипта (do local _={};return _;end)
       if (!ret.valid()) {
         sol::error err = ret;
         std::cout << err.what();
@@ -212,7 +227,7 @@ namespace devils_engine {
     
     void interface_container::get_fonts() {
       for (uint32_t i = 0; i < fonts::count; ++i) {
-        const auto font = sol::make_light(ctx->fonts[i]);
+        auto font = sol::make_light(ctx->fonts[i]);
         fonts[i] = get_font(font);
       }
     }

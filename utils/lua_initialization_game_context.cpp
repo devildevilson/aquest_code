@@ -19,15 +19,11 @@ namespace devils_engine {
         "tile_index", sol::readonly_property([] (const game::context* self) {
           return TO_LUA_INDEX(self->traced_tile_index);
         }),
-        "tile_index_dist", sol::readonly_property([] (const game::context* self) {
-          return self->traced_tile_dist;
-        }),
+        "tile_index_dist", &game::context::traced_tile_dist,
         "heraldy_tile_index", sol::readonly_property([] (const game::context* self) {
           return TO_LUA_INDEX(self->traced_heraldy_tile_index);
         }),
-        "heraldy_tile_index_dist", sol::readonly_property([] (const game::context* self) {
-          return self->traced_tile_dist;
-        }),
+        "heraldy_tile_index_dist", &game::context::traced_heraldy_dist,
 //         "new_state", sol::readonly_property(&game::context::new_state),
         "player_character", sol::readonly_property(&game::context::player_character),
         "is_loading", &game::context::is_loading,

@@ -1,16 +1,38 @@
 #include "lua_initialization_hidden.h"
 
+#include <queue>
+
 #include "render/shared_render_utility.h"
+
+#include "localization_container.h"
 #include "magic_enum_header.h"
 #include "linear_rng.h"
-#include "bin/core_structures.h"
 #include "lua_environment.h"
 #include "globals.h"
 #include "systems.h"
-#include "localization_container.h"
+#include "fmt/format.h"
+#include "core/structures_header.h"
+#include "core/stats.h"
+#include "core/stats_table.h"
+#include "core/realm_mechanics_arrays.h"
+#include "bin/map.h"
+#include "ai/path_container.h"
+
+#define DEFAULT_LUA_REF_COPY_SIZE 256
+#define DEFAULT_ONE_FUNCTION_MAXIMUM_CALLS 256
+
+#define CHECK_ERROR(ret) if (!ret.valid()) {       \
+  sol::error err = ret;                            \
+  std::cout << err.what();                         \
+  luaL_error(s, "Catched lua error");              \
+}
 
 namespace devils_engine {
   namespace utils {
+    constexpr bool find_substr(const std::string_view &str, const std::string_view &sub) {
+      return str.find(sub) != std::string_view::npos;
+    }
+    
     static double create_pair_u32f32(const uint32_t &u32, const float &f32) {
       union convert { uint64_t u; double d; };
       const uint32_t &data = glm::floatBitsToUint(f32);
@@ -53,7 +75,32 @@ namespace devils_engine {
       return std::abs(double(int64_t(num)) - num) < EPSILON;
     }
     
-    static std::string compose_string(const std::string_view &sym, const sol::variadic_args &args) {
+    size_t count_func(sol::this_state this_s, const sol::object &iterable) {
+      sol::state_view s = this_s;
+      size_t func_counter = 0;
+      if (iterable.get_type() == sol::type::table) {
+        const auto &table = iterable.as<sol::table>();
+        for (const auto &pair : table) { ++func_counter; (void)pair; }
+      } else if (iterable.get_type() == sol::type::string) {
+        const auto &str = iterable.as<std::string_view>();
+        func_counter = str.size();
+      } else if (iterable.get_type() == sol::type::function) {
+        const auto &iterable_func = iterable.as<sol::function>();
+        const auto &itr_ret = iterable_func(); CHECK_ERROR_THROW(itr_ret);
+        std::tuple<sol::object, sol::object> current = itr_ret;
+        while (std::get<0>(current).valid() && std::get<0>(current).get_type() != sol::type::nil) {
+          ++func_counter;
+          const auto &itr_ret = iterable_func(); CHECK_ERROR_THROW(itr_ret);
+          current = itr_ret;
+        }
+      } else throw std::runtime_error("utils.count: bad iterable input");
+      
+      return func_counter;
+    }
+    
+    // вообще имеет смысл тут передать формат и скормить это дело все в fmt
+    // формат вида фмт то есть выглядит примерно так "{} {}'{}"
+    static std::string compose_string(const std::string_view &format, const sol::variadic_args &args) {
       // тут мы должны получать строки из локализации и соединять их в одну через пробел (через пробел ли?)
       // правила соединения строк могут быть разными, но с друго стороны эта функция тупо делает компоновку строк 
       // наиболее быстро и эффективно (тут мы хотя бы память заранее задаем), в локализации у нас может вернуться таблица
@@ -61,118 +108,32 @@ namespace devils_engine {
       // а хотя мы можем скармливать строчку вида: id1.id2.3, но нам соответственно нужно будет определить что перед нами число, 
       // а не символ строки, ну хотя нейминг может быть поразному устроен, хотя лучше наверное индекс все же числом получать
       
+      // короч теперь я могу получить что то вразумительное из локализации даже скормив строчку вида table1.212.table2
+      // поэтому имеет смысл ожидать здесь строку в любом случае
+      
       auto loc = global::get<systems::core_t>()->loc.get();
       
-      size_t argument_counter = 1;
+      assert(format.back() != '\0');
+      
+      const size_t max_count = 256;
       size_t string_count = 0;
-      std::array<std::pair<std::string_view, double>, 512> strings;
+      std::array<fmt::format_args::format_arg, max_count> strings;
       for (const auto &obj : args) {
-        const size_t current_arg_index = argument_counter;
-        ++argument_counter;
-        
-        if (obj.get_type() == sol::type::string) {
-          const std::string_view &str = obj.as<std::string_view>();
-          const size_t index = string_count;
-          ++string_count;
-          strings[index] = std::make_pair(str, std::numeric_limits<double>::quiet_NaN());
-          continue;
+        if (obj.get_type() != sol::type::string) throw std::runtime_error("compose_string expecting only strings");
+        auto str = obj.as<std::string_view>();
+        if (find_substr(str, ".")) {
+          const auto obj = loc->get(devils_engine::localization::container::get_current_locale(), str);
+          if (obj.get_type() != sol::type::string) throw std::runtime_error("Got bad object from localization container using key " + std::string(str));
+          str = obj.as<std::string_view>();
         }
         
-        if (obj.get_type() == sol::type::table) {
-          const sol::table t = obj.as<sol::table>();
-          const auto proxy1 = t[1];
-          if (!proxy1.valid() || proxy1.get_type() != sol::type::string) {
-            throw std::runtime_error("Bad table value, table must contain localization key string and optionally localization table index");
-          }
-          
-          const std::string_view key = proxy1.get<std::string_view>();
-          
-          size_t index = SIZE_MAX;
-          const auto proxy2 = t[2];
-          if (proxy2.valid() && proxy2.get_type() == sol::type::number) {
-            index = proxy2.get<size_t>();
-          }
-          
-          const auto loc_obj = loc->get(loc->get_current_locale(), key);
-          if (loc_obj.get_type() == sol::type::string) {
-            const std::string_view &str = loc_obj.as<std::string_view>();
-            const size_t index = string_count;
-            ++string_count;
-            strings[index] = std::make_pair(str, std::numeric_limits<double>::quiet_NaN());
-            continue;
-          }
-          
-          if (loc_obj.get_type() == sol::type::number) {
-            const double num = loc_obj.as<double>();
-            const size_t index = string_count;
-            ++string_count;
-            strings[index] = std::make_pair("", num);
-            continue;
-          }
-          
-          if (loc_obj.get_type() == sol::type::table) {
-            if (index == SIZE_MAX) throw std::runtime_error("Localization container returns a table using key '" + std::string(key) + "', expecting next table value to be localization table index");
-            
-            const sol::table t = loc_obj.as<sol::table>();
-            const auto proxy = t[index];
-            if (proxy.valid()) {
-              if (proxy.get_type() == sol::type::string) {
-                const std::string_view str = proxy.get<std::string_view>();
-                const size_t index = string_count;
-                ++string_count;
-                strings[index] = std::make_pair(str, std::numeric_limits<double>::quiet_NaN());
-                continue;
-              }
-              
-              if (proxy.get_type() == sol::type::number) {
-                const double num = proxy.get<double>();
-                const size_t index = string_count;
-                ++string_count;
-                strings[index] = std::make_pair("", num);
-                continue;
-              }
-              
-              throw std::runtime_error("Localization container returns a table using key '" + std::string(key) + "' and index " + std::to_string(index));
-            }
-          }
-          
-          // из контейнера локализации к нам может придти только строка, число или таблица
-        }
-        
-        throw std::runtime_error("Bad argument " + std::to_string(current_arg_index) + " type");
+        strings[string_count] = fmt::v8::detail::make_arg<fmt::format_context>(str);
+        ++string_count;
+        if (string_count >= max_count) throw std::runtime_error("Too many args");
       }
       
-      const size_t sym_lenght = sym.length();
-      size_t char_counter = 0;
-      for (size_t i = 0; i < string_count; ++i) {
-        char_counter += (strings[i].first.length() == 0 ? 30 : strings[i].first.length()) + (i != string_count-1)*sym_lenght;
-      }
-      
-      size_t offset = 0;
-      std::string container(char_counter, '\0');
-      for (size_t i = 0; i < string_count; ++i) {
-        if (strings[i].first.length() == 0) {
-          const double NaN = std::numeric_limits<double>::quiet_NaN();
-          ASSERT(*reinterpret_cast<size_t*>(&strings[i].second) != *reinterpret_cast<const size_t*>(&NaN));
-          const std::string str_num = is_integer(strings[i].second) ? std::to_string(int64_t(strings[i].second)) : std::to_string(strings[i].second);
-          ASSERT(str_num.length() < 30);
-          ASSERT(offset + str_num.length() < container.size());
-          memcpy(&container[offset], str_num.data(), str_num.length());
-          offset += str_num.length();
-        } else {
-          ASSERT(offset + strings[i].first.length() < container.size());
-          memcpy(&container[offset], strings[i].first.data(), strings[i].first.length());
-          offset += strings[i].first.length();
-        }
-        
-        if (i != string_count-1) {
-          ASSERT(offset + sym.length() < container.size());
-          memcpy(&container[offset], sym.data(), sym.length());
-          offset += sym.length();
-        }
-      }
-      
-      return container;
+      const auto &str = fmt::vformat(format, fmt::format_args(strings.data(), string_count));
+      return str;
     }
     
     void setup_lua_safe_utils(sol::state_view lua) {
@@ -180,15 +141,18 @@ namespace devils_engine {
       utils.set_function("prng32", render::prng);
       utils.set_function("prng32_2", render::prng2);
       utils.set_function("prng_normalize32", render::prng_normalize);
-      utils.set_function("prng64", [] (const uint64_t &value) {
-        return splitmix64::get_value(splitmix64::rng({value}));
+      utils.set_function("prng64", [] (const int64_t &value) {
+        const uint64_t val = s_to_unsigned64(value);
+        return splitmix64::get_value(splitmix64::rng({val}));
       });
-      utils.set_function("prng64_2", [] (const uint64_t &value1, const uint64_t &value2) {
+      utils.set_function("prng64_2", [] (const int64_t &value1, const int64_t &value2) {
+        const uint64_t val1 = s_to_unsigned64(value1);
+        const uint64_t val2 = s_to_unsigned64(value2);
         //if (value1 + value2 == 0) throw std::runtime_error("Summ of prng64_2 args must not be 0"); // ???
         return xoroshiro128starstar::get_value(
           xoroshiro128starstar::rng({
-            splitmix64::get_value(splitmix64::rng({value1})), 
-            splitmix64::get_value(splitmix64::rng({value2}))
+            splitmix64::get_value(splitmix64::rng({val1})), 
+            splitmix64::get_value(splitmix64::rng({val2}))
           })
         );
       });
@@ -211,10 +175,11 @@ namespace devils_engine {
         return std::make_tuple(255.0 / double(ur), 255.0 / double(ug), 255.0 / double(ub), 255.0 / double(ua));
       });
       
-      utils.set_function("init_array", [] (const size_t &size, sol::object default_value, sol::this_state s) -> sol::table {
+      utils.set_function("init_array", [] (const double &num, sol::object default_value, sol::this_state s) -> sol::table {
+        const size_t size = num;
         sol::state_view view(s);
         auto t = view.create_table(size, 0);
-        if (default_value.is<sol::table>()) {
+        if (default_value.get_type() == sol::type::table) {
           for (size_t i = 0; i < size; ++i) {
             t.add(view.create_table(30, 0));
           }
@@ -226,7 +191,7 @@ namespace devils_engine {
         return t;
       });
       
-      utils.set_function("create_table", [] (sol::object arr_size, sol::object hash_size, sol::this_state s) -> sol::table {
+      utils.set_function("create_table", [] (const sol::object arr_size, const sol::object hash_size, sol::this_state s) -> sol::table {
         sol::state_view view(s);
         const uint32_t narr = arr_size.is<uint32_t>() ? arr_size.as<uint32_t>() : 100;
         const uint32_t nhash = hash_size.is<uint32_t>() ? hash_size.as<uint32_t>() : 100;
@@ -241,44 +206,176 @@ namespace devils_engine {
       
       utils.set_function("compose_string", &compose_string);
       
-      // по этой строке я хочу понять какой мне интерфейс делать
-      // но думаю что нужно как то иначе это делать, по dpi?
-//       utils.set_function("get_platform", [] () -> std::string_view {
-// #if defined(__linux__)
-//         return "linux";
-// #elif defined(WIN32)
-//         return "windows";
-// #endif
-//       });
+      // это мне нахрен не нужно если есть функциональная либа
+      utils.set_function("count", &count_func);
+      // с функциональной либой не получилось, точшее луа сам по себе неплохо код оптимизирует, а вызовы с++ функций все портят
       
-      auto core = lua[magic_enum::enum_name<reserved_lua::values>(reserved_lua::core)].get_or_create<sol::table>();
-      core.set_function("type", [] (sol::this_state s, const sol::object &obj) -> std::string {
-        if (obj.get_type() != sol::type::userdata) {
-          sol::state_view lua = s;
-          auto proxy = lua["type"];
-          if (!proxy.valid() || proxy.get_type() != sol::type::function) throw std::runtime_error("Could not find function 'type'");
-                        
-          sol::function f = proxy;
-          const auto ret = f(obj);
-          if (!ret.valid()) {
-            sol::error err = ret;
-            std::cout << err.what();
-            throw std::runtime_error("There is lua error");
-          }
-          
-          const std::string str = ret;
-          return str;
+      utils.set_function("int_queue", [] (sol::this_state s, const double &first_count, const sol::function prepare_function, const sol::function queue_function) {
+        sol::state_view lua = s;
+        std::queue<int64_t> queue;
+        const auto push_func = [&queue] (const int64_t data) { queue.push(data); };
+        sol::object lua_push_func = sol::make_object(lua, push_func);
+        
+        const size_t size = first_count;
+        for (size_t i = 0; i < size; ++i) {
+          prepare_function(TO_LUA_INDEX(i), lua_push_func);
         }
         
-        if (obj.is<core::army*>()) return "army";
-        else if (obj.is<core::city*>()) return "city";
-        else if (obj.is<core::city_type*>()) return "city_type";
-        else if (obj.is<core::building_type*>()) return "building_type";
-        else if (obj.is<core::hero_troop*>()) return "hero_troop";
-        else if (obj.is<core::character*>()) return "character";
-        else if (obj.is<core::realm*>()) return "realm";
-        else if (obj.is<core::titulus*>()) return "title";
-        else if (obj.is<core::province*>()) return "province";
+        while (!queue.empty()) {
+          const int64_t data = queue.front();
+          queue.pop();
+          
+          queue_function(data, lua_push_func);
+        }
+      });
+      
+      utils.set_function("num_queue", [] (sol::this_state s, const double &first_count, const sol::function prepare_function, const sol::function queue_function) {
+        sol::state_view lua = s;
+        std::queue<double> queue;
+        const auto push_func = [&queue] (const double data) { queue.push(data); };
+        sol::object lua_push_func = sol::make_object(lua, push_func);
+        
+        const size_t size = first_count;
+        for (size_t i = 0; i < size; ++i) {
+          prepare_function(TO_LUA_INDEX(i), lua_push_func);
+        }
+        
+        while (!queue.empty()) {
+          const double data = queue.front();
+          queue.pop();
+          
+          queue_function(data, lua_push_func);
+        }
+      });
+      
+      utils.set_function("queue", [] (sol::this_state s, const double &first_count, const sol::function prepare_function, const sol::function queue_function) {
+        sol::state_view lua = s;
+        std::queue<sol::object> queue;
+        const auto push_func = [&queue] (const sol::object data) { queue.push(data); };
+        sol::object lua_push_func = sol::make_object(lua, push_func);
+        
+        const size_t size = first_count;
+        for (size_t i = 0; i < size; ++i) {
+          prepare_function(TO_LUA_INDEX(i), lua_push_func);
+        }
+        
+        while (!queue.empty()) {
+          const sol::object data = queue.front();
+          queue.pop();
+          
+          queue_function(data, lua_push_func);
+        }
+      });
+      
+      // что тут вернуть? строку или число? нагляднее наверное будет вернуть строку, type вот у меня тоже строку возвращает
+      // другое дело что возврат строки 200% связан с выделением памяти для обекта + вычислением хеша
+      // по всей видимости не нужно об этом задумываться
+      utils.set_function("get_stat_type", [] (sol::this_state, const sol::object &stat) -> std::string_view {
+        if (stat.get_type() != sol::type::number && stat.get_type() != sol::type::string) return "invalid";
+                         
+        if (stat.get_type() == sol::type::number) {
+          const auto val = FROM_LUA_INDEX(stat.as<double>());
+          const size_t final_val = val;
+          return core::stat_type::names[core::get_stat_type(final_val)];
+        }
+        
+#define STAT_CONDITION_FUNC(name) if (const auto itr = core::name##s::map.find(str); itr != core::name##s::map.end()) return core::stat_type::names[core::stat_type::name];
+        
+        // супер тяжелая функция
+        const auto &str = stat.as<std::string_view>();
+        STAT_CONDITION_FUNC(character_stat)
+        STAT_CONDITION_FUNC(realm_stat)
+        STAT_CONDITION_FUNC(province_stat)
+        STAT_CONDITION_FUNC(city_stat)
+        STAT_CONDITION_FUNC(army_stat)
+        STAT_CONDITION_FUNC(hero_troop_stat)
+        STAT_CONDITION_FUNC(troop_stat)
+        STAT_CONDITION_FUNC(hero_stat)
+        STAT_CONDITION_FUNC(character_resource)
+        STAT_CONDITION_FUNC(realm_resource)
+        STAT_CONDITION_FUNC(city_resource)
+        STAT_CONDITION_FUNC(army_resource)
+        
+#undef STAT_CONDITION_FUNC
+        
+        return core::stat_type::names[0];
+      });
+      
+      utils.set_function("get_stat_name", [] (sol::this_state, const size_t &index) {
+        const size_t num = FROM_LUA_INDEX(index);
+#define STAT_OFFSET_FUNC(name)                                       \
+        if (num >= core::offsets::name && num < core::name::count) { \
+          return core::name::names[num];                             \
+        }
+        
+        STATS_OFFSET_LIST
+#undef STAT_OFFSET_FUNC
+        
+        return std::string_view("");
+      });
+      
+      utils.set_function("get_opinion_type_name", [] (sol::this_state, const size_t &index) {
+        //const size_t num = FROM_LUA_INDEX(index);
+        const size_t num = index;
+        if (num == 0 || num >= core::opinion_modifiers::count) return core::opinion_modifiers::names[0];
+        return core::opinion_modifiers::names[num];
+      });
+      
+      utils.set_function("get_right_name", [] (sol::this_state, const size_t &index) {
+        const size_t num = FROM_LUA_INDEX(index);
+        if (num >= core::power_rights::offset && num < core::power_rights::count) {
+          return core::power_rights::names[num];
+        }
+        
+        if (num >= core::state_rights::offset && num < core::state_rights::count) {
+          return core::state_rights::names[num];
+        }
+        
+        return std::string_view("");
+      });
+      
+      utils.set_function("get_culture_feature_name", [] (sol::this_state, const size_t &index) {
+        const size_t num = FROM_LUA_INDEX(index);
+        if (num < core::culture_mechanics::count) {
+          return core::culture_mechanics::names[num];
+        }
+        
+        return std::string_view("");
+      });
+      
+      utils.set_function("get_religion_feature_name", [] (sol::this_state, const size_t &index) {
+        const size_t num = FROM_LUA_INDEX(index);
+        if (num < core::religion_mechanics::count) {
+          return core::religion_mechanics::names[num];
+        }
+        
+        return std::string_view("");
+      });
+      
+      auto core = lua[magic_enum::enum_name(reserved_lua::core)].get_or_create<sol::table>();
+      core.set_function("type", [] (sol::this_state, const sol::object &obj) -> std::string_view {
+        if (!obj.valid()) return "nil";
+                        
+        const auto type = obj.get_type();
+        if (type != sol::type::userdata) {
+          switch (type) {
+            case sol::type::nil: return "nil";
+            case sol::type::none: return "none";
+            case sol::type::string: return "string";
+            case sol::type::number: return "number";
+            case sol::type::thread: return "thread";
+            case sol::type::boolean: return "boolean";
+            case sol::type::function: return "function";
+            case sol::type::userdata: return "userdata";
+            case sol::type::lightuserdata: return "lightuserdata";
+            case sol::type::table: return "table";
+            default: assert(false);
+          }
+        }
+        
+#define GAME_STRUCTURE_FUNC(val) if (obj.is<core::val*>()) return #val;
+        GAME_STRUCTURES_LIST
+#undef GAME_STRUCTURE_FUNC
                         
         return "userdata";
       });
@@ -298,6 +395,57 @@ namespace devils_engine {
           const std::string local_module_name = "module_" + std::string(mod_name) + "_" + std::string(module_path);
           loaded_table[local_module_name] = nil_obj;
         }
+      });
+      
+      // синхронный поиск =(
+      core.set_function("find_path", [] (sol::this_state s, const uint32_t &tile_index1, const uint32_t &tile_index2, const sol::optional<sol::function> &func) {
+        const uint32_t final_index1 = FROM_LUA_INDEX(tile_index1);
+        const uint32_t final_index2 = FROM_LUA_INDEX(tile_index2);
+        
+        if (final_index1 >= core::map::hex_count_d(core::map::detail_level)) throw std::runtime_error("Start tile index " + std::to_string(tile_index1) + " is invalid");
+        if (final_index2 >= core::map::hex_count_d(core::map::detail_level)) throw std::runtime_error("End tile index " + std::to_string(tile_index2) + " is invalid");
+        
+        auto path_finder = global::get<systems::core_t>()->path_managment;
+          
+        ai::path_container* path = nullptr;
+        size_t path_size = 0;
+        if (func.has_value()) {
+          using float_t = ai::path_managment::float_t;
+          const auto vertex_func = [func = func.value()] (const uint32_t &current_tile, const uint32_t &next_tile, const utils::user_data &) -> float_t {
+            auto ret = func(TO_LUA_INDEX(current_tile), TO_LUA_INDEX(next_tile));
+            CHECK_ERROR_THROW(ret);
+            
+            const float_t val = ret;
+            return val;
+          };
+          
+          path = path_finder->find_path_raw(final_index1, final_index2, utils::user_data(), vertex_func, path_size);
+        } else {
+          path = path_finder->find_path_raw(final_index1, final_index2, utils::user_data(), nullptr, path_size);
+        }
+        
+        if (path_size == 0 || path == nullptr) return sol::object(sol::nil);
+        
+        sol::state_view lua = s;
+        auto table = lua.create_table(path_size, 0);
+        auto cur_path = path;
+        for (size_t i = 0, counter = 0; i < path_size; ++i, ++counter) {
+          if (counter >= ai::path_container::container_size) {
+            cur_path = ai::advance_container(cur_path, 1);
+            counter = 0;
+          }
+          
+          // как положить данные? мне нужна пара (индекс, расстояние)
+          // расстояние хранится в double, перевести его во float? расстояние хранится во флоате, будет ли потеря точности?
+          // может быть положить просто один за другим?
+          const auto &piece = cur_path->tile_path[counter];
+          const double data = create_pair_u32f32(TO_LUA_INDEX(piece.tile), piece.cost);
+          table.add(data);
+        }
+        
+        path_finder->free_path(path);
+        
+        return sol::object(table);
       });
     }
   }

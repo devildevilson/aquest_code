@@ -48,6 +48,7 @@ namespace devils_engine {
         
         province,
         building_type,
+        holding_type,
         city_type,
         city,
         trait,
@@ -56,6 +57,7 @@ namespace devils_engine {
         decision,
         religion_group,
         religion,
+        culture_group,
         culture,
         law,
         event,

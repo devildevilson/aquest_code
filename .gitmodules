@@ -61,3 +61,6 @@
 [submodule "include/re2"]
 	path = include/re2
 	url = https://github.com/google/re2.git
+[submodule "include/function2"]
+	path = include/function2
+	url = https://github.com/Naios/function2.git

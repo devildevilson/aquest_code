@@ -22,9 +22,7 @@
 // нужно вытащить тайловые функции отдельно
 namespace devils_engine {
   namespace utils {
-    constexpr bool valid_tile(const uint32_t &index) {
-      return index < core::map::hex_count_d(core::map::detail_level);
-    }
+    constexpr bool valid_tile(const uint32_t &index) { return index < core::map::hex_count_d(core::map::detail_level); }
     
     void setup_lua_tile(sol::state_view lua) {
       auto core = lua[magic_enum::enum_name(reserved_lua::core)].get_or_create<sol::table>();
@@ -76,7 +74,7 @@ namespace devils_engine {
         return core::get_tile_city(FROM_LUA_INDEX(tile_index));
       });
       
-      core.set_function("is_tile_valid", [] (const uint32_t &tile_index) {
+      core.set_function("is_tile_index_valid", [] (const uint32_t &tile_index) {
         const uint32_t final_index = FROM_LUA_INDEX(tile_index);
         return valid_tile(final_index);
       });

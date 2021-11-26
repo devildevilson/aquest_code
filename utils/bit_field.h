@@ -1,5 +1,5 @@
-#ifndef BIT_FIELD_H
-#define BIT_FIELD_H
+#ifndef DEVILS_ENGINE_UTILS_BIT_FIELD_H
+#define DEVILS_ENGINE_UTILS_BIT_FIELD_H
 
 #include <cstddef>
 #include <cstdint>
@@ -22,7 +22,7 @@ namespace devils_engine {
 
       inline bit_field() { reset(); }
       inline bool set(const size_t &index, const bool value) {
-        ASSERT(index < SIZE_WIDTH * N);
+        ASSERT(index < capacity());
         const size_t container_index = index / SIZE_WIDTH;
         const size_t index_container = index % SIZE_WIDTH;
         const container_type mask = container_type(1) << index_container;
@@ -32,11 +32,10 @@ namespace devils_engine {
       }
 
       inline bool get(const size_t &index) const {
-        ASSERT(index < SIZE_WIDTH * N);
         const size_t container_index = index / SIZE_WIDTH;
         const size_t index_container = index % SIZE_WIDTH;
         const container_type mask = container_type(1) << index_container;
-        return bool(container[container_index] & mask);
+        return index < capacity() ? bool((container[container_index] & mask) == mask) : false;
       }
 
       constexpr size_t capacity() const {
@@ -66,11 +65,10 @@ namespace devils_engine {
       }
 
       inline bool get(const size_t &index) const {
-        ASSERT(index < UINT32_WIDTH * N);
         const size_t container_index = index / UINT32_WIDTH;
         const size_t index_container = index % UINT32_WIDTH;
         const container_type mask = container_type(1) << index_container;
-        return bool(container[container_index] & mask);
+        return index < capacity() ? bool((container[container_index] & mask) == mask) : false;
       }
 
       constexpr size_t capacity() const {

@@ -2,6 +2,7 @@
 #define TABLE_CONTAINER_H
 
 #include "sol.h"
+#include "assert.h"
 
 #include <vector>
 #include "bin/core_structures.h"

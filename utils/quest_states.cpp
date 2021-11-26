@@ -6,20 +6,55 @@
 #include "main_menu.h"
 #include "progress_container.h"
 #include "thread_pool.h"
+
 #include "bin/map_creator.h"
 #include "bin/loading_functions.h"
 #include "bin/logic.h"
 #include "bin/battle_map.h"
+
 #include "render/image_controller.h"
 // #include "render/battle_render_stages.h"
-#include "utils/input.h"
-#include "utils/game_enums.h"
-
 // посчтитать используемую память
 #include "render/container.h"
 
+#include "utils/input.h"
+#include "utils/game_enums.h"
+
+#include "core/internal_lua_state.h"
+
+#include "Cpp/FastNoiseLite.h"
+
+#define STATIC_ARRAY_SIZE(arr) (sizeof(arr) / sizeof(arr[0]))
+
 namespace devils_engine {
   namespace utils {
+//     void start(const std::string &name, const size_t &time, quest_state* curr_state, quest_state* prev_state) {
+//       (void)time;
+//       (void)curr_state;
+//       (void)prev_state;
+//       auto base = global::get<systems::core_t>();
+//       auto prog = base->loading_progress;
+//       systems::advance_progress(prog, name);
+//     }
+//     
+//     void clean(const std::string &name, const size_t &time, quest_state* curr_state, quest_state* prev_state) {
+//       (void)time;
+//       auto base = global::get<systems::core_t>();
+//       auto prog = base->loading_progress;
+//       prev_state->clean(curr_state);
+//       systems::advance_progress(prog, name);
+//     }
+//     
+//     void end(const std::string &name, const size_t &time, quest_state* curr_state, quest_state* prev_state) {
+//       (void)time;
+//       (void)curr_state;
+//       (void)prev_state;
+//       auto base = global::get<systems::core_t>();
+//       auto prog = base->loading_progress;
+//       systems::advance_progress(prog, name);
+//       ASSERT(prog->finished());
+//     }
+    
     void update_interface() {
       auto base = global::get<systems::core_t>();
       auto prog = base->loading_progress;
@@ -49,6 +84,9 @@ namespace devils_engine {
       set_up_input_keys(player::in_menu);
       
       if (prev_state != nullptr) prev_state->clean(this);
+      
+      auto base = global::get<systems::core_t>();
+      base->internal.reset(nullptr);
     }
     
     uint32_t main_menu_loading_state::update(const size_t &time, quest_state* prev_state) {
@@ -167,6 +205,30 @@ namespace devils_engine {
 //       return m_next_state;
 //     }
 
+//     void finalizing(const std::string &name, const size_t &time, quest_state* curr_state, quest_state* prev_state) {
+//       (void)time;
+//       (void)curr_state;
+//       (void)prev_state;
+//       auto base = global::get<systems::core_t>();
+//       auto prog = base->loading_progress;
+//       auto map = global::get<systems::map_t>();
+//       map->create_map_container();
+//       map->setup_map_generator();
+//       systems::setup_map_generator(map);
+//       systems::advance_progress(prog, name);
+//       auto ctx = systems::create_loading_context();
+//       systems::loading_generator::advance(ctx, prog);
+//       systems::destroy_loading_context(ctx);
+//     }
+// 
+//     const std::string_view map_creation_loading_state::step_names[] = {
+//       "cleaning", "creating container", "finalizing", "end"
+//     };
+//     
+//     const loading_function map_creation_loading_state::steps[] = {
+//       utils::start, utils::clean, utils::finalizing, utils::end
+//     };
+
     map_creation_loading_state::map_creation_loading_state() : quest_state(world_map_generator_loading) {}
     void map_creation_loading_state::enter(quest_state* prev_state) {
       (void)prev_state;
@@ -174,7 +236,8 @@ namespace devils_engine {
       auto prog = base->loading_progress;
       prog->reset();
       
-      prog->set_max_value(4);
+      assert(systems::loading_generator::func_count == 1);
+      prog->set_max_value(3 + systems::loading_generator::func_count);
       prog->set_hint1(std::string_view("Creating demiurge"));
       
       update_interface();
@@ -184,20 +247,33 @@ namespace devils_engine {
       auto base = global::get<systems::core_t>();
       auto prog = base->loading_progress;
       
-      if (prog->get_value() == 3) {
-        systems::from_menu_to_create_map(prog);
-        auto map = global::get<systems::map_t>();
-        map->start_rendering();
-        systems::advance_progress(prog, "end");
-        ASSERT(prog->finished());
-      }
+//       static int64_t counter = 0;
+//       
+//       while (counter == prog->get_value()) {
+//         const int64_t index = prog->get_value();
+//         steps[index](std::string(step_names[index]), time, this, prev_state);
+//         ++counter;
+//       }
+      
+//       if (prog->get_value() == 3) {
+// //         systems::from_menu_to_create_map(prog);
+//         auto map = global::get<systems::map_t>();
+//         map->start_rendering();
+//         systems::advance_progress(prog, "end");
+//         ASSERT(prog->finished());
+//       }
       
       if (prog->get_value() == 2) {
         auto map = global::get<systems::map_t>();
         map->create_map_container();
         map->setup_map_generator();
+//         std::cout << "start systems::setup_map_generator(map)" << "\n";
         systems::setup_map_generator(map);
+//         std::cout << "end systems::setup_map_generator(map)" << "\n";
         systems::advance_progress(prog, "finalizing");
+        auto ctx = systems::create_loading_context();
+        systems::loading_generator::advance(ctx, prog);
+        systems::destroy_loading_context(ctx);
       }
       
       if (prog->get_value() == 1) {
@@ -436,15 +512,16 @@ namespace devils_engine {
       auto base = global::get<systems::core_t>();
       auto map = global::get<systems::map_t>();
       auto prog = base->loading_progress;
+      if (!base->internal) base->internal.reset(new core::internal_lua_state);
       
       // если меню отвалится, то откуда брать путь загрузки? пока пусть так
       //if (base->menu->loading_path.empty()) {
       if (map->load_world.empty()) {
-        prog->set_max_value(13);
-        prog->set_hint1(std::string_view("Load map"));
+        prog->set_max_value(3 + systems::loading_generated_map::func_count);
+        prog->set_hint1(std::string_view("loading_generated_map"));
       } else {
-        prog->set_max_value(13);
-        prog->set_hint1(std::string_view("Load world"));
+        prog->set_max_value(3 + systems::loading_saved_world::func_count);
+        prog->set_hint1(std::string_view("loading_saved_world"));
       }
       
       set_up_input_keys(player::on_global_map);
@@ -457,6 +534,12 @@ namespace devils_engine {
       auto prog = base->loading_progress;
       
       if (prog->get_value() == 2) {
+        static bool first = true;
+        assert(first);
+        if (first) {
+          first = false;
+        }
+        
         auto map = global::get<systems::map_t>();
         map->create_map_container(); // повторно создаваться не будет
         map->start_rendering();
@@ -465,18 +548,24 @@ namespace devils_engine {
         // тут добавим задачу на загрузку
         if (map->load_world.empty()) {
           pool->submitbase([prog] () {
-            systems::from_create_map_to_map(prog);
+            //systems::from_create_map_to_map(prog);
+            auto ctx = systems::create_loading_context();
+            systems::loading_generated_map::advance(ctx, prog);
+            systems::destroy_loading_context(ctx);
           });
         } else {
           pool->submitbase([prog] () {
-            systems::from_menu_to_map(prog);
+            //systems::from_menu_to_map(prog);
+            auto ctx = systems::create_loading_context();
+            systems::loading_saved_world::advance(ctx, prog);
+            systems::destroy_loading_context(ctx);
           });
         }
       }
       
       if (prog->get_value() == 1) {
         prev_state->clean(this);
-        systems::advance_progress(prog, "creating container");
+        systems::advance_progress(prog, "creating_container");
       }
       
       if (prog->get_value() == 0) {
@@ -670,7 +759,7 @@ namespace devils_engine {
     struct battle_loading_state::battle_generator_data {
       sol::state lua;
       utils::random_engine_st random;
-      FastNoise noiser;
+      FastNoiseLite noiser;
       
       map::generator::container* container;
       // где то тут же нужно добавить контейнер для таблиц
@@ -704,6 +793,7 @@ namespace devils_engine {
       
       auto base = global::get<systems::core_t>();
       auto prog = base->loading_progress;
+      if (!base->internal) base->internal.reset(new core::internal_lua_state);
       
       //base->interface_container->open_layer(0, "background", {base->interface_container->lua.create_table()}); // картинка
       //base->interface_container->open_layer(1, "progress_bar", {base->interface_container->lua.create_table()});
@@ -946,6 +1036,8 @@ namespace devils_engine {
       UNUSED_VARIABLE(prev_state);
       ASSERT(false);
       set_up_input_keys(player::on_hero_battle_map);
+      auto base = global::get<systems::core_t>();
+      if (!base->internal) base->internal.reset(new core::internal_lua_state);
     }
 
     uint32_t encounter_state::update(const size_t &time, quest_state* prev_state) { UNUSED_VARIABLE(time); UNUSED_VARIABLE(prev_state); return UINT32_MAX; }

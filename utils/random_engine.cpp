@@ -220,5 +220,18 @@ namespace devils_engine {
       again = !again;
       return ret;
     }
+    
+    size_t random_engine_st::weighted_distribution(const size_t &size, const double* weights) {
+      double sum = 0.0;
+      for (size_t i = 0; i < size; sum += weights[i], ++i);
+      
+      const double rand = norm();
+      const double num = rand * sum;
+      double cumulative = 0.0;
+      size_t i = 0;
+      for (; i < size && cumulative <= num; cumulative += weights[i], ++i);
+      i -= 1; // i всегда будет стартовать от 1, из-за особенностей условий в цикле выше
+      return i;
+    }
   }
 }

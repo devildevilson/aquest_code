@@ -7,9 +7,6 @@
 #include "systems.h"
 #include "game_context.h"
 
-#define FROM_LUA_INDEX(index) (index-1)
-#define TO_LUA_INDEX(index) (index+1)
-
 namespace devils_engine {
   namespace utils {
     void setup_lua_main_menu(sol::state_view lua) {

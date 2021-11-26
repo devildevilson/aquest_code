@@ -39,7 +39,9 @@ namespace devils_engine {
         );
 
         target.set_function("check_event", input::check_event);
-        target.set_function("timed_check_event", input::timed_check_event);
+        target.set_function("timed_check_event", [] (const utils::id &event, const uint32_t &states, const double &wait, const double &period) {
+          return input::timed_check_event(event, states, wait, period);
+        });
         target.set_function("event_state", input::input_event_state);
         target.set_function("is_event_pressed", input::is_event_pressed);
         target.set_function("is_event_released", input::is_event_released);

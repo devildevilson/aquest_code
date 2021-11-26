@@ -154,11 +154,11 @@ namespace devils_engine {
         const auto &p = check_path(path);
         if (p.empty()) return sol::make_object(lua, sol::nil);
         
-        auto file = lua["io"]["open"](p.c_str());
+        const auto file = lua["io"]["open"](p.c_str());
         if (!file.valid()) return sol::make_object(lua, sol::nil);
-        auto ret = lua["io"]["lines"](file, sol::as_args(args));
+        const auto ret = lua["io"]["lines"](file, sol::as_args(args));
         if (!ret.valid()) return sol::make_object(lua, sol::nil);
-        sol::object o = ret;
+        const sol::object o = ret;
         return o;
       });
       env["io"] = io;
@@ -177,6 +177,8 @@ namespace devils_engine {
         // чтобы не пересекаться с другими скриптами с тем же названием но в других модах,
         // с другой стороны можно просто забить и не запоминать скрипт (хотя почему бы и нет)
         
+//         std::cout << "require " << module_name << "\n";
+        
         sol::state_view lua = s;
         sol::environment &env = e;
         auto proxy = env[module_name];
@@ -188,8 +190,22 @@ namespace devils_engine {
         
         const std::string local_module_name = "module_" + std::string(mod_name) + "_" + std::string(module_path);
         
+//         std::cout << "local_module_name " << local_module_name << "\n";
+        
         sol::table loaded_table = lua["package"]["loaded"];
         auto lproxy = loaded_table[local_module_name];
+//         std::cout << "found " << lproxy.valid() << "\n";
+//         std::cout << "table (" << size_t(sol::type::table) << ") type " << size_t(lproxy.get_type()) << "\n";
+//         if (local_module_name == "module_apates_quest_scripts.queue" && lproxy.valid()) {
+//           auto obj = lproxy.get<sol::object>();
+//           auto table = obj.as<sol::table>();
+//           auto ret = table["new"]();
+//           if (!ret.valid()) {
+//             sol::error err = ret;
+//             std::cout << err.what();
+//             throw std::runtime_error("lua error");
+//           }
+//         }
         if (lproxy.valid()) return lproxy.get<sol::object>();
         
         // тут проверим путь
@@ -202,6 +218,8 @@ namespace devils_engine {
         const auto &p = check_path(std_module_path);
         assert(!p.empty());
         if (p.empty()) throw std::runtime_error("Could not find module " + std::string(module_name));
+                       
+//         std::cout << "path " << p << "\n";
         
         auto ret = lua.script_file(p.string(), env);
         if (!ret.valid()) {
@@ -209,6 +227,8 @@ namespace devils_engine {
           std::cout << err.what();
           throw std::runtime_error("Could not load module " + std::string(module_name));
         }
+        
+//         std::cout << "loaded " << "\n";
         
         sol::object obj = ret;
         loaded_table[local_module_name] = obj;

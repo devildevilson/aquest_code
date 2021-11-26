@@ -1,15 +1,16 @@
 #ifndef SYSTEMS_H
 #define SYSTEMS_H
 
-#include "typeless_container.h"
-#include "slot_container.h"
-#include "render/render_mode_container.h"
-#include "game_enums.h"
 #include <string>
 #include <atomic>
 #include <memory>
 
-class FastNoise;
+#include "typeless_container.h"
+#include "slot_container.h"
+#include "game_enums.h"
+#include "render/render_mode_container.h"
+
+class FastNoiseLite;
 
 namespace sol {
   class state;
@@ -25,6 +26,7 @@ namespace devils_engine {
     struct map;
     class context;
     struct seasons;
+    struct internal_lua_state;
   }
   
   namespace game {
@@ -48,7 +50,7 @@ namespace devils_engine {
     class progress_container;
     struct objects_selection;
     struct random_engine_st;
-    class localization;
+//     class localization;
   }
   
   namespace interface {
@@ -120,6 +122,7 @@ namespace devils_engine {
       //utils::interface_container* interface_container;
       std::unique_ptr<utils::interface_container> interface_container;
       std::unique_ptr<localization::container> loc;
+      std::unique_ptr<core::internal_lua_state> internal;
       
       core_t();
       ~core_t();

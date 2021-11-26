@@ -53,6 +53,7 @@ namespace devils_engine {
       sol::object loading_table_tmp;
       
       sol::table serpent;
+      sol::table serpent_opts;
       sol::function serpent_line;
       
       struct create_info {

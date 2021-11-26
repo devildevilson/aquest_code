@@ -43,6 +43,8 @@ namespace devils_engine {
       //script_utils.new_usertype<script::script_data>("script_data");
       script_utils.new_usertype<script::lua_data_struct>(
         "lua_data_struct", sol::no_constructor,
+        "command_type", &script::lua_data_struct::command_type,
+        "command_id", &script::lua_data_struct::command_id,
         "name", &script::lua_data_struct::name,
         "nesting", &script::lua_data_struct::nesting,
         "compare_type", &script::lua_data_struct::compare_type,
@@ -92,29 +94,11 @@ namespace devils_engine {
         set_stat_function(script_utils, i);
       }
       
-      script_utils.set_function("context", [] (const sol::object &val) {
-        //script::script_data d;
-        
-        if (val.get_type() == sol::type::number) {
-          const double num = val.as<int64_t>();
-          return std::string(magic_enum::enum_name(script::data_source_type::context)) + ":" + 
-                 std::string(magic_enum::enum_name(script::data_type::index)) + ":" + 
-                 std::to_string(num);
-        } else if (val.get_type() == sol::type::string) {
-          const std::string id = val.as<std::string>();
-          if (id == "index") throw std::runtime_error("Invalid context variable id 'index'");
-          return std::string(magic_enum::enum_name(script::data_source_type::context)) + ":" + 
-                 id + ":" + 
-                 std::to_string(0);
-        }
-        
-        throw std::runtime_error("Bad context value type");
-        return std::string();
+      script_utils.set_function("context", [] (const sol::string_view &id) {
+        return std::string(magic_enum::enum_name(script::data_source_type::context)) + ":" + 
+               std::string(id) + ":" + 
+               std::to_string(0);
       });
-      
-//       script_utils.set_function("is_script_data", [] (const sol::object &val) {
-//         return val.is<script::script_data>();
-//       });
       
       script_utils.new_enum("decision", {
         //std::make_pair(magic_enum::enum_name(core::decision::type::diplomatic), core::decision::type::diplomatic),

@@ -19,27 +19,6 @@ namespace devils_engine {
         if (tile_opt == nullptr) throw std::runtime_error("Bad game state. Could not get world map");
         tile_opt->set_border_rendering(!tile_opt->is_rendering_border());
       });
-      
-      core.set_function("each_title", [] (const core::realm* f, const sol::function &function) {
-        if (f == nullptr) throw std::runtime_error("each_title: Invalid realm");
-                        
-        auto title = f->titles;
-        while (title != nullptr) {
-          const auto ret = function(title);
-          if (!ret.valid()) {
-            sol::error err = ret;
-            std::cout << err.what();
-            throw std::runtime_error("There is lua errors");
-          }
-          
-          if (ret.get_type() == sol::type::boolean) {
-            const bool val = ret;
-            if (val) break;
-          }
-                        
-          title = title->next;
-        }
-      });
     }
     
     void setup_lua_interface_utils(sol::state_view lua) {
@@ -54,13 +33,17 @@ namespace devils_engine {
         auto ctx = &global::get<systems::core_t>()->context->ctx;
         if (obj.is<core::titulus*>()) {
           auto titulus = obj.as<core::titulus*>();
-          const uint32_t heraldy_index = titulus->heraldy;
+          auto render = global::get<render::heraldies_render>();
+          const render::heraldies_render::heraldy_interface_data data{
+            titulus->heraldy_container.data(),
+            titulus->heraldy_layers_count
+          };
+          const size_t index = render->add(data);
+          //const uint32_t heraldy_index = titulus->heraldy;
           struct nk_image img;
           memset(&img, 0, sizeof(img));
           
-          image_handle_data id;
-          id.type = IMAGE_TYPE_HERALDY;
-          id.data = heraldy_index;
+          const image_handle_data id {IMAGE_TYPE_HERALDY, index == SIZE_MAX ? GPU_UINT_MAX : uint32_t(index)};
           const auto h = image_data_to_nk_handle(id);
           img.handle = h;
           
@@ -68,6 +51,7 @@ namespace devils_engine {
           return;
         }
         
+        // геральдика по идее присутствует только у титулов и династий
         throw std::runtime_error("What needs to be done with other objects?");
       });
       
@@ -76,13 +60,19 @@ namespace devils_engine {
         auto ctx = &global::get<systems::core_t>()->context->ctx;
         if (obj.is<core::titulus*>()) {
           auto titulus = obj.as<core::titulus*>();
-          const uint32_t heraldy_index = titulus->heraldy;
+          //const uint32_t heraldy_index = titulus->heraldy;
+          auto render = global::get<render::heraldies_render>();
+          const render::heraldies_render::heraldy_interface_data data{
+            titulus->heraldy_container.data(),
+            titulus->heraldy_layers_count
+          };
+          const size_t index = render->add(data);
           struct nk_image img;
           memset(&img, 0, sizeof(img));
           
           image_handle_data id;
           id.type = IMAGE_TYPE_HERALDY;
-          id.data = heraldy_index;
+          id.data = index == SIZE_MAX ? GPU_UINT_MAX : uint32_t(index);
           const auto h = image_data_to_nk_handle(id);
           img.handle = h;
           
@@ -92,6 +82,21 @@ namespace devils_engine {
         
         throw std::runtime_error("What needs to be done with other objects?");
         return 0;
+      });
+      
+      interface.set_function("image", [] (const sol::object &nk_ctx, const uint32_t &handle) -> void {
+        (void)nk_ctx;
+        auto ctx = &global::get<systems::core_t>()->context->ctx;
+        
+        //const render::image_t render_img {handle};
+        struct nk_image img;
+        memset(&img, 0, sizeof(img));
+        
+        const image_handle_data id {IMAGE_TYPE_DEFAULT, handle};
+        const auto h = image_data_to_nk_handle(id);
+        img.handle = h;
+        
+        nk_image(ctx, img);
       });
       
       auto utils = lua["utils"].get_or_create<sol::table>();

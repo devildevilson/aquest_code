@@ -17,6 +17,7 @@ namespace devils_engine {
     
     void astar_search::set_vertex_cost_f(const vertex_cost_f &f) { neighbor_cost = f; }
     void astar_search::set_goal_cost_f(const goal_cost_f &f) { goal_cost = f; }
+    void astar_search::set_fill_successors_f(const fill_successors_f &f) { fill_successors = f; }
     
     astar_search::astar_search() : canceled(false), current_state(state::not_initialised), steps(0), start(nullptr), current(nullptr), goal(nullptr) {}
     astar_search::~astar_search() {
@@ -25,10 +26,11 @@ namespace devils_engine {
     
     void astar_search::cancel() { canceled = true; }
     
-    void astar_search::set(const uint32_t &tile_start, const uint32_t &tile_end, const predicate_f &f) {
+    void astar_search::set(const uint32_t &tile_start, const uint32_t &tile_end, const struct user_data &ud) {
       canceled = false;
   
-      predicate = f;
+      //predicate = f;
+      this->user_data = ud;
       
       start = node_pool.create(tile_start);
       goal = node_pool.create(tile_end);
@@ -110,39 +112,8 @@ namespace devils_engine {
 
         // User provides this functions and uses AddSuccessor to add each successor of
         // node 'n' to m_Successors
-        add_successor(n->tile_index);
-//         for (size_t i = 0; i < n->vertex->degree(); ++i) {
-//           size_t mem = i;
-//           const graph::edge* edge = n->vertex->next_edge(mem);
-//           const components::vertex* vertex = edge->vertices.first == n->vertex ? edge->vertices.second : edge->vertices.first;
-//           
-//           if (!vertex->is_active()) continue; // !vertex->is_valid() || 
-//           if (!predicate(n->vertex, vertex, edge)) continue;
-//           
-//           node* tmp = node_pool.newElement();
-//           
-//           tmp->edge = edge;
-//           tmp->vertex = vertex;
-//           
-//           successors.push_back(tmp);
-//         }
-// 
-//         // ????
-//         if (n->vertex->degree() == 0) {
-//           // free the nodes that may previously have been added 
-//           for (auto successor = successors.begin(); successor != successors.end(); ++successor) {
-//             node_pool.deleteElement((*successor));
-//           }
-// 
-//           successors.clear(); // empty vector of successor nodes to n
-// 
-//           // free up everything else we allocated
-//           node_pool.deleteElement(n);
-//           free_all();
-// 
-//           current_state = state::out_of_memory;
-//           return current_state;
-//         }
+        //add_successor(n->tile_index);
+        fill_successors(this, n->tile_index, user_data);
         
         ASSERT(successors.size() <= 6);
         ASSERT(successors.size() > 0);
@@ -151,7 +122,7 @@ namespace devils_engine {
         for (auto successor = successors.begin(); successor != successors.end(); ++successor) {
           // The g value for this successor ...
           //const float newg = n->g + n->vertex->cost((*successor)->vertex);
-          const float_t n_cost = neighbor_cost(n->tile_index, (*successor)->tile_index); // тут видимо иногда неверно приходит значение
+          const float_t n_cost = neighbor_cost(n->tile_index, (*successor)->tile_index, user_data); // тут видимо иногда неверно приходит значение
           ASSERT(n_cost > 0.0);
 //           ASSERT(n_cost < 1000.0);
           const float_t newg = n->g + n_cost;
@@ -281,18 +252,23 @@ namespace devils_engine {
     
     uint32_t astar_search::step_count() const { return steps; }
     
+//     void astar_search::add_successor(const uint32_t &tile_index) {
+//       // это нужно будет переделывать для других типов карт
+//       auto map = global::get<systems::map_t>()->map;
+//       const auto &tile_data = render::unpack_data(map->get_tile(tile_index));
+//       const uint32_t n_count = render::is_pentagon(tile_data) ? 5 : 6;
+//       for (uint32_t i = 0; i < n_count; ++i) {
+//         const uint32_t n_index = tile_data.neighbors[i];
+//         if (!predicate(tile_index, n_index)) continue;
+//         
+//         auto node = node_pool.create(n_index);
+//         successors.push_back(node);
+//       }
+//     }
+
     void astar_search::add_successor(const uint32_t &tile_index) {
-      // это нужно будет переделывать для других типов карт
-      auto map = global::get<systems::map_t>()->map;
-      const auto &tile_data = render::unpack_data(map->get_tile(tile_index));
-      const uint32_t n_count = render::is_pentagon(tile_data) ? 5 : 6;
-      for (uint32_t i = 0; i < n_count; ++i) {
-        const uint32_t n_index = tile_data.neighbors[i];
-        if (!predicate(tile_index, n_index)) continue;
-        
-        auto node = node_pool.create(n_index);
-        successors.push_back(node);
-      }
+      auto node = node_pool.create(tile_index);
+      successors.push_back(node);
     }
     
     void astar_search::free_solution() {

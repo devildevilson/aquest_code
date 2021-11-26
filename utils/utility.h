@@ -29,6 +29,4 @@
 #define CONCAT(a, b) a##b
 #define UNUSED_VARIABLE(var) ((void)var)
 
-#include "constexpr_funcs.h"
-
 #endif

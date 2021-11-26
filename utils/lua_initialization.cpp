@@ -3,7 +3,7 @@
 #include "lua_initialization_hidden.h"
 
 #include "globals.h"
-#include "bin/core_structures.h"
+// #include "bin/core_structures.h"
 // #include "bin/helper.h"
 #include "utility.h"
 #include "bin/logic.h"

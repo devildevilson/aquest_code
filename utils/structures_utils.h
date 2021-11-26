@@ -6,12 +6,22 @@
 #include <cstdint>
 #include "parallel_hashmap/phmap.h"
 #include "core/stat_data.h"
+#include "core/stat_modifier.h"
+#include "script/object.h"
+
+// имеет ли смысл для этих структур добавлять std mutex?
+// может сильно помочь на самом деле
+// с другой стороны было бы неплохо ограничить доступ к этому всему во время загрузок или ходов
+// как обходить? коллбек функция, можно ли как нибудь через итераторы?
+// можно поставить секцию на всю функцию интерфейса и тогда без особых проблем 
+// обойти структуры по итератору, желательно конечно чтобы ход был быстрым
 
 namespace devils_engine {
   namespace core {
     struct trait;
     struct event;
     struct modificator;
+    struct character;
   }
   
   namespace utils {
@@ -22,6 +32,7 @@ namespace devils_engine {
       bool has_flag(const std::string_view &flag) const;
       void add_flag(const std::string_view &flag, const size_t &turns);
       void remove_flag(const std::string_view &flag);
+      void clear_timed_flags();
     };
     
     struct traits_container {
@@ -35,29 +46,66 @@ namespace devils_engine {
       void remove_trait(const core::trait* trait);
     };
     
+    // тут добавятся данные с мапой от предыдущих вызовов
     struct events_container {
-      phmap::flat_hash_map<const core::event*, size_t> events;
+      struct event_data {
+        size_t mtth; // 0 мгновенно вызывается, 1 с шансом 50/50 на этом ходу
+        // тут видимо нужно будет еще хранить контекст? 
+        script::object root;
+        phmap::flat_hash_map<std::string_view, script::object> context;
+      };
+      
+      phmap::node_hash_map<const core::event*, event_data> events;
       
       //void update_turn(); // по идее тут нужен особый апдейт
       bool has_event(const core::event* event) const;
-      void add_event(const core::event* event, const size_t &turns);
+      void add_event(const core::event* event, event_data &&data);
       void remove_event(const core::event* event);
     };
     
+    // тут надо как то учитывать модификатор отношений (дополнительные данные)
     struct modificators_container {
-      phmap::flat_hash_map<const core::modificator*, size_t> modificators;
+      struct modificator_data {
+        static const size_t max_stat_modifiers_count = 4;
+        static const size_t max_opinion_modifiers_count = 4;
+        
+        size_t turns_count;
+        std::array<core::stat_modifier, max_stat_modifiers_count> bonuses;
+        std::array<core::opinion_modifier, max_opinion_modifiers_count> opinion_mods;
+      };
+      
+      phmap::node_hash_map<const core::modificator*, modificator_data> modificators;
       
       void update_turn();
       bool has_modificator(const core::modificator* modificator) const;
-      void add_modificator(const core::modificator* modificator, const size_t &turns);
+      void add_modificator(const core::modificator* modificator, const modificator_data &data);
       void remove_modificator(const core::modificator* modificator);
+    };
+    
+    struct hooks_container {
+      // хук? хук всегда связан с персонажем, у хука есть тип + некоторые характеристики
+      struct data {
+        uint32_t type; // сильный/слабый
+//         union {
+          uint32_t cooldown; // можно ли потратить сильный хук?
+          uint32_t expries;
+//         };
+        uint32_t secret; // тип секрета, для локализации например
+      };
+      
+      phmap::node_hash_map<const core::character*, data> hooks;
+      
+      void update_turn();
+      bool has_hook(const core::character* c) const;
+      void add_hook(const core::character* c, const struct data &data);
+      void remove_hook(const core::character* c);
     };
 
     // тут нужно как то добавить проверку типов, в принципе особо проблем нет просто добавить указатель
     // нужно ли проверять указатель на баунды? а мы можем указать в теплейте? можем
     // почему наличие указателя выдает ворнинг subobject-linkage? пишет что есть анонимный неймспейс
     // стаковерфлоу говорит что это баг компилятора
-    template <typename T, const core::stat_type::values* type_array = nullptr>
+    template <typename T, bool check_character_stat_type = false>
     struct stats_container {
       std::array<core::stat_container, T::count> array;
       
@@ -65,37 +113,50 @@ namespace devils_engine {
         memset(array.data(), 0, array.size() * sizeof(array[0]));
       }
       
+      stats_container(const stats_container &other) {
+        memcpy(array.data(), other.array.data(), array.size() * sizeof(array[0]));
+      }
+      
+      stats_container(stats_container &&other) = delete;
+      
       float get(const uint32_t &index) const {
-        if constexpr (type_array == nullptr) return array[index].ival;
-        switch (type_array[index]) {
-          case core::stat_type::int_t:   return array[index].ival;
-          case core::stat_type::uint_t:  return array[index].uval;
-          case core::stat_type::float_t: return array[index].fval;
+        if constexpr (!check_character_stat_type) return array[index].ival;
+        switch (core::character_stats::types[index]) {
+          case core::stat_value_type::int_t:   return array[index].ival;
+          case core::stat_value_type::uint_t:  return array[index].uval;
+          case core::stat_value_type::float_t: return array[index].fval;
           default: assert(false);
         }
         return 0.0f;
       }
       
       void set(const uint32_t &index, const float &value) {
-        if constexpr (type_array == nullptr) { array[index].ival = value; return; }
-        switch (type_array[index]) {
-          case core::stat_type::int_t:   array[index].ival = value; break;
-          case core::stat_type::uint_t:  array[index].uval = value; break;
-          case core::stat_type::float_t: array[index].fval = value; break;
+        if constexpr (!check_character_stat_type) { array[index].ival = value; return; }
+        switch (core::character_stats::types[index]) {
+          case core::stat_value_type::int_t:   array[index].ival = value; break;
+          case core::stat_value_type::uint_t:  array[index].uval = value; break;
+          case core::stat_value_type::float_t: array[index].fval = value; break;
           default: assert(false);
         }
       }
       
       float add(const uint32_t &index, const float &value) {
-        if constexpr (type_array == nullptr) { const int32_t a = array[index].ival; array[index].ival += value; return a; }
-        switch (type_array[index]) {
-          case core::stat_type::int_t:   { const  int32_t a = array[index].ival; array[index].ival += value; return a; }
-          case core::stat_type::uint_t:  { const uint32_t a = array[index].uval; array[index].uval += value; return a; }
-          case core::stat_type::float_t: { const    float a = array[index].fval; array[index].fval += value; return a; }
+        if constexpr (!check_character_stat_type) { const int32_t a = array[index].ival; array[index].ival += value; return a; }
+        switch (core::character_stats::types[index]) {
+          case core::stat_value_type::int_t:   { const  int32_t a = array[index].ival; array[index].ival += value; return a; }
+          case core::stat_value_type::uint_t:  { const uint32_t a = array[index].uval; array[index].uval += value; return a; }
+          case core::stat_value_type::float_t: { const    float a = array[index].fval; array[index].fval += value; return a; }
           default: assert(false);
         }
         return 0.0f;
       }
+      
+      stats_container & operator=(const stats_container &other) {
+        memcpy(array.data(), other.array.data(), array.size() * sizeof(array[0]));
+        return *this;
+      }
+      
+      stats_container & operator=(stats_container &&other) = delete;
     };
    
     // массивы вообще имеют право на жизнь

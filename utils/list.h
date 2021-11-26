@@ -1,5 +1,5 @@
-#ifndef UTILS_LIST_H
-#define UTILS_LIST_H
+#ifndef DEVILS_ENGINE_UTILS_LIST_H
+#define DEVILS_ENGINE_UTILS_LIST_H
 
 #include <type_traits>
 #include "assert.h"
@@ -15,8 +15,31 @@ namespace devils_engine {
   namespace utils {
     enum class list_type { // возможно имеет смысл перенести типы в другое место
       prisoners,
-      siblings,
-      vassals
+      courtiers,
+      father_line_siblings,
+      mother_line_siblings,
+      prev_consorts,
+      concubines,
+      vassals,
+      titles,
+      sibling_titles,
+      faiths,
+      sibling_cultures,
+      victims,
+      statemans,
+      councilors,
+      magistrates,
+      assemblers,
+      clergymans,
+      state_electors,
+      council_electors,
+      tribunal_electors,
+      assembly_electors,
+      clergy_electors,
+      city_troops,
+      army_troops,
+      province_cities,
+      hero_companions,
     };
     
     namespace forw {
@@ -36,7 +59,6 @@ namespace devils_engine {
         void remove(T* prev) noexcept {
           static_assert(std::is_base_of_v<list<T, t>, T>);
           auto l = static_cast<list<T, t>>(prev);
-          assert(l->m_next == static_cast<T*>(this));
           l->m_next = m_next;
           m_next = nullptr;
         }
@@ -69,35 +91,64 @@ namespace devils_engine {
       }
 
       template <list_type t, typename T>
-      T* list_next(T* cur) noexcept {
-        list<T, t>* l = cur;
+      T* list_next(const T* cur) noexcept {
+        const list<T, t>* l = cur;
         return l->m_next;
+      }
+      
+      template <list_type t, typename T>
+      bool list_empty(const T* cur) noexcept {
+        const list<T, t>* l = cur;
+        return l->empty();
+      }
+      
+      template <list_type t, typename T>
+      void list_invalidate(T* cur) noexcept {
+        list<T, t>* l = cur;
+        l->invalidate();
       }
     }
     
     namespace ring {
       template <typename T, list_type t>
       struct list {
+        using current_list_p = list<T, t>*;
+        
         T* m_next;
         T* m_prev;
         
         list() noexcept : m_next(static_cast<T*>(this)), m_prev(static_cast<T*>(this)) {}
+        // пока непонятно насколько это испортит разные списки в игре
+        // но с другой стороны, если мы в этот момент не будем ничего обходить
+        // то так аккуратно уберем невалидные данные
+        ~list() noexcept { remove(); }
     
         void add(T* obj) noexcept {
           static_assert(std::is_base_of_v<list<T, t>, T>);
-          list<T, t>* l = obj;
+          current_list_p l = obj;
           auto cur = static_cast<T*>(this);
           l->m_next = m_next;
           l->m_prev = cur;
-          list<T, t>* n = m_next;
+          current_list_p n = m_next;
           m_next = obj;
           n->m_prev = obj;
         }
         
+        void radd(T* obj) noexcept {
+          static_assert(std::is_base_of_v<list<T, t>, T>);
+          current_list_p l = obj;
+          auto cur = static_cast<T*>(this);
+          l->m_next = cur;
+          l->m_prev = m_prev;
+          current_list_p n = m_prev;
+          m_prev = obj;
+          n->m_next = obj;
+        }
+        
         void remove() noexcept {
           static_assert(std::is_base_of_v<list<T, t>, T>);
-          auto l_next = static_cast<list<T, t>*>(m_next);
-          auto l_prev = static_cast<list<T, t>*>(m_prev);
+          auto l_next = static_cast<current_list_p>(m_next);
+          auto l_prev = static_cast<current_list_p>(m_prev);
           l_next->m_prev = m_prev;
           l_prev->m_next = m_next;
           m_prev = static_cast<T*>(this);
@@ -105,13 +156,19 @@ namespace devils_engine {
         }
         
         void invalidate() noexcept { m_next = static_cast<T*>(this); m_prev = static_cast<T*>(this); }
-        bool empty() const noexcept { return m_next == static_cast<T*>(this) && m_prev == static_cast<T*>(this); }
+        bool empty() const noexcept { return m_next == static_cast<const T*>(this) && m_prev == static_cast<const T*>(this); }
       };
     
       template <list_type t, typename T>
       void list_add(T* cur, T* obj) noexcept {
         list<T, t>* l = cur;
         l->add(obj);
+      }
+      
+      template <list_type t, typename T>
+      void list_radd(T* cur, T* obj) noexcept {
+        list<T, t>* l = cur;
+        l->radd(obj);
       }
 
       template <list_type t, typename T>
@@ -121,15 +178,27 @@ namespace devils_engine {
       }
 
       template <list_type t, typename T>
-      T* list_next(T* cur, T* ref) noexcept {
-        list<T, t>* l = cur;
-        return l->m_next == ref ? nullptr : l->m_next;
+      T* list_next(const T* cur, const T* ref) noexcept {
+        const list<T, t>* l = cur;
+        return cur != nullptr && l->m_next != ref ? l->m_next : nullptr;
       }
 
       template <list_type t, typename T>
-      T* list_prev(T* cur, T* ref) noexcept {
+      T* list_prev(const T* cur, const T* ref) noexcept {
+        const list<T, t>* l = cur;
+        return cur != nullptr && l->m_prev != ref ? l->m_prev : nullptr;
+      }
+      
+      template <list_type t, typename T>
+      bool list_empty(const T* cur) noexcept {
+        const list<T, t>* l = cur;
+        return l->empty();
+      }
+      
+      template <list_type t, typename T>
+      void list_invalidate(T* cur) noexcept {
         list<T, t>* l = cur;
-        return l->m_prev == ref ? nullptr : l->m_prev;
+        l->invalidate();
       }
     }
     

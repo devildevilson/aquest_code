@@ -13,7 +13,8 @@
 #include "main_menu.h"
 #include "lua_initialization.h"
 #include "settings.h"
-#include "astar_search.h"
+//#include "astar_search.h"
+#include "astar_search_mt.h"
 #include "battle_lua_states.h"
 //#include "string_bank.h"
 #include "localization_container.h"
@@ -31,6 +32,7 @@
 #include "render/image_controller.h"
 #include "render/battle_render_stages.h"
 #include "render/map_data.h"
+#include "render/render_mode_container.h"
 
 #include "ai/sub_system.h"
 #include "ai/ai_system.h"
@@ -54,6 +56,7 @@
 #include "bin/objects_selection.h"
 
 #include "core/context.h"
+#include "core/internal_lua_state.h"
 
 #include <filesystem>
 
@@ -91,6 +94,7 @@ namespace devils_engine {
         sizeof(struct path_managment) +
         sizeof(localization::container)
         //sizeof(utils::localization)
+        , 8
       ),
       //input_data(nullptr),
       keys_mapping{nullptr},
@@ -285,6 +289,7 @@ namespace devils_engine {
       auto device = graphics_container->vulkan->device;
       auto window = graphics_container->window;
       auto buffers = system->add_target<render::buffers>(graphics_container);
+      global::get(buffers);
 
       auto next_frame = system->add_stage<render::window_next_frame>();
       auto begin   = system->add_stage<render::task_begin>();
@@ -322,7 +327,7 @@ namespace devils_engine {
       global::get(start);
 //       global::get(tiles);
 //       global::get(walls);
-      global::get(buffers);
+//       global::get(buffers);
 //       global::get(opt2);
 //       global::get(opt3);
 //       (void)borders;
@@ -542,14 +547,15 @@ namespace devils_engine {
       create_render_stages();
       
       const auto local_map = map;
-      utils::astar_search::set_vertex_cost_f([local_map] (const uint32_t &current_tile_index, const uint32_t &neighbour_tile_index) -> utils::astar_search::float_t {
-        const auto &current_tile_data = render::unpack_data(local_map->get_tile(current_tile_index));
-        const auto &neighbour_tile_data = render::unpack_data(local_map->get_tile(neighbour_tile_index));
+      const auto local_context = core_context;
+      utils::astar_search_mt::set_vertex_cost_f([local_context] (const uint32_t &current_tile_index, const uint32_t &neighbour_tile_index, const utils::user_data &) -> utils::astar_search_mt::float_t {
+        const auto current_tile_data = local_context->get_entity<core::tile>(current_tile_index);
+        const auto neighbour_tile_data = local_context->get_entity<core::tile>(neighbour_tile_index);
         
-        if (neighbour_tile_data.height > 0.5f) return 1000.0;
+        if (neighbour_tile_data->height > 0.5f) return 1000.0;
         
-        const uint32_t current_height_layer = render::compute_height_layer(current_tile_data.height);
-        const uint32_t neighbour_height_layer = render::compute_height_layer(neighbour_tile_data.height);
+        const uint32_t current_height_layer = render::compute_height_layer(current_tile_data->height);
+        const uint32_t neighbour_height_layer = render::compute_height_layer(neighbour_tile_data->height);
         
         // какая высота ограничивает передвижение? у меня кажется максимальная высота 20? мне надо прикинуть что 
         // 20 слоев это весь подьем от моря до самой высокой горы, и примерно с 10 слоя (по идее) начинаются горы (проходимые?)
@@ -562,268 +568,377 @@ namespace devils_engine {
         //return 1.0;
       });
       
-      utils::astar_search::set_goal_cost_f([local_map] (const uint32_t &current_tile_index, const uint32_t &goal_tile_index) -> utils::astar_search::float_t {
-        const auto &current_tile_data = local_map->get_tile(current_tile_index);
-        const auto current_tile_point_index = current_tile_data.tile_indices.x;
+      utils::astar_search_mt::set_goal_cost_f([local_context, local_map] (const uint32_t &current_tile_index, const uint32_t &goal_tile_index) -> utils::astar_search_mt::float_t {
+        const auto &current_tile_data = local_context->get_entity<core::tile>(current_tile_index);
+        const auto current_tile_point_index = current_tile_data->center;
         const auto current_tile_center = local_map->get_point(current_tile_point_index);
-        const auto current_tile_vec = glm::dvec4(glm::dvec3(current_tile_center), 0.0);
+//         const auto current_tile_vec = glm::dvec4(glm::dvec3(current_tile_center), 0.0);
         
-        const auto &goal_tile_data = local_map->get_tile(goal_tile_index);
-        const auto goal_tile_point_index = goal_tile_data.tile_indices.x;
+        const auto &goal_tile_data = local_context->get_entity<core::tile>(goal_tile_index);
+        const auto goal_tile_point_index = goal_tile_data->center;
         const auto goal_tile_center = local_map->get_point(goal_tile_point_index);
-        const auto goal_tile_vec = glm::dvec4(glm::dvec3(goal_tile_center), 0.0);
+//         const auto goal_tile_vec = glm::dvec4(glm::dvec3(goal_tile_center), 0.0);
         
-        const double angle = vectors_angle(current_tile_vec, goal_tile_vec);
+        //const double angle = vectors_angle(current_tile_vec, goal_tile_vec);
         
         //return angle * core::map::world_radius;
         return glm::distance(current_tile_center, goal_tile_center); // по углу похоже неверный результат иногда выдает
+      });
+      
+      utils::astar_search_mt::set_fill_successors_f([] (utils::astar_search_mt* searcher, const uint32_t &tile_index, const utils::user_data &) {
+        assert(false);
       });
       
       // нужно ли специально обнулять эти функции? врядли
     }
     
     void map_t::setup_rendering_modes() {
+      // функции наверное лучше куда нибудь вытащить
+      // во всех этих функциях я буду задавать данные в конкретный тайл,
+      // функция может быть запущена в другом потоке отличном от потка интерфейса
+      // может ли случиться кердык? может, хотя эта вещь нужна только игроку
+      // следовательно не имеет смысла тут городить что то серьезное, но возможно
+      // нужно сделать отложенное выполнение этой функции
       ASSERT(is_init());
       auto &render_modes_container = *render_modes;
       render_modes_container[render::modes::biome] = [this] () {
-//         auto ptr = global::get<core::seasons>();
-//         auto map = global::get<core::map>();
         for (size_t i = 0; i < core::map::hex_count_d(core::map::detail_level); ++i) {
           const uint32_t biome_index = seasons->get_tile_biome(seasons->current_season, i);
-          const auto &current_biome = seasons->biomes[biome_index];
-          map->set_tile_color(i, current_biome.color);
-          map->set_tile_texture(i, current_biome.texture);
-//           if (biome_index == render::biome_grassland) {
-//             ASSERT(render::is_image_valid(current_biome.texture));
-//           }
+          const auto &current_biome = core_context->get_entity<core::biome>(biome_index);
+          auto tile = core_context->get_entity<core::tile>(i);
+          tile->color = current_biome->data.color;
+          tile->texture = current_biome->data.texture;
         }
+        
+        global::get<render::tile_updater>()->update_all(core_context);
       };
       
       render_modes_container[render::modes::cultures] = [this] () {
-        for (size_t i = 0; i < core_context->get_entity_count<core::province>(); ++i) {
-          auto province = core_context->get_entity<core::province>(i);
-          auto culture = nullptr;
-          for (const uint32_t tile_index : province->tiles) {
-            const uint32_t rand_num1 = render::prng(size_t(0));
-            const uint32_t rand_num2 = render::prng(rand_num1);
-            const uint32_t rand_num3 = render::prng(rand_num2);
-            const float color_r = render::prng_normalize(rand_num1);
-            const float color_g = render::prng_normalize(rand_num2);
-            const float color_b = render::prng_normalize(rand_num3);
-            map->set_tile_color(tile_index, render::make_color(color_r, color_b, color_g, 1.0f));
-            map->set_tile_texture(tile_index, {GPU_UINT_MAX});
+        for (size_t i = 0; i < core::map::hex_count_d(core::map::detail_level); ++i) {
+          auto tile = core_context->get_entity<core::tile>(i);
+          tile->texture = {GPU_UINT_MAX};
+          
+          if (tile->province == UINT32_MAX) {
+            const auto &current_biome = core_context->get_entity<core::biome>(tile->biome_index);
+            const bool is_water = current_biome->get_attribute(core::biome::attributes::water);
+            tile->color = is_water ? current_biome->data.color : render::make_color(0.3f, 0.3f, 0.3f, 1.0f);
+            tile->texture = is_water ? current_biome->data.texture : render::image_t{GPU_UINT_MAX};
+            //tile->color = current_biome->data.color;
+            //tile->texture = current_biome->data.texture;
+            continue;
           }
+          
+          const auto province = core_context->get_entity<core::province>(tile->province);
+          auto culture = province->culture;
+          tile->color = culture->color;
         }
+        
+        global::get<render::tile_updater>()->update_all(core_context);
       };
       
       render_modes_container[render::modes::culture_groups] = [this] () {
-        for (size_t i = 0; i < core_context->get_entity_count<core::province>(); ++i) {
-          auto province = core_context->get_entity<core::province>(i);
-          auto culture = nullptr;
-          for (const uint32_t tile_index : province->tiles) {
-            const uint32_t rand_num1 = render::prng(size_t(0));
-            const uint32_t rand_num2 = render::prng(rand_num1);
-            const uint32_t rand_num3 = render::prng(rand_num2);
-            const float color_r = render::prng_normalize(rand_num1);
-            const float color_g = render::prng_normalize(rand_num2);
-            const float color_b = render::prng_normalize(rand_num3);
-            map->set_tile_color(tile_index, render::make_color(color_r, color_b, color_g, 1.0f));
-            map->set_tile_texture(tile_index, {GPU_UINT_MAX});
+        for (size_t i = 0; i < core::map::hex_count_d(core::map::detail_level); ++i) {
+          auto tile = core_context->get_entity<core::tile>(i);
+          tile->texture = {GPU_UINT_MAX};
+          
+          if (tile->province == UINT32_MAX) {
+            const auto &current_biome = core_context->get_entity<core::biome>(tile->biome_index);
+            const bool is_water = current_biome->get_attribute(core::biome::attributes::water);
+            tile->color = is_water ? current_biome->data.color : render::make_color(0.3f, 0.3f, 0.3f, 1.0f);
+            tile->texture = is_water ? current_biome->data.texture : render::image_t{GPU_UINT_MAX};
+            //tile->color = current_biome->data.color;
+            //tile->texture = current_biome->data.texture;
+            continue;
           }
+          
+          const auto province = core_context->get_entity<core::province>(tile->province);
+          auto culture_group = province->culture->group;
+          tile->color = culture_group->color;
         }
+        
+        global::get<render::tile_updater>()->update_all(core_context);
       };
       
       render_modes_container[render::modes::religions] = [this] () {
-        for (size_t i = 0; i < core_context->get_entity_count<core::province>(); ++i) {
-          auto province = core_context->get_entity<core::province>(i);
-          auto religion = nullptr;
-          for (const uint32_t tile_index : province->tiles) {
-            const uint32_t rand_num1 = render::prng(size_t(0));
-            const uint32_t rand_num2 = render::prng(rand_num1);
-            const uint32_t rand_num3 = render::prng(rand_num2);
-            const float color_r = render::prng_normalize(rand_num1);
-            const float color_g = render::prng_normalize(rand_num2);
-            const float color_b = render::prng_normalize(rand_num3);
-            map->set_tile_color(tile_index, render::make_color(color_r, color_b, color_g, 1.0f));
-            map->set_tile_texture(tile_index, {GPU_UINT_MAX});
+        for (size_t i = 0; i < core::map::hex_count_d(core::map::detail_level); ++i) {
+          auto tile = core_context->get_entity<core::tile>(i);
+          tile->texture = {GPU_UINT_MAX};
+          
+          if (tile->province == UINT32_MAX) {
+            const auto &current_biome = core_context->get_entity<core::biome>(tile->biome_index);
+            const bool is_water = current_biome->get_attribute(core::biome::attributes::water);
+            tile->color = is_water ? current_biome->data.color : render::make_color(0.3f, 0.3f, 0.3f, 1.0f);
+            tile->texture = is_water ? current_biome->data.texture : render::image_t{GPU_UINT_MAX};
+            //tile->color = current_biome->data.color;
+            //tile->texture = current_biome->data.texture;
+            continue;
           }
+          
+          const auto province = core_context->get_entity<core::province>(tile->province);
+          auto religion = province->religion;
+          tile->color = religion->color;
         }
+        
+        global::get<render::tile_updater>()->update_all(core_context);
       };
       
       render_modes_container[render::modes::religion_groups] = [this] () {
-        for (size_t i = 0; i < core_context->get_entity_count<core::province>(); ++i) {
-          auto province = core_context->get_entity<core::province>(i);
-          auto religion = nullptr;
-          for (const uint32_t tile_index : province->tiles) {
-            const uint32_t rand_num1 = render::prng(size_t(0));
-            const uint32_t rand_num2 = render::prng(rand_num1);
-            const uint32_t rand_num3 = render::prng(rand_num2);
-            const float color_r = render::prng_normalize(rand_num1);
-            const float color_g = render::prng_normalize(rand_num2);
-            const float color_b = render::prng_normalize(rand_num3);
-            map->set_tile_color(tile_index, render::make_color(color_r, color_b, color_g, 1.0f));
-            map->set_tile_texture(tile_index, {GPU_UINT_MAX});
+        for (size_t i = 0; i < core::map::hex_count_d(core::map::detail_level); ++i) {
+          auto tile = core_context->get_entity<core::tile>(i);
+          tile->texture = {GPU_UINT_MAX};
+          
+          if (tile->province == UINT32_MAX) {
+            const auto &current_biome = core_context->get_entity<core::biome>(tile->biome_index);
+            const bool is_water = current_biome->get_attribute(core::biome::attributes::water);
+            tile->color = is_water ? current_biome->data.color : render::make_color(0.3f, 0.3f, 0.3f, 1.0f);
+            tile->texture = is_water ? current_biome->data.texture : render::image_t{GPU_UINT_MAX};
+            //tile->color = current_biome->data.color;
+            //tile->texture = current_biome->data.texture;
+            continue;
           }
+          
+          const auto province = core_context->get_entity<core::province>(tile->province);
+          auto religion_group = province->religion->group;
+          tile->color = religion_group->color;
         }
+        
+        global::get<render::tile_updater>()->update_all(core_context);
       };
       
       render_modes_container[render::modes::provinces] = [this] () { // не уверен что это вооще нужно
         ASSERT(core_context->get_entity_count<core::province>() != 0);
-        for (size_t i = 0; i < core_context->get_entity_count<core::province>(); ++i) {
-          auto province = core_context->get_entity<core::province>(i);
-          ASSERT(!province->tiles.empty());
-          for (const uint32_t tile_index : province->tiles) {
-            const uint32_t rand_num1 = render::prng(i);
-            const uint32_t rand_num2 = render::prng(rand_num1);
-            const uint32_t rand_num3 = render::prng(rand_num2);
-            const float color_r = render::prng_normalize(rand_num1);
-            const float color_g = render::prng_normalize(rand_num2);
-            const float color_b = render::prng_normalize(rand_num3);
-            map->set_tile_color(tile_index, render::make_color(color_r, color_b, color_g, 1.0f));
-            map->set_tile_texture(tile_index, {GPU_UINT_MAX});
+        for (size_t i = 0; i < core::map::hex_count_d(core::map::detail_level); ++i) {
+          auto tile = core_context->get_entity<core::tile>(i);
+          tile->texture = {GPU_UINT_MAX};
+          
+          if (tile->province == UINT32_MAX) {
+            const auto &current_biome = core_context->get_entity<core::biome>(tile->biome_index);
+            const bool is_water = current_biome->get_attribute(core::biome::attributes::water);
+            tile->color = is_water ? current_biome->data.color : render::make_color(0.3f, 0.3f, 0.3f, 1.0f);
+            tile->texture = is_water ? current_biome->data.texture : render::image_t{GPU_UINT_MAX};
+            //tile->color = current_biome->data.color;
+            //tile->texture = current_biome->data.texture;
+            continue;
           }
+          
+          const uint32_t rand_num1 = render::prng(tile->province);
+          const uint32_t rand_num2 = render::prng(rand_num1);
+          const uint32_t rand_num3 = render::prng(rand_num2);
+          const float color_r = render::prng_normalize(rand_num1);
+          const float color_g = render::prng_normalize(rand_num2);
+          const float color_b = render::prng_normalize(rand_num3);
+          tile->color = render::make_color(color_r, color_b, color_g, 1.0f);
         }
+        
+        global::get<render::tile_updater>()->update_all(core_context);
       };
       
+      // возможно имеет смысл для следующих режимов придумать способ как можно сделать то же самое но от провинций
       render_modes_container[render::modes::countries] = [this] () {
-        for (size_t i = 0; i < core_context->get_entity_count<core::province>(); ++i) {
-          auto province = core_context->get_entity<core::province>(i);
-          auto faction = province->title->owner;
-          ASSERT(faction != nullptr);
-          auto final_faction = faction;
-          while (faction != nullptr) {
-            final_faction = faction;
-            faction = faction->liege;
+        for (size_t i = 0; i < core::map::hex_count_d(core::map::detail_level); ++i) {
+          auto tile = core_context->get_entity<core::tile>(i);
+          tile->texture = {GPU_UINT_MAX};
+          
+          if (tile->province == UINT32_MAX) {
+            const auto &current_biome = core_context->get_entity<core::biome>(tile->biome_index);
+            const bool is_water = current_biome->get_attribute(core::biome::attributes::water);
+            tile->color = is_water ? current_biome->data.color : render::make_color(0.3f, 0.3f, 0.3f, 1.0f);
+            tile->texture = is_water ? current_biome->data.texture : render::image_t{GPU_UINT_MAX};
+            //tile->color = current_biome->data.color;
+            //tile->texture = current_biome->data.texture;
+            continue;
           }
-          ASSERT(final_faction != nullptr);
+          
+          auto province = core_context->get_entity<core::province>(tile->province);
+          auto realm = province->title->owner;
+          ASSERT(realm != nullptr);
+          auto final_realm = realm;
+          while (realm != nullptr) {
+            final_realm = realm;
+            realm = realm->liege;
+          }
+          ASSERT(final_realm != nullptr);
           
           // какое то число? пока что приведем указатель
-          const auto color = final_faction->main_title->main_color;
-          
-          for (const uint32_t tile_index : province->tiles) {
-            map->set_tile_color(tile_index, color);
-            map->set_tile_texture(tile_index, {GPU_UINT_MAX});
-          }
+          const auto color = final_realm->main_title->main_color;
+          tile->color = color;
         }
+        
+        global::get<render::tile_updater>()->update_all(core_context);
       };
       
-      render_modes_container[render::modes::duchies] = [this] () {
-        static bool deure = false;
-        if (render::get_current_mode() == render::modes::duchies) deure = !deure;
-        if (render::get_current_mode() != render::modes::duchies) deure = false;
-        
-        for (size_t i = 0; i < core_context->get_entity_count<core::province>(); ++i) {
-          auto province = core_context->get_entity<core::province>(i);
-          core::titulus* duchy_title = nullptr;
-          if (deure) {
-            auto title = province->title;
-            ASSERT(title != nullptr);
-            duchy_title = title->parent;
-          } else {
-            auto owner = province->title->owner;
-            while (owner != nullptr) {
-              if (owner->main_title->type == core::titulus::type::duke) duchy_title = owner->main_title;
-              owner = owner->liege;
-            }
+      render_modes_container[render::modes::duchies_de_jure] = [this] () {
+        for (size_t i = 0; i < core::map::hex_count_d(core::map::detail_level); ++i) {
+          auto tile = core_context->get_entity<core::tile>(i);
+          tile->texture = {GPU_UINT_MAX};
+          
+          // возможно имеет смысл тайлы земли перекрасить в серый
+          if (tile->province == UINT32_MAX) {
+            const auto &current_biome = core_context->get_entity<core::biome>(tile->biome_index);
+            const bool is_water = current_biome->get_attribute(core::biome::attributes::water);
+            tile->color = is_water ? current_biome->data.color : render::make_color(0.3f, 0.3f, 0.3f, 1.0f);
+            tile->texture = is_water ? current_biome->data.texture : render::image_t{GPU_UINT_MAX};
+            continue;
           }
           
-          if (duchy_title != nullptr && duchy_title->owner != nullptr) {
-  //           const size_t num = reinterpret_cast<size_t>(duchy_title);
-            const render::color_t color = duchy_title->main_color;
-            
-            for (const uint32_t tile_index : province->tiles) {
-  //             const uint32_t rand_num1 = render::lcg(num);
-  //             const uint32_t rand_num2 = render::lcg(rand_num1);
-  //             const uint32_t rand_num3 = render::lcg(rand_num2);
-  //             const float color_r = render::lcg_normalize(rand_num1);
-  //             const float color_g = render::lcg_normalize(rand_num2);
-  //             const float color_b = render::lcg_normalize(rand_num3);
-  //             map->set_tile_color(tile_index, render::make_color(color_r, color_b, color_g, 1.0f));
-              map->set_tile_color(tile_index, color);
-              map->set_tile_texture(tile_index, {GPU_UINT_MAX});
-            }
-          } else {
-            for (const uint32_t tile_index : province->tiles) {
-              map->set_tile_color(tile_index, render::make_color(0.3f, 0.3f, 0.3f, 1.0f));
-              map->set_tile_texture(tile_index, {GPU_UINT_MAX});
-            }
-          }
+          auto province = core_context->get_entity<core::province>(tile->province);
+          auto title = province->title;
+          ASSERT(title != nullptr);
+          const auto duchy_title = title->parent;
+          
+          if (duchy_title != nullptr) tile->color = duchy_title->main_color;
+          else tile->color = render::make_color(0.3f, 0.3f, 0.3f, 1.0f);
         }
+        
+        global::get<render::tile_updater>()->update_all(core_context);
       };
       
-      render_modes_container[render::modes::kingdoms] = [this] () {
-        static bool deure = false;
-        if (render::get_current_mode() == render::modes::kingdoms) deure = !deure;
-        if (render::get_current_mode() != render::modes::kingdoms) deure = false;
-        
-        for (size_t i = 0; i < core_context->get_entity_count<core::province>(); ++i) {
-          auto province = core_context->get_entity<core::province>(i);
-          core::titulus* king_title = nullptr;
-          if (deure) {
-            auto title = province->title;
-            ASSERT(title != nullptr);
-            auto duchy_title = title->parent;
-            king_title = duchy_title == nullptr ? nullptr : duchy_title->parent;
-          } else {
-            auto owner = province->title->owner;
-            while (owner != nullptr) {
-              if (owner->main_title->type == core::titulus::type::king) king_title = owner->main_title;
-              owner = owner->liege;
-            }
+      render_modes_container[render::modes::duchies_de_facto] = [this] () {
+        for (size_t i = 0; i < core::map::hex_count_d(core::map::detail_level); ++i) {
+          auto tile = core_context->get_entity<core::tile>(i);
+          tile->texture = {GPU_UINT_MAX};
+          
+          // возможно имеет смысл тайлы земли перекрасить в серый
+          if (tile->province == UINT32_MAX) {
+            const auto &current_biome = core_context->get_entity<core::biome>(tile->biome_index);
+            const bool is_water = current_biome->get_attribute(core::biome::attributes::water);
+            tile->color = is_water ? current_biome->data.color : render::make_color(0.3f, 0.3f, 0.3f, 1.0f);
+            tile->texture = is_water ? current_biome->data.texture : render::image_t{GPU_UINT_MAX};
+            continue;
           }
           
-          if (king_title != nullptr && king_title->owner != nullptr) {
-            const render::color_t color = king_title->main_color;
-            
-            for (const uint32_t tile_index : province->tiles) {
-              map->set_tile_color(tile_index, color);
-              map->set_tile_texture(tile_index, {GPU_UINT_MAX});
-            }
-          } else {
-            for (const uint32_t tile_index : province->tiles) {
-              map->set_tile_color(tile_index, render::make_color(0.3f, 0.3f, 0.3f, 1.0f));
-              map->set_tile_texture(tile_index, {GPU_UINT_MAX});
-            }
+          auto province = core_context->get_entity<core::province>(tile->province);
+          auto title = province->title;
+          ASSERT(title != nullptr);
+          auto owner = province->title->owner;
+          const core::titulus* duchy_title = nullptr;
+          while (owner != nullptr) {
+            if (owner->main_title->type() == core::titulus::type::duke) duchy_title = owner->main_title;
+            owner = owner->liege;
           }
+          
+          if (duchy_title != nullptr) tile->color = duchy_title->main_color;
+          else tile->color = render::make_color(0.3f, 0.3f, 0.3f, 1.0f);
         }
+        
+        global::get<render::tile_updater>()->update_all(core_context);
       };
       
-      render_modes_container[render::modes::empires] = [this] () {
-        static bool deure = false;
-        if (render::get_current_mode() == render::modes::empires) deure = !deure;
-        if (render::get_current_mode() != render::modes::empires) deure = false;
-        
-        for (size_t i = 0; i < core_context->get_entity_count<core::province>(); ++i) {
-          auto province = core_context->get_entity<core::province>(i);
-          core::titulus* emp_title = nullptr;
-          if (deure) {
-            auto title = province->title;
-            ASSERT(title != nullptr);
-            auto duchy_title = title->parent;
-            auto king_title = duchy_title == nullptr ? nullptr : duchy_title->parent;
-            emp_title = king_title == nullptr ? nullptr : king_title->parent;
-          } else {
-            auto owner = province->title->owner;
-            while (owner != nullptr) {
-              if (owner->main_title->type == core::titulus::type::imperial) emp_title = owner->main_title;
-              owner = owner->liege;
-            }
+      render_modes_container[render::modes::kingdoms_de_jure] = [this] () {
+        for (size_t i = 0; i < core::map::hex_count_d(core::map::detail_level); ++i) {
+          auto tile = core_context->get_entity<core::tile>(i);
+          tile->texture = {GPU_UINT_MAX};
+          
+          // возможно имеет смысл тайлы земли перекрасить в серый
+          if (tile->province == UINT32_MAX) {
+            const auto &current_biome = core_context->get_entity<core::biome>(tile->biome_index);
+            const bool is_water = current_biome->get_attribute(core::biome::attributes::water);
+            tile->color = is_water ? current_biome->data.color : render::make_color(0.3f, 0.3f, 0.3f, 1.0f);
+            tile->texture = is_water ? current_biome->data.texture : render::image_t{GPU_UINT_MAX};
+            continue;
           }
           
-          if (emp_title != nullptr && emp_title->owner != nullptr) {
-            const render::color_t color = emp_title->main_color;
-            
-            for (const uint32_t tile_index : province->tiles) {
-              map->set_tile_color(tile_index, color);
-              map->set_tile_texture(tile_index, {GPU_UINT_MAX});
-            }
-          } else {
-            for (const uint32_t tile_index : province->tiles) {
-              map->set_tile_color(tile_index, render::make_color(0.3f, 0.3f, 0.3f, 1.0f));
-              map->set_tile_texture(tile_index, {GPU_UINT_MAX});
-            }
-          }
+          auto province = core_context->get_entity<core::province>(tile->province);
+          auto title = province->title;
+          ASSERT(title != nullptr);
+          const auto duchy_title = title->parent;
+          const auto kingdom_title = duchy_title != nullptr ? duchy_title->parent : nullptr;
+          
+          if (kingdom_title != nullptr) tile->color = kingdom_title->main_color;
+          else tile->color = render::make_color(0.3f, 0.3f, 0.3f, 1.0f);
         }
+        
+        global::get<render::tile_updater>()->update_all(core_context);
+      };
+      
+      render_modes_container[render::modes::kingdoms_de_facto] = [this] () {
+        for (size_t i = 0; i < core::map::hex_count_d(core::map::detail_level); ++i) {
+          auto tile = core_context->get_entity<core::tile>(i);
+          tile->texture = {GPU_UINT_MAX};
+          
+          // возможно имеет смысл тайлы земли перекрасить в серый
+          if (tile->province == UINT32_MAX) {
+            const auto &current_biome = core_context->get_entity<core::biome>(tile->biome_index);
+            const bool is_water = current_biome->get_attribute(core::biome::attributes::water);
+            tile->color = is_water ? current_biome->data.color : render::make_color(0.3f, 0.3f, 0.3f, 1.0f);
+            tile->texture = is_water ? current_biome->data.texture : render::image_t{GPU_UINT_MAX};
+            continue;
+          }
+          
+          auto province = core_context->get_entity<core::province>(tile->province);
+          auto title = province->title;
+          ASSERT(title != nullptr);
+          auto owner = province->title->owner;
+          const core::titulus* kingdom_title = nullptr;
+          while (owner != nullptr) {
+            if (owner->main_title->type() == core::titulus::type::king) kingdom_title = owner->main_title;
+            owner = owner->liege;
+          }
+          
+          if (kingdom_title != nullptr) tile->color = kingdom_title->main_color;
+          else tile->color = render::make_color(0.3f, 0.3f, 0.3f, 1.0f);
+        }
+        
+        global::get<render::tile_updater>()->update_all(core_context);
+      };
+      
+      render_modes_container[render::modes::empires_de_jure] = [this] () {
+        for (size_t i = 0; i < core::map::hex_count_d(core::map::detail_level); ++i) {
+          auto tile = core_context->get_entity<core::tile>(i);
+          tile->texture = {GPU_UINT_MAX};
+          
+          // возможно имеет смысл тайлы земли перекрасить в серый
+          if (tile->province == UINT32_MAX) {
+            const auto &current_biome = core_context->get_entity<core::biome>(tile->biome_index);
+            const bool is_water = current_biome->get_attribute(core::biome::attributes::water);
+            tile->color = is_water ? current_biome->data.color : render::make_color(0.3f, 0.3f, 0.3f, 1.0f);
+            tile->texture = is_water ? current_biome->data.texture : render::image_t{GPU_UINT_MAX};
+            continue;
+          }
+          
+          auto province = core_context->get_entity<core::province>(tile->province);
+          auto title = province->title;
+          ASSERT(title != nullptr);
+          const auto duchy_title = title->parent;
+          const auto kingdom_title = duchy_title != nullptr ? duchy_title->parent : nullptr;
+          const auto emp_title = kingdom_title != nullptr ? kingdom_title->parent : nullptr;
+          
+          if (emp_title != nullptr) tile->color = emp_title->main_color;
+          else tile->color = render::make_color(0.3f, 0.3f, 0.3f, 1.0f);
+        }
+        
+        global::get<render::tile_updater>()->update_all(core_context);
+      };
+      
+      render_modes_container[render::modes::empires_de_facto] = [this] () {
+        for (size_t i = 0; i < core::map::hex_count_d(core::map::detail_level); ++i) {
+          auto tile = core_context->get_entity<core::tile>(i);
+          tile->texture = {GPU_UINT_MAX};
+          
+          // возможно имеет смысл тайлы земли перекрасить в серый
+          if (tile->province == UINT32_MAX) {
+            const auto &current_biome = core_context->get_entity<core::biome>(tile->biome_index);
+            const bool is_water = current_biome->get_attribute(core::biome::attributes::water);
+            tile->color = is_water ? current_biome->data.color : render::make_color(0.3f, 0.3f, 0.3f, 1.0f);
+            tile->texture = is_water ? current_biome->data.texture : render::image_t{GPU_UINT_MAX};
+            continue;
+          }
+          
+          auto province = core_context->get_entity<core::province>(tile->province);
+          auto title = province->title;
+          ASSERT(title != nullptr);
+          auto owner = province->title->owner;
+          const core::titulus* emp_title = nullptr;
+          while (owner != nullptr) {
+            if (owner->main_title->type() == core::titulus::type::imperial) emp_title = owner->main_title;
+            owner = owner->liege;
+          }
+          
+          if (emp_title != nullptr) tile->color = emp_title->main_color;
+          else tile->color = render::make_color(0.3f, 0.3f, 0.3f, 1.0f);
+        }
+        
+        global::get<render::tile_updater>()->update_all(core_context);
       };
     }
     
@@ -856,7 +971,9 @@ namespace devils_engine {
     
     void map_t::create_render_stages() {
       const size_t optimizators_size = sizeof(render::world_map_buffers) +
-        sizeof(render::tile_optimizer);
+        sizeof(render::static_copy_array<16>) +
+        sizeof(render::tile_optimizer) +
+        sizeof(render::tile_updater);
 //         sizeof(render::tile_borders_optimizer) + 
 //         sizeof(render::tile_walls_optimizer);
         
@@ -887,6 +1004,8 @@ namespace devils_engine {
       auto buffers = optimizators_container->add_target<render::world_map_buffers>(container);
       world_buffers = buffers;
       
+      auto copy = optimizators_container->add_stage<render::static_copy_array<16>>(device);
+      auto upd  = optimizators_container->add_stage<render::tile_updater>(render::tile_updater::create_info{device, allocator, map});
       auto opt1 = optimizators_container->add_stage<render::tile_optimizer>(render::tile_optimizer::create_info{device, allocator, tiles_layout, uniform_layout});
 //       auto opt2 = optimizators_container->add_stage<render::tile_borders_optimizer>(render::tile_borders_optimizer::create_info{device, buffers});
 //       auto opt3 = optimizators_container->add_stage<render::tile_walls_optimizer>(render::tile_walls_optimizer::create_info{device, buffers});
@@ -896,12 +1015,17 @@ namespace devils_engine {
 //       auto walls   = render_container->add_stage<render::tile_connections_render>(render::tile_connections_render::create_info{device, opt1, buffers});
                      render_container->add_stage<render::tile_object_render>(render::tile_object_render::create_info{container, tiles_layout, images_layout, opt1, buffers});
       auto thl     = render_container->add_stage<render::tile_highlights_render>(render::tile_highlights_render::create_info{container, tiles_layout, buffers});
-                     render_container->add_stage<render::render_pass_end>();
-                     render_container->add_stage<render::tile_objects_optimizer>(render::tile_objects_optimizer::create_info{device, allocator, tiles_layout, uniform_layout, opt1});
-                     render_container->add_stage<render::render_pass_begin>(1);
-                     render_container->add_stage<render::tile_structure_render>(render::tile_structure_render::create_info{container, tiles_layout, images_layout, opt1, world_buffers});
-                     render_container->add_stage<render::heraldies_render>(render::heraldies_render::create_info{container, tiles_layout, images_layout, opt1, world_buffers});
-                     render_container->add_stage<render::armies_render>(render::armies_render::create_info{container, tiles_layout, images_layout, opt1, world_buffers});
+//                      render_container->add_stage<render::render_pass_end>();
+//                      render_container->add_stage<render::tile_objects_optimizer>(render::tile_objects_optimizer::create_info{device, allocator, tiles_layout, uniform_layout, opt1});
+//                      render_container->add_stage<render::render_pass_begin>(1);
+      auto tsr     = render_container->add_stage<render::tile_structure_render>(render::tile_structure_render::create_info{container, tiles_layout, images_layout, opt1, world_buffers});
+      auto ar      = render_container->add_stage<render::armies_render>(render::armies_render::create_info{container, tiles_layout, images_layout, opt1, world_buffers});
+      auto hr      = render_container->add_stage<render::heraldies_render>(render::heraldies_render::create_info{container, tiles_layout, images_layout, opt1, world_buffers});
+      
+      copy->add(world_buffers);
+      copy->add(tsr);
+      copy->add(hr);
+      copy->add(ar);
                      
 //       systems->render_slots->set_stage(2, optimizators_container);
 //       systems->render_slots->set_stage(7, render_container);
@@ -913,6 +1037,11 @@ namespace devils_engine {
 //       global::get(world_buffers);
 //       global::get(opt2);
 //       global::get(opt3);
+      global::get(tsr);
+      global::get(hr);
+      global::get(ar);
+      global::get(copy);
+      global::get(upd);
       UNUSED_VARIABLE(borders);
     }
     
@@ -937,6 +1066,7 @@ namespace devils_engine {
       auto systems = global::get<core_t>();
       systems->render_slots->set_stage(OPTIMIZATOR_STAGE_SLOT, optimizators_container);
       systems->render_slots->set_stage(RENDER_STAGE_SLOT, render_container);
+      std::cout << "start render world map" << "\n";
     }
     
     void map_t::stop_rendering() {
@@ -945,6 +1075,7 @@ namespace devils_engine {
       auto systems = global::get<core_t>();
       systems->render_slots->clear_slot(RENDER_STAGE_SLOT);
       systems->render_slots->clear_slot(OPTIMIZATOR_STAGE_SLOT);
+      std::cout << "stop render world map" << "\n";
     }
     
     bool map_t::is_rendering() const {
@@ -1177,4 +1308,3 @@ namespace devils_engine {
     //bool encouter_t::is_init() const { return container.inited(); }
   }
 }
-

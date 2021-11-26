@@ -11,7 +11,7 @@ namespace devils_engine {
   namespace utils {
     class stack_allocator {
     public:
-      stack_allocator(const size_t &size);
+      stack_allocator(const size_t &size, const size_t &aligment);
       stack_allocator(stack_allocator &&allocator);
       ~stack_allocator();
       
@@ -19,10 +19,12 @@ namespace devils_engine {
       void clear();
       
       size_t size() const;
+      size_t aligment() const;
       size_t allocated_size() const;
     private:
       char* m_memory;
       size_t m_size;
+      size_t m_aligment;
       std::atomic<size_t> m_allocated;
     };
     

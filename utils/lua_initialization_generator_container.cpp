@@ -4,7 +4,7 @@
 #include "bin/generator_context2.h"
 #include "bin/seasons.h"
 #include "random_engine.h"
-#include "FastNoise.h"
+#include "Cpp/FastNoiseLite.h"
 #include "bin/map.h"
 #include "render/shared_render_utility.h"
 #include "globals.h"
@@ -69,8 +69,8 @@ namespace devils_engine {
     
     void setup_lua_generator_container(sol::state_view lua) {
       auto generator = lua[magic_enum::enum_name<reserved_lua::values>(reserved_lua::generator)].get_or_create<sol::table>();
-      auto container = generator.new_usertype<map::generator::container>("container",
-        sol::no_constructor,
+      auto container = generator.new_usertype<map::generator::container>(
+        "container", sol::no_constructor,
         "add_entity", &map::generator::container::add_entity_lua,
         "set_entity_count", &map::generator::container::set_entity_count_lua,
         "clear_entities", &map::generator::container::clear_entities_lua,
@@ -159,10 +159,11 @@ namespace devils_engine {
           }
         }
       });
-      utils.set_function("int_random_queue", [] (sol::this_state s, const map::generator::context* ctx, const size_t &first_count, const sol::function prepare_function, const sol::function queue_function) {
+      
+      utils.set_function("int_random_queue", [] (sol::this_state s, const map::generator::context* ctx, const double &first_count, const sol::function prepare_function, const sol::function queue_function) {
         sol::state_view lua = s;
-        std::vector<int64_t> queue(first_count * 2);
-        queue.clear();
+        std::vector<int64_t> queue;
+        queue.reserve(first_count * 2);
         const auto push_func = [&queue] (const int64_t data) { queue.push_back(data); };
         sol::object lua_push_func = sol::make_object(lua, push_func);
         
@@ -179,31 +180,38 @@ namespace devils_engine {
           queue_function(data, lua_push_func);
         }
       });
-      utils.set_function("int_queue", [] (sol::this_state s, const size_t &first_count, const sol::function prepare_function, const sol::function queue_function) {
+      
+      utils.set_function("num_random_queue", [] (sol::this_state s, const map::generator::context* ctx, const double &first_count, const sol::function prepare_function, const sol::function queue_function) {
         sol::state_view lua = s;
-        std::queue<int64_t> queue;
-        const auto push_func = [&queue] (const int64_t data) { queue.push(data); };
+        std::vector<double> queue;
+        const size_t size = first_count;
+        queue.reserve(size * 2);
+        const auto push_func = [&queue] (const double data) { queue.push_back(data); };
         sol::object lua_push_func = sol::make_object(lua, push_func);
         
-        for (size_t i = 0; i < first_count; ++i) {
+        for (size_t i = 0; i < size; ++i) {
           prepare_function(TO_LUA_INDEX(i), lua_push_func);
         }
         
         while (!queue.empty()) {
-          const int64_t data = queue.front();
-          queue.pop();
+          const size_t rand_index = ctx->random->index(queue.size());
+          const double data = queue[rand_index];
+          queue[rand_index] = queue.back();
+          queue.pop_back();
           
           queue_function(data, lua_push_func);
         }
       });
-      utils.set_function("random_queue", [] (sol::this_state s, const map::generator::context* ctx, const size_t &first_count, const sol::function prepare_function, const sol::function queue_function) {
+      
+      utils.set_function("random_queue", [] (sol::this_state s, const map::generator::context* ctx, const double &first_count, const sol::function prepare_function, const sol::function queue_function) {
         sol::state_view lua = s;
-        std::vector<sol::object> queue(first_count * 2);
-        queue.clear();
+        std::vector<sol::object> queue;
+        const size_t size = first_count;
+        queue.reserve(size * 2);
         const auto push_func = [&queue] (const sol::object data) { queue.push_back(data); };
         sol::object lua_push_func = sol::make_object(lua, push_func);
         
-        for (size_t i = 0; i < first_count; ++i) {
+        for (size_t i = 0; i < size; ++i) {
           prepare_function(TO_LUA_INDEX(i), lua_push_func);
         }
         
@@ -216,23 +224,7 @@ namespace devils_engine {
           queue_function(data, lua_push_func);
         }
       });
-      utils.set_function("queue", [] (sol::this_state s, const size_t &first_count, const sol::function prepare_function, const sol::function queue_function) {
-        sol::state_view lua = s;
-        std::queue<sol::object> queue;
-        const auto push_func = [&queue] (const sol::object data) { queue.push(data); };
-        sol::object lua_push_func = sol::make_object(lua, push_func);
-        
-        for (size_t i = 0; i < first_count; ++i) {
-          prepare_function(TO_LUA_INDEX(i), lua_push_func);
-        }
-        
-        while (!queue.empty()) {
-          const sol::object data = queue.front();
-          queue.pop();
-          
-          queue_function(data, lua_push_func);
-        }
-      });
+      
       utils.set_function("each_tile_neighbor", [] (const map::generator::context* ctx, const sol::function activity) {
         const size_t tiles_count = ctx->map->tiles_count();
         for (size_t i = 0; i < tiles_count; ++i) {
@@ -252,26 +244,26 @@ namespace devils_engine {
         "set_tile_biome", [] (core::seasons* self, const uint32_t &season_index, const uint32_t &tile_index, const uint32_t &biome_index) {
           self->set_tile_biome(FROM_LUA_INDEX(season_index), FROM_LUA_INDEX(tile_index), FROM_LUA_INDEX(biome_index));
         },
-        "add_biome", [] (sol::this_state s, core::seasons* self, const sol::table &biome) {
-          sol::state_view lua = s;
-          auto cont = global::get<utils::world_serializator>();
-          
-          const bool ret = utils::validate_biome(cont->get_data_count(utils::world_serializator::biome), biome);
-          if (!ret) throw std::runtime_error("Biome validation error");                                                 
-          auto creator = global::get<systems::map_t>()->map_creator;
-          const std::string str_t = creator->serialize_table(biome);
-          
-          const uint32_t cont_biome_index = cont->add_data(utils::world_serializator::biome, str_t);
-          const uint32_t biome_index = self->allocate_biome();
-          if (cont_biome_index != biome_index) throw std::runtime_error("Something completely wrong with biomes indices");
-          
-          return TO_LUA_INDEX(biome_index);
-        },
+//         "add_biome", [] (sol::this_state s, core::seasons* self, const sol::table &biome) {
+//           sol::state_view lua = s;
+//           auto cont = global::get<utils::world_serializator>();
+//           
+//           const bool ret = utils::validate_biome(cont->get_data_count(utils::world_serializator::biome), biome);
+//           if (!ret) throw std::runtime_error("Biome validation error");                                                 
+//           auto creator = global::get<systems::map_t>()->map_creator;
+//           const std::string str_t = creator->serialize_table(biome);
+//           
+//           const uint32_t cont_biome_index = cont->add_data(utils::world_serializator::biome, str_t);
+//           const uint32_t biome_index = self->allocate_biome();
+//           if (cont_biome_index != biome_index) throw std::runtime_error("Something completely wrong with biomes indices");
+//           
+//           return TO_LUA_INDEX(biome_index);
+//         },
         "allocate_season", [] (core::seasons* self) {
           return TO_LUA_INDEX(self->allocate_season());
         },
         "seasons_count", sol::readonly_property(&core::seasons::seasons_count),
-        "biomes_count", sol::readonly_property(&core::seasons::biomes_count),
+//         "biomes_count", sol::readonly_property(&core::seasons::biomes_count),
         "max_seasons_count", sol::var(&core::seasons::maximum_seasons),
         "max_biomes_count", sol::var(&core::seasons::maximum_biomes),
         "invalid_biome", sol::var(&core::seasons::invalid_biome)

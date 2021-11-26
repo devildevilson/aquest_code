@@ -1,5 +1,5 @@
-#ifndef ACTION_COMMANDS_MACRO_H
-#define ACTION_COMMANDS_MACRO_H
+#ifndef DEVILS_ENGINE_SCRIPT_ACTION_COMMANDS_MACRO_H
+#define DEVILS_ENGINE_SCRIPT_ACTION_COMMANDS_MACRO_H
 
 // пока что добавил функции для персонажа, 
 // попытался немного по категориям их раскидать
@@ -12,23 +12,26 @@
 
 #define ACTION_COMMANDS_LIST \
   ACTION_COMMAND_FUNC(add_flag) \
-  ACTION_COMMAND_FUNC(marry) \
-  \
   ACTION_COMMAND_FUNC(add_hook) \
   ACTION_COMMAND_FUNC(add_trait) \
+  ACTION_COMMAND_FUNC(marry) \
+  ACTION_COMMAND_FUNC(divorce) \
   ACTION_COMMAND_FUNC(start_war) \
-  \
-  ACTION_COMMAND_FUNC(value) \
-  ACTION_COMMAND_FUNC(add) \
-  ACTION_COMMAND_FUNC(factor) \
-  ACTION_COMMAND_FUNC(string) \
-  ACTION_COMMAND_FUNC(object) \
-  ACTION_COMMAND_FUNC(save_as)
+  ACTION_COMMAND_FUNC(imprison) \
+  
+//   ACTION_COMMAND_FUNC(string) 
+//   ACTION_COMMAND_FUNC(object) 
+//   ACTION_COMMAND_FUNC(save_as)
+  
+//   ACTION_COMMAND_FUNC(add)
+//   ACTION_COMMAND_FUNC(multiply)
+//     ACTION_COMMAND_FUNC(value)
   
   // как сделать сохранение в контекст? во первых может ли быть сохранение в контекст в кондишоне?
   // хороший вопрос, вообще было бы неплохо еще какие то глобальные вещи хранить, но это уже за гранью
   // у функций которые создают объект должен быть 100% способ сразу засунуть их в память
   // не помню как там было в цк, но определенно нужно сделать сохранение в экшонах
+  // как убирать и добавлять вассалов, придворных, заключенных, 
   
   // перки, у меня наверное это дело будет по другому
 //   ACTION_COMMAND_FUNC(add_diplomacy_lifestyle_perk_points)

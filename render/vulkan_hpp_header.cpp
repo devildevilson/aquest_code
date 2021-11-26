@@ -1,6 +1,3 @@
-#define VMA_IMPLEMENTATION
-#include "vk_mem_alloc.hpp"
-
 #include "vulkan_hpp_header.h"
 
 #include <cstring>
@@ -818,9 +815,6 @@ namespace devils_engine {
       const vk::ShaderModuleCreateInfo info({}, opcode.size(), (uint32_t*)(opcode.data()));
       return device.createShaderModuleUnique(info);
     }
-    
-    vk::Device allocator_device(vma::Allocator allocator) { return (*allocator).m_hDevice; }
-    vk::Instance allocator_instance(vma::Allocator allocator) { return (*allocator).m_hInstance; }
     
     PFN_vkCreateDebugUtilsMessengerEXT pfnCreateDebugUtilsMessenger = nullptr;
     PFN_vkDestroyDebugUtilsMessengerEXT pfnDestroyDebugUtilsMessenger = nullptr;

@@ -297,8 +297,8 @@ namespace devils_engine {
     
     vk::UniqueShaderModule create_shader_module(vk::Device device, const std::string &path);
     
+    // vk_mem_alloc_impl.cpp
     vk::Device allocator_device(vma::Allocator allocator);
-    //vk::PhysicalDevice allocator_physical_device(vma::Allocator allocator); // аллокатору нужны только проперти, указателя на устройство нет
     vk::Instance allocator_instance(vma::Allocator allocator);
     
     vk::Extent2D cast(const extent2d &val);

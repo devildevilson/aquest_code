@@ -1,13 +1,14 @@
 #ifndef BATTLE_RENDER_STAGES_H
 #define BATTLE_RENDER_STAGES_H
 
+#include <array>
 #include "stage.h"
 #include "utils/utility.h"
 #include "utils/frustum.h"
 #include "shared_structures.h"
 #include "shared_battle_structures.h"
 #include "vulkan_hpp_header.h"
-#include <array>
+#include "utils/constexpr_funcs.h"
 
 namespace devils_engine {
   namespace render {

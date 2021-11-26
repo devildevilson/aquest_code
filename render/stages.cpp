@@ -16,10 +16,13 @@
 #include "utils/input.h"
 #include "utils/systems.h"
 #include "utils/frustum.h"
+#include "utils/shared_time_constant.h"
 
 #include "bin/interface_context.h"
 #include "bin/interface2.h"
 #include "bin/map.h"
+
+#include "core/context.h"
 
 #define TILE_RENDER_PIPELINE_LAYOUT_NAME "tile_render_pipeline_layout"
 #define TILE_RENDER_PIPELINE_NAME "tile_render_pipeline"
@@ -79,13 +82,142 @@ namespace devils_engine {
 
     void render_pass_end::clear() {}
     
+    void do_copy_tasks(container* ctx, vk::Event event, const size_t &size, const copy_stage* const* stages) {
+      for (size_t i = 0; i < size; ++i) { stages[i]->copy(ctx); }
+      auto cb = ctx->command_buffer();
+      cb->setEvent(event, vk::PipelineStageFlagBits::eTransfer); // не понимаю когда это вызывается совсем =(
+    }
+    
+    void set_event_cmd(container* ctx, vk::Event event) {
+      auto cb = ctx->command_buffer();
+      cb->setEvent(event, vk::PipelineStageFlagBits::eTransfer); // не понимаю когда это вызывается совсем =(
+//       std::cout << "set_event_cmd" << "\n";
+    }
+    
+    // виндовс не дает использовать базовый offsetof
+#define offsetof123(s,m) ((::size_t)&reinterpret_cast<char const volatile&>((((s*)0)->m)))
+    
+    tile_updater::tile_updater(const create_info &info) : 
+      need_copy(false), 
+      device(info.device), 
+      allocator(info.allocator), 
+      copies(new vk::BufferCopy[core::map::hex_count_d(core::map::detail_level)]), 
+      map(info.map) 
+    {
+      const size_t tiles_count = core::map::hex_count_d(core::map::detail_level);
+      updates.create(allocator, buffer(align_to(tiles_count * sizeof(update_data_t), 16), vk::BufferUsageFlagBits::eTransferSrc), vma::MemoryUsage::eCpuOnly);
+      
+#ifdef __linux
+      static_assert(sizeof(map_tile_t) - offsetof(render::map_tile_t, texture) == sizeof(update_data_t));
+      static_assert(offsetof(render::map_tile_t, texture) - offsetof(render::map_tile_t, texture) == offsetof(update_data_t, texture));
+      static_assert(offsetof(render::map_tile_t, color) - offsetof(render::map_tile_t, texture) == offsetof(update_data_t, color));
+      static_assert(offsetof(render::map_tile_t, borders_data) - offsetof(render::map_tile_t, texture) == offsetof(update_data_t, borders_data));
+      static_assert(offsetof(render::map_tile_t, biome_index) - offsetof(render::map_tile_t, texture) == offsetof(update_data_t, biome_index));
+#endif
+      
+      for (size_t i = 0; i < tiles_count; ++i) {
+        const size_t src_offset = i * sizeof(update_data_t);
+        const size_t dst_offset = i * sizeof(map_tile_t) + offsetof123(render::map_tile_t, texture);
+        const size_t size = sizeof(update_data_t);
+        const vk::BufferCopy c{ src_offset, dst_offset, size };
+        copies[i] = c;
+      }
+    }
+    
+    tile_updater::~tile_updater() {
+      updates.destroy(allocator);
+      delete [] copies;
+    }
+    
+    void tile_updater::begin() {}
+    void tile_updater::proccess(container* ctx) {
+      if (!need_copy) return;
+      
+      const size_t tiles_count = core::map::hex_count_d(core::map::detail_level);
+      auto task = ctx->command_buffer();
+      task->copyBuffer(updates.handle, map->data->tiles.handle, tiles_count, copies); // это поди будет жутко тяжелое копирование
+      need_copy = false;
+    }
+    
+    void tile_updater::clear() {}
+    
+    // нужно ли тут мьютексами аккуратно закрыть? ну тип надо бы
+    
+    void tile_updater::update_texture(const uint32_t tile_index, const render::image_t texture) {
+      const size_t tiles_count = core::map::hex_count_d(core::map::detail_level);
+      assert(tile_index < tiles_count);
+      std::unique_lock<std::mutex> lock(map->mutex);
+      auto array = reinterpret_cast<update_data_t*>(updates.ptr);
+      array[tile_index].texture = texture;
+      need_copy = true;
+    }
+    
+    void tile_updater::update_color(const uint32_t tile_index, const render::color_t color) {
+      const size_t tiles_count = core::map::hex_count_d(core::map::detail_level);
+      assert(tile_index < tiles_count);
+      std::unique_lock<std::mutex> lock(map->mutex);
+      auto array = reinterpret_cast<update_data_t*>(updates.ptr);
+      array[tile_index].color = color;
+      need_copy = true;
+    }
+    
+    void tile_updater::update_borders_data(const uint32_t tile_index, const uint32_t borders_data) {
+      const size_t tiles_count = core::map::hex_count_d(core::map::detail_level);
+      assert(tile_index < tiles_count);
+      std::unique_lock<std::mutex> lock(map->mutex);
+      auto array = reinterpret_cast<update_data_t*>(updates.ptr);
+      array[tile_index].borders_data = borders_data;
+      need_copy = true;
+    }
+    
+    void tile_updater::update_biome_index(const uint32_t tile_index, const uint32_t biome_index) {
+      const size_t tiles_count = core::map::hex_count_d(core::map::detail_level);
+      assert(tile_index < tiles_count);
+      std::unique_lock<std::mutex> lock(map->mutex);
+      auto array = reinterpret_cast<update_data_t*>(updates.ptr);
+      array[tile_index].biome_index = biome_index;
+      need_copy = true;
+    }
+    
+    void tile_updater::update_all(const core::context* ctx) {
+      std::unique_lock<std::mutex> lock(map->mutex);
+      auto array = reinterpret_cast<update_data_t*>(updates.ptr);
+      for (size_t i = 0; i < ctx->get_entity_count<core::tile>(); ++i) {
+        const auto tile = ctx->get_entity<core::tile>(i);
+        array[i].texture = tile->texture;
+        array[i].color = tile->color;
+        array[i].borders_data = tile->borders_data;
+        array[i].biome_index = tile->biome_index;
+      }
+      
+      need_copy = true;
+    }
+    
+    void tile_updater::setup_default(container* ctx) {
+      // тут по идее нужно скопировать в обратную сторону, чтобы заполнить текущими значениями
+      const size_t tiles_count = core::map::hex_count_d(core::map::detail_level);
+      for (size_t i = 0; i < tiles_count; ++i) { std::swap(copies[i].srcOffset, copies[i].dstOffset); }
+      
+      auto device = ctx->vulkan->device;
+      auto pool = ctx->vulkan->transfer_command_pool;
+      auto queue = ctx->vulkan->graphics;
+      auto fence = ctx->vulkan->transfer_fence;
+      
+      render::do_command(device, pool, queue, fence, [&] (vk::CommandBuffer task) {
+        const vk::CommandBufferBeginInfo b_info(vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
+        task.begin(b_info);
+        task.copyBuffer(map->data->tiles.handle, updates.handle, tiles_count, copies);
+        task.end();
+      });
+      
+      for (size_t i = 0; i < tiles_count; ++i) { std::swap(copies[i].srcOffset, copies[i].dstOffset); }
+    }
+    
 #define WORLD_MAP_RENDER_DESCRIPTOR_POOL "world_map_render_descriptor_pool"
     
     const size_t half_tiles_count = (core::map::hex_count_d(core::map::detail_level) / 2 + 1);
     const size_t max_indices_count = half_tiles_count * 7; // тут теперь максимальное количество ИНДЕКСОВ
     const size_t max_objects_indices_count = core::map::hex_count_d(core::map::detail_level) * 5;
-    //const size_t max_objects_indices_count = half_tiles_count * 5;
-    //static_assert(max_tiles_count < 500000);
     tile_optimizer::tile_optimizer(const create_info &info) : 
       device(info.device),
       allocator(info.allocator),
@@ -197,19 +329,24 @@ namespace devils_engine {
         dsu.update();
       }
       
+      auto world_buffers = global::get<systems::map_t>()->world_buffers;
+      
       {
         pipeline_layout_maker plm(&device);
         pipe_layout = plm.addDescriptorLayout(info.uniform_layout)
                          .addDescriptorLayout(info.tiles_data_layout)
                          .addDescriptorLayout(layout)
+                         .addDescriptorLayout(world_buffers->tiles_rendering_data_layout)
                          .create("tiles_optimizer_pipeline_layout");
       }
       
       {
         const auto mod = create_shader_module(device, global::root_directory() + "shaders/tiles.comp.spv");
+        const auto mod1 = create_shader_module(device, global::root_directory() + "shaders/tile_data.comp.spv");
         
         compute_pipeline_maker cpm(&device);
         pipe = cpm.shader(mod.get()).create("tiles_optimizer_pipeline", pipe_layout);
+        tile_pipe = cpm.shader(mod1.get()).create("individual_tile_pipeline", pipe_layout);
       }
     }
     
@@ -325,6 +462,8 @@ namespace devils_engine {
         buffer->biome_data[i].objects_data[0]     = 0; // ферст инстанс
         buffer->biome_data[i].objects_data[3]     = 0; // нужно ли?
       }
+      
+//       global::get<systems::map_t>()->world_buffers->clear_renderable();
     }
     
     void tile_optimizer::proccess(container* ctx) {
@@ -334,23 +473,22 @@ namespace devils_engine {
       
       auto uniform_set = global::get<render::buffers>()->uniform_set;
       auto tiles = map->data->tiles_set;
+      auto tiles_rendering_data = map_systems->world_buffers->tiles_rendering_data;
       
       auto task = ctx->command_buffer();
-      task->bindPipeline(vk::PipelineBindPoint::eCompute, pipe);
       task->bindDescriptorSets(vk::PipelineBindPoint::eCompute, pipe_layout, 0, {
         uniform_set, 
         tiles, 
-        buffers_set
+        buffers_set,
+        tiles_rendering_data
       }, nullptr);
       
-      const uint32_t count = std::ceil(float(core::map::tri_count_d(core::map::accel_struct_detail_level)) / float(work_group_size));
+      task->bindPipeline(vk::PipelineBindPoint::eCompute, pipe);
+      const uint32_t count = ceil(double(core::map::tri_count_d(core::map::accel_struct_detail_level)) / double(work_group_size));
       task->dispatch(count, 1, 1);
-      
-//       task->setBarrier(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT,
-//                        VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_INDIRECT_COMMAND_READ_BIT);
-//       
-//       task->setBarrier(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_VERTEX_INPUT_BIT,
-//                        VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT);
+      // пайп для тайлов, в котором мы во первых можем проверить выделение, а во вторых собрать данные биомов и границ
+      task->bindPipeline(vk::PipelineBindPoint::eCompute, tile_pipe);
+      task->dispatchIndirect(indirect.handle, offsetof123(struct tile_optimizer::indirect_buffer, dispatch_indirect_command));
     }
     
     static const utils::frustum default_fru{
@@ -439,7 +577,7 @@ namespace devils_engine {
     }
     
     void tile_optimizer::set_max_structures_count(const uint32_t &count) {
-      const uint32_t indices_count = count*5;
+      const uint32_t indices_count = count;
       const uint32_t final_size = align_to(indices_count*sizeof(uint32_t), 16);
       auto ind_buffer = reinterpret_cast<struct indirect_buffer*>(indirect.ptr);
       structures_indices_count = indices_count;
@@ -455,7 +593,7 @@ namespace devils_engine {
     
     void tile_optimizer::set_max_heraldy_count(const uint32_t &count) {
       if (heraldy_indices.handle == vk::Buffer(nullptr)) return; // пока так оставим, индексы геральдики попадают теперь в большой буффер объектов
-      const uint32_t indices_count = count*5;
+      const uint32_t indices_count = count;
       const uint32_t final_size = align_to(indices_count*sizeof(uint32_t), 16);
       auto ind_buffer = reinterpret_cast<struct indirect_buffer*>(indirect.ptr);
       heraldies_indices_count = indices_count;
@@ -582,9 +720,6 @@ namespace devils_engine {
       
       //buffer->padding4[2] = 0;
     }
-    
-    // виндовс не дает использовать базовый offsetof
-#define offsetof123(s,m) ((::size_t)&reinterpret_cast<char const volatile&>((((s*)0)->m)))
     
     void tile_objects_optimizer::proccess(container* ctx) {
       auto map_systems = global::get<systems::map_t>();
@@ -1498,12 +1633,20 @@ namespace devils_engine {
       allocator(info.cont->vulkan->buffer_allocator),
       opt(info.opt), 
       map_buffers(info.map_buffers), 
-      images_set(nullptr) 
+      images_set(nullptr),
+      structures_count(0),
+      current_inst_size(0),
+      local_structures_count(0)
     {
       auto uniform_layout = info.cont->vulkan->uniform_layout;
       auto tiles_data_layout = info.tiles_data_layout;
       auto images_layout = info.images_layout;
       images_set = *global::get<systems::core_t>()->image_controller->get_descriptor_set();
+      
+      current_inst_size = 2000;
+      const size_t size = align_to(current_inst_size * sizeof(structure_data), 16);
+      structures_instance.create(allocator, buffer(size, vk::BufferUsageFlagBits::eTransferSrc), vma::MemoryUsage::eCpuOnly, "structures_instance");
+      gpu_structures_instance.create(allocator, buffer(size, vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eVertexBuffer), vma::MemoryUsage::eGpuOnly, "gpu_structures_instance");
 
       {
         pipeline_layout_maker plm(&device);
@@ -1522,8 +1665,12 @@ namespace devils_engine {
 
         pipe = pm.addShader(vk::ShaderStageFlagBits::eVertex, vertex.get())
                  .addShader(vk::ShaderStageFlagBits::eFragment, fragment.get())
-                 .vertexBinding(0, sizeof(uint32_t), vk::VertexInputRate::eInstance)
-                   .vertexAttribute(0, 0, vk::Format::eR32Uint, 0)
+                 //.vertexBinding(0, sizeof(uint32_t), vk::VertexInputRate::eInstance)
+                 //  .vertexAttribute(0, 0, vk::Format::eR32Uint, 0)
+                 .vertexBinding(0, sizeof(structure_data), vk::VertexInputRate::eInstance)
+                   .vertexAttribute(0, 0, vk::Format::eR32Uint, offsetof123(structure_data, tile_index))
+                   .vertexAttribute(1, 0, vk::Format::eR32Uint, offsetof123(structure_data, img))
+                   .vertexAttribute(2, 0, vk::Format::eR32Sfloat, offsetof123(structure_data, scale))
                  .depthTest(VK_TRUE)
                  .depthWrite(VK_TRUE)
                  .frontFace(vk::FrontFace::eClockwise)
@@ -1541,50 +1688,146 @@ namespace devils_engine {
     tile_structure_render::~tile_structure_render() {
       device.destroy(p_layout);
       device.destroy(pipe);
+      structures_instance.destroy(allocator);
+      gpu_structures_instance.destroy(allocator);
     }
     
-    void tile_structure_render::begin() {}
+    void tile_structure_render::begin() {
+      local_structures_count = structures_count;
+      structures_count = 0;
+    }
+    
     void tile_structure_render::proccess(container* ctx) {
+      if (local_structures_count == 0) return;
+      
       auto map_systems = global::get<systems::map_t>();
       if (!map_systems->is_init()) return;
       auto map = map_systems->map;
       auto uniform = global::get<render::buffers>()->uniform_set;
       auto tiles = map->data->tiles_set;
       
-      auto indirect_buffer = opt->indirect_buffer();
+      //auto indirect_buffer = opt->indirect_buffer();
       //auto indices_buffer = opt->structures_index_buffer();
-      auto indices_buffer = opt->borders_index_buffer();
-      if (indices_buffer == vk::Buffer(nullptr)) return;
+//       auto indices_buffer = opt->borders_index_buffer();
+//       if (indices_buffer == vk::Buffer(nullptr)) return;
       
       const auto bind_point = vk::PipelineBindPoint::eGraphics;
       auto task = ctx->command_buffer();
       task->bindPipeline(bind_point, pipe);
       task->bindDescriptorSets(bind_point, p_layout, 0, {uniform, images_set, tiles}, nullptr);
-      task->bindVertexBuffers(0, indices_buffer, {0});
-      task->drawIndirect(indirect_buffer, offsetof123(struct tile_optimizer::indirect_buffer, borders_command), 1, sizeof(vk::DrawIndirectCommand));
+      //task->bindVertexBuffers(0, indices_buffer, {0});
+      //task->drawIndirect(indirect_buffer, offsetof123(struct tile_optimizer::indirect_buffer, borders_command), 1, sizeof(vk::DrawIndirectCommand));
+      
+      task->bindVertexBuffers(0, gpu_structures_instance.handle, {0});
+      task->draw(4, local_structures_count, 0, 0);
     }
     
-    void tile_structure_render::clear() {}
+    void tile_structure_render::clear() {
+      if (local_structures_count > current_inst_size) {
+        current_inst_size = local_structures_count;
+        structures_instance.destroy(allocator);
+        gpu_structures_instance.destroy(allocator);
+        
+        const size_t size = align_to(current_inst_size * sizeof(structure_data), 16);
+        structures_instance.create(allocator, buffer(size, vk::BufferUsageFlagBits::eTransferSrc), vma::MemoryUsage::eCpuOnly, "structures_instance");
+        gpu_structures_instance.create(allocator, buffer(size, vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eVertexBuffer), vma::MemoryUsage::eGpuOnly, "gpu_structures_instance");
+      }
+      
+      local_structures_count = 0;
+    }
+    
+    void tile_structure_render::copy(container* ctx) const {
+      const size_t instance_buffer_size = align_to(current_inst_size * sizeof(structure_data), 16);
+      const vk::BufferCopy c1{ 0, 0, instance_buffer_size };
+      auto task = ctx->command_buffer();
+      task->copyBuffer(structures_instance.handle, gpu_structures_instance.handle, 1, &c1);
+    }
+    
+    void tile_structure_render::add(const structure_data &data) {
+      const uint32_t index = structures_count.fetch_add(1);
+      if (index < current_inst_size) {
+        auto inst = reinterpret_cast<structure_data*>(structures_instance.ptr);
+        memcpy(&inst[index], &data, sizeof(data));
+      }
+    }
+    
+    struct heraldy_instance_data_t {
+      uint32_t tile_index;
+      uint32_t offset;
+      uint32_t shield_layer;
+      float scale;
+      image_t frame;
+      float frame_scale;
+    };
     
     heraldies_render::heraldies_render(const create_info &info) : 
       device(info.cont->vulkan->device), 
       allocator(info.cont->vulkan->buffer_allocator),
       opt(info.opt), 
       map_buffers(info.map_buffers), 
-      images_set(nullptr) 
+      images_set(nullptr),
+      chain_count(0),
+      inst_count(0),
+      current_buffer_size(0),
+      current_inst_size(0),
+      local_inst_count(0),
+      local_chain_count(0)
     {
       auto uniform_layout = info.cont->vulkan->uniform_layout;
       auto tiles_data_layout = info.tiles_data_layout;
       auto images_layout = info.images_layout;
-      auto storage_layout = info.cont->vulkan->storage_layout;
+      auto heraldy_layout = global::get<render::buffers>()->heraldy_layout;
       images_set = *global::get<systems::core_t>()->image_controller->get_descriptor_set();
+      
+      // какой размер по умолчанию?
+      current_inst_size = 2000+1; // попробуем так взять
+      current_buffer_size = current_inst_size*5;
+      layers_chain.create(allocator, render::buffer(align_to(current_buffer_size * sizeof(uint32_t), 16), vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferSrc), vma::MemoryUsage::eCpuOnly);
+      heraldy_instance.create(allocator, render::buffer(align_to(current_inst_size * sizeof(heraldy_instance_data_t), 16), vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eTransferSrc), vma::MemoryUsage::eCpuOnly);
+//       gpu_layers_chain.create(allocator, render::buffer(
+//         align_to(
+//           current_buffer_size * sizeof(uint32_t), 16), 
+//           vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst
+//         ), 
+//         vma::MemoryUsage::eGpuOnly
+//       );
+      
+      auto layers_buffer = &global::get<render::buffers>()->heraldy_indices;
+      layers_buffer->destroy(allocator);
+      layers_buffer->create(
+        allocator, render::buffer(
+        align_to(
+          current_buffer_size * sizeof(uint32_t), 16), 
+          vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst
+        ), 
+        vma::MemoryUsage::eGpuOnly
+      );
+      
+      gpu_heraldy_instance.create(allocator, render::buffer(
+        align_to(
+          current_inst_size * sizeof(heraldy_instance_data_t), 16), 
+          vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eTransferDst
+        ), 
+        vma::MemoryUsage::eGpuOnly
+      );
+      
+      {
+        auto set = global::get<render::buffers>()->heraldy_set;
+        descriptor_set_updater upd(&device);
+        //upd.currentSet(set).begin(1, 0, vk::DescriptorType::eStorageBuffer).buffer(gpu_layers_chain.handle).update();
+        upd.currentSet(set).begin(1, 0, vk::DescriptorType::eStorageBuffer).buffer(layers_buffer->handle).update();
+      }
+      
+      // было бы неплохо эти буферы скопировать в гпу буферы в начале рендеринга, как можно это сделать?
+      // для этого нужен утилити стейдж, в него мы положим указатели на классы с функцией копирования
+      // функцию зададим например здесь
 
       {
         pipeline_layout_maker plm(&device);
         p_layout = plm.addDescriptorLayout(uniform_layout)
                       .addDescriptorLayout(images_layout)
                       .addDescriptorLayout(tiles_data_layout)
-                      .addDescriptorLayout(storage_layout)
+                      .addDescriptorLayout(heraldy_layout)
                       .create("heraldies_rendering_pipeline_layout");
       }
       
@@ -1597,8 +1840,13 @@ namespace devils_engine {
 
         pipe = pm.addShader(vk::ShaderStageFlagBits::eVertex, vertex.get())
                  .addShader(vk::ShaderStageFlagBits::eFragment, fragment.get())
-                 .vertexBinding(0, sizeof(uint32_t), vk::VertexInputRate::eInstance)
-                   .vertexAttribute(0, 0, vk::Format::eR32Uint, 0)
+                 //.vertexBinding(0, sizeof(uint32_t), vk::VertexInputRate::eInstance)
+                 //  .vertexAttribute(0, 0, vk::Format::eR32Uint, 0)
+                 .vertexBinding(0, sizeof(heraldy_instance_data_t), vk::VertexInputRate::eInstance)
+                   .vertexAttribute(0, 0, vk::Format::eR32Uint, offsetof123(heraldy_instance_data_t, tile_index))
+                   .vertexAttribute(1, 0, vk::Format::eR32Uint, offsetof123(heraldy_instance_data_t, offset))
+                   .vertexAttribute(2, 0, vk::Format::eR32Uint, offsetof123(heraldy_instance_data_t, shield_layer))
+                   .vertexAttribute(3, 0, vk::Format::eR32Sfloat, offsetof123(heraldy_instance_data_t, scale))
                  .depthTest(VK_TRUE)
                  .depthWrite(VK_TRUE)
                  .frontFace(vk::FrontFace::eClockwise)
@@ -1615,10 +1863,23 @@ namespace devils_engine {
     heraldies_render::~heraldies_render() {
       device.destroy(p_layout);
       device.destroy(pipe);
+      layers_chain.destroy(allocator);
+      heraldy_instance.destroy(allocator);
+//       gpu_layers_chain.destroy(allocator);
+      gpu_heraldy_instance.destroy(allocator);
+      
+      // нужно ли удалить render::buffers::heraldy_indices?
     }
     
-    void heraldies_render::begin() {}
+    void heraldies_render::begin() { 
+      local_inst_count = inst_count;
+      local_chain_count = chain_count;
+      inst_count = 0; 
+      chain_count = 0;
+    }
     void heraldies_render::proccess(container* ctx) {
+      if (local_inst_count == 0) return;
+      
       auto map_systems = global::get<systems::map_t>();
       if (!map_systems->is_init()) return;
       auto map = map_systems->map;
@@ -1626,35 +1887,175 @@ namespace devils_engine {
       auto heraldy = global::get<render::buffers>()->heraldy_set;
       auto tiles = map->data->tiles_set;
       
-      auto indirect_buffer = opt->indirect_buffer();
+//       auto indirect_buffer = opt->indirect_buffer();
       //auto indices_buffer = opt->heraldy_index_buffer();
-      auto indices_buffer = opt->walls_index_buffer();
-      if (indices_buffer == vk::Buffer(nullptr)) return;
+//       auto indices_buffer = opt->walls_index_buffer();
+//       if (indices_buffer == vk::Buffer(nullptr)) return;
       
       ASSERT(heraldy);
       
+      // до рендеринга геральдики имеет смысл почистить буфер глубины
+      // для того чтобы геральдика не входила внутрь земли, как это скажется на интерфейсе? фиг знает
+      
+      const vk::ClearAttachment att{vk::ImageAspectFlagBits::eDepth, 0, vk::ClearValue({1.0f, 0})};
+      const vk::ClearRect rect{cast(ctx->size()), 0, 1};
+      
       const auto bind_point = vk::PipelineBindPoint::eGraphics;
       auto task = ctx->command_buffer();
+      task->clearAttachments({att}, {rect});
       task->bindPipeline(bind_point, pipe);
+      //task->bindDescriptorSets(bind_point, p_layout, 0, {uniform, images_set, tiles, heraldy}, nullptr);
+      //task->bindVertexBuffers(0, indices_buffer, {0});
+      //task->drawIndirect(indirect_buffer, offsetof123(struct tile_optimizer::indirect_buffer, walls_command), 1, sizeof(vk::DrawIndirectCommand));
+      
       task->bindDescriptorSets(bind_point, p_layout, 0, {uniform, images_set, tiles, heraldy}, nullptr);
-      task->bindVertexBuffers(0, indices_buffer, {0});
-      task->drawIndirect(indirect_buffer, offsetof123(struct tile_optimizer::indirect_buffer, walls_command), 1, sizeof(vk::DrawIndirectCommand));
+      task->bindVertexBuffers(0, gpu_heraldy_instance.handle, {0});
+      task->draw(4, local_inst_count+1, 0, 1); // наверное начнем со второго инстанса, в первом будет храниться heraldy_highlight_data
     }
     
-    void heraldies_render::clear() {}
+    void heraldies_render::clear() {
+      auto layers_buffer = &global::get<render::buffers>()->heraldy_indices;
+      
+      if (local_chain_count > current_buffer_size) {
+        layers_chain.destroy(allocator);
+        //gpu_layers_chain.destroy(allocator);
+        layers_buffer->destroy(allocator);
+      }
+      
+      if (local_inst_count+1 > current_inst_size) {
+        heraldy_instance.destroy(allocator);
+        gpu_heraldy_instance.destroy(allocator);
+      }
+      
+      if (local_chain_count > current_buffer_size) {
+        current_buffer_size = local_chain_count;
+        
+        layers_chain.create(allocator, render::buffer(align_to(current_buffer_size * sizeof(uint32_t), 16), vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst), vma::MemoryUsage::eCpuOnly, "layers_chain");
+        layers_buffer->create(allocator, render::buffer( // gpu_layers_chain
+          align_to(
+            current_buffer_size * sizeof(uint32_t), 16), 
+            vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst
+          ), 
+          vma::MemoryUsage::eGpuOnly,
+          "gpu_layers_chain"
+        );
+        
+        {
+          auto set = global::get<render::buffers>()->heraldy_set;
+          descriptor_set_updater upd(&device);
+          //upd.currentSet(set).begin(1, 0, vk::DescriptorType::eStorageBuffer).buffer(gpu_layers_chain.handle).update();
+          upd.currentSet(set).begin(1, 0, vk::DescriptorType::eStorageBuffer).buffer(layers_buffer->handle).update();
+        }
+      }
+      
+      if (local_inst_count+1 > current_inst_size) {
+        current_inst_size = local_inst_count+1;
+        
+        heraldy_instance.create(allocator, 
+          render::buffer(align_to(current_inst_size * sizeof(heraldy_instance_data_t), 16), vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eTransferDst),
+          vma::MemoryUsage::eCpuOnly,
+          "heraldy_instance"
+        );
+        gpu_heraldy_instance.create(allocator, 
+          render::buffer(align_to(current_inst_size * sizeof(heraldy_instance_data_t), 16), vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eTransferDst),
+          vma::MemoryUsage::eGpuOnly,
+          "gpu_heraldy_instance"
+        );
+      }
+      
+      local_inst_count = 0;
+      local_chain_count = 0;
+    }
+    
+    void heraldies_render::copy(container* ctx) const {
+      const size_t layers_buffer_size = align_to(current_buffer_size * sizeof(uint32_t), 16);
+      const size_t heraldy_instance_buffer_size = align_to(current_inst_size * sizeof(heraldy_instance_data_t), 16);
+      
+      auto layers_buffer = &global::get<render::buffers>()->heraldy_indices;
+      const vk::BufferCopy c1{ 0, 0, layers_buffer_size };
+      const vk::BufferCopy c2{ 0, 0, heraldy_instance_buffer_size };
+      auto task = ctx->command_buffer();
+      //task->copyBuffer(layers_chain.handle, gpu_layers_chain.handle, 1, &c1);
+      task->copyBuffer(layers_chain.handle, layers_buffer->handle, 1, &c1);
+      task->copyBuffer(heraldy_instance.handle, gpu_heraldy_instance.handle, 1, &c2);
+    }
+    
+    // че мне обходить видимые тайлы с предыдущего кадра? их может быть до 250к
+    // на мобиле у меня будет 4 ядра (те по 60-70к тайлов на ядро), 
+    // желательно потратить на это дело меньше 1мс
+    // что нужно сделать? проверить кто на тайле, если город или армия, взять титул у владельца
+    // передать в heraldies_render::add, городов и армий будет сильно меньше чем 60к-70к,
+    // наверное 2-3к, а значит и все остальные операции беруться только 2-3к раз, 
+    // потенциально я могу пробежать по видимым игроком городам и видимым игроком армиям, чтобы 
+    // сократить количество, но как проверить видимость тайлов рендером? а нужно ли? 
+    // нужно чтобы не рисовать лишний раз, мы можем видимость тайлов задать в буфере для
+    // тайл оптимизера (15кб), пробегаемся по всем городам и армиям и смотрим что видим
+    // это должно быть быстрее чем обходить все тайлы
+    
+    // сюда видимо еще придется передать индекс тайла, и еще каким то образом 
+    // оформить разницу между типами геральдик (императорская, герцогская, армия и проч)
+    // разницу оформим нарисовав рамку (или коронку сверху) вокруг геральдики
+    size_t heraldies_render::add(const heraldy_data &data) {
+      ASSERT(data.array_size < 256);
+      const uint32_t offset = chain_count.fetch_add(data.array_size+1);
+      const bool fit_buffer = offset+data.array_size+1 <= current_buffer_size;
+      const uint32_t inst_index = inst_count.fetch_add(uint32_t(fit_buffer))+1;
+      const bool fit_instance = inst_index < current_inst_size;
+      if (fit_buffer && fit_instance) {
+        auto ptr = reinterpret_cast<uint32_t*>(layers_chain.ptr);
+        ptr[offset] = data.array_size;
+        memcpy(&ptr[offset+1], data.array, sizeof(data.array[0])*data.array_size);
+        
+        // размер буфера?
+        auto inst_ptr = reinterpret_cast<heraldy_instance_data_t*>(heraldy_instance.ptr);
+        inst_ptr[inst_index].tile_index = data.tile_index;
+        inst_ptr[inst_index].offset = offset;
+        inst_ptr[inst_index].shield_layer = data.shield_layer;
+        inst_ptr[inst_index].frame = data.frame;
+        inst_ptr[inst_index].scale = data.scale;
+        inst_ptr[inst_index].frame_scale = data.frame_scale;
+      }
+      
+      return offset;
+    }
+    
+    size_t heraldies_render::add(const heraldy_interface_data &data) {
+      const uint32_t offset = chain_count.fetch_add(data.array_size+1);
+      const bool fit_buffer = offset+data.array_size+1 <= current_buffer_size;
+      if (fit_buffer) {
+        auto ptr = reinterpret_cast<uint32_t*>(layers_chain.ptr);
+        ptr[offset] = data.array_size;
+        memcpy(&ptr[offset+1], data.array, sizeof(data.array[0])*data.array_size);
+      }
+      
+      return fit_buffer ? offset : SIZE_MAX;
+    }
+    
+    size_t heraldies_render::add_highlight(const heraldy_highlight_data &data) {
+      // хайлайт нужно добавить наверное в первый слот heraldy_instance
+      return SIZE_MAX;
+    }
     
     armies_render::armies_render(const create_info &info) : 
       device(info.cont->vulkan->device), 
       allocator(info.cont->vulkan->buffer_allocator),
       opt(info.opt), 
       map_buffers(info.map_buffers), 
-      images_set(nullptr) 
+      images_set(nullptr),
+      armies_count(0),
+      local_armies_count(0),
+      current_inst_size(0)
     {
       auto uniform_layout = info.cont->vulkan->uniform_layout;
       auto tiles_data_layout = info.tiles_data_layout;
       auto images_layout = info.images_layout;
       auto storage_layout = info.cont->vulkan->storage_layout;
       images_set = *global::get<systems::core_t>()->image_controller->get_descriptor_set();
+      
+      current_inst_size = 1000;
+      const size_t size = align_to(current_inst_size * sizeof(army_data), 16);
+      instance.create(allocator, buffer(size, vk::BufferUsageFlagBits::eTransferSrc), vma::MemoryUsage::eCpuOnly, "army_instance");
+      gpu_instance.create(allocator, buffer(size, vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eVertexBuffer), vma::MemoryUsage::eGpuOnly, "gpu_army_instance");
 
       {
         pipeline_layout_maker plm(&device);
@@ -1674,8 +2075,12 @@ namespace devils_engine {
 
         pipe = pm.addShader(vk::ShaderStageFlagBits::eVertex, vertex.get())
                  .addShader(vk::ShaderStageFlagBits::eFragment, fragment.get())
-                 .vertexBinding(0, sizeof(uint32_t), vk::VertexInputRate::eInstance)
-                   .vertexAttribute(0, 0, vk::Format::eR32Uint, 0)
+                 //.vertexBinding(0, sizeof(uint32_t), vk::VertexInputRate::eInstance)
+                 //  .vertexAttribute(0, 0, vk::Format::eR32Uint, 0)
+                 .vertexBinding(0, sizeof(army_data), vk::VertexInputRate::eInstance)
+                   .vertexAttribute(0, 0, vk::Format::eR32G32B32Sfloat, offsetof123(army_data, pos))
+                   .vertexAttribute(1, 0, vk::Format::eR32Uint, offsetof123(army_data, img))
+                   .vertexAttribute(2, 0, vk::Format::eR32Sfloat, offsetof123(army_data, scale))
                  .depthTest(VK_TRUE)
                  .depthWrite(VK_TRUE)
                  .frontFace(vk::FrontFace::eClockwise)
@@ -1692,10 +2097,18 @@ namespace devils_engine {
     armies_render::~armies_render() {
       device.destroy(p_layout);
       device.destroy(pipe);
+      instance.destroy(allocator);
+      gpu_instance.destroy(allocator);
     }
     
-    void armies_render::begin() {}
+    void armies_render::begin() {
+      local_armies_count = armies_count;
+      armies_count = 0;
+    }
+    
     void armies_render::proccess(container* ctx) {
+      if (local_armies_count == 0) return;
+      
       auto map_systems = global::get<systems::map_t>();
       if (!map_systems->is_init()) return;
       auto map = map_systems->map;
@@ -1703,19 +2116,52 @@ namespace devils_engine {
 //       auto heraldy = global::get<render::buffers>()->heraldy;
       auto tiles = map->data->tiles_set;
       
-      auto indirect_buffer = opt->indirect_buffer();
-      auto indices_buffer = opt->objects_index_buffer();
-      if (indices_buffer == vk::Buffer(nullptr)) return;
+//       auto indirect_buffer = opt->indirect_buffer();
+//       auto indices_buffer = opt->objects_index_buffer();
+//       if (indices_buffer == vk::Buffer(nullptr)) return;
       
       const auto bind_point = vk::PipelineBindPoint::eGraphics;
       auto task = ctx->command_buffer();
       task->bindPipeline(bind_point, pipe);
       task->bindDescriptorSets(bind_point, p_layout, 0, {uniform, images_set, tiles}, nullptr); // heraldy->descriptorSet()->handle()
-      task->bindVertexBuffers(0, indices_buffer, {0});
-      task->drawIndirect(indirect_buffer, offsetof123(struct tile_optimizer::indirect_buffer, structures_command), 1, sizeof(vk::DrawIndirectCommand));
+//       task->bindVertexBuffers(0, indices_buffer, {0});
+//       task->drawIndirect(indirect_buffer, offsetof123(struct tile_optimizer::indirect_buffer, structures_command), 1, sizeof(vk::DrawIndirectCommand));
+      
+      task->bindVertexBuffers(0, gpu_instance.handle, {0});
+      task->draw(4, local_armies_count, 0, 0);
     }
     
-    void armies_render::clear() {}
+    void armies_render::clear() {
+      if (local_armies_count > current_inst_size) {
+        current_inst_size = local_armies_count;
+        
+        instance.destroy(allocator);
+        gpu_instance.destroy(allocator);
+        
+        const size_t size = align_to(current_inst_size * sizeof(army_data), 16);
+        instance.create(allocator, buffer(size, vk::BufferUsageFlagBits::eTransferSrc), vma::MemoryUsage::eCpuOnly, "army_instance");
+        gpu_instance.create(allocator, buffer(size, vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eVertexBuffer), vma::MemoryUsage::eGpuOnly, "gpu_army_instance");
+      }
+      
+      local_armies_count = 0;
+    }
+    
+    // возможно копировать придется в другом месте (в каком?)
+    // запускаем рендер - обходим города/армии/геральдики - ждем окончания рендера - копируем
+    void armies_render::copy(container* ctx) const {
+      const size_t current_instance_buffer_size = align_to(current_inst_size * sizeof(army_data), 16);
+      const vk::BufferCopy c1{ 0, 0, current_instance_buffer_size };
+      auto task = ctx->command_buffer();
+      task->copyBuffer(instance.handle, gpu_instance.handle, 1, &c1);
+    }
+      
+    void armies_render::add(const army_data &data) {
+      const uint32_t index = armies_count.fetch_add(1);
+      if (index < current_inst_size) {
+        auto arr = reinterpret_cast<army_data*>(instance.ptr);
+        memcpy(&arr[index], &data, sizeof(data));
+      }
+    }
     
     world_map_render::world_map_render(const create_info &info) : stage_container(info.container_size) {}
     void world_map_render::begin() {
@@ -1747,24 +2193,17 @@ namespace devils_engine {
     interface_stage::interface_stage(const create_info &info) : 
       device(info.cont->vulkan->device),
       allocator(info.cont->vulkan->buffer_allocator)
-//       vertex_gui(device, yavf::BufferCreateInfo::buffer(MAX_VERTEX_BUFFER, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT), VMA_MEMORY_USAGE_CPU_ONLY), 
-//       index_gui(device, yavf::BufferCreateInfo::buffer(MAX_INDEX_BUFFER, VK_BUFFER_USAGE_INDEX_BUFFER_BIT), VMA_MEMORY_USAGE_CPU_ONLY), 
-//       matrix(device, yavf::BufferCreateInfo::buffer(sizeof(glm::mat4), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT), VMA_MEMORY_USAGE_CPU_ONLY)
     {
       vertex_gui.create(allocator, buffer(MAX_VERTEX_BUFFER, vk::BufferUsageFlagBits::eVertexBuffer), vma::MemoryUsage::eCpuOnly, "interface_stage::vertex_gui");
       index_gui.create(allocator, buffer(MAX_INDEX_BUFFER, vk::BufferUsageFlagBits::eIndexBuffer), vma::MemoryUsage::eCpuOnly, "interface_stage::index_gui"); 
       matrix.create(allocator, buffer(sizeof(glm::mat4), vk::BufferUsageFlagBits::eUniformBuffer), vma::MemoryUsage::eCpuOnly, "interface_stage::matrix");
       
-//       auto w = global::get<render::window>();
       auto uniform_layout = info.cont->vulkan->uniform_layout;
       auto images_layout = info.images_layout;
-      auto storage_layout = info.cont->vulkan->storage_layout;
+//       auto storage_layout = info.cont->vulkan->storage_layout;
+      ASSERT(global::get<render::buffers>() != nullptr);
+      auto heraldy_layout = global::get<render::buffers>()->heraldy_layout;
       images_set = *global::get<systems::core_t>()->image_controller->get_descriptor_set();
-      
-//       {
-//         descriptor_set_layout_maker dlm(&device);
-//         sampled_image_layout = dlm.binding(0, vk::DescriptorType::eCombinedImageSampler, vk::ShaderStageFlagBits::eFragment).create(SAMPLED_IMAGE_LAYOUT_NAME);
-//       }
       
       {
         // вообще плохо тут использовать общий пул, но с другой стороны эта штука создается и удаляется только один раз за программу
@@ -1777,14 +2216,11 @@ namespace devils_engine {
         dsu.currentSet(matrix_set).begin(0, 0, vk::DescriptorType::eUniformBuffer).buffer(matrix.handle).update();
       }
       
-//       yavf::DescriptorSetLayout sampled_image_layout = device->setLayout(SAMPLED_IMAGE_LAYOUT_NAME);
-//       yavf::DescriptorSetLayout uniform_layout       = device->setLayout(UNIFORM_BUFFER_LAYOUT_NAME);
-      
       { 
         pipeline_layout_maker plm(&device);
         p_layout = plm.addDescriptorLayout(uniform_layout)
                       .addDescriptorLayout(images_layout)
-                      .addDescriptorLayout(storage_layout)
+                      .addDescriptorLayout(heraldy_layout)
                       .addPushConstRange(0, sizeof(image_handle_data))
                       .create("gui_layout");
       }
@@ -1894,7 +2330,6 @@ namespace devils_engine {
     
     void interface_stage::proccess(container* ctx) {
       auto task = ctx->command_buffer();
-//       auto data = global::get<interface::context>();
       
       const auto bind_point = vk::PipelineBindPoint::eGraphics;
       task->bindPipeline(bind_point, pipe);
@@ -1905,35 +2340,6 @@ namespace devils_engine {
       task->bindDescriptorSets(bind_point, p_layout, 0, {matrix_set, images_set, heraldy}, nullptr);
       
       uint32_t index_offset = 0;
-//       const nk_draw_command *cmd = nullptr;
-//       // вот это нужно скопировать из наклира в промежуточный буфер и чистить наклир
-//       nk_draw_foreach(cmd, &data->ctx, &data->cmds) {
-//         if (cmd->elem_count == 0) continue;
-//         
-//         //const render::image_t i = image_nk_handle(cmd->texture);
-//         const image_handle_data data = nk_handle_to_image_data(cmd->texture);
-//         //ASSERT(i.index == UINT32_MAX && i.layer == UINT32_MAX);
-//         //auto data = glm::uvec4(i.container, 0, 0, 0);
-//     //     PRINT_VEC2("image id", data)
-//         task->pushConstants(p_layout, vk::ShaderStageFlagBits::eVertex, 0, sizeof(data), &data);
-// 
-//         const glm::vec2 fb_scale = input::get_input_data()->fb_scale;
-//         const vk::Rect2D scissor{
-//           {
-//             static_cast<int32_t>(std::max(cmd->clip_rect.x * fb_scale.x, 0.0f)),
-//             static_cast<int32_t>(std::max(cmd->clip_rect.y * fb_scale.y, 0.0f)),
-//           },
-//           {
-//             static_cast<uint32_t>(cmd->clip_rect.w * fb_scale.x),
-//             static_cast<uint32_t>(cmd->clip_rect.h * fb_scale.y),
-//           }
-//         };
-//         
-//         task->setScissor(0, scissor);
-//         task->drawIndexed(cmd->elem_count, 1, index_offset, 0, 0);
-//         index_offset += cmd->elem_count;
-//       }
-      
       for (const auto &cmd : commands) {
         if (cmd.elem_count == 0) continue;
         
@@ -1958,15 +2364,8 @@ namespace devils_engine {
     }
     
     void interface_stage::clear() {
-//       auto data = global::get<interface::context>();
-//       nk_buffer_clear(&data->cmds);
-//       nk_clear(&data->ctx);
       commands.clear();
     }
-
-//     void interface_stage::recreate_pipelines(const game::image_resources_t* resource) {
-//       (void)resource;
-//     }
 
     task_start::task_start(vk::Device device) : device(device) {}
     void task_start::begin() {}
@@ -1990,7 +2389,8 @@ namespace devils_engine {
     // и так это будет выглядеть наиболее нормально, другое дело что нам нужно ждать этот поток
     // иначе мы не отловим ошибку + мы можем попытаться подождать всю загрузку используя обычное ожидание
     void task_start::wait() {
-      const auto res = device.waitForFences(rendering_fence, VK_TRUE, 1000000000);
+      const size_t ten_second = size_t(10) * NANO_PRECISION;
+      const auto res = device.waitForFences(rendering_fence, VK_TRUE, ten_second);
       if (res != vk::Result::eSuccess) { throw std::runtime_error("drawing takes too long"); }
     }
     

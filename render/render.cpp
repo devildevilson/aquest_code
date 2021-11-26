@@ -5,7 +5,7 @@
 
 namespace devils_engine {
   namespace render {
-    stage_container::stage_container(const size_t &container_size) : container(container_size) {}
+    stage_container::stage_container(const size_t &container_size) : container(container_size, 8) {}
     stage_container::~stage_container() {
       for (auto stage : stages) {
         container.destroy(stage);

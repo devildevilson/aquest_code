@@ -40,7 +40,7 @@ namespace devils_engine {
       };
       
       struct create_info {
-        target* recration_target;
+        target* recreation_target;
         bool fullscreen;
         uint32_t width;
         uint32_t height;
@@ -56,7 +56,7 @@ namespace devils_engine {
       extent2d extent;
       struct flags flags;
       float fov;
-      target* recration_target;
+      target* recreation_target;
       
       window(const create_info &info);
       ~window();

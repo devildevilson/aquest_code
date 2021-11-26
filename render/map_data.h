@@ -16,6 +16,7 @@ namespace devils_engine {
       vk_buffer_data accel_triangles;
       vk_buffer_data tile_indices;
       vk_buffer_data biomes;
+      // буферов ниже скорее всего не будет
       vk_buffer_data structures;
       vk_buffer_data tile_object_indices;
       vk_buffer_data army_data_buffer;

@@ -73,7 +73,7 @@ namespace devils_engine {
     }
     
     container::container() : 
-      mem(sizeof(vulkan_container) + sizeof(vulkan_window) + sizeof(struct window) + sizeof(render::stage_container)), 
+      mem(sizeof(vulkan_container) + sizeof(vulkan_window) + sizeof(struct window) + sizeof(render::stage_container), 8), 
       window(nullptr), 
       vulkan(nullptr), 
       vlk_window(nullptr), 
@@ -250,6 +250,7 @@ namespace devils_engine {
         vulkan->uniform_layout = 
           dlm.binding(0, vk::DescriptorType::eUniformBuffer, vk::ShaderStageFlagBits::eAll)
              .binding(1, vk::DescriptorType::eUniformBuffer, vk::ShaderStageFlagBits::eAll)
+             .binding(2, vk::DescriptorType::eUniformBuffer, vk::ShaderStageFlagBits::eAll)
              .create(UNIFORM_BUFFER_LAYOUT_NAME);
         vulkan->storage_layout = dlm.binding(0, vk::DescriptorType::eStorageBuffer, vk::ShaderStageFlagBits::eAll).create(STORAGE_BUFFER_LAYOUT_NAME);
       }

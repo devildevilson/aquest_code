@@ -143,13 +143,13 @@ namespace devils_engine {
     
     void world_map_update_selection() {
       const auto opt = global::get<render::tile_optimizer>();
-      const auto map = global::get<systems::map_t>()->map;
+//       const auto map = global::get<systems::map_t>()->map;
       const auto ctx = global::get<systems::map_t>()->core_context;
       auto selection_secondary = global::get<systems::core_t>()->selection.secondary;
       auto interface = global::get<systems::core_t>()->interface_container.get();
-      auto game_ctx = global::get<systems::core_t>()->game_ctx;
+//       auto game_ctx = global::get<systems::core_t>()->game_ctx;
       ASSERT(opt != nullptr);
-      ASSERT(map != nullptr);
+//       ASSERT(map != nullptr);
       ASSERT(ctx != nullptr);
       
       selection_secondary->clear();
@@ -159,6 +159,7 @@ namespace devils_engine {
       float min_dist = 10000.0f;
       uint32_t min_dist_heraldy_index = UINT32_MAX;
       
+      // эта штука не работает сейчас, было бы неплохо разделить tiles.comp шейдер
       for (uint32_t i = 0 ; i < selection_count; ++i) {
         if (selection_data[i] > INT32_MAX) {
           const float tmp = -glm::uintBitsToFloat(selection_data[i]);
@@ -180,31 +181,31 @@ namespace devils_engine {
         // вот у нас селектион, перемещение камеры по карте нужно сделать тогда приближением к краям + нужно сделать рендер курсора?
         // хотя наверное можно обойтись просто ограничением мышки
         
-        
-        const uint32_t structure_index = map->get_tile_objects_index(tile_index, 0);
-        const uint32_t army_index = map->get_tile_objects_index(tile_index, 4);
-        const uint32_t hero_index = map->get_tile_objects_index(tile_index, 5);
+        const auto tile = ctx->get_entity<core::tile>(tile_index);
+        const uint32_t city_index = tile->city;
+        const size_t army_token = tile->army_token;
+        const size_t hero_token = tile->hero_token;
         // по идее у меня будет еще некий индекс в 3 слоте, как понять что это?
         //const uint32_t unit_index = map->get_tile_objects_index(tile_index, 6);
         
 //         PRINT_VAR("army_index", army_index)
 //         PRINT_VAR("hero_index", hero_index)
         
-        if (structure_index != GPU_UINT_MAX) {
-          //auto city = ctx->get_entity<core::city>(structure_index);
-          auto city = core::get_tile_city(tile_index);
+        if (city_index != GPU_UINT_MAX) {
+          auto city = ctx->get_entity<core::city>(city_index);
+          //auto city = core::get_tile_city(tile_index);
           ASSERT(city != nullptr);
           selection_secondary->add(sol::make_object(interface->lua, city));
         }
         
-        if (army_index != GPU_UINT_MAX) {
-          auto army = ctx->get_army(army_index);
+        if (army_token != SIZE_MAX) {
+          auto army = ctx->get_army(army_token);
           ASSERT(army != nullptr);
           selection_secondary->add(sol::make_object(interface->lua, army));
         }
         
-        if (hero_index != GPU_UINT_MAX) {
-          auto hero_troop = ctx->get_hero_troop(hero_index);
+        if (hero_token != SIZE_MAX) {
+          auto hero_troop = ctx->get_hero_troop(hero_token);
           ASSERT(hero_troop != nullptr);
           selection_secondary->add(sol::make_object(interface->lua, hero_troop));
         }
@@ -215,8 +216,8 @@ namespace devils_engine {
 //         PRINT_VAR("heraldy index", min_dist_heraldy_index)
 //       }
       
-      game_ctx->traced_heraldy_dist = min_dist;
-      game_ctx->traced_heraldy_tile_index = min_dist_heraldy_index;
+//       game_ctx->traced_heraldy_dist = min_dist;
+//       game_ctx->traced_heraldy_tile_index = min_dist_heraldy_index;
     }
     
     void update_selection() {

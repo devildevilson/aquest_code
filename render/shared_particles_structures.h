@@ -7,14 +7,22 @@
 namespace devils_engine {
   namespace render {
     
+#define INLINE inline
+#define INOUT(type) type&
+    
+#else
+    
+#define INLINE
+#define INOUT(type) inout type
+    
 #endif
     
 struct gpu_particle_t {
   vec4 pos;
   vec4 vel;
-  uvec4 int_data;
-  vec4 float_data;
-  vec4 speed_color;
+  uvec4 int_data; // x - flags, y - image, z - life time, w - current time
+  vec4 float_data; // x - max scale, y - min scale, z - gravity, w - bounce
+  vec4 speed_color; // x - max speed, y - min speed, z - friction, w - color
 };
     
 INLINE image_t get_particle_image(const gpu_particle_t particle) {
@@ -71,22 +79,22 @@ INLINE float get_particle_bounce(const gpu_particle_t particle) {
   return particle.float_data[3];
 }
 
-INLINE void set_particle_pos(INOUT gpu_particle_t particle, const vec4 pos) {
+INLINE void set_particle_pos(INOUT(gpu_particle_t) particle, const vec4 pos) {
   particle.pos = pos;
 }
 
-INLINE void set_particle_vel(INOUT gpu_particle_t particle, const vec4 vel) {
+INLINE void set_particle_vel(INOUT(gpu_particle_t) particle, const vec4 vel) {
   particle.vel = vel;
 }
 
-INLINE void set_particle_current_time(INOUT gpu_particle_t particle, const uint time) {
+INLINE void set_particle_current_time(INOUT(gpu_particle_t) particle, const uint time) {
   particle.int_data.w = time;
 #ifdef __cplusplus
   (void)particle;
 #endif
 }
 
-INLINE void set_particle_is_on_ground(INOUT gpu_particle_t particle, const bool value) {
+INLINE void set_particle_is_on_ground(INOUT(gpu_particle_t) particle, const bool value) {
   const uint mask = 0x7fffffff;
   particle.int_data.z = value ? particle.int_data.z | ~mask : particle.int_data.z & mask;
 }

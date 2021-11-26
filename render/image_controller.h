@@ -1,11 +1,11 @@
 #ifndef IMAGE_CONTROLLER_H
 #define IMAGE_CONTROLLER_H
 
-#include <unordered_map>
 #include <string>
 #include "shared_structures.h"
 #include "utils/memory_pool.h"
 #include "vulkan_declarations.h"
+#include "parallel_hashmap/phmap.h"
 
 // тут у нас должны храниться названия изображений и доступ к ним
 // как мы загружаем изображения? по идее описываем таблицу 
@@ -68,9 +68,18 @@ namespace devils_engine {
         image_container* container;
         uint32_t slot;
         uint32_t offset;
-        uint32_t count; // count + offset может выходить за пределы UINT8_MAX, это означает что мы берем следующий слот
+        // count + offset может выходить за пределы UINT8_MAX, это означает что мы берем следующий слот
+        // так ли это? возможно имеет смысл тут добавить указатель на следующий контейнер? как гарантировать следующий слот?
+        uint32_t count;
         image_type type;
         uint32_t sampler;
+        
+//         container_view();
+        container_view(const container_view& copy) = default;
+        container_view(container_view&& move) = default;
+        
+        container_view & operator=(const container_view& copy) = default;
+        container_view & operator=(container_view&& move) = default;
         
         std::tuple<uint32_t, uint32_t> get_size() const;
         render::image_t get_image(const size_t &index, const bool mirror_u, const bool mirror_v) const;
@@ -78,13 +87,13 @@ namespace devils_engine {
       
       image_container* container;
       internal* vulkan;
-      std::unordered_map<std::string, container_view> image_slots; // строки пихнуть в мемори пул?
+      phmap::node_hash_map<std::string, container_view> image_slots; // строки пихнуть в мемори пул?
       size_t current_slot_offset;
       
       image_controller(vk::Device* device, image_container* container);
       ~image_controller();
       
-      const container_view* get_view(const std::string &name) const;
+      const container_view* get_view(const std::string_view &name) const;
       
       void clear_type(const image_type &type);
       // несколько функций которые создадут несколько слотов и их размер
@@ -96,20 +105,9 @@ namespace devils_engine {
         uint32_t slot;
         uint32_t offset;
         uint32_t sampler;
-//         uint32_t width;
-//         uint32_t height;
-//         bool mipmap;
       };
       
-//       struct output_data {
-//         uint32_t slot;
-//         uint32_t offset;
-//       };
-      //output_data create_slot(const input_data &data); // так только мы их создадим
       void register_images(const input_data &data); // пока что просто заполняем массив
-      // как заполнить? все что нам нужно сделать это скопировать все изображения
-      // по слотам в контейнер, может нужно сначало зарегистрировать пачку изображений
-      //void create_slots();
       // грузить наверное будем не здесь, тут лучше просто организовать доступ
       
       void update_set();

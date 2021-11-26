@@ -95,6 +95,8 @@ namespace devils_engine {
       }
     };
     
+//     image_controller::container_view::container_view() : container(nullptr), slot(UINT32_MAX), offset(UINT32_MAX), count(UINT32_MAX), sampler(UINT32_MAX) {}
+    
     std::tuple<uint32_t, uint32_t> image_controller::container_view::get_size() const {
       const auto pool = container->get_pool(slot);
       return std::make_tuple(pool->image_size().width, pool->image_size().height);
@@ -104,7 +106,7 @@ namespace devils_engine {
       if (index >= count) throw std::runtime_error("Bad image index");
       uint32_t current_slot = slot;
       uint32_t current_index = offset+index;
-      while (current_index > render::image_container::image_pool::max_size) {
+      while (current_index >= render::image_container::image_pool::max_size) {
         ++current_slot;
         current_index -= render::image_container::image_pool::max_size;
       }
@@ -179,7 +181,7 @@ namespace devils_engine {
       vulkan = nullptr;
     }
     
-    const image_controller::container_view* image_controller::get_view(const std::string &name) const {
+    const image_controller::container_view* image_controller::get_view(const std::string_view &name) const {
       auto itr = image_slots.find(name);
       if (itr == image_slots.end()) return nullptr;
       return &itr->second;
@@ -202,18 +204,6 @@ namespace devils_engine {
       if (itr != image_slots.end()) throw std::runtime_error("Images with id " + data.name + " are already exists");
       image_slots.insert(std::make_pair(data.name, container_view{container, data.slot, data.offset, data.count, data.type, data.sampler}));
     }
-    
-//     void image_controller::create_slots() {
-//       size_t system_counter = 0;
-//       for (const auto &p : image_slots) {
-//         if (p.second.type == image_type::system) {
-//           ++system_counter;
-//           if (system_counter > 4) throw std::runtime_error("Bad system images");
-//         }
-//         
-//         
-//       }
-//     }
 
     void image_controller::update_set() {
       container->update_descriptor_data(get_descriptor_set());

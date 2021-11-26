@@ -4,26 +4,31 @@
 #include "bin/core_structures.h"
 #include "container.h"
 #include "makers.h"
+#include "bin/map.h"
 
 #include <cstring>
+#include <iostream>
 
 namespace devils_engine {
   namespace render {
-    buffers::buffers(container* c) : c(c) {
+    buffers::buffers(container* c) : c(c), uniform_camera(nullptr), uniform_matrices(nullptr), uniform_common(nullptr) {
       auto device = c->vulkan->device;
       auto allocator = c->vulkan->buffer_allocator;
       const size_t buffer1_size = align_to(sizeof(camera_data),   16);
       const size_t buffer2_size = align_to(sizeof(matrices_data), 16);
-       uniform.create(allocator, buffer(buffer1_size, vk::BufferUsageFlagBits::eUniformBuffer), vma::MemoryUsage::eCpuOnly, "uniform buffer");
-      matrices.create(allocator, buffer(buffer2_size, vk::BufferUsageFlagBits::eUniformBuffer), vma::MemoryUsage::eCpuOnly, "matrices buffer");
+      const size_t buffer3_size = align_to(sizeof(common_data),   16);
+       uniform.create(allocator, buffer(buffer1_size + buffer2_size + buffer3_size, vk::BufferUsageFlagBits::eUniformBuffer), vma::MemoryUsage::eCpuOnly, "uniform buffer");
+//       matrices.create(allocator, buffer(buffer2_size, vk::BufferUsageFlagBits::eUniformBuffer), vma::MemoryUsage::eCpuOnly, "matrices buffer");
+//         common.create(allocator, buffer(buffer3_size, vk::BufferUsageFlagBits::eUniformBuffer), vma::MemoryUsage::eCpuOnly, "common buffer");
        heraldy.create(allocator, buffer(16, vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst), vma::MemoryUsage::eGpuOnly, "heraldy buffer");
-//       heraldy  = device.create(yavf::BufferCreateInfo::buffer(16,   VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT), VMA_MEMORY_USAGE_GPU_ONLY);
+      heraldy_indices.create(allocator, buffer(16, vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst), vma::MemoryUsage::eGpuOnly, "heraldy indices buffer");
       
       assert(uniform.ptr != nullptr);
-      assert(matrices.ptr != nullptr);
+//       assert(matrices.ptr != nullptr);
+      memset(uniform.ptr, 0, buffer1_size + buffer2_size + buffer3_size);
       
       auto pool = c->vulkan->descriptor_pool;
-      auto storage_layout = c->vulkan->storage_layout;
+//       auto storage_layout = c->vulkan->storage_layout;
       auto uniform_layout = c->vulkan->uniform_layout;
       
       {
@@ -33,25 +38,44 @@ namespace devils_engine {
         
         descriptor_set_updater dsu(&device);
         dsu.currentSet(uniform_set);
-        dsu.begin(0, 0, vk::DescriptorType::eUniformBuffer).buffer(uniform.handle);
-        dsu.begin(1, 0, vk::DescriptorType::eUniformBuffer).buffer(matrices.handle);
+        dsu.begin(0, 0, vk::DescriptorType::eUniformBuffer).buffer(uniform.handle, 0, buffer1_size);
+        dsu.begin(1, 0, vk::DescriptorType::eUniformBuffer).buffer(uniform.handle, buffer1_size, buffer2_size);
+        dsu.begin(2, 0, vk::DescriptorType::eUniformBuffer).buffer(uniform.handle, buffer1_size + buffer2_size, buffer3_size);
         dsu.update();
+        
+        auto tmp1 = reinterpret_cast<char*>(uniform.ptr);
+        uniform_camera   = &tmp1[0];
+        uniform_matrices = &tmp1[buffer1_size];
+        uniform_common   = &tmp1[buffer1_size + buffer2_size];
       }
       
       {
+        descriptor_set_layout_maker dslm(&device);
+        heraldy_layout = dslm.binding(0, vk::DescriptorType::eStorageBuffer, vk::ShaderStageFlagBits::eFragment)
+                             .binding(1, vk::DescriptorType::eStorageBuffer, vk::ShaderStageFlagBits::eFragment)
+                             .create("heraldy buffers layout");
+        
         descriptor_set_maker dm(&device);
-        heraldy_set = dm.layout(storage_layout).create(pool, "heraldy buffer descriptor")[0];
+        heraldy_set = dm.layout(heraldy_layout).create(pool, "heraldy buffer descriptor")[0];
         
         descriptor_set_updater dsu(&device);
-        dsu.currentSet(heraldy_set).begin(0, 0, vk::DescriptorType::eStorageBuffer).buffer(heraldy.handle).update();
+        dsu.currentSet(heraldy_set)
+           .begin(0, 0, vk::DescriptorType::eStorageBuffer).buffer(heraldy.handle)
+           .begin(1, 0, vk::DescriptorType::eStorageBuffer).buffer(heraldy_indices.handle)
+           .update();
+           
+        // нужно видимо здесь держать буфер
       }
     }
 
     buffers::~buffers() {
+      auto device = c->vulkan->device;
       auto allocator = c->vulkan->buffer_allocator;
       uniform.destroy(allocator);
-      matrices.destroy(allocator);
+      //matrices.destroy(allocator);
+      heraldy_indices.destroy(allocator);
       heraldy.destroy(allocator);
+      device.destroy(heraldy_layout);
     }
 
 //     void buffers::update_matrix(const glm::mat4 &matrix) {
@@ -61,15 +85,15 @@ namespace devils_engine {
     
     void buffers::update_projection_matrix(const glm::mat4 &matrix) {
 //       auto camera = reinterpret_cast<camera_data*>(uniform->ptr());
-      auto mat = reinterpret_cast<matrices_data*>(matrices.ptr);
+      auto mat = reinterpret_cast<matrices_data*>(uniform_matrices);
       
       mat->proj = matrix;
       mat->invProj = glm::inverse(matrix);
     }
     
     void buffers::update_view_matrix(const glm::mat4 &matrix) {
-      auto camera = reinterpret_cast<camera_data*>(uniform.ptr);
-      auto mat = reinterpret_cast<matrices_data*>(matrices.ptr);
+      auto camera = reinterpret_cast<camera_data*>(uniform_camera);
+      auto mat = reinterpret_cast<matrices_data*>(uniform_matrices);
       
       mat->view = matrix;
       mat->invView = glm::inverse(matrix);
@@ -78,95 +102,124 @@ namespace devils_engine {
     }
     
     void buffers::update_pos(const glm::vec3 &pos) {
-      auto camera = reinterpret_cast<camera_data*>(uniform.ptr);
+      auto camera = reinterpret_cast<camera_data*>(uniform_camera);
       camera->pos = glm::vec4(pos, 1.0f);
     }
     
     void buffers::update_dir(const glm::vec3 &dir) {
-      auto camera = reinterpret_cast<camera_data*>(uniform.ptr);
+      auto camera = reinterpret_cast<camera_data*>(uniform_camera);
       camera->dir = glm::vec4(dir, 0.0f);
     }
     
     void buffers::update_zoom(const float &zoom) {
-      auto camera = reinterpret_cast<camera_data*>(uniform.ptr);
-      camera->dim[2] = glm::floatBitsToUint(zoom);
+      auto c = reinterpret_cast<common_data*>(uniform_common);
+      c->dim[2] = glm::floatBitsToUint(zoom);
     }
     
     void buffers::update_cursor_dir(const glm::vec4 &cursor_dir) {
-      auto camera = reinterpret_cast<camera_data*>(uniform.ptr);
-      camera->cursor_dir = cursor_dir;
+//       auto camera = reinterpret_cast<camera_data*>(uniform.ptr);
+//       camera->cursor_dir = cursor_dir;
+      auto c = reinterpret_cast<common_data*>(uniform_common);
+      c->cursor_dir = cursor_dir;
     }
     
     void buffers::update_dimensions(const uint32_t &width, const uint32_t &height) {
-      auto camera = reinterpret_cast<camera_data*>(uniform.ptr);
-      camera->dim.x = width;
-      camera->dim.y = height;
+      auto c = reinterpret_cast<common_data*>(uniform_common);
+      c->dim.x = width;
+      c->dim.y = height;
+    }
+    
+    void buffers::update_time(const uint32_t &time) {
+      auto c = reinterpret_cast<common_data*>(uniform_common);
+      c->dim.w += time;
     }
 
     void buffers::recreate(const uint32_t &width, const uint32_t &height) {
       const glm::mat4 persp = glm::perspective(glm::radians(75.0f), float(width) / float(height), 0.1f, 256.0f);
       update_projection_matrix(persp);
-      auto camera = reinterpret_cast<camera_data*>(uniform.ptr);
-      camera->dim[0] = width;
-      camera->dim[1] = height;
+      auto c = reinterpret_cast<common_data*>(uniform_common);
+      c->dim[0] = width;
+      c->dim[1] = height;
     }
     
     glm::mat4 buffers::get_matrix() const {
-      auto camera = reinterpret_cast<camera_data*>(uniform.ptr);
+      auto camera = reinterpret_cast<camera_data*>(uniform_camera);
       return camera->viewproj;
     }
     
     glm::mat4 buffers::get_proj() const {
-      auto mat = reinterpret_cast<matrices_data*>(matrices.ptr);
+      auto mat = reinterpret_cast<matrices_data*>(uniform_matrices);
       return mat->proj;
     }
     
     glm::mat4 buffers::get_view() const {
-      auto mat = reinterpret_cast<matrices_data*>(matrices.ptr);
+      auto mat = reinterpret_cast<matrices_data*>(uniform_matrices);
       return mat->view;
     }
     
     glm::mat4 buffers::get_inv_proj() const {
-      auto mat = reinterpret_cast<matrices_data*>(matrices.ptr);
+      auto mat = reinterpret_cast<matrices_data*>(uniform_matrices);
       return mat->invProj;
     }
     
     glm::mat4 buffers::get_inv_view() const {
-      auto mat = reinterpret_cast<matrices_data*>(matrices.ptr);
+      auto mat = reinterpret_cast<matrices_data*>(uniform_matrices);
       return mat->invView;
     }
     
     glm::mat4 buffers::get_inv_view_proj() const {
-      auto mat = reinterpret_cast<matrices_data*>(matrices.ptr);
+      auto mat = reinterpret_cast<matrices_data*>(uniform_matrices);
       return mat->invViewProj;
     }
     
     glm::vec4 buffers::get_pos() const {
-      auto camera = reinterpret_cast<camera_data*>(uniform.ptr);
+      auto camera = reinterpret_cast<camera_data*>(uniform_camera);
       return camera->pos;
     }
     
     glm::vec4 buffers::get_dir() const {
-      auto camera = reinterpret_cast<camera_data*>(uniform.ptr);
+      auto camera = reinterpret_cast<camera_data*>(uniform_camera);
       return camera->dir;
     }
     
     glm::vec4 buffers::get_cursor_dir() const {
-      auto camera = reinterpret_cast<camera_data*>(uniform.ptr);
+      auto camera = reinterpret_cast<common_data*>(uniform_common);
       return camera->cursor_dir;
     }
     
-    void buffers::resize_heraldy_buffer(const size_t &size) {
+    float buffers::get_zoom() const {
+      auto camera = reinterpret_cast<common_data*>(uniform_common);
+      return glm::uintBitsToFloat(camera->dim[2]);
+    }
+    
+    void buffers::resize_heraldy_buffer(const size_t &heraldy_layers_count) {
       auto allocator = c->vulkan->buffer_allocator;
       heraldy.destroy(allocator);
-      heraldy.create(allocator, buffer(size, vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst), vma::MemoryUsage::eGpuOnly, "heraldy buffer");
+      heraldy.create(allocator, buffer(heraldy_layers_count, vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst), vma::MemoryUsage::eGpuOnly, "heraldy buffer");
       
       auto device = c->vulkan->device;
       descriptor_set_updater dsu(&device);
       dsu.currentSet(heraldy_set).begin(0, 0, vk::DescriptorType::eStorageBuffer).buffer(heraldy.handle).update();
     }
     
+//     void buffers::resize_heraldy_indices_buffer(const size_t &heraldy_indices_size, const size_t &heraldy_indices_count) {
+//       assert(current_indices_size == 0);
+//       auto allocator = c->vulkan->buffer_allocator;
+//       heraldy_indices.destroy(allocator);
+//       heraldy_indices.create(allocator, buffer(heraldy_indices_size, vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst), vma::MemoryUsage::eGpuOnly, "heraldy buffer");
+//       current_indices_size = heraldy_indices_count;
+//       
+//       auto device = c->vulkan->device;
+//       descriptor_set_updater dsu(&device);
+//       dsu.currentSet(heraldy_set).begin(1, 0, vk::DescriptorType::eStorageBuffer).buffer(heraldy_indices.handle).update();
+//     }
+    
 #define WORLD_MAP_DESCRIPTOR_POOL "world_map_descriptor_pool"
+
+    // как раполагается в памяти? рендер, експлор, визибл
+#define RENDER_STAT_OFFSET_MULT 0
+#define EXPLORED_STAT_OFFSET_MULT 1
+#define VISIBILITY_STAT_OFFSET_MULT 2
     
     world_map_buffers::world_map_buffers(container* c) : c(c) {
       auto device = c->vulkan->device;
@@ -175,9 +228,32 @@ namespace devils_engine {
       border_buffer.create(allocator, buffer(sizeof(glm::vec4)*4, vk::BufferUsageFlagBits::eStorageBuffer), vma::MemoryUsage::eCpuOnly);
       border_types.create(allocator, buffer(sizeof(glm::vec4)*4, vk::BufferUsageFlagBits::eStorageBuffer), vma::MemoryUsage::eCpuOnly);
       
+      // один буффер? с точки зрения шейдера ничего не изменится
+      const size_t tile_stat_buffer_size = align_to(ceil(double(core::map::hex_count_d(core::map::detail_level)) / double(UINT32_WIDTH)), 16);
+      tiles_renderable.create(
+        allocator, 
+        buffer(tile_stat_buffer_size * 3, vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eTransferSrc), 
+        vma::MemoryUsage::eCpuOnly
+      );
+      gpu_tiles_renderable.create(
+        allocator, 
+        buffer(tile_stat_buffer_size * 3, vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eTransferSrc), 
+        vma::MemoryUsage::eGpuOnly
+      );
+      PRINT_VAR("tile_stat_buffer_size", tile_stat_buffer_size)
+      memset(tiles_renderable.ptr, 0, tile_stat_buffer_size * 3);
+      
       {
         descriptor_pool_maker dpm(&device);
-        pool = dpm.poolSize(vk::DescriptorType::eStorageBuffer, 3).create(WORLD_MAP_DESCRIPTOR_POOL);
+        pool = dpm.poolSize(vk::DescriptorType::eStorageBuffer, 5).create(WORLD_MAP_DESCRIPTOR_POOL);
+      }
+      
+      {
+        descriptor_set_layout_maker dslm(&device);
+        tiles_rendering_data_layout = dslm.binding(0, vk::DescriptorType::eStorageBuffer, vk::ShaderStageFlagBits::eAll)
+                                          .binding(1, vk::DescriptorType::eStorageBuffer, vk::ShaderStageFlagBits::eAll)
+                                          .binding(2, vk::DescriptorType::eStorageBuffer, vk::ShaderStageFlagBits::eAll)
+                                          .create("tiles_rendering_data_layout");
       }
       
       {
@@ -195,6 +271,17 @@ namespace devils_engine {
         descriptor_set_updater dsu(&device);
         dsu.currentSet(types_set).begin(0, 0, vk::DescriptorType::eStorageBuffer).buffer(border_types.handle).update();
       }
+      
+      {
+        descriptor_set_maker dsm(&device);
+        tiles_rendering_data = dsm.layout(tiles_rendering_data_layout).create(pool, "tiles_rendering_data")[0];
+        descriptor_set_updater dsu(&device);
+        dsu.currentSet(tiles_rendering_data)
+           .begin(0, 0, vk::DescriptorType::eStorageBuffer).buffer(gpu_tiles_renderable.handle, tile_stat_buffer_size * RENDER_STAT_OFFSET_MULT, tile_stat_buffer_size)
+           .begin(1, 0, vk::DescriptorType::eStorageBuffer).buffer(gpu_tiles_renderable.handle, tile_stat_buffer_size * EXPLORED_STAT_OFFSET_MULT, tile_stat_buffer_size)
+           .begin(2, 0, vk::DescriptorType::eStorageBuffer).buffer(gpu_tiles_renderable.handle, tile_stat_buffer_size * VISIBILITY_STAT_OFFSET_MULT, tile_stat_buffer_size)
+           .update();
+      }
     }
     
     world_map_buffers::~world_map_buffers() {
@@ -202,14 +289,28 @@ namespace devils_engine {
       auto device = c->vulkan->device;
       border_buffer.destroy(allocator);
       border_types.destroy(allocator);
-      tiles_connections.destroy(allocator);
-      structure_buffer.destroy(allocator);
+      tiles_renderable.destroy(allocator);
+      gpu_tiles_renderable.destroy(allocator);
+      device.destroy(tiles_rendering_data_layout);
       device.destroy(pool);
     }
     
     void world_map_buffers::recreate(const uint32_t &width, const uint32_t &height) {
       (void)width;
       (void)height;
+    }
+    
+    void world_map_buffers::copy(container* ctx) const {
+      constexpr size_t tile_stat_buffer_size = align_to(ceil(double(core::map::hex_count_d(core::map::detail_level)) / double(UINT32_WIDTH)), 16);
+      constexpr size_t whole_size = tile_stat_buffer_size * 3;
+      const size_t render_offset = tile_stat_buffer_size * RENDER_STAT_OFFSET_MULT;
+      const size_t next_offset = tile_stat_buffer_size * (RENDER_STAT_OFFSET_MULT+1);
+      const vk::BufferCopy c1{render_offset, render_offset, tile_stat_buffer_size};
+      const vk::BufferCopy c2{next_offset, next_offset, whole_size - next_offset};
+      auto cb = ctx->command_buffer();
+      cb->copyBuffer(gpu_tiles_renderable.handle, tiles_renderable.handle, c1);
+      cb->copyBuffer(tiles_renderable.handle, gpu_tiles_renderable.handle, c2);
+      cb->fillBuffer(gpu_tiles_renderable.handle, render_offset, tile_stat_buffer_size, 0);
     }
     
     void world_map_buffers::resize_border_buffer(const size_t &size) {
@@ -230,6 +331,73 @@ namespace devils_engine {
       
       descriptor_set_updater dsu(&device);
       dsu.currentSet(types_set).begin(0, 0, vk::DescriptorType::eStorageBuffer).buffer(border_types.handle).update();
+    }
+    
+    void world_map_buffers::set_map_exploration(const uint32_t &tile_index, const bool explored) {
+      assert(tile_index < core::map::hex_count_d(core::map::detail_level));
+      constexpr size_t tile_stat_buffer_size = align_to(ceil(double(core::map::hex_count_d(core::map::detail_level)) / double(UINT32_WIDTH)), 16);
+      auto tmp_ptr = reinterpret_cast<char*>(tiles_renderable.ptr);
+      auto offset_ptr = reinterpret_cast<uint32_t*>(&tmp_ptr[tile_stat_buffer_size * EXPLORED_STAT_OFFSET_MULT]);
+      const uint32_t index_array = tile_index / UINT32_WIDTH;
+      const uint32_t index_bit = tile_index % UINT32_WIDTH;
+      const uint32_t mask = explored ? (1 << index_bit) : ~(1 << index_bit);
+      // атомарность? желательно
+      offset_ptr[index_array] = explored ? offset_ptr[index_array] | mask : offset_ptr[index_array] & mask;
+    }
+    
+    void world_map_buffers::set_map_visibility(const uint32_t &tile_index, const bool visible) {
+      assert(tile_index < core::map::hex_count_d(core::map::detail_level));
+      constexpr size_t tile_stat_buffer_size = align_to(ceil(double(core::map::hex_count_d(core::map::detail_level)) / double(UINT32_WIDTH)), 16);
+      auto tmp_ptr = reinterpret_cast<char*>(tiles_renderable.ptr);
+      auto offset_ptr = reinterpret_cast<uint32_t*>(&tmp_ptr[tile_stat_buffer_size * VISIBILITY_STAT_OFFSET_MULT]);
+      const uint32_t index_array = tile_index / UINT32_WIDTH;
+      const uint32_t index_bit = tile_index % UINT32_WIDTH;
+      const uint32_t mask = visible ? (1 << index_bit) : ~(1 << index_bit);
+      // атомарность? желательно
+      offset_ptr[index_array] = visible ? offset_ptr[index_array] | mask : offset_ptr[index_array] & mask;
+    }
+    
+    bool world_map_buffers::get_map_exploration(const uint32_t &tile_index) const {
+      assert(tile_index < core::map::hex_count_d(core::map::detail_level));
+      constexpr size_t tile_stat_buffer_size = align_to(ceil(double(core::map::hex_count_d(core::map::detail_level)) / double(UINT32_WIDTH)), 16);
+      auto tmp_ptr = reinterpret_cast<char*>(tiles_renderable.ptr);
+      auto offset_ptr = reinterpret_cast<uint32_t*>(&tmp_ptr[tile_stat_buffer_size * EXPLORED_STAT_OFFSET_MULT]);
+      const uint32_t index_array = tile_index / UINT32_WIDTH;
+      const uint32_t index_bit = tile_index % UINT32_WIDTH;
+      const uint32_t mask = 1 << index_bit;
+      // атомарность? желательно
+      return (offset_ptr[index_array] & mask) == mask;
+    }
+    
+    bool world_map_buffers::get_map_visibility(const uint32_t &tile_index) const {
+      assert(tile_index < core::map::hex_count_d(core::map::detail_level));
+      constexpr size_t tile_stat_buffer_size = align_to(ceil(double(core::map::hex_count_d(core::map::detail_level)) / double(UINT32_WIDTH)), 16);
+      auto tmp_ptr = reinterpret_cast<char*>(tiles_renderable.ptr);
+      auto offset_ptr = reinterpret_cast<uint32_t*>(&tmp_ptr[tile_stat_buffer_size * VISIBILITY_STAT_OFFSET_MULT]);
+      const uint32_t index_array = tile_index / UINT32_WIDTH;
+      const uint32_t index_bit = tile_index % UINT32_WIDTH;
+      const uint32_t mask = 1 << index_bit;
+      // атомарность? желательно
+      return (offset_ptr[index_array] & mask) == mask;
+    }
+    
+    bool world_map_buffers::get_map_renderable(const uint32_t &tile_index) const {
+      assert(tile_index < core::map::hex_count_d(core::map::detail_level));
+      constexpr size_t tile_stat_buffer_size = align_to(ceil(double(core::map::hex_count_d(core::map::detail_level)) / double(UINT32_WIDTH)), 16);
+      auto tmp_ptr = reinterpret_cast<char*>(tiles_renderable.ptr);
+      auto offset_ptr = reinterpret_cast<uint32_t*>(&tmp_ptr[tile_stat_buffer_size * RENDER_STAT_OFFSET_MULT]);
+      const uint32_t index_array = tile_index / UINT32_WIDTH;
+      const uint32_t index_bit = tile_index % UINT32_WIDTH;
+      const uint32_t mask = 1 << index_bit;
+      // атомарность? желательно
+      return (offset_ptr[index_array] & mask) == mask;
+    }
+    
+    void world_map_buffers::clear_renderable() {
+      constexpr size_t tile_stat_buffer_size = align_to(ceil(double(core::map::hex_count_d(core::map::detail_level)) / double(UINT32_WIDTH)), 16);
+      auto tmp_ptr = reinterpret_cast<char*>(tiles_renderable.ptr);
+      auto offset_ptr = reinterpret_cast<uint32_t*>(&tmp_ptr[tile_stat_buffer_size * RENDER_STAT_OFFSET_MULT]);
+      memset(offset_ptr, 0, tile_stat_buffer_size);
     }
   }
 }

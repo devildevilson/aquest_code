@@ -69,7 +69,7 @@ namespace devils_engine {
 
     //window::surface::surface() : handle(VK_NULL_HANDLE), presentMode(VK_PRESENT_MODE_MAX_ENUM_KHR), offset{0, 0}, extent{0, 0} {}
 
-    window::window(const create_info &info) : monitor(nullptr), handle(nullptr), recration_target(info.recration_target) {
+    window::window(const create_info &info) : monitor(nullptr), handle(nullptr), recreation_target(info.recreation_target) {
       // const bool fullscreen = Global::get<utils::settings>()->graphics.fullscreen;
       // uint32_t width = Global::get<utils::settings>()->graphics.width;
       // uint32_t height = Global::get<utils::settings>()->graphics.height;
@@ -133,7 +133,7 @@ namespace devils_engine {
     void window::resize() {
       int w, h;
       glfwGetWindowSize(handle, &w, &h);
-      recration_target->recreate(w, h);
+      recreation_target->recreate(w, h);
     }
 
     uint32_t window::refresh_rate() const {

@@ -12,10 +12,16 @@ namespace devils_engine {
     
     class stage {
     public:
-      virtual ~stage() {}
+      virtual ~stage() = default;
       virtual void begin() = 0;
       virtual void proccess(container* ctx) = 0;
       virtual void clear() = 0;
+    };
+    
+    class copy_stage {
+    public:
+      virtual ~copy_stage() = default;
+      virtual void copy(container* ctx) const = 0;
     };
     
 //     class pipeline_stage {

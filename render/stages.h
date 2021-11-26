@@ -15,6 +15,11 @@
 #include "vulkan_hpp_header.h"
 
 namespace devils_engine {
+  namespace core {
+    struct map;
+    class context;
+  }
+  
   namespace render {
     class deffered;
     struct images;
@@ -60,6 +65,79 @@ namespace devils_engine {
       void begin() override;
       void proccess(container* ctx) override;
       void clear() override;
+    };
+    
+    void do_copy_tasks(container* ctx, vk::Event event, const size_t &size, const copy_stage* const* stages);
+    void set_event_cmd(container* ctx, vk::Event event);
+    
+    template <size_t N>
+    class static_copy_array : public stage, public copy_stage {
+    public:
+      static_copy_array(vk::Device device) : device(device), size(0) { 
+        memset(stages.data(), 0, stages.size() * sizeof(stages[0])); 
+        event = device.createEvent(vk::EventCreateInfo());
+        device.setEvent(event);
+      }
+      ~static_copy_array() { device.destroy(event); }
+      void begin() override { device.resetEvent(event); }
+      void proccess(container* ctx) override { 
+        copy(ctx);
+        set_event_cmd(ctx, event);
+      }
+      void clear() override {}
+      void copy(container* ctx) const override { for (size_t i = 0; i < size; ++i) { stages[i]->copy(ctx); } }
+      
+      void add(const copy_stage* stage) {
+        if (size >= N) throw std::runtime_error("Small copy array size " + std::to_string(N));
+        stages[size] = stage;
+        ++size;
+      }
+      
+      bool end() const {
+        const auto res = device.getEventStatus(event);
+        return res == vk::Result::eEventSet;
+      }
+    private:
+      vk::Device device;
+      vk::Event event;
+      size_t size;
+      std::array<const copy_stage*, N> stages;
+    };
+    
+    class tile_updater : public stage {
+    public:
+      struct create_info {
+        vk::Device device;
+        vma::Allocator allocator;
+        core::map* map;
+      };
+      tile_updater(const create_info &info);
+      ~tile_updater();
+      void begin() override;
+      void proccess(container* ctx) override;
+      void clear() override;
+      
+      void update_texture(const uint32_t tile_index, const render::image_t texture);
+      void update_color(const uint32_t tile_index, const render::color_t color);
+      void update_borders_data(const uint32_t tile_index, const uint32_t borders_data);
+      void update_biome_index(const uint32_t tile_index, const uint32_t biome_index);
+      void update_all(const core::context* ctx);
+      
+      void setup_default(container* ctx);
+    private:
+      struct update_data_t {
+        render::image_t texture;
+        render::color_t color;
+        uint32_t borders_data;
+        uint32_t biome_index;
+      };
+      
+      bool need_copy;
+      vk::Device device;
+      vma::Allocator allocator;
+      vk_buffer_data updates;
+      vk::BufferCopy* copies;
+      core::map* map;
     };
     
     class tile_optimizer : public stage {
@@ -153,6 +231,7 @@ namespace devils_engine {
       vk::DescriptorSet buffers_set;
       vk::PipelineLayout pipe_layout;
       vk::Pipeline pipe;
+      vk::Pipeline tile_pipe;
       
       size_t borders_buffer_size;
       size_t connections_buffer_size;
@@ -423,8 +502,14 @@ namespace devils_engine {
       std::atomic<uint32_t> pen_tiles_count;
     };
     
-    class tile_structure_render : public stage {
+    class tile_structure_render : public stage, public copy_stage {
     public:
+      struct structure_data {
+        uint32_t tile_index;
+        image_t img; // одно изображение? чет я сомневаюсь в том что имеет смысл делить вид сверху и нет
+        float scale;
+      };
+      
       struct create_info {
         container* cont;
         vk::DescriptorSetLayout tiles_data_layout;
@@ -439,6 +524,10 @@ namespace devils_engine {
       void begin() override;
       void proccess(container* ctx) override;
       void clear() override;
+      
+      void copy(container* ctx) const override;
+      
+      void add(const structure_data &data);
     private:
       vk::Device device;
       vma::Allocator allocator;
@@ -447,10 +536,44 @@ namespace devils_engine {
       vk::PipelineLayout p_layout;
       vk::Pipeline pipe;
       vk::DescriptorSet images_set;
+      
+      std::atomic<uint32_t> structures_count;
+      uint32_t current_inst_size;
+      uint32_t local_structures_count;
+      vk_buffer_data structures_instance;
+      vk_buffer_data gpu_structures_instance;
     };
     
-    class heraldies_render : public stage {
+    class heraldies_render : public stage, public copy_stage {
     public:
+      // или не делать фрейм? просто проскалировать?
+      // в цк3 коронками оформлялись геральдики на карте
+      // мы можем первый слой заменить на любой другой, но нужно сохранить цвет
+      // нам нужно не просто заменить слой, а нужно нарисовать картинку до этого
+      // короче говоря картинка + новый первый слой, как мы можем это заменить из конфига?
+      struct heraldy_data {
+        uint32_t tile_index;
+        const uint32_t* array; // массив должен пойти в сторадж буфер
+        size_t array_size;
+        uint32_t shield_layer;
+        image_t frame;
+        float scale;
+        float frame_scale;
+      };
+      
+      // как рисовать? нужно нарисовать прост светлую область за геральдикой
+      // можно силуэт по форме быстренько сделать в гимпе
+      struct heraldy_highlight_data {
+        uint32_t tile_index;
+        float scale;
+        uint32_t shield_layer;
+      };
+      
+      struct heraldy_interface_data {
+        const uint32_t* array;
+        size_t array_size;
+      };
+      
       struct create_info {
         container* cont;
         vk::DescriptorSetLayout tiles_data_layout;
@@ -465,6 +588,13 @@ namespace devils_engine {
       void begin() override;
       void proccess(container* ctx) override;
       void clear() override;
+      
+      void copy(container* ctx) const override;
+      
+      // передаем последовательность слоев геральдики, в массиве только слои? размер мы можем взять из array_size
+      size_t add(const heraldy_data &data); // вызывается пару тысяч раз за кадр, мультитрединг?
+      size_t add(const heraldy_interface_data &data); // вызывается пару раз за кадр
+      size_t add_highlight(const heraldy_highlight_data &data); // вызывается один раз за кадр
     private:
       vk::Device device;
       vma::Allocator allocator;
@@ -473,10 +603,27 @@ namespace devils_engine {
       vk::PipelineLayout p_layout;
       vk::Pipeline pipe;
       vk::DescriptorSet images_set;
+      
+      std::atomic<uint32_t> chain_count;
+      std::atomic<uint32_t> inst_count;
+      uint32_t current_buffer_size;
+      uint32_t current_inst_size;
+      uint32_t local_inst_count;
+      uint32_t local_chain_count;
+      vk_buffer_data layers_chain;
+      vk_buffer_data heraldy_instance;
+      //vk_buffer_data gpu_layers_chain; // эти данные лежат в render::buffers
+      vk_buffer_data gpu_heraldy_instance;
     };
     
-    class armies_render : public stage {
+    class armies_render : public stage, public copy_stage {
     public:
+      struct army_data {
+        glm::vec3 pos;
+        image_t img;
+        float scale;
+      };
+      
       struct create_info {
         container* cont;
         vk::DescriptorSetLayout tiles_data_layout;
@@ -491,6 +638,10 @@ namespace devils_engine {
       void begin() override;
       void proccess(container* ctx) override;
       void clear() override;
+      
+      void copy(container* ctx) const override;
+      
+      void add(const army_data &data);
     private:
       vk::Device device;
       vma::Allocator allocator;
@@ -499,6 +650,12 @@ namespace devils_engine {
       vk::PipelineLayout p_layout;
       vk::Pipeline pipe;
       vk::DescriptorSet images_set;
+      
+      std::atomic<uint32_t> armies_count;
+      uint32_t local_armies_count;
+      uint32_t current_inst_size;
+      vk_buffer_data instance;
+      vk_buffer_data gpu_instance;
     };
     
     class world_map_render : public stage_container { // public pipeline_stage, 

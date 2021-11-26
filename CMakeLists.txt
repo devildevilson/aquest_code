@@ -51,7 +51,8 @@ set(LUA_LIB_PATH ${PROJECT_DIR}/scripts)
 
 include_directories(
   .
-  include/sol2/include/
+  #include/sol2/include/
+  include/sol2_release/
   include/lanes/src/
   #include/VulkanMemoryAllocator/src/
   include/FastNoise/
@@ -70,6 +71,7 @@ include_directories(
   include/Nuklear/
   include/stb/
   include/re2/
+  include/function2/include/function2/
 )
 link_directories(
   ${CMAKE_CURRENT_BINARY_DIR}
@@ -182,18 +184,19 @@ endif (CMAKE_BUILD_TYPE MATCHES "Debug")
 
 file(GLOB_RECURSE GLSL_SOURCE_FILES
   raw_shaders/tiles.vert
-  raw_shaders/tiles.geom
+  #raw_shaders/tiles.geom
   raw_shaders/tiles.frag
   raw_shaders/tiles.comp
+  raw_shaders/tile_data.comp
   raw_shaders/tiles_borders.frag
   raw_shaders/gui.frag
   raw_shaders/gui.vert
-  raw_shaders/borders.comp
+  #raw_shaders/borders.comp
   raw_shaders/borders.vert
   raw_shaders/borders.frag
   raw_shaders/one_tile.vert
   raw_shaders/one_tile.frag
-  raw_shaders/walls.comp
+  #raw_shaders/walls.comp
   raw_shaders/walls.vert
   raw_shaders/first_object.vert
   raw_shaders/first_object.frag
@@ -278,6 +281,14 @@ set(SRC_LIST
   utils/lua_initialization_internal_province.cpp
   utils/lua_initialization_internal_titulus.cpp
   utils/lua_initialization_internal_army.cpp
+  utils/lua_initialization_internal_war.cpp
+  utils/lua_initialization_internal_religion.cpp
+  utils/lua_initialization_internal_culture.cpp
+  utils/lua_initialization_internal_troop.cpp
+  utils/lua_initialization_internal_troop_type.cpp
+  #utils/lua_initialization_internal_trait.cpp
+  #utils/lua_initialization_internal_modificator.cpp
+  #utils/lua_initialization_internal_casus_belli.cpp
   utils/lua_initialization_battle_map.cpp
   utils/lua_initialization_generator_container.cpp
   utils/lua_initialization_noiser.cpp
@@ -295,7 +306,7 @@ set(SRC_LIST
   utils/lua_initialization_core_loading.cpp
   utils/lua_initialization_camera.cpp
   utils/lua_initialization_selection.cpp
-  utils/lua_initialization_script_utils.cpp
+  #utils/lua_initialization_script_utils.cpp
   utils/lua_initialization.cpp
   utils/deferred_tasks.cpp
   utils/lua_environment.cpp
@@ -313,14 +324,19 @@ set(SRC_LIST
   #bin/objects_selector.cpp
   bin/objects_selection.cpp
   utils/astar_search.cpp
+  utils/astar_search_mt.cpp
   utils/battle_lua_states.cpp
   bin/battle_context.cpp
   bin/battle_structures.cpp
   utils/structures_utils.cpp
-  include/FastNoise/FastNoise.cpp
+  #include/FastNoise/FastNoise.cpp
   include/whereami/src/whereami.c
   include/fmt/src/format.cc
   include/fmt/src/os.cc
+  # странно что это сработало вообще
+  #core/realm_mechanics_arrays.cpp
+  #core/stats_table.cpp
+  #core/traits_modifier_attribs.cpp
 )
 
 set(HDR_LIST
@@ -345,8 +361,6 @@ set(HDR_LIST
   utils/linear_rng.h
   utils/table_container.h
   utils/bit_field.h
-  utils/on_action_types.h
-  utils/traits_modifier_attribs.h
   utils/lua_initialization.h
   utils/lua_initialization_hidden.h
   utils/lua_initialization_internal.h
@@ -366,12 +380,17 @@ set(HDR_LIST
   #bin/objects_selector.h
   bin/objects_selection.h
   utils/astar_search.h
+  utils/astar_search_mt.h
   utils/battle_lua_states.h
   bin/battle_context.h
   bin/battle_structures.h
   utils/structures_utils.h
-  include/FastNoise/FastNoise.h
+  include/FastNoise/Cpp/FastNoiseLite.h
   include/whereami/src/whereami.h
+  
+  #core/realm_mechanics.h
+  #core/realm_mechanics_arrays.h
+  #core/stats_table.h
 )
 
 # if (UNIX)
@@ -405,6 +424,7 @@ set(SRC_LIST
   render/utils.cpp
   render/makers.cpp
   render/vulkan_hpp_header.cpp
+  render/vk_mem_alloc_impl.cpp
 )
 
 set(HDR_LIST
@@ -459,23 +479,47 @@ set(HDR_LIST
 add_library(ai ${SRC_LIST} ${HDR_LIST})
 target_link_libraries(ai utils)
 
+# old files located to exclude/
 set(SRC_LIST
+  script/on_action_container.cpp
+  script/on_action_types_arrays.cpp
+  script/init_functions.cpp
+  script/core.cpp
+  script/container.cpp
+  script/context.cpp
+  script/numeric_functions.cpp
   script/condition_functions.cpp
+  script/change_context_commands.cpp
+  script/logic_commands.cpp
   script/action_functions.cpp
-  script/script_block_functions.cpp
-  script/script_header.cpp
-  script/utility.cpp
+  script/common_commands.cpp
+  script/header.cpp
+  script/object.cpp
 )
 
 set(HDR_LIST
-  script/condition_functions.h
-  script/action_functions.h
-  script/script_block_functions.h
-  script/script_header.h
+  script/on_action_types.h
+  script/on_action_container.h
+  script/on_action_types_arrays.h
+  script/numeric_commands_macro.h
+  script/numeric_functions.h
   script/condition_commands_macro.h
+  script/condition_functions.h
   script/action_commands_macro.h
-  script/script_block_commands_macro.h
-  script/utility.h
+  script/action_functions.h
+  script/change_context_commands_macro.h
+  script/change_context_commands.h
+  script/logic_commands_macro.h
+  script/logic_commands.h
+  script/common_commands.h
+  script/init_functions.h
+  script/core.h
+  script/header.h
+  script/container.h
+  script/context.h
+  script/input_data.h
+  script/interface.h
+  script/object.h
 )
 
 add_library(script ${SRC_LIST} ${HDR_LIST})
@@ -497,10 +541,14 @@ add_library(systems ${SRC_LIST} ${HDR_LIST})
 target_link_libraries(systems render utils)
 
 set(SRC_LIST
+  core/realm_mechanics_arrays.cpp
+  core/stats_table.cpp
+  core/traits_modifier_attribs.cpp
   core/decision.cpp
   core/army.cpp
   core/building_type.cpp
   core/character.cpp
+  core/character_data_parser.cpp
   core/city_type.cpp
   core/city.cpp
   core/culture.cpp
@@ -520,9 +568,18 @@ set(SRC_LIST
   core/interaction.cpp
   core/war.cpp
   core/casus_belli.cpp
+  core/internal_lua_state.cpp
+  core/generator_begin.cpp
+  core/biome.cpp
+  core/declare_structures_table.cpp
 )
 
 set(HDR_LIST
+  core/realm_mechanics.h
+  core/realm_mechanics_arrays.h
+  core/stats_table.h
+  core/stats.h
+  core/traits_modifier_attribs.h
   core/casus_belli.h
   core/war.h
   core/decision.h
@@ -546,8 +603,10 @@ set(HDR_LIST
   core/troop.h
   core/context.h
   core/interaction.h
-  core/war.h
-  core/casus_belli.h
+  core/internal_lua_state.h
+  core/generator_begin.h
+  core/biome.h
+  core/declare_structures_table.h
 )
 
 add_library(core ${SRC_LIST} ${HDR_LIST})
@@ -562,7 +621,7 @@ set(SRC_LIST
   bin/helper.cpp
   bin/camera.cpp
   bin/generator_system2.cpp
-  bin/map_generators2.cpp
+  #bin/map_generators2.cpp
   bin/map.cpp
   bin/generator_container.cpp
   #include/lanes/src/deep.c
@@ -570,12 +629,13 @@ set(SRC_LIST
   #include/lanes/src/compat.c
   #bin/character.cpp
   bin/map_creator.cpp
-  bin/titulus_data_parser.cpp
-  bin/province_data_parser.cpp
-  bin/city_type_data_parser.cpp
-  bin/city_data_parser.cpp
-  bin/character_data_parser.cpp
-  bin/building_data_parser.cpp
+  #bin/titulus_data_parser.cpp
+  #bin/province_data_parser.cpp
+  #bin/city_type_data_parser.cpp
+  #bin/city_data_parser.cpp
+  #bin/character_data_parser.cpp
+  #bin/building_data_parser.cpp
+  bin/data_parser.cpp
   bin/image_parser.cpp
   bin/heraldy_parser.cpp
   bin/logic.cpp
@@ -595,7 +655,7 @@ set(HDR_LIST
   bin/figures.h
   bin/camera.h
   bin/generator_system2.h
-  bin/map_generators2.h
+  #bin/map_generators2.h
   bin/map.h
   bin/generator_context2.h
   bin/generator_container.h

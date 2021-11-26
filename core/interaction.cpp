@@ -1,11 +1,12 @@
 #include "interaction.h"
+
 #include "utils/utility.h"
 #include "target_type.h"
 #include "structures_header.h"
 
 namespace devils_engine {
   namespace core {
-    interaction::interaction() : input_count(0) {}
+    interaction::interaction() : input_count(0), options_count(0) {}
     
 #define INPUT_CASE(type) case core::target_type::type: {      \
     in->input_array[current_index].first = std::string(id);     \
@@ -14,66 +15,66 @@ namespace devils_engine {
     break;                                                    \
   }
     
-    void init_input_array(const sol::object &obj, core::interaction* in) {
-      assert(obj.get_type() == sol::type::table);
-      const auto input_t = obj.as<sol::table>();
-      in->input_count = 1;
-      for (const auto &pair : input_t) {
-        if (pair.second.get_type() != sol::type::number) continue;
-        
-        std::string id;
-        if (pair.first.get_type() == sol::type::string) {
-          id = pair.first.as<std::string>();
-        } else if (pair.first.get_type() == sol::type::number) {
-          id = "root";
-        }
-        
-        const uint32_t type = pair.second.as<uint32_t>();
-        const bool is_root = id == "root";
-        const size_t current_index = is_root ? 0 : in->input_count;
-        in->input_count += size_t(!is_root);
-        
-        if (is_root && !in->input_array[0].first.empty()) throw std::runtime_error("Root data is already setup");
-        
-        switch (type) {
-          INPUT_CASE(character)
-          INPUT_CASE(army)
-          INPUT_CASE(city)
-          INPUT_CASE(culture)
-          INPUT_CASE(dynasty)
-          INPUT_CASE(hero_troop)
-          INPUT_CASE(province)
-          INPUT_CASE(realm)
-          INPUT_CASE(religion)
-          INPUT_CASE(titulus)
-          
-          case core::target_type::boolean: {
-            if (is_root) throw std::runtime_error("Root node could not be boolean, number or string type");
-            in->input_array[current_index].first = id;
-            in->input_array[current_index].second.number_type = script::number_type::boolean;
-            break;
-          }
-          
-          case core::target_type::number: {
-            if (is_root) throw std::runtime_error("Root node could not be boolean, number or string type");
-            in->input_array[current_index].first = id;
-            in->input_array[current_index].second.number_type = script::number_type::number;
-            break;
-          }
-          
-          case core::target_type::string: {
-            if (is_root) throw std::runtime_error("Root node could not be boolean, number or string type");
-            in->input_array[current_index].first = id;
-            in->input_array[current_index].second.number_type = script::number_type::string;
-            break;
-          }
-          
-          default: throw std::runtime_error("Bad input target type");
-        }
-        
-        assert(in->input_count <= 16);
-      }
-    }
+//     void init_input_array(const sol::object &obj, core::interaction* in) {
+//       assert(obj.get_type() == sol::type::table);
+//       const auto input_t = obj.as<sol::table>();
+//       in->input_count = 1;
+//       for (const auto &pair : input_t) {
+//         if (pair.second.get_type() != sol::type::number) continue;
+//         
+//         std::string id;
+//         if (pair.first.get_type() == sol::type::string) {
+//           id = pair.first.as<std::string>();
+//         } else if (pair.first.get_type() == sol::type::number) {
+//           id = "root";
+//         }
+//         
+//         const uint32_t type = pair.second.as<uint32_t>();
+//         const bool is_root = id == "root";
+//         const size_t current_index = is_root ? 0 : in->input_count;
+//         in->input_count += size_t(!is_root);
+//         
+//         if (is_root && !in->input_array[0].first.empty()) throw std::runtime_error("Root data is already setup");
+//         
+//         switch (type) {
+//           INPUT_CASE(character)
+//           INPUT_CASE(army)
+//           INPUT_CASE(city)
+//           INPUT_CASE(culture)
+//           INPUT_CASE(dynasty)
+//           INPUT_CASE(hero_troop)
+//           INPUT_CASE(province)
+//           INPUT_CASE(realm)
+//           INPUT_CASE(religion)
+//           INPUT_CASE(titulus)
+//           
+//           case core::target_type::boolean: {
+//             if (is_root) throw std::runtime_error("Root node could not be boolean, number or string type");
+//             in->input_array[current_index].first = id;
+//             in->input_array[current_index].second.number_type = script::number_type::boolean;
+//             break;
+//           }
+//           
+//           case core::target_type::number: {
+//             if (is_root) throw std::runtime_error("Root node could not be boolean, number or string type");
+//             in->input_array[current_index].first = id;
+//             in->input_array[current_index].second.number_type = script::number_type::number;
+//             break;
+//           }
+//           
+//           case core::target_type::string: {
+//             if (is_root) throw std::runtime_error("Root node could not be boolean, number or string type");
+//             in->input_array[current_index].first = id;
+//             in->input_array[current_index].second.number_type = script::number_type::string;
+//             break;
+//           }
+//           
+//           default: throw std::runtime_error("Bad input target type");
+//         }
+//         
+//         assert(in->input_count <= 16);
+//       }
+//     }
     
     bool validate_interaction(const size_t &index, const sol::table &table) {
       UNUSED_VARIABLE(index);
@@ -212,40 +213,66 @@ namespace devils_engine {
 //         decision->type = static_cast<enum core::decision::type>(data);
 //       }
       
-      core::init_input_array(table["input"], interaction);
-      const uint32_t root_type = interaction->input_array[0].second.helper2;
-      script::init_string_from_script(root_type, table["name"], &interaction->name_script);
-      if (const auto proxy = table["description"]; proxy.valid()) script::init_string_from_script(root_type, proxy, &interaction->description_script);
-      script::init_condition(root_type, table["potential"], &interaction->potential);
-      script::init_condition(root_type, table["conditions"], &interaction->condition);
-      if (const auto proxy = table["auto_accept"]; proxy.valid()) script::init_condition(root_type, proxy, &interaction->auto_accept);
-      if (const auto proxy = table["immediate"]; proxy.valid()) script::init_action(root_type, proxy, &interaction->immediate);
-      if (const auto proxy = table["on_accept"]; proxy.valid()) script::init_action(root_type, proxy, &interaction->on_accept);
-      if (const auto proxy = table["on_auto_accept"]; proxy.valid()) script::init_action(root_type, proxy, &interaction->on_auto_accept);
-      if (const auto proxy = table["on_decline"]; proxy.valid()) script::init_action(root_type, proxy, &interaction->on_decline);
-      if (const auto proxy = table["pre_auto_accept"]; proxy.valid()) script::init_action(root_type, proxy, &interaction->pre_auto_accept);
-      if (const auto proxy = table["on_blocked_effect"]; proxy.valid()) script::init_action(root_type, proxy, &interaction->on_blocked_effect);
-      if (const auto proxy = table["ai_accept"]; proxy.valid()) script::init_number_from_script(root_type, proxy, &interaction->ai_accept);
-      script::init_number_from_script(root_type, table["ai_will_do"], &interaction->ai_will_do);
-      if (const auto proxy = table["ai_frequency"]; proxy.valid()) script::init_number_from_script(root_type, proxy, &interaction->ai_frequency);
-      if (const auto proxy = table["ai_potential"]; proxy.valid()) script::init_number_from_script(root_type, proxy, &interaction->ai_potential);
+      script::input_data inter_input;
+      inter_input.current = inter_input.root = script::object::type_bit::character;
+      // все интеракции идут от персонажа, передаются кому то другому
+      // эти другие передаются в контексте, можно ли их проверить? хороший вопрос
+      
+      script::create_string(inter_input, &interaction->name_script,        table["name"]);
+      script::create_string(inter_input, &interaction->description_script, table["description"]);
+      
+      script::create_condition(inter_input, &interaction->potential,   table["potential"]);
+      script::create_condition(inter_input, &interaction->condition,   table["conditions"]);
+      script::create_condition(inter_input, &interaction->auto_accept, table["auto_accept"]);
+      script::create_condition(inter_input, &interaction->ai_potential, table["ai_potential"]); // это разве кондишен?
+      
+      script::create_effect(inter_input, &interaction->immediate,         table["immediate"]);
+      script::create_effect(inter_input, &interaction->on_accept,         table["on_accept"]);
+      script::create_effect(inter_input, &interaction->on_auto_accept,    table["on_auto_accept"]);
+      script::create_effect(inter_input, &interaction->on_decline,        table["on_decline"]);
+      script::create_effect(inter_input, &interaction->pre_auto_accept,   table["pre_auto_accept"]);
+      script::create_effect(inter_input, &interaction->on_blocked_effect, table["on_blocked_effect"]);
+      
+      script::create_number(inter_input, &interaction->ai_accept,    table["ai_accept"]);
+      script::create_number(inter_input, &interaction->ai_will_do,   table["ai_will_do"]);
+      script::create_number(inter_input, &interaction->ai_frequency, table["ai_frequency"]);
+      //script::create_number(inter_input, &interaction->ai_potential, table["ai_potential"]);
+      
+      if (!interaction->name_script.valid()) throw std::runtime_error("Interaction " + interaction->id + " must have name script");
+      if (!interaction->potential.valid())   throw std::runtime_error("Interaction " + interaction->id + " must have potential script");
+      if (!interaction->condition.valid())   throw std::runtime_error("Interaction " + interaction->id + " must have condition script");
+      if (!interaction->ai_will_do.valid())  throw std::runtime_error("Interaction " + interaction->id + " must have ai_will_do script");
       
       if (const auto proxy = table["send_options"]; proxy.valid()) {
+        size_t counter = 0;
         const auto t = proxy.get<sol::table>();
         for (const auto &pair : t) {
           if (pair.second.get_type() != sol::type::table) continue;
+          if (counter >= core::interaction::max_options_count) 
+            throw std::runtime_error("Too many interaction options, maximum is " + std::to_string(core::interaction::max_options_count));
           
           const auto opt = pair.second.as<sol::table>();
-          interaction->send_options.emplace_back();
-          interaction->send_options.back().id = opt["id"];
-          script::init_string_from_script(root_type, opt["name"], &interaction->name_script);
-          if (const auto proxy = opt["description"]; proxy.valid()) script::init_string_from_script(root_type, proxy, &interaction->description_script);
-          if (const auto proxy = opt["potential"]; proxy.valid()) script::init_condition(root_type, proxy, &interaction->send_options.back().potential);
-          script::init_condition(root_type, opt["condition"], &interaction->send_options.back().condition);
-          // думаю что эффект должен быть в любом случае
-          if (const auto proxy = opt["effect"]; proxy.valid()) script::init_action(root_type, proxy, &interaction->send_options.back().effect);
-          script::init_number_from_script(root_type, opt["ai_will_do"], &interaction->send_options.back().ai_will_do);
+          interaction->send_options[interaction->options_count].id = opt["id"];
+          script::create_string(   inter_input, &interaction->send_options[counter].name_script,        opt["name"]);
+          script::create_string(   inter_input, &interaction->send_options[counter].description_script, opt["description"]);
+          script::create_condition(inter_input, &interaction->send_options[counter].potential,          opt["potential"]);
+          script::create_condition(inter_input, &interaction->send_options[counter].condition,          opt["condition"]);
+          script::create_effect(   inter_input, &interaction->send_options[counter].effect,             opt["effect"]);
+          script::create_number(   inter_input, &interaction->send_options[counter].ai_will_do,         opt["ai_will_do"]);
+          
+          if (!interaction->send_options[counter].name_script.valid()) 
+            throw std::runtime_error("Interaction " + interaction->id + " send option " + std::to_string(counter) + " must have a name script");
+          
+          if (!interaction->send_options[counter].condition.valid()) 
+            throw std::runtime_error("Interaction " + interaction->id + " send option " + std::to_string(counter) + " must have a condition script");
+          
+          if (!interaction->send_options[counter].ai_will_do.valid()) 
+            throw std::runtime_error("Interaction " + interaction->id + " send option " + std::to_string(counter) + " must have a ai_will_do script");
+          
+          ++counter;
         }
+        
+        interaction->options_count = counter;
       }
     }
   }

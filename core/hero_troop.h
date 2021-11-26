@@ -30,6 +30,8 @@ namespace devils_engine {
       // пусть строго каждые пять интеллекта +1 к размеру пати, для того чтобы объявить себя героем с 20 интеллектом
       // персонаж должен быть практикующим магом
       
+      size_t object_token;
+      
       // отряд (отряд у героя состоит из персонажей, некоторые из них сгенерированные (копейщик, нанятый в городе))
       uint32_t party_size;
       // видимо у персонажей должен быть по умолчанию средний интеллект (какой?)
@@ -42,8 +44,9 @@ namespace devils_engine {
       float current_pos;
       // позиция
       uint32_t tile_index;
-      uint32_t army_gpu_slot; // это обязательный аттрибут любой армии или героя, нужно где то сделать поиск в обратную сторону
-      // статы
+//       uint32_t army_gpu_slot; // это обязательный аттрибут любой армии или героя, нужно где то сделать поиск в обратную сторону
+      glm::vec3 pos;
+      render::image_t image;
       
       utils::stats_container<hero_troop_stats::values> stats;
       utils::stats_container<hero_troop_stats::values> current_stats;

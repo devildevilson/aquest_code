@@ -5,9 +5,9 @@
 #include <cstdint>
 #include <cstddef>
 #include "declare_structures.h"
-#include "script/script_header.h"
 #include "utils/bit_field.h"
 #include "utils/constexpr_funcs.h"
+#include "script/header.h"
 
 namespace devils_engine {
   namespace core {
@@ -55,11 +55,9 @@ namespace devils_engine {
         count
       };
       
+      static const size_t bit_field_size = ceil(double(count) / double(SIZE_WIDTH));
+      
       std::string id;
-      float authority_cost;
-      float esteem_cost;
-      float influence_cost;
-      float money_cost;
       float battle_warscore_mult;
       float infamy_modifier;
       float ticking_war_score_multiplier;
@@ -70,7 +68,7 @@ namespace devils_engine {
       float max_defender_battle_score;
       float max_attacker_battle_score;
       size_t truce_turns;
-      utils::bit_field<ceil(double(count) / double(SIZE_WIDTH))> flags_field;
+      utils::bit_field<bit_field_size> flags_field;
       // картиночка
       // diplo_view_region - меняет провинции котолрые подсвечиваются при выборе этого цб
       // check_de_jure_tier - сканирует (?) все де юре королевства на предмет владений у вассалов?
@@ -80,26 +78,45 @@ namespace devils_engine {
       // on_success, on_success_post, on_fail, on_fail_post, on_reverse_demand, on_reverse_demand_post, 
       // on_attacker_leader_death, on_defender_leader_death, on_thirdparty_death, on_invalidation
       // можно ли запускать скрипты от казус белли? скорее всего нужно запускать от войны
-      script::script_data name_script; // скрипты зависят от того кто запускает войну
-      script::script_data war_name_script;
-      script::script_data can_use; // условия для того чтобы персонаж мог воспользоваться этим казус белли
-      script::script_data is_valid; // этот скрипт в цк2 мог взываться от персонажа и от титула
-      script::script_data ai_will_do;
+      script::string name_script; // скрипты зависят от непосредственно войны
+      script::string war_name_script;
+      script::condition can_use_script; // условия для того чтобы персонаж мог воспользоваться этим казус белли
+      script::condition is_valid; // этот скрипт в цк2 мог взываться от персонажа и от титула
+      script::number ai_will_do;
+      script::number authority_cost_script;
+      script::number esteem_cost_script;
+      script::number influence_cost_script;
+      script::number money_cost_script;
       // тут обходим эффекты
-      script::script_data on_add; // при добавлении участника
-      script::script_data on_add_post;
-      script::script_data on_success; // успешное завершение войны (для нападающего)
-      script::script_data on_success_post;
-      script::script_data on_fail; // не успешное завершение войны
-      script::script_data on_fail_post;
-      script::script_data on_reverse_demand; // выдвинуты обратные требования (то есть победа защиты?)
-      script::script_data on_reverse_demand_post;
-      script::script_data on_attacker_leader_death;
-      script::script_data on_defender_leader_death;
-      script::script_data on_thirdparty_death;
-      script::script_data on_invalidation; // если is_valid = false
+      script::effect on_add; // при добавлении участника
+      script::effect on_add_post;
+      script::effect on_success; // успешное завершение войны (для нападающего)
+      script::effect on_success_post;
+      script::effect on_fail; // не успешное завершение войны
+      script::effect on_fail_post;
+      script::effect on_reverse_demand; // выдвинуты обратные требования (то есть победа защиты?)
+      script::effect on_reverse_demand_post;
+      script::effect on_attacker_leader_death;
+      script::effect on_defender_leader_death;
+      script::effect on_thirdparty_death;
+      // если is_valid = false, а также при конце войны, когда тип конца войны инвалид
+      // 
+      script::effect on_invalidation;
       
       casus_belli();
+      
+      inline bool get_flag(const size_t &index) { return flags_field.get(index); }
+      inline bool set_flag(const size_t &index, const bool value) { return flags_field.set(index, value); }
+      
+      // какие данные мы ожидаем здесь?
+      bool can_use(const realm* root, const realm* target, const titulus* title) const;
+      float authority_cost(const realm* root, const realm* target, const titulus* title) const;
+      float esteem_cost(const realm* root, const realm* target, const titulus* title) const;
+      float influence_cost(const realm* root, const realm* target, const titulus* title) const;
+      float money_cost(const realm* root, const realm* target, const titulus* title) const;
+      float ai_probability(const realm* root, const realm* target, const titulus* title) const;
+      std::string_view name(const realm* root, const realm* target, const titulus* title) const;
+      std::string_view war_name(const realm* root, const realm* target, const titulus* title) const;
     };
     
     bool validate_casus_belli(const size_t &index, const sol::table &table);

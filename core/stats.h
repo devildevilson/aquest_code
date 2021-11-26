@@ -1,5 +1,5 @@
-#ifndef STATS_H
-#define STATS_H
+#ifndef DEVILS_ENGINE_CORE_STATS_H
+#define DEVILS_ENGINE_CORE_STATS_H
 
 #define CONCAT(a, b) a##b
 #define PENALTY_STAT(stat) CONCAT(stat, _penalty)
@@ -9,13 +9,15 @@
 
 // возможно лучше переделать на одну макрофункцию все? зачем разные? существует undef который легко покрывает мои нужды
 
-#define BASE_TROOP_STATS_LIST STAT_FUNC(troop_size) \
+#define BASE_TROOP_STATS_LIST STAT_FUNC(troop_size) /* текущий размер? */ \
   STAT_FUNC(morale)               \
   STAT_FUNC(armor)                \
   STAT_FUNC(siege_armor)          \
   STAT_FUNC(magic_resistance)     \
   STAT_FUNC(fire_resistance)      \
   STAT_FUNC(charge)               \
+  /* нужно наверное добавить еще какой тип (что то вроде темной магии) для которой будет очень мало резистов */ \
+  /* этим может быть и fire damage (или уменьшать его от резиста к магии? огненные стрелы это не магия) */ \
   STAT_FUNC(morale_damage)        \
   STAT_FUNC(melee_damage)         \
   STAT_FUNC(melee_armor_piercing) \
@@ -30,7 +32,7 @@
   STAT_FUNC(accuracy)             \
   STAT_FUNC(reloading)            \
   STAT_FUNC(maintenance)          \
-  STAT_FUNC(provision)            \
+  STAT_FUNC(consumption)          \
   STAT_FUNC(reinforce)
   
 #define TROOP_FACTOR_STATS_LIST STAT_FUNC(maintenance_factor)          \
@@ -43,12 +45,12 @@
   // стат - (резист + пенальти)
 #define BASE_HERO_STATS_LIST STAT_FUNC(min_damage)              \
   STAT_FUNC(max_damage)              \
-  STAT_FUNC(health_per_damage_level) \
-  STAT_FUNC(salary)                  \
-  STAT_FUNC(recovery)               
+  STAT_FUNC(health_per_damage_level) /* с уменьшением здоровья уменьшается и урон */ \
+  STAT_FUNC(salary) /* денюшка за ход (?) */ \
+  STAT_FUNC(recovery) /* восстановление хп, каждый ход восстанавливаемся почуть чуть в зависимости от снабжения? */              
 
-#define SHARED_TROOP_HERO_STATS_LIST STAT_FUNC(max_hp) \
-  STAT_FUNC(initiative)              \
+#define SHARED_TROOP_HERO_STATS_LIST STAT_FUNC(max_hp) /* текущее хп? */ \
+  STAT_FUNC(initiative) /* для того чтобы это хорошо работало нужна шкала с инициативой как в пятых героях */             \
   STAT_FUNC(melee_attack)            \
   STAT_FUNC(melee_defence)           \
   STAT_FUNC(range_attack)            \
@@ -67,12 +69,14 @@
   STAT_FUNC(agility)                 \
   STAT_FUNC(intellect)               \
   STAT_FUNC(demesne_size)            \
+  /* могут улучшиться по эвентам, невидимы игроку */ \
   STAT_FUNC(assassinate_chance_factor)  \
   STAT_FUNC(arrest_chance_factor)       \
   STAT_FUNC(plot_power_factor)          \
   STAT_FUNC(murder_plot_power_factor)   \
   STAT_FUNC(defensive_plot_power_factor)\
   STAT_FUNC(plot_discovery_chance)   \
+  /* статы для того чтобы сделать ии немного разным */ \
   STAT_FUNC(ai_rationality)          \
   STAT_FUNC(ai_zeal)                 \
   STAT_FUNC(ai_greed)                \
@@ -88,6 +92,7 @@
   CHARACTER_PENALTY_STAT_FUNC(agility)   \
   CHARACTER_PENALTY_STAT_FUNC(intellect)
   
+// авторитет, уважение и влияние: расходники в эвентах и решениях
 #define RESOURCE_STATS_LIST STAT_FUNC(money) \
   STAT_FUNC(authority) \
   STAT_FUNC(esteem)    \
@@ -96,6 +101,7 @@
 // у нас еще может быть прибавка с разных источников
 // есть прибавка для сюзерена (прибавляет владельцу, его сюзерену и далее по иерархии)
 // может ли быть у прибавки для сюзерена фактор? хороший вопрос, но скорее нет чем да
+// прибавка к авторитету, уважению и влиянию каждый ход (приходит в основном от треитов)
 #define RESOURCE_INCOME_STATS_LIST STAT_FUNC(tax_income) \
   STAT_FUNC(trade_income)                \
   STAT_FUNC(authority_income)            \
@@ -107,10 +113,11 @@
   STAT_FUNC(liege_influence_income) 
   
 // город, феодал, церковь, нужно ли разделение на город/республику, скорее всего нет
+// увеличение или уменьшение прибавки, супер мощный бафф/дебафф
 #define RESOURCE_INCOME_FACTOR_STATS_LIST STAT_FUNC(money_income_factor)         \
   STAT_FUNC(tax_income_factor)           \
   STAT_FUNC(trade_income_factor)         \
-  STAT_FUNC(authority_income_factor)     \
+  STAT_FUNC(authority_income_factor) /* модификация для всех владельцев титулов в этой провинции */    \
   STAT_FUNC(esteem_income_factor)        \
   STAT_FUNC(influence_income_factor)     
   
@@ -129,14 +136,14 @@
 // но у персонажа могут быть модификаторы инкома, также как и у realm'а
 #define BASE_REALM_STATS_LIST STAT_FUNC(hero_recovery_factor)        \
   STAT_FUNC(hero_discipline)          \
-  STAT_FUNC(max_population_factor)    \
-  STAT_FUNC(global_revolt_risk)       \
+  STAT_FUNC(max_population_factor) /* может ли государство модифицировать максимальное количество жителей? например тех? */   \
+  STAT_FUNC(global_revolt_risk) /* риск восстания в государстве */      \
   STAT_FUNC(vassal_limit)
   
 #define BUILD_FACTOR_STATS_LIST STAT_FUNC(build_cost_factor)           \
   STAT_FUNC(build_time_factor)           
 
-#define SHARED_PROVINCE_CITY_CHARACTER_STATS_LIST STAT_FUNC(culture_flex)                 \
+#define SHARED_PROVINCE_CITY_CHARACTER_STATS_LIST STAT_FUNC(culture_flex) /* толерантность к другим культурам или скорость принятия, это я так полагаю для ии */ \
   STAT_FUNC(religion_flex)                \
   STAT_FUNC(short_reign_length)   
   
@@ -174,19 +181,23 @@
   STAT_FUNC(winter_provision_production) 
 
 // эти вещи могут быть глобальными (могут быть у государства)
+// модификатор для восстановления юнитов ???
 #define ARMY_FACTOR_STATS_LIST STAT_FUNC(provision_recovery_factor) \
-  STAT_FUNC(morale_recovery_factor)    \
-  STAT_FUNC(casualties_factor)         \
+  STAT_FUNC(morale_recovery_factor) /* полководец может улучшить ситуацию с восстановлением, восстановление перекрывает небоевые потери */   \
+  STAT_FUNC(casualties_factor) /* прибавка к модификатору потерь */    \
   STAT_FUNC(speed_factor)              \
   STAT_FUNC(vision_factor)             
   
-#define ARMY_RESOURCE_STATS_LIST STAT_FUNC(provision) \
-  STAT_FUNC(morale)
+// модификатор необходимой провизии армии (складывается из всех провизий отрядов)
+// передвижение тоже должно быть ресурсом
+#define ARMY_RESOURCE_STATS_LIST STAT_FUNC(provision) /* некая переменная которая должна обозначать богатсво провинции и возможность кормить конкретную армию */ \
+  
+  //STAT_FUNC(morale) /* мораль как ресурс это что? такая штука явно присутствовала в цк как мне повторить? */
 
 #define BASE_HERO_TROOP_STATS_LIST STAT_FUNC(discipline)
   
-#define SHARED_HERO_TROOP_ARMY_STATS_LIST STAT_FUNC(speed) \
-  STAT_FUNC(vision) 
+#define SHARED_HERO_TROOP_ARMY_STATS_LIST STAT_FUNC(speed) /* скорость на карте */ \
+  STAT_FUNC(vision) /* видимость армии (не думаю что нужно делать больше 2-3 тайлов) */
 
 #define CHARACTER_STATS_LIST CHARACTER_PENALTY_STATS_LIST \
   BASE_CHARACTER_STATS_LIST                 \
@@ -266,12 +277,121 @@
   VASSAL_RESOURCE_INCOME_FACTOR_STATS_LIST  \
   BUILD_FACTOR_STATS_LIST                   \
   ARMY_FACTOR_STATS_LIST                    \
-  RESOURCE_STATS_LIST
   
-  // тут немного сложнее
-// BASE_HERO_TROOP_STATS_LIST
-// BASE_HERO_STATS_LIST
-// HERO_FACTOR_STATS_LIST
+#define UNIQUE_RESOURCES_LIST               \
+  RESOURCE_STATS_LIST                       \
+  CITY_RESOURCE_STATS_LIST                  \
+  ARMY_RESOURCE_STATS_LIST                  \
+  
+#define UNIQUE_STATS_RESOURCES_LIST \
+  UNIQUE_STATS_LIST     \
+  UNIQUE_RESOURCES_LIST \
+  
+#define STATS_OFFSET_LIST \
+  STAT_OFFSET_FUNC(character_stats) \
+  STAT_OFFSET_FUNC(realm_stats) \
+  STAT_OFFSET_FUNC(province_stats) \
+  STAT_OFFSET_FUNC(city_stats) \
+  STAT_OFFSET_FUNC(army_stats) \
+  STAT_OFFSET_FUNC(hero_troop_stats) \
+  STAT_OFFSET_FUNC(troop_stats) \
+  STAT_OFFSET_FUNC(hero_stats) \
+  STAT_OFFSET_FUNC(character_resources) \
+  STAT_OFFSET_FUNC(realm_resources) \
+  STAT_OFFSET_FUNC(city_resources) \
+  STAT_OFFSET_FUNC(army_resources)
+  
+#define STAT_TYPES_LIST \
+  STAT_TYPES_FUNC(invalid) \
+  STAT_TYPES_FUNC(character_stat) \
+  STAT_TYPES_FUNC(realm_stat) \
+  STAT_TYPES_FUNC(province_stat) \
+  STAT_TYPES_FUNC(city_stat) \
+  STAT_TYPES_FUNC(army_stat) \
+  STAT_TYPES_FUNC(hero_troop_stat) \
+  STAT_TYPES_FUNC(troop_stat) \
+  STAT_TYPES_FUNC(hero_stat) \
+  STAT_TYPES_FUNC(character_resource) \
+  STAT_TYPES_FUNC(realm_resource) \
+  STAT_TYPES_FUNC(city_resource) \
+  STAT_TYPES_FUNC(army_resource)
+  
+  
+#define OPINION_MODIFIER_TYPES_LIST \
+  OPINION_MODIFIER_TYPE_FUNC(invalid) \
+  OPINION_MODIFIER_TYPE_FUNC(general_opinion) \
+  OPINION_MODIFIER_TYPE_FUNC(vassal_opinion) \
+  OPINION_MODIFIER_TYPE_FUNC(religious_vassal_opinion) \
+  OPINION_MODIFIER_TYPE_FUNC(powerful_vassal_opinion) \
+  OPINION_MODIFIER_TYPE_FUNC(direct_vassal_opinion) \
+  OPINION_MODIFIER_TYPE_FUNC(fellow_vassal_opinion) \
+  OPINION_MODIFIER_TYPE_FUNC(free_invest_vassal_opinion) \
+  OPINION_MODIFIER_TYPE_FUNC(liege_opinion) \
+  OPINION_MODIFIER_TYPE_FUNC(same_religion_liege_opinion) \
+  OPINION_MODIFIER_TYPE_FUNC(same_parent_religion_liege_opinion) \
+  OPINION_MODIFIER_TYPE_FUNC(same_religion_group_liege_opinion) \
+  OPINION_MODIFIER_TYPE_FUNC(different_religion_liege_opinion) \
+  OPINION_MODIFIER_TYPE_FUNC(different_parent_religion_liege_opinion) \
+  OPINION_MODIFIER_TYPE_FUNC(different_religion_group_liege_opinion) \
+  OPINION_MODIFIER_TYPE_FUNC(independent_ruler_opinion) \
+  OPINION_MODIFIER_TYPE_FUNC(opinion_of_male_rulers) \
+  OPINION_MODIFIER_TYPE_FUNC(opinion_of_female_rulers) \
+  OPINION_MODIFIER_TYPE_FUNC(council_opinion) \
+  OPINION_MODIFIER_TYPE_FUNC(tribunal_opinion) \
+  OPINION_MODIFIER_TYPE_FUNC(clergy_opinion) \
+  OPINION_MODIFIER_TYPE_FUNC(courtier_opinion) \
+  OPINION_MODIFIER_TYPE_FUNC(guest_opinion) \
+  OPINION_MODIFIER_TYPE_FUNC(courtier_and_guest_opinion) \
+  OPINION_MODIFIER_TYPE_FUNC(prisoner_opinion) \
+  \
+  OPINION_MODIFIER_TYPE_FUNC(twin_opinion) \
+  OPINION_MODIFIER_TYPE_FUNC(dynasty_opinion) \
+  OPINION_MODIFIER_TYPE_FUNC(male_dynasty_opinion) \
+  OPINION_MODIFIER_TYPE_FUNC(female_dynasty_opinion) \
+  OPINION_MODIFIER_TYPE_FUNC(child_opinion) \
+  OPINION_MODIFIER_TYPE_FUNC(oldest_child_opinion) \
+  OPINION_MODIFIER_TYPE_FUNC(youngest_child_opinion) \
+  OPINION_MODIFIER_TYPE_FUNC(spouse_opinion) \
+  OPINION_MODIFIER_TYPE_FUNC(close_relative_opinion) \
+  OPINION_MODIFIER_TYPE_FUNC(player_heir_opinion) \
+  OPINION_MODIFIER_TYPE_FUNC(child_except_player_heir_opinion) \
+  OPINION_MODIFIER_TYPE_FUNC(eligible_child_opinion) \
+  OPINION_MODIFIER_TYPE_FUNC(eligible_child_except_player_heir_opinion) \
+  \
+  OPINION_MODIFIER_TYPE_FUNC(male_opinion) \
+  OPINION_MODIFIER_TYPE_FUNC(female_opinion) \
+  \
+  OPINION_MODIFIER_TYPE_FUNC(ambition_opinion) \
+  OPINION_MODIFIER_TYPE_FUNC(sex_appeal_opinion) \
+  \
+  OPINION_MODIFIER_TYPE_FUNC(same_opinion) \
+  OPINION_MODIFIER_TYPE_FUNC(same_opinion_if_same_religion) \
+  OPINION_MODIFIER_TYPE_FUNC(opposite_opinion) \
+  OPINION_MODIFIER_TYPE_FUNC(same_culture_opinion) \
+  OPINION_MODIFIER_TYPE_FUNC(same_culture_opinion_if_same_religion) \
+  \
+  OPINION_MODIFIER_TYPE_FUNC(same_religion_opinion) \
+  OPINION_MODIFIER_TYPE_FUNC(same_parent_religion_opinion) \
+  OPINION_MODIFIER_TYPE_FUNC(same_religion_group_opinion) \
+  OPINION_MODIFIER_TYPE_FUNC(different_religion_opinion) \
+  OPINION_MODIFIER_TYPE_FUNC(different_parent_religion_opinion) \
+  OPINION_MODIFIER_TYPE_FUNC(different_religion_group_opinion) \
+  OPINION_MODIFIER_TYPE_FUNC(infidel_opinion) \
+  OPINION_MODIFIER_TYPE_FUNC(church_opinion) \
+  OPINION_MODIFIER_TYPE_FUNC(rel_head_opinion) \
+  OPINION_MODIFIER_TYPE_FUNC(realm_priest_opinion) \
+  \
+  /* дальше идут бонусы к конкретным вещам или типам */ \
+  OPINION_MODIFIER_TYPE_FUNC(character_opinion) \
+  OPINION_MODIFIER_TYPE_FUNC(realm_opinion) \
+  OPINION_MODIFIER_TYPE_FUNC(culture_opinion) \
+  OPINION_MODIFIER_TYPE_FUNC(culture_group_opinion) \
+  OPINION_MODIFIER_TYPE_FUNC(religion_opinion) \
+  OPINION_MODIFIER_TYPE_FUNC(religion_group_opinion) \
+  OPINION_MODIFIER_TYPE_FUNC(city_type_opinion) \
+  OPINION_MODIFIER_TYPE_FUNC(holding_type_opinion) \
+  OPINION_MODIFIER_TYPE_FUNC(other_dynasty_opinion)
+
   
 // ко всем статам еще нужны иконки, названия, описания
 // по всей видимости должны быть четкие разделения на статы фракции -> персонажа -> провинции -> города -> здания
@@ -279,18 +399,17 @@ namespace devils_engine {
   namespace core {
     struct troop_type;
     
-    enum class unit_type {
-      invalid,
-      troop,
-      hero,
-      hero_troop,
-      character,
-      realm,
-      city,
-      province
-    };
-    
     namespace stat_type {
+      enum values {
+#define STAT_TYPES_FUNC(val) val,
+        STAT_TYPES_LIST
+#undef STAT_TYPES_FUNC
+        
+        count
+      };
+    }
+    
+    namespace stat_value_type {
       enum values {
         int_t,
         uint_t,
@@ -302,46 +421,8 @@ namespace devils_engine {
     // типы значений? по идее тут все значения int
     namespace troop_stats { // не подходит для геройских битв
       enum values {
-//         current_troop_size, 
-//         current_hp,
-//         current_morale,
-//         troop_size, // текущий размер?
-//         max_hp,     // текущее хп?
-//         morale,
-//         armor,
-//         siege_armor, // защита против урона по зданиям
-//         speed,
-//         initiative,
-//         melee_attack,
-//         melee_defence,
-//         range_attack,
-//         range_defence,
-//         charge,
-//         // нужно наверное добавить еще какой тип (что то вроде темной магии) для которой будет очень мало резистов
-//         // этим может быть и fire damage (или уменьшать его от резиста к магии? огненные стрелы это не магия)
-//         morale_damage,
-//         melee_damage, 
-//         melee_armor_piercing,
-//         melee_magic,
-//         melee_fire,
-//         melee_siege,
-//         range_damage,
-//         range_armor_piercing,
-//         range_magic,
-//         range_fire,
-//         range_siege,
-//         accuracy,
-//         reloading,
-//         ammo,
-//         // небоевые статы
-//         maintenance, // денюшка за ход (?)
-//         provision,   // некая переменная которая должна обозначать богатсво провинции и возможность кормить конкретную армию
-//         recovery,    // восстановление хп, каждый ход восстанавливаемся почуть чуть в зависимости от снабжения?
-        
 #define STAT_FUNC(val) val,
-        
         TROOP_STATS_LIST
-        
 #undef STAT_FUNC
         
         count
@@ -359,31 +440,12 @@ namespace devils_engine {
     // наверное да только за какой то ресурс (например так может уменьшаться влияние) кому даются какие статы?
     // у нас видимо должно быть разделение на типы героев в этом случае 
     // (типы героев вообще вещь полезная: стартовые статы героя, пассивки, активки, условия генерации и прочее)
+    // вряд ли нужно давать героям возможность сбежать
+    // вместо этого нужно сделать удачу и мораль
     namespace hero_stats {
       enum values {
-//         current_hp,
-//         max_hp, // текущее хп?
-//         // вряд ли нужно давать героям возможность сбежать
-//         // вместо этого нужно сделать удачу и мораль
-//         //leadership,
-//         speed,
-//         initiative,  // для того чтобы это хорошо работало нужна шкала с инициативой как в пятых героях
-//         melee_attack,
-//         melee_defence,
-//         range_attack,
-//         range_defence,
-//         min_damage, // доп урон?
-//         max_damage,
-//         ammo,
-//         health_per_damage_level, // с уменьшением здоровья уменьшается и урон
-//         // небоевые статы
-//         recovery,
-//         // зарплата?
-        
 #define STAT_FUNC(val) val,
-        
         HERO_STATS_LIST
-        
 #undef STAT_FUNC
         
         count
@@ -400,152 +462,85 @@ namespace devils_engine {
     // модификаторы отношений к дворянству и церкови?
     // как пересчитывать статы? нужны ли дефолтные статы? 
     // выяснил что в цк2 показаны дефолтные статы + показано какой трейт как воздействует
-    // 
+    // интрига? не помешало бы что то подобное, 
+    // хотя с этим частично могут справиться и другие статы
     namespace character_stats {
       enum values {
-//         // статы правителя
-//         military, // пенальти для каждого скила?
-//         managment,
-//         diplomacy,
-//         // интрига? не помешало бы что то подобное, 
-//         // хотя с этим частично могут справиться и другие статы
-//         health,
-//         fertility,
-//         // геройские статы
-//         strength,
-//         agility,
-//         intellect,
-//         
-//         PENALTY_STAT(military)
-//         PENALTY_STAT(managment)
-//         PENALTY_STAT(diplomacy)
-//         PENALTY_STAT(health)
-//         PENALTY_STAT(fertility)
-//         PENALTY_STAT(strength)
-//         PENALTY_STAT(agility)
-//         PENALTY_STAT(intellect)
-//         
-//         demesne_size,
-//         culture_flex,  // толерантность к другим культурам, это я так полагаю для ии
-//         religion_flex,
-//         // могут улучшиться по эвентам, невидимы игроку
-//         assassinate_chance_mod,
-//         arrest_chance_mod,
-//         plot_power_mod,
-//         murder_plot_power_mod,
-//         defensive_plot_power_mod,
-//         plot_discovery_chance,
-//         // статы для того чтобы сделать ии немного разным
-//         ai_rationality,
-//         ai_zeal,
-//         ai_greed,
-//         ai_honor,
-//         ai_ambition,
-//         
-//         // увеличение или уменьшение прибавки, супер мощный бафф/дебафф
-//         authority_increase_mod,
-//         esteem_increase_mod,
-//         influence_increase_mod,
-//         income_mod,
-//         
-//         // прибавка к авторитету, уважению и влиянию каждый ход (приходит в основном от треитов)
-//         authority_increase,
-//         esteem_increase,
-//         influence_increase,
-//         income, // инком может быть из других источников (должность) инком от налогов расчитывается во фракции
-//         
-//         // авторитет, уважение и влияние: расходники в эвентах и решениях
-//         authority,
-//         esteem,
-//         influence,
-//         money,
-        
-        // в зданиях можно указать тип объекта, стат которого мы увеличиваем (то есть character_modificators и проч)
-        // и тогда не придется отделять здесь фракционные статы от статов персонажа по названиям
-        // с другой стороны можно отделить и тогда не придется разделять character_modificators и faction_modificators
-        // нет, почти для всех модификаторов лучше отделить, в цк2 названия модификаторов не пересекаются
-        // статы персонажа и статы фракции можно совместить, другое дело что какие то модификаторы наследуются и статы фракции персонажам без нее вобщем то не нужны
-        //CONCAT(character_, authority_increase_mod)
-        
-        // мнение о персонаже, думаю что нужно все мнения собрать в отдельную кучу
-
 #define STAT_FUNC(val) val,
 #define CHARACTER_PENALTY_STAT_FUNC(val) val##_penalty,
-        
         CHARACTER_STATS_LIST
-        
 #undef STAT_FUNC
 #undef CHARACTER_PENALTY_STAT_FUNC
         
         count
       };
       
-      const stat_type::values types[] = {
+      const stat_value_type::values types[] = {
         // пенальти
-        stat_type::int_t,
-        stat_type::int_t,
-        stat_type::int_t,
-        stat_type::float_t, // health
-        stat_type::float_t, // fertility
-        stat_type::int_t,
-        stat_type::int_t,
-        stat_type::int_t,
+        stat_value_type::int_t,
+        stat_value_type::int_t,
+        stat_value_type::int_t,
+        stat_value_type::float_t, // health
+        stat_value_type::float_t, // fertility
+        stat_value_type::int_t,
+        stat_value_type::int_t,
+        stat_value_type::int_t,
         
         // базовые статы
-        stat_type::int_t,
-        stat_type::int_t,
-        stat_type::int_t,
-        stat_type::float_t, // health
-        stat_type::float_t, // fertility
-        stat_type::int_t,
-        stat_type::int_t,
-        stat_type::int_t,
+        stat_value_type::int_t,
+        stat_value_type::int_t,
+        stat_value_type::int_t,
+        stat_value_type::float_t, // health
+        stat_value_type::float_t, // fertility
+        stat_value_type::int_t,
+        stat_value_type::int_t,
+        stat_value_type::int_t,
         
-        stat_type::int_t,  // demesne_size
+        stat_value_type::int_t,  // demesne_size
         
-        stat_type::float_t,
-        stat_type::float_t,
-        stat_type::float_t,
-        stat_type::float_t,
-        stat_type::float_t,
-        stat_type::float_t, // plot_discovery_chance
+        stat_value_type::float_t,
+        stat_value_type::float_t,
+        stat_value_type::float_t,
+        stat_value_type::float_t,
+        stat_value_type::float_t,
+        stat_value_type::float_t, // plot_discovery_chance
         
-        stat_type::int_t,
-        stat_type::int_t,
-        stat_type::int_t,
-        stat_type::int_t,
-        stat_type::int_t,   // ai_ambition
+        stat_value_type::int_t,
+        stat_value_type::int_t,
+        stat_value_type::int_t,
+        stat_value_type::int_t,
+        stat_value_type::int_t,   // ai_ambition
         
         // провинция/город/персонаж статы
-        stat_type::float_t,
-        stat_type::float_t,
-        stat_type::int_t,
+        stat_value_type::float_t,
+        stat_value_type::float_t,
+        stat_value_type::int_t,
         
         // доход
-        stat_type::float_t, // tax
-        stat_type::float_t, // trade
-        stat_type::float_t,
-        stat_type::float_t,
-        stat_type::float_t,
+        stat_value_type::float_t, // tax
+        stat_value_type::float_t, // trade
+        stat_value_type::float_t,
+        stat_value_type::float_t,
+        stat_value_type::float_t,
         
         // множитель дохода
-        stat_type::float_t, // money (общий множитель)
-        stat_type::float_t, // tax
-        stat_type::float_t, // trade
-        stat_type::float_t,
-        stat_type::float_t,
-        stat_type::float_t,
+        stat_value_type::float_t, // money (общий множитель)
+        stat_value_type::float_t, // tax
+        stat_value_type::float_t, // trade
+        stat_value_type::float_t,
+        stat_value_type::float_t,
+        stat_value_type::float_t,
         
         // множитель строительства
-        stat_type::float_t,
-        stat_type::float_t,
+        stat_value_type::float_t,
+        stat_value_type::float_t,
         
         // множители для армии
-        stat_type::float_t,
-        stat_type::float_t,
-        stat_type::float_t,
-        stat_type::float_t,
-        stat_type::float_t,
+        stat_value_type::float_t,
+        stat_value_type::float_t,
+        stat_value_type::float_t,
+        stat_value_type::float_t,
+        stat_value_type::float_t,
         // забыл че удалил в армии =(
       };
       
@@ -561,87 +556,13 @@ namespace devils_engine {
       };
     }
     
-    // для этих значений свойства определены
-    namespace opinion_stats {
-      enum values {
-        ambition_opinion,
-        vassal_opinion,
-        sex_appeal_opinion,
-        same_opinion,
-        same_opinion_if_same_religion,
-        opposite_opinion,
-        liege_opinion,
-        general_opinion,
-        twin_opinion,
-        dynasty_opinion,
-        male_dynasty_opinion,
-        female_dynasty_opinion,
-        child_opinion,
-        oldest_child_opinion,
-        youngest_child_opinion,
-        spouse_opinion,
-        male_opinion,
-        female_opinion,
-        same_religion_opinion,
-        infidel_opinion,
-        church_opinion,
-        feudal_opinion,
-        rel_head_opinion,
-        free_invest_vassal_opinion,
-        clan_sentiment,
-        count,
-        max_count = 128
-        
-//         temple_opinion,             // отношения к конкретным типам владений
-//         temple_all_opinion,         // мне нужно будет добавить отдельно
-//         city_opinion,               // так же как и отношения конкретных религий
-//         castle_opinion,
-//         tribal_opinion,
-//         unreformed_tribal_opinion,
-      };
-    }
-    
     // этими статами меняем приток денег от города например
     // хотя тут наверное не статы а модификаторы
     namespace realm_stats {
       enum values {
-//         tax_income_mod,
-//         trade_income_mod,
-//         
-//         provision_mod,
-//         
-//         army_recovery_mod, // модификатор для восстановления юнитов
-//         army_morale_recovery_mod,
-//         army_discipline,   // все армии из этого города стартуют с такой прибавкой дисциплины
-//         army_maintenance_mod,
-//         army_morale,
-//         casualties_mod,    // прибавка к модификатору потерь
-//         army_speed,
-//         army_vision,
-//         
-//         hero_recovery_mod, // модификатор восстановления героя в принципе (например между противникамим в данже)
-//         hero_discipline,   // модификатор дисциплины для всех героев под этими знаменами
-// //         authority_increase_mod, // положим в персонажа
-// //         esteem_increase_mod,
-// //         influence_increase_mod,
-// //         church_opinion,         // прибавка к отношению церкви
-// //         vassal_opinion,         // прибавка к отношению вассалов
-//         build_cost_mod,
-//         build_time_mod,
-//         population_growth_mod,
-//         max_population_mod,     // может ли государство модифицировать максимальное количество жителей? например тех?
-//         tech_spread_mod,
-//         global_revolt_risk,     // риск восстания в государстве
-//         revolt_risk_mod,
-//         
-//         vassal_limit,           //
-        
-        // глобальные характеристики для торговли
-        
+        // нужно добавить еще глобальные характеристики для торговли
 #define STAT_FUNC(val) val,
-        
         REALM_STATS_LIST
-        
 #undef STAT_FUNC
         
         count
@@ -658,37 +579,7 @@ namespace devils_engine {
     }
     
     namespace province_stats {
-      enum values {
-//         tax_income_mod,
-//         provision_mod,
-//         
-//         army_recovery_mod, // модификатор для восстановления юнитов
-//         army_morale_recovery_mod,
-//         army_discipline,   // все армии из этого города стартуют с такой прибавкой дисциплины
-//         army_maintenance_mod,
-//         army_morale,
-//         casualties_mod,    // прибавка к модификатору потерь
-//         army_speed,
-//         army_vision,
-//         
-//         authority_increase_mod, // модификация для всех владельцев титулов в этой провинции
-//         esteem_increase_mod,    // модификация для владельца или для господина?
-//         influence_increase_mod,
-//         authority_increase_liege_mod,
-//         esteem_increase_liege_mod,    
-//         influence_increase_liege_mod,
-//         
-//         local_revolt_risk,
-//         disease_defence,
-//         culture_flex,
-//         religion_flex,
-//         
-//         short_reign_length, // нужно ли?
-//         attrition, // наверное небоевые потери будем расчитывать по всей провинции
-//         max_attrition,
-//         
-//         // торговля
-        
+      enum values {        
 #define STAT_FUNC(val) val,
         PROVINCE_STATS_LIST
 #undef STAT_FUNC
@@ -705,59 +596,10 @@ namespace devils_engine {
     // и так пока доход не будет собран в каком либо ноде
     namespace city_stats {
       enum values {
-//         tax_income,
-//         tax_income_mod,
-//         
-//         authority_increase, // владельцу
-//         esteem_increase,
-//         influence_increase,
-//         authority_increase_liege, // владельцу и господину? наверное только господину
-//         esteem_increase_liege,
-//         influence_increase_liege, // нужны тут модификаторы?
-// //         church_opinion, // мнение отдельно модифицируется
-// //         vassal_opinion,
-//         // бонусы для всех войск из этого города
-//         build_cost_mod,
-//         build_time_mod,
-//         // население, нужно придумать хорошую механику централизации
-//         population,
-//         population_growth,
-//         max_population,
-//         tech_spread,
-//         demesne_size, // размер личных владений
-//         // торговля
-//         trade_power, // в чью пользу идет профит от торговли в ноде
-//         production,  // сколько производится продукции в городе (значение продукции умножается на цену товара) (это как раз дает непосредственно доход в год)
-//         // в европке только два стата для торговли по сути
-//         // остальное это куча различных модификаторов для этих статов в разных условиях
-//         
-//         // армейские статы
-//         provision,         // сколько отрядов может прокормить армия
-//         winter_provision,  // возможно нужно контролировать модификатором
-//         provision_mod,
-//         army_recovery_mod, // модификатор для восстановления юнитов
-//         army_morale_recovery_mod,
-//         army_discipline,   // все армии из этого города стартуют с такой прибавкой дисциплины
-//         army_maintenance_mod,
-//         army_morale,
-//         casualties_mod,    // прибавка к модификатору потерь
-//         army_speed,
-//         army_vision,
-//         
-//         // геройские статы
-// //         hero_speed, // непонятно как герою дать этот стат в городе, герой если "отдыхает" то скорее всего находится при дворе какого то правителя
-// //         hero_vision,
-// //         hero_recovery_mod, // глобальный модификатор
-// //         hero_discipline,   // глобальный модификатор
-//         
-//         // можно еще добавить несколько аттрибутов с окончанием _penalty, для того чтобы моделировать ущерб от болезни (который не может быть вылечен больше чем заболел)
-//         
-//         // может быть нужно добавить температуру провинции? или какой то такой аттрибут чтобы контролировать провизию
+        // может быть нужно добавить температуру провинции? или какой то такой аттрибут чтобы контролировать провизию
         
 #define STAT_FUNC(val) val,
-        
         CITY_STATS_LIST
-        
 #undef STAT_FUNC
         
         count
@@ -778,17 +620,6 @@ namespace devils_engine {
     // что такое мод? это конкретное значение или множитель? где конкретное значение?
     namespace army_stats {
       enum values {
-//         speed,           // скорость на карте
-//         vision,          // видимость армии (не думаю что нужно делать больше 2-3 тайлов)
-//         provision_mod,   // модификатор необходимой провизии армии (складывается из всех провизий отрядов)
-//         maintenance_mod,
-//         morale_mod,      // модификатор морали - наверное должен быть изменяемым по эвентам
-//         morale_recovery, // восстановление морали после битвы, в процентах?
-//         discipline,      // расхлябанность армии, на что влияет? некоторые статы должны от этого зависеть (умение атаки/защиты, урон по морали, инициатива)
-//         recovery_mod,    // полководец может улучшить ситуацию с восстановлением, восстановление перекрывает небоевые потери
-//         casualties_mod,  // полководец может чутка уменьшить урон от небоевых потерь
-//         // 
-        
 #define STAT_FUNC(val) val,
         ARMY_STATS_LIST
 #undef STAT_FUNC
@@ -807,18 +638,34 @@ namespace devils_engine {
     }
     
     namespace hero_troop_stats {
-      enum values {
-//         speed,           // скорость на карте
-//         vision,          // видимость геройской партии (не думаю что нужно делать больше 2-3 тайлов)
-// //         maintenance_mod,
-//         discipline,      // расхлябанность отряда героя, на что влияет? некоторые статы должны от этого зависеть (умение атаки/защиты, урон по морали, инициатива)
-//         recovery_mod,    // восстановление геройской партии
-        
+      enum values {        
 #define STAT_FUNC(val) val,
         HERO_TROOP_STATS_LIST
 #undef STAT_FUNC
         
         count
+      };
+    }
+    
+    // для этих значений свойства определены
+    // нужно вот что сделать, задать максимальное количество разных типов
+    // в цк3 опинион модификатор действительно отдельно, в скрипте можно указать
+    // от кого к кому 
+    // сколько всего типов владений? какие формы правления?
+    // формы правления напрямую у меня нет, но есть разные права у акторов в государстве
+    // думаю что отношения должны быть скорее с конкретными акторами и их целями
+    // то есть должны быть некие объединения групп акторов по каким то целям
+    // и вот по этим целям раздавать модификаторы к отношениям
+    namespace opinion_modifiers {
+      enum values {
+#define OPINION_MODIFIER_TYPE_FUNC(val) val,
+        OPINION_MODIFIER_TYPES_LIST
+#undef OPINION_MODIFIER_TYPE_FUNC
+        
+        count,
+//         max_count = 128
+        opinion_modifier_type = general_opinion,
+        entity_type_opinion_modifier = character_opinion
       };
     }
     
@@ -833,8 +680,12 @@ namespace devils_engine {
         hero_troop_stats = army_stats + army_stats::count,
         troop_stats = hero_troop_stats + hero_troop_stats::count,
         hero_stats = troop_stats + troop_stats::count,
+        character_resources = hero_stats + hero_stats::count,
+        realm_resources = character_resources + character_resources::count,
+        city_resources = realm_resources + realm_resources::count,
+        army_resources = city_resources + city_resources::count,
         
-        count = hero_stats + hero_stats::count
+        count = army_resources + army_resources::count
       };
     }
     

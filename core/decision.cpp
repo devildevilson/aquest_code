@@ -1,7 +1,6 @@
 #include "decision.h"
 
 #include "utils/utility.h"
-#include "script/script_block_functions.h"
 #include "structures_header.h"
 #include "target_type.h"
 
@@ -16,100 +15,100 @@ namespace devils_engine {
 //       delete [] effect_array;
     }
     
-    bool decision::check_shown_condition(script::context* ctx) const {
-      // осталось решить что с рнд, рнд нужно каждый раз приводить в дефолтное состояние
-      // 
-//       script::random_state rnd { 5235545 };
+//     bool decision::check_shown_condition(script::context* ctx) const {
+//       // осталось решить что с рнд, рнд нужно каждый раз приводить в дефолтное состояние
+//       // 
+// //       script::random_state rnd { 5235545 };
+// //       
+// //       script::context ctx{
+// //         {},
+// //         {},
+// //         &rnd,
+// //         nullptr
+// //       };
+// //       
+// //       ctx.array_data.emplace_back(root);
+// //       ctx.array_data.emplace_back(helper);
 //       
-//       script::context ctx{
-//         {},
-//         {},
-//         &rnd,
-//         nullptr
-//       };
+//       const script::target_t t = check_input(ctx);
+//       //return script::condition(root, ctx, potential_count, potential_array) == TRUE_BLOCK;
+//       return script::condition(t, ctx, 1, &potential) == TRUE_BLOCK;
+//     }
+//     
+//     bool decision::check_condition(script::context* ctx) const {
+//       const script::target_t t = check_input(ctx);
+//       //return script::condition(t, ctx, condition_count, condition_array) == TRUE_BLOCK;
+//       return script::condition(t, ctx, 1, &condition) == TRUE_BLOCK;
+//     }
+//     
+//     void decision::iterate_potential(script::context* ctx) const {
+//       const script::target_t t = check_input(ctx);
+//       assert(ctx->itr_func != nullptr);
+//       script::condition(t, ctx, 1, &potential);
+//     }
+//     
+//     void decision::iterate_conditions(script::context* ctx) const {
+//       const script::target_t t = check_input(ctx);
+//       assert(ctx->itr_func != nullptr);
+//       script::condition(t, ctx, 1, &condition);
+//     }
+//     
+//     void decision::iterate_actions(script::context* ctx) const {
+//       const script::target_t t = check_input(ctx);
+//       assert(ctx->itr_func != nullptr);
+//       script::action(t, ctx, 1, &effect);
+//     }
+//     
+//     bool decision::run(script::context* ctx) const {
+//       const script::target_t t = check_input(ctx);
+//       const bool check = script::condition(t, ctx, 1, &condition) == TRUE_BLOCK;
+//       if (!check) return false;
 //       
-//       ctx.array_data.emplace_back(root);
-//       ctx.array_data.emplace_back(helper);
-      
-      const script::target_t t = check_input(ctx);
-      //return script::condition(root, ctx, potential_count, potential_array) == TRUE_BLOCK;
-      return script::condition(t, ctx, 1, &potential) == TRUE_BLOCK;
-    }
-    
-    bool decision::check_condition(script::context* ctx) const {
-      const script::target_t t = check_input(ctx);
-      //return script::condition(t, ctx, condition_count, condition_array) == TRUE_BLOCK;
-      return script::condition(t, ctx, 1, &condition) == TRUE_BLOCK;
-    }
-    
-    void decision::iterate_potential(script::context* ctx) const {
-      const script::target_t t = check_input(ctx);
-      assert(ctx->itr_func != nullptr);
-      script::condition(t, ctx, 1, &potential);
-    }
-    
-    void decision::iterate_conditions(script::context* ctx) const {
-      const script::target_t t = check_input(ctx);
-      assert(ctx->itr_func != nullptr);
-      script::condition(t, ctx, 1, &condition);
-    }
-    
-    void decision::iterate_actions(script::context* ctx) const {
-      const script::target_t t = check_input(ctx);
-      assert(ctx->itr_func != nullptr);
-      script::action(t, ctx, 1, &effect);
-    }
-    
-    bool decision::run(script::context* ctx) const {
-      const script::target_t t = check_input(ctx);
-      const bool check = script::condition(t, ctx, 1, &condition) == TRUE_BLOCK;
-      if (!check) return false;
-      
-      //script::action(t, ctx, effect_count, effect_array);
-      script::action(t, ctx, 1, &effect);
-      return true;
-    }
-    
-    std::string_view decision::get_name(script::context* ctx) const {
-      const script::target_t t = check_input(ctx);
-      return script::get_string_from_script(t, ctx, &name_script);
-    }
-    
-    std::string_view decision::get_description(script::context* ctx) const {
-      const script::target_t t = check_input(ctx);
-      return script::get_string_from_script(t, ctx, &description_script);
-    }
-    
-    bool decision::check_ai(script::context* ctx) const {
-      UNUSED_VARIABLE(ctx);
-      // проверка ии, она пишется отдельным скриптом
-      return false;
-    }
-    
-    bool decision::run_ai(script::context* ctx) const {
-      UNUSED_VARIABLE(ctx);
-      // я думал что запуск для ии будет чем то отличаться, но вряд ли
-      return false;
-    }
-    
-    script::target_t decision::check_input(script::context* ctx) const {
-      // тут наверное нужно проверить входные данные, как это сделать?
-      // входные данные у нас записаны в инпут, и наверное нужно просто проверить типы?
-      // то есть
-      if (ctx->root.type != input_array[0].second.helper2) throw std::runtime_error("Input root is wrong type");
-      for (size_t i = 1; i < input_count; ++i) {
-        auto itr = ctx->map_data.find(input_array[i].first);
-        if (itr == ctx->map_data.end()) throw std::runtime_error("Could not find " + input_array[i].first + " data");
-        const bool check = 
-          itr->second.command_type == input_array[i].second.command_type && 
-          itr->second.number_type == input_array[i].second.number_type && 
-          itr->second.helper2 == input_array[i].second.helper2;
-          
-        if (!check) throw std::runtime_error("Bad " + std::to_string(i+1) + " decision argument");
-      }
-      
-      return ctx->root;
-    }
+//       //script::action(t, ctx, effect_count, effect_array);
+//       script::action(t, ctx, 1, &effect);
+//       return true;
+//     }
+//     
+//     std::string_view decision::get_name(script::context* ctx) const {
+//       const script::target_t t = check_input(ctx);
+//       return script::get_string_from_script(t, ctx, &name_script);
+//     }
+//     
+//     std::string_view decision::get_description(script::context* ctx) const {
+//       const script::target_t t = check_input(ctx);
+//       return script::get_string_from_script(t, ctx, &description_script);
+//     }
+//     
+//     bool decision::check_ai(script::context* ctx) const {
+//       UNUSED_VARIABLE(ctx);
+//       // проверка ии, она пишется отдельным скриптом
+//       return false;
+//     }
+//     
+//     bool decision::run_ai(script::context* ctx) const {
+//       UNUSED_VARIABLE(ctx);
+//       // я думал что запуск для ии будет чем то отличаться, но вряд ли
+//       return false;
+//     }
+//     
+//     script::target_t decision::check_input(script::context* ctx) const {
+//       // тут наверное нужно проверить входные данные, как это сделать?
+//       // входные данные у нас записаны в инпут, и наверное нужно просто проверить типы?
+//       // то есть
+//       if (ctx->root.type != input_array[0].second.helper2) throw std::runtime_error("Input root is wrong type");
+//       for (size_t i = 1; i < input_count; ++i) {
+//         auto itr = ctx->map_data.find(input_array[i].first);
+//         if (itr == ctx->map_data.end()) throw std::runtime_error("Could not find " + input_array[i].first + " data");
+//         const bool check = 
+//           itr->second.command_type == input_array[i].second.command_type && 
+//           itr->second.number_type == input_array[i].second.number_type && 
+//           itr->second.helper2 == input_array[i].second.helper2;
+//           
+//         if (!check) throw std::runtime_error("Bad " + std::to_string(i+1) + " decision argument");
+//       }
+//       
+//       return ctx->root;
+//     }
     
 #define INPUT_CASE(type) case core::target_type::type: {      \
     d->input_array[current_index].first = std::string(id);     \
@@ -118,66 +117,66 @@ namespace devils_engine {
     break;                                                    \
   }
     
-    void init_input_array(const sol::object &obj, core::decision* d) {
-      assert(obj.get_type() == sol::type::table);
-      const auto input_t = obj.as<sol::table>();
-      d->input_count = 1;
-      for (const auto &pair : input_t) {
-        if (pair.second.get_type() != sol::type::number) continue;
-        
-        std::string id;
-        if (pair.first.get_type() == sol::type::string) {
-          id = pair.first.as<std::string>();
-        } else if (pair.first.get_type() == sol::type::number) {
-          id = "root";
-        }
-        
-        const uint32_t type = pair.second.as<uint32_t>();
-        const bool is_root = id == "root";
-        const size_t current_index = is_root ? 0 : d->input_count;
-        d->input_count += size_t(!is_root);
-        
-        if (is_root && !d->input_array[0].first.empty()) throw std::runtime_error("Root data is already setup");
-        
-        switch (type) {
-          INPUT_CASE(character)
-          INPUT_CASE(army)
-          INPUT_CASE(city)
-          INPUT_CASE(culture)
-          INPUT_CASE(dynasty)
-          INPUT_CASE(hero_troop)
-          INPUT_CASE(province)
-          INPUT_CASE(realm)
-          INPUT_CASE(religion)
-          INPUT_CASE(titulus)
-          
-          case core::target_type::boolean: {
-            if (is_root) throw std::runtime_error("Root node could not be boolean, number or string type");
-            d->input_array[current_index].first = id;
-            d->input_array[current_index].second.number_type = script::number_type::boolean;
-            break;
-          }
-          
-          case core::target_type::number: {
-            if (is_root) throw std::runtime_error("Root node could not be boolean, number or string type");
-            d->input_array[current_index].first = id;
-            d->input_array[current_index].second.number_type = script::number_type::number;
-            break;
-          }
-          
-          case core::target_type::string: {
-            if (is_root) throw std::runtime_error("Root node could not be boolean, number or string type");
-            d->input_array[current_index].first = id;
-            d->input_array[current_index].second.number_type = script::number_type::string;
-            break;
-          }
-          
-          default: throw std::runtime_error("Bad input target type");
-        }
-        
-        assert(d->input_count <= 16);
-      }
-    }
+//     void init_input_array(const sol::object &obj, core::decision* d) {
+//       assert(obj.get_type() == sol::type::table);
+//       const auto input_t = obj.as<sol::table>();
+//       d->input_count = 1;
+//       for (const auto &pair : input_t) {
+//         if (pair.second.get_type() != sol::type::number) continue;
+//         
+//         std::string id;
+//         if (pair.first.get_type() == sol::type::string) {
+//           id = pair.first.as<std::string>();
+//         } else if (pair.first.get_type() == sol::type::number) {
+//           id = "root";
+//         }
+//         
+//         const uint32_t type = pair.second.as<uint32_t>();
+//         const bool is_root = id == "root";
+//         const size_t current_index = is_root ? 0 : d->input_count;
+//         d->input_count += size_t(!is_root);
+//         
+//         if (is_root && !d->input_array[0].first.empty()) throw std::runtime_error("Root data is already setup");
+//         
+//         switch (type) {
+//           INPUT_CASE(character)
+//           INPUT_CASE(army)
+//           INPUT_CASE(city)
+//           INPUT_CASE(culture)
+//           INPUT_CASE(dynasty)
+//           INPUT_CASE(hero_troop)
+//           INPUT_CASE(province)
+//           INPUT_CASE(realm)
+//           INPUT_CASE(religion)
+//           INPUT_CASE(titulus)
+//           
+//           case core::target_type::boolean: {
+//             if (is_root) throw std::runtime_error("Root node could not be boolean, number or string type");
+//             d->input_array[current_index].first = id;
+//             d->input_array[current_index].second.number_type = script::number_type::boolean;
+//             break;
+//           }
+//           
+//           case core::target_type::number: {
+//             if (is_root) throw std::runtime_error("Root node could not be boolean, number or string type");
+//             d->input_array[current_index].first = id;
+//             d->input_array[current_index].second.number_type = script::number_type::number;
+//             break;
+//           }
+//           
+//           case core::target_type::string: {
+//             if (is_root) throw std::runtime_error("Root node could not be boolean, number or string type");
+//             d->input_array[current_index].first = id;
+//             d->input_array[current_index].second.number_type = script::number_type::string;
+//             break;
+//           }
+//           
+//           default: throw std::runtime_error("Bad input target type");
+//         }
+//         
+//         assert(d->input_count <= 16);
+//       }
+//     }
     
     bool validate_decision(const size_t &index, const sol::table &table) {
       UNUSED_VARIABLE(index);
@@ -237,14 +236,22 @@ namespace devils_engine {
         decision->type = static_cast<enum core::decision::type>(data);
       }
       
-      core::init_input_array(table["input"], decision);
-      const uint32_t root_type = decision->input_array[0].second.helper2;
-      script::init_string_from_script(root_type, table["name"], &decision->name_script);
-      if (const auto proxy = table["description"]; proxy.valid()) script::init_string_from_script(root_type, proxy, &decision->description_script);
-      script::init_condition(root_type, table["potential"], &decision->potential);
-      script::init_condition(root_type, table["conditions"], &decision->condition);
-      script::init_action(root_type, table["effects"], &decision->effect);
-      script::init_number_from_script(root_type, table["ai_will_do"], &decision->ai_will_do);
+      script::input_data inter_input;
+      inter_input.current = inter_input.root = script::object::type_bit::character;
+      // решения тоже исходят от игрока
+      
+      script::create_string(inter_input, &decision->name_script, table["name"]);
+      script::create_string(inter_input, &decision->description_script, table["description"]);
+      script::create_condition(inter_input, &decision->potential, table["potential"]);
+      script::create_condition(inter_input, &decision->condition, table["condition"]);
+      script::create_effect(inter_input, &decision->effect, table["effect"]);
+      script::create_number(inter_input, &decision->ai_will_do, table["ai_will_do"]);
+      
+      if (!decision->name_script.valid()) throw std::runtime_error("Decision " + decision->id + " must have name script");
+      if (!decision->potential.valid())   throw std::runtime_error("Decision " + decision->id + " must have potential script");
+      if (!decision->condition.valid())   throw std::runtime_error("Decision " + decision->id + " must have condition script");
+      if (!decision->effect.valid())      throw std::runtime_error("Decision " + decision->id + " must have effect script");
+      if (!decision->ai_will_do.valid())  throw std::runtime_error("Decision " + decision->id + " must have ai_will_do script");
     }
   }
 }

@@ -6,10 +6,9 @@
 #include "utils/globals.h"
 #include "utils/systems.h"
 #include "utils/deferred_tasks.h"
+#include "bin/game_time.h"
 
 #include "ai/path_container.h"
-
-#include "script/script_block_functions.h"
 
 #include "realm.h"
 #include "titulus.h"
@@ -43,6 +42,8 @@ namespace devils_engine {
         dead,
         has_troop,
         has_army,
+        excommunicated,
+        general,
         
         count
       };
@@ -62,8 +63,8 @@ namespace devils_engine {
           for (uint8_t k = 0; k < 2; ++k) {
             auto p2 = b->family.parents[k];
             for (uint8_t c = 0; c < 2; ++c) {
-              auto gp2 = p2->family.parents[j];
-              ret = ret || gp1 == gp2;
+              auto gp2 = p2->family.parents[c];
+              ret = ret || (gp1 == gp2);
             }
           }
         }
@@ -91,16 +92,25 @@ namespace devils_engine {
     
     bool character::is_bastard(const character* a) {
       // незаконное рождение - нужно проверить законных жен
-      auto parent1 = a->family.parents[0];
-      auto parent2 = a->family.parents[1];
-      bool ret = parent1->family.consort == parent2;
-      auto prev_consort = parent1->family.previous_consorts;
-      while (prev_consort != nullptr) {
-        ret = ret || prev_consort == parent2;
-        prev_consort = prev_consort->family.previous_consorts;
-      }
+      // можно проверить по трейтам... или нет? 
+      // нет нужен трейт бастард
+//       auto parent1 = a->family.parents[0];
+//       auto parent2 = a->family.parents[1];
+//       bool ret = parent1->family.consort == parent2;
+//       for (auto consort : parent1->family.consorts) {
+//         
+//       }
+//       while (consort != nullptr) {
+//         ret = ret || prev_consort == parent2;
+//         consort =  prev_consort->family.previous_consorts;
+//       }
+//       
+//       return !ret;
       
-      return !ret;
+      for (const auto trait : a->traits) {
+        if (trait->get_attrib(core::trait_attributes::is_bastard)) return true;
+      }
+      return false;
     }
     
     bool character::is_concubine_child(const character* a) {
@@ -121,55 +131,120 @@ namespace devils_engine {
       return a != nullptr && b != nullptr && (a->family.parents[0] == b || a->family.parents[1] == b);
     }
     
-    character::family::family() :
+    // проверка героя, у меня тут есть несколько проблем, получается что если я заберу аттрибут
+    // то персонаж перестанет быть героем, что это значит? он может быть на геройской миссии
+    // в этом случае как только герой вернется в город, то у него должна пропасть возможность
+    // выходить в приключения
+    bool character::is_hero(const character* a) {
+      for (const auto trait : a->traits) {
+        if (trait->get_attrib(core::trait_attributes::is_hero)) return true;
+      }
+      
+      return false;
+    }
+    
+    bool character::is_priest(const character* a) {
+      for (const auto trait : a->traits) {
+        if (trait->get_attrib(core::trait_attributes::is_priest)) return true;
+      }
+      
+      return false;
+    }
+    
+    bool character::is_sick(const character* a) {
+      for (const auto trait : a->traits) {
+        if (trait->get_attrib(core::trait_attributes::is_disease) || trait->get_attrib(core::trait_attributes::is_magic_disease)) return true;
+      }
+      
+      return false;
+    }
+    
+    bool character::can_marry(const character* a) {
+      if (a->is_married()) return false;
+      
+      for (const auto trait : a->traits) {
+        if (trait->get_attrib(core::trait_attributes::cannot_marry)) return false;
+      }
+      
+      return true;
+    }
+    
+    character::family::family() noexcept :
       real_parents{nullptr, nullptr},
       parents{nullptr, nullptr}, 
 //       grandparents{nullptr, nullptr, nullptr, nullptr}, 
-      children(nullptr), 
-      next_sibling(nullptr), 
-      prev_sibling(nullptr), 
+      children(nullptr),
       consort(nullptr), 
-      previous_consorts(nullptr), 
       owner(nullptr), 
       concubines(nullptr),
       blood_dynasty(nullptr),
       dynasty(nullptr)
     {}
     
-    character::relations::relations() :
-      friends{nullptr},
-      rivals{nullptr},
-      lovers{nullptr}
+    const size_t character::relations::max_game_acquaintance;
+    character::relations::relations() noexcept :
+      acquaintances{std::make_pair(nullptr, character::relations::data{0, 0})}
     {
-      ASSERT(friends[max_game_friends-1] == nullptr);
-      ASSERT(rivals[max_game_rivals-1] == nullptr);
-      ASSERT(lovers[max_game_lovers-1] == nullptr);
+      ASSERT(acquaintances[max_game_acquaintance-1].first == nullptr);
+    }
+    
+    bool character::relations::is_acquaintance(character* c, int32_t* friendship, int32_t* love) const {
+      for (const auto &pair : acquaintances) {
+        if (pair.first == c) {
+          if (friendship != nullptr) *friendship = pair.second.friendship;
+          if (love != nullptr) *love = pair.second.friendship;
+          return true;
+        }
+      }
+      
+      return false;
+    }
+    
+    bool character::relations::add_acquaintance(character* c, int32_t friendship_level, int32_t love_level) {
+      for (auto &pair : acquaintances) {
+        if (pair.first == nullptr) {
+          pair.first = c;
+          pair.second = { friendship_level, love_level };
+          ASSERT(is_acquaintance(c));
+          return true;
+        }
+      }
+      
+      return false;
+    }
+    
+    bool character::relations::remove_acquaintance(character* c) {
+      for (auto &pair : acquaintances) {
+        if (pair.first == c) {
+          pair.first = nullptr;
+          pair.second = { 0, 0 };
+          return true;
+        }
+      }
+      
+      return false;
+    }
+    
+    // нужно ли тут что то вызывать?
+    void character::relations::remove_all_neutral() {
+      for (auto &pair : acquaintances) {
+        if (pair.second.friendship == 0 || pair.second.love == 0) {
+          pair.first = nullptr;
+          pair.second = { 0, 0 };
+        }
+      }
     }
     
     character::character(const bool male, const bool dead) : 
       name_number(0), 
       born_day(INT64_MAX), 
       death_day(INT64_MAX), 
-//       name_str(SIZE_MAX), 
-//       nickname_str(SIZE_MAX), 
-      suzerain(nullptr),
-      imprisoner(nullptr),
-      next_prisoner(nullptr),
-      prev_prisoner(nullptr),
-      next_courtier(nullptr),
-      prev_courtier(nullptr),
+      victims(nullptr),
+      killer(nullptr),
       culture(nullptr),
       religion(nullptr),
-      hidden_religion(nullptr),
-      realms{nullptr, nullptr, nullptr, nullptr}
-//       modificators(nullptr),
-//       events(nullptr),
-//       flags(nullptr)
+      hidden_religion(nullptr)
     {
-//       memset(stats.data(), 0, stats.size()*sizeof(stats[0]));
-//       memset(current_stats.data(), 0, current_stats.size()*sizeof(current_stats[0]));
-//       memset(hero_stats.data(), 0, hero_stats.size()*sizeof(hero_stats[0]));
-//       memset(current_hero_stats.data(), 0, current_hero_stats.size()*sizeof(current_hero_stats[0]));
       data.set(system::male, male);
       data.set(system::dead, dead);
       traits.reserve(traits_container_size);
@@ -177,29 +252,29 @@ namespace devils_engine {
         modificators.reserve(modificators_container_size);
         events.reserve(events_container_size);
         flags.reserve(flags_container_size);
-//         modificators = new modificators_container<modificators_container_size>;
-//         events = new events_container<events_container_size>;
-//         flags = new flags_container<flags_container_size>;
       }
     }
     
     character::~character() {
-//       delete modificators;
-//       delete events;
-//       delete flags;
+      modificators.clear();
+      modificators.reserve(0);
+      flags.clear();
+      flags.reserve(0);
+      events.clear();
+      events.reserve(0);
     }
     
     bool character::is_independent() const {
-      if (realms[self] == nullptr) {
+      if (!self.valid()) {
         ASSERT(suzerain != nullptr);
         return false;
       }
       
-      return realms[self] != nullptr && realms[self]->is_independent(); //  || suzerain == nullptr // персонаж без титулов и не придворный это ошибка!
+      return self->is_independent(); //  || suzerain == nullptr // персонаж без титулов и не придворный это ошибка!
     }
     
     bool character::is_prisoner() const {
-      return imprisoner != nullptr;
+      return !imprisoner.valid();
     }
     
     bool character::is_married() const {
@@ -227,7 +302,7 @@ namespace devils_engine {
     }
     
     bool character::is_ai_playable() const {
-      return realms[self] != nullptr && realms[self]->main_title->type != titulus::type::city;
+      return self.valid() && self->main_title->type() != titulus::type::city;
     }
     
     bool character::is_troop_owner() const {
@@ -237,6 +312,27 @@ namespace devils_engine {
     bool character::is_army_owner() const {
       return data.get(system::has_army);
     }
+    
+    bool character::is_excommunicated() const {
+      return data.get(system::excommunicated);
+    }
+    
+    bool character::is_general() const {
+      return data.get(system::general);
+    }
+    
+    bool character::is_establishment_member() const { return realms[establishment].valid(); }
+    bool character::is_council_member() const       { return realms[council].valid(); }
+    bool character::is_tribunal_member() const      { return realms[tribunal].valid(); }
+    bool character::is_assembly_member() const      { return realms[assembly].valid(); }
+    bool character::is_clergy_member() const        { return realms[clergy].valid(); }
+    
+    bool character::is_elector() const               { return is_establishment_elector() || is_council_elector() || is_tribunal_elector() || is_assembly_elector() || is_clergy_elector(); }
+    bool character::is_establishment_elector() const { return electorate[establishment].valid(); }
+    bool character::is_council_elector() const       { return electorate[council].valid(); }
+    bool character::is_tribunal_elector() const      { return electorate[tribunal].valid(); }
+    bool character::is_assembly_elector() const      { return electorate[assembly].valid(); }
+    bool character::is_clergy_elector() const        { return electorate[clergy].valid(); }
     
     character* character::get_father() const {
       character* c = nullptr;
@@ -254,26 +350,30 @@ namespace devils_engine {
     
     void character::set_dead() {
       data.set(system::dead, true);
-      // разрушается когда? когда некому наследовать
-      //global::get<core::context>()->destroy(factions[self]);
-      
-//       delete modificators;
-//       delete events;
-//       delete flags;
+
       {
-        phmap::flat_hash_map<const modificator*, size_t> m;
+        decltype(utils::modificators_container::modificators) m;
         modificators.swap(m);
       }
       
       {
-        phmap::flat_hash_map<const event*, size_t> e;
+        decltype(utils::events_container::events) e;
         events.swap(e);
       }
       
+      // нужно ли чистить флаги? нужно наверное только те что имеют время
+      utils::flags_container::clear_timed_flags();
+//       {
+//         decltype(utils::flags_container::flags) f;
+//         flags.swap(f);
+//       }
+      
       {
-        phmap::flat_hash_map<std::string, size_t> f;
-        flags.swap(f);
+        decltype(utils::hooks_container::hooks) h;
+        hooks.swap(h);
       }
+      
+      death_day = global::get<utils::calendar>()->current_day();
     }
     
     void character::make_hero() {
@@ -286,252 +386,104 @@ namespace devils_engine {
       // передача титулов и денег
     }
     
+    void character::make_excommunicated() {
+      data.set(system::excommunicated, true);
+    }
+    
+    void character::make_not_excommunicated() {
+      data.set(system::excommunicated, false);
+    }
+    
+    void character::make_general() {
+      data.set(system::general, true);
+    }
+    
+    void character::fire_general() {
+      data.set(system::general, false);
+    }
+    
     void character::add_title(titulus* title) {
-      if (realms[self] == nullptr && title->type > titulus::type::baron) throw std::runtime_error("Cannot give title to unlanded");
-      
-      if (realms[self] == nullptr) {
-        const size_t token = global::get<core::context>()->create_realm();
-        realms[self] = global::get<core::context>()->get_realm(token);
-      }
-      
-      realms[self]->add_title(title);
+      if (!self.valid() && title->type() > titulus::type::baron) throw std::runtime_error("Cannot give title to unlanded");
+      if (!self.valid()) self = global::get<core::context>()->create_realm();
+      self->add_title(title);
     }
     
     void character::remove_title(titulus* title) {
       ASSERT(title->owner != nullptr);
-      ASSERT(realms[self] != nullptr);
-      ASSERT(title->owner == realms[self]);
+      ASSERT(self.valid());
+      ASSERT(title->owner == self);
       
-      realms[self]->remove_title(title);
-      if (realms[self]->titles == nullptr) {
-        const size_t token = global::get<core::context>()->get_realm_token(realms[self]);
+      self->remove_title(title);
+      if (self->titles == nullptr) {
+        // это единственное условие по разрушению титула?
+        const size_t token = self.get_token();
         global::get<core::context>()->destroy_realm(token);
       }
     }
     
     titulus* character::get_main_title() const {
-      return realms[self] ? realms[self]->main_title : nullptr;
+      return self.valid() ? self->main_title : nullptr;
     }
     
     void character::add_vassal(character* vassal) {
       ASSERT(vassal != this);
-      ASSERT(realms[self] != nullptr);
-      ASSERT(vassal->realms[self] != nullptr);
-      ASSERT(realms[self] != vassal->realms[self]->liege);
+      ASSERT(self.valid());
+      ASSERT(vassal->self.valid());
+      ASSERT(self != vassal->self->liege);
       
-      realms[self]->add_vassal(vassal->realms[self]);
+      self->add_vassal(vassal->self.get());
     }
     
     void character::remove_vassal(character* vassal) {
       ASSERT(vassal != this);
-      ASSERT(realms[self] != nullptr);
-      ASSERT(vassal->realms[self] != nullptr);
-      ASSERT(realms[self] == vassal->realms[self]->liege);
+      ASSERT(self != nullptr);
+      ASSERT(self != nullptr);
+      ASSERT(self == vassal->self->liege);
       
-      realms[self]->remove_vassal(vassal->realms[self]);
-    }
-    
-    void character::add_courtier(character* courtier) {
-      ASSERT(realms[self] != nullptr);
-      ASSERT(courtier->realms[self] == nullptr);
-      
-      if (courtier->suzerain == this) return;
-      if (courtier->suzerain != nullptr) courtier->suzerain->remove_courtier(courtier);
-      
-      ASSERT(courtier->suzerain == nullptr);
-      ASSERT(courtier->next_courtier == nullptr);
-      ASSERT(courtier->prev_courtier == nullptr);
-      
-      courtier->suzerain = this;
-      courtier->next_courtier = realms[self]->courtiers;
-      if (realms[self]->courtiers != nullptr) realms[self]->courtiers->prev_courtier = courtier;
-      realms[self]->courtiers = courtier;
-    }
-    
-    void character::add_courtier_raw(character* courtier) {
-      ASSERT(courtier->suzerain == this);
-      ASSERT(realms[self] != nullptr);
-      ASSERT(courtier->realms[self] == nullptr);
-      courtier->next_courtier = realms[self]->courtiers;
-      if (realms[self]->courtiers != nullptr) realms[self]->courtiers->prev_courtier = courtier;
-      realms[self]->courtiers = courtier;
-    }
-    
-    void character::remove_courtier(character* courtier) {
-      ASSERT(realms[self] != nullptr);
-      ASSERT(courtier->suzerain == this);
-      
-      courtier->suzerain = nullptr;
-      if (courtier->next_courtier != nullptr) courtier->next_courtier->prev_courtier = courtier->prev_courtier;
-      if (courtier->prev_courtier != nullptr) courtier->prev_courtier->next_courtier = courtier->next_courtier;
-      courtier->next_courtier = nullptr;
-      courtier->prev_courtier = nullptr;
-    }
-    
-    character* character::get_last_courtier() const {
-      ASSERT(realms[self] != nullptr);
-      if (realms[self]->courtiers == nullptr) return nullptr;
-      
-      auto tmp = realms[self]->courtiers, last = realms[self]->courtiers->prev_courtier;
-      while (tmp != nullptr) {
-        last = tmp;
-        tmp = tmp->next_courtier;
-      }
-      
-      ASSERT(!(last == nullptr || last->next_courtier != nullptr));
-      return last;
+      self->remove_vassal(vassal->self.get());
     }
     
     void character::add_prisoner(character* prisoner) {
-      ASSERT(realms[self] != nullptr);
-      realms[self]->add_prisoner(prisoner);
+      ASSERT(self != nullptr);
+      self->add_prisoner(prisoner);
     }
     
     void character::remove_prisoner(character* prisoner) {
-      ASSERT(realms[self] != nullptr);
-      realms[self]->remove_prisoner(prisoner);
+      ASSERT(self != nullptr);
+      self->remove_prisoner(prisoner);
     }
     
     void character::add_concubine(character* concubine) {
       if (concubine->family.owner == this) return;
-      concubine->family.concubines = family.concubines;
-      family.concubines = concubine;
-      concubine->family.owner = this;
-      // надо ли делать обход в обратную сторону?
+      
+      if (family.concubines == nullptr) family.concubines = concubine;
+      else utils::ring::list_radd<utils::list_type::concubines>(family.concubines, concubine);
     }
     
     void character::add_concubine_raw(character* concubine) {
       ASSERT(concubine->family.owner == this);
-      concubine->family.concubines = family.concubines;
-      family.concubines = concubine;
+      
+      if (family.concubines == nullptr) family.concubines = concubine;
+      else utils::ring::list_radd<utils::list_type::concubines>(family.concubines, concubine);
     }
     
     void character::remove_concubine(character* concubine) {
-      ASSERT(concubine != nullptr);
       ASSERT(concubine->family.owner == this);
-      character* prev_concubine = family.concubines;
-      character* current_concubine = family.concubines;
-      ASSERT(current_concubine != nullptr);
-      while (current_concubine != nullptr) {
-        if (current_concubine == concubine) break;
-        prev_concubine = current_concubine;
-        current_concubine = current_concubine->family.concubines;
-      }
       
-      ASSERT(current_concubine != nullptr);
-      if (current_concubine != family.concubines) prev_concubine->family.concubines = current_concubine->family.concubines;
-      if (current_concubine == family.concubines) family.concubines = current_concubine->family.concubines;
+      concubine->family.owner = nullptr;
+      if (family.concubines == concubine) family.concubines = utils::ring::list_next<utils::list_type::concubines>(concubine, concubine);
+      utils::ring::list_remove<utils::list_type::concubines>(concubine);
     }
-    
-//     void character::add_child(character* child) {
-//       
-//     }
     
     void character::add_child_raw(character* child) {
       ASSERT(child->family.parents[0] == this || child->family.parents[1] == this);
-      child->family.next_sibling = family.children;
-      if (family.children != nullptr) family.children->family.prev_sibling = child;
-      family.children = child;
+      
+      if (family.children == nullptr) family.children = child;
+      else {
+        if (is_male()) utils::ring::list_radd<utils::list_type::father_line_siblings>(family.children, child);
+        else utils::ring::list_radd<utils::list_type::mother_line_siblings>(family.children, child);
+      }
     }
-    
-//     void character::remove_child(character* child) {
-//       
-//     }
-    
-//     float character::base_stat(const uint32_t &index) const {
-//       ASSERT(index < character_stats::count);
-//       auto s = stats[index];
-//       switch(character_stats::types[index]) {
-//         case stat_type::uint_t:  return float(s.uval);
-//         case stat_type::int_t:   return float(s.ival);
-//         case stat_type::float_t: return float(s.fval);
-//         default: assert(false);
-//       }
-//       
-//       return 0.0f;
-//     }
-//     
-//     void character::set_base_stat(const uint32_t &index, const float &value) {
-//       ASSERT(index < character_stats::count);
-//       switch(character_stats::types[index]) {
-//         case stat_type::uint_t:  stats[index].uval = uint32_t(value); break;
-//         case stat_type::int_t:   stats[index].ival =  int32_t(value); break;
-//         case stat_type::float_t: stats[index].fval =    float(value); break;
-//         default: assert(false);
-//       }
-//     }
-//     
-//     float character::add_to_base_stat(const uint32_t &index, const float &value) {
-//       ASSERT(index < character_stats::count);
-//       auto s = stats[index];
-//       switch(character_stats::types[index]) {
-//         case stat_type::uint_t:  stats[index].uval += uint32_t(value); return float(s.uval);
-//         case stat_type::int_t:   stats[index].ival +=  int32_t(value); return float(s.ival);
-//         case stat_type::float_t: stats[index].fval +=    float(value); return float(s.fval);
-//         default: assert(false);
-//       }
-//       
-//       return 0.0f;
-//     }
-//     
-//     float character::stat(const uint32_t &index) const {
-//       ASSERT(index < character_stats::count);
-//       auto s = current_stats[index];
-//       switch(character_stats::types[index]) {
-//         case stat_type::uint_t:  return float(s.uval);
-//         case stat_type::int_t:   return float(s.ival);
-//         case stat_type::float_t: return float(s.fval);
-//         default: assert(false);
-//       }
-//       
-//       return 0.0f;
-//     }
-//     
-//     void character::set_stat(const uint32_t &index, const float &value) {
-//       ASSERT(index < character_stats::count);
-//       switch(character_stats::types[index]) {
-//         case stat_type::uint_t:  current_stats[index].uval = uint32_t(value); break;
-//         case stat_type::int_t:   current_stats[index].ival =  int32_t(value); break;
-//         case stat_type::float_t: current_stats[index].fval =    float(value); break;
-//         default: assert(false);
-//       }
-//     }
-//     
-//     float character::add_to_stat(const uint32_t &index, const float &value) {
-//       ASSERT(index < character_stats::count);
-//       auto s = current_stats[index];
-//       switch(character_stats::types[index]) {
-//         case stat_type::uint_t:  current_stats[index].uval += uint32_t(value); return float(s.uval);
-//         case stat_type::int_t:   current_stats[index].ival +=  int32_t(value); return float(s.ival);
-//         case stat_type::float_t: current_stats[index].fval +=    float(value); return float(s.fval);
-//         default: assert(false);
-//       }
-//       
-//       return 0.0f;
-//     }
-//     
-//     float character::base_hero_stat(const uint32_t &index) const {
-//       ASSERT(index < hero_stats::count);
-//       auto s = hero_stats[index];
-//       return float(s.ival);
-//     }
-//     
-//     float character::hero_stat(const uint32_t &index) const {
-//       ASSERT(index < hero_stats::count);
-//       auto s = current_hero_stats[index];
-//       return float(s.ival);
-//     }
-//     
-//     void character::set_hero_stat(const uint32_t &index, const float &value) {
-//       ASSERT(index < hero_stats::count);
-//       current_hero_stats[index].ival = int32_t(value);
-//     }
-//     
-//     float character::add_to_hero_stat(const uint32_t &index, const float &value) {
-//       auto s = current_hero_stats[index];
-//       current_hero_stats[index].ival += int32_t(value);
-//       return float(s.ival);
-//     }
     
     bool character::get_bit(const size_t &index) const {
       ASSERT(index < SIZE_WIDTH - system::count);
@@ -544,23 +496,8 @@ namespace devils_engine {
       const auto final_index = index + system::count;
       return data.set(final_index, value);
     }
-    
-//     bool character::has_flag(const size_t &flag) const {
-//       if (is_dead()) return false; // ASSERT(flags != nullptr);
-//       return flags->has(flag);
-//     }
-//     
-//     void character::add_flag(const size_t &flag) {
-//       if (is_dead()) return;
-//       flags->add(flag);
-//     }
-//     
-//     void character::remove_flag(const size_t &flag) {
-//       if (is_dead()) return;
-//       flags->remove(flag);
-//     }
 
-    size_t character::has_flag(const std::string_view &flag) const { return flags.find(flag) != flags.end(); }
+    bool character::has_flag(const std::string_view &flag) const { return utils::flags_container::has_flag(flag); }
     // откуда мы берем flag? по идее если он приходит из эвента, то мы можем даже не париться по поводу хранилища
     // другое дело что скорее всего не все так просто, а значит нам похорошему нужно хранилище строк
     void character::add_flag(const std::string_view &flag, const size_t &turn) { flags.try_emplace(std::string(flag), turn); }
@@ -571,18 +508,192 @@ namespace devils_engine {
     void character::remove_trait(const trait* t) { traits.erase(t); }
     
     bool character::has_modificator(const modificator* m) const { return modificators.find(m) != modificators.end(); }
-    void character::add_modificator(const modificator* m, const size_t &turn) { if (is_dead()) return; modificators.try_emplace(m, turn); }
+    void character::add_modificator(const modificator* m, const utils::modificators_container::modificator_data &data) { if (is_dead()) return; modificators.try_emplace(m, data); }
     void character::remove_modificator(const modificator* m) { if (is_dead()) return; modificators.erase(m); }
     
     bool character::has_event(const event* e) const { if (is_dead()) return false; return utils::events_container::has_event(e); }
     //void character::add_event(const event* e, const event_container &cont) { if (is_dead()) return; events.try_emplace(e, cont); }
-    void character::add_event(const event* e, const size_t &data) { if (is_dead()) return; utils::events_container::add_event(e, data); }
+    void character::add_event(const event* e, utils::events_container::event_data &&data) { if (is_dead()) return; utils::events_container::add_event(e, std::move(data)); }
     void character::remove_event(const event* e) { if (is_dead()) return; utils::events_container::remove_event(e); }
     
     uint64_t character::get_random() {
       using namespace utils::xoshiro256plusplus;
       rng_state = rng(rng_state);
       return get_value(rng_state);
+    }
+    
+    uint32_t character::get_age() const {
+      auto cal = global::get<utils::calendar>();
+      if (death_day == INT64_MAX) {
+        const int64_t current_day = cal->current_day();
+        assert(born_day <= current_day);
+        const int64_t days = current_day - born_day;
+        assert(days >= 0);
+        return cal->days_to_years(days);
+      }
+      
+      assert(born_day <= death_day);
+      const int64_t days = death_day - born_day;
+      assert(days >= 0);
+      return cal->days_to_years(days);
+    }
+    
+    std::string_view character::object_pronoun() const {
+      
+    }
+    
+    std::string_view character::poss_pronoun() const {
+      
+    }
+    
+    std::string_view character::reflexive_pronoun() const {
+      
+    }
+    
+    std::string_view character::subject_pronoun() const {
+      
+    }
+    
+    std::string_view character::gender() const {
+      return is_male() ? "male" : "female";
+    }
+    
+    std::string_view character::man_woman() const {
+      return is_male() ? "man" : "woman";
+    }
+    
+    std::string_view character::boy_girl() const {
+      return is_male() ? "boy" : "girl";
+    }
+    
+    std::string_view character::boy_man_girl_woman() const {
+      const uint32_t age = get_age();
+      // какой возраст сознательный? 16 лет?
+      return is_male() ? (age >= CHARACTER_ADULT_AGE ? "man" : "boy") : (age >= CHARACTER_ADULT_AGE ? "woman" : "girl");
+    }
+    
+    std::string_view character::spouse_type() const {
+      return is_male() ? "husband" : "wife";
+    }
+    
+    std::string_view character::parent_type() const {
+      return is_male() ? "father" : "mother";
+    }
+    
+    std::string_view character::child_type() const {
+      // тут тип дитя, ребенок, мальчик, юноша и далее
+      // а может и нет
+      return is_male() ? "son" : "daughter";
+    }
+    
+    std::string_view character::master_gender() const {
+      return !is_male() && culture->get_mechanic(core::culture_mechanics::has_master_gender) ? "mistress" : "master";
+    }
+    
+    std::string_view character::lad_gender() const {
+      return is_male() ? "lad" : "lass";
+    }
+    
+    std::string_view character::lord_gender() const {
+      return !is_male() && culture->get_mechanic(core::culture_mechanics::has_lord_gender) ? "lady" : "lord";
+    }
+    
+    std::string_view character::king_gender() const {
+      return !is_male() && culture->get_mechanic(core::culture_mechanics::has_king_gender) ? "queen" : "king";
+    }
+    
+    std::string_view character::emperor_gender() const {
+      return !is_male() && culture->get_mechanic(core::culture_mechanics::has_emperor_gender) ? "empress" : "emperor";
+    }
+    
+    std::string_view character::patriarch_gender() const {
+      return is_male() ? "patriarch" : "matriarch";
+    }
+    
+    std::string_view character::sibling_gender() const {
+      return is_male() ? "brother" : "sister";
+    }
+    
+    std::string_view character::hero_gender() const {
+      return !is_male() && culture->get_mechanic(core::culture_mechanics::has_hero_gender) ? "heroine" : "hero";
+    }
+    
+    std::string_view character::wizard_gender() const {
+      return !is_male() && culture->get_mechanic(core::culture_mechanics::has_wizard_gender) ? "witch" : "wizard";
+    }
+    
+    std::string_view character::duke_gender() const {
+      return !is_male() && culture->get_mechanic(core::culture_mechanics::has_duke_gender) ? "duchess" : "duke";
+    }
+    
+    std::string_view character::count_gender() const {
+      return !is_male() && culture->get_mechanic(core::culture_mechanics::has_count_gender) ? "countess" : "count";
+    }
+    
+    std::string_view character::heir_gender() const {
+      return !is_male() && culture->get_mechanic(core::culture_mechanics::has_heir_gender) ? "heiress" : "heir";
+    }
+    
+    std::string_view character::prince_gender() const {
+      return !is_male() && culture->get_mechanic(core::culture_mechanics::has_prince_gender) ? "princess" : "prince";
+    }
+    
+    std::string_view character::baron_gender() const {
+      return !is_male() && culture->get_mechanic(core::culture_mechanics::has_baron_gender) ? "baroness" : "baron";
+    }
+    
+    static bool add_bonus(core::character* character, const stat_modifier &bonus) {
+      if (bonus.invalid()) return false;
+          
+      if (bonus.type == core::stat_type::character_stat) {
+        character->current_stats.add(bonus.stat, bonus.mod);
+      }
+      
+      if (bonus.type == core::stat_type::hero_stat) {
+        character->current_hero_stats.add(bonus.stat, bonus.mod);
+      }
+      
+      return true;
+    }
+    
+    void update_character_stats(core::character* character) {
+      // какие источники обновления статов?
+      character->current_stats = character->stats;
+      character->current_hero_stats = character->hero_stats;
+      
+      // обычные бонусы, указываем в конфиге +/- и тут соотвественно добавляем или убавляем
+      for (const auto &trait : character->traits) {
+        for (size_t i = 0; i < trait->bonuses.size() && trait->bonuses[i].valid(); ++i) {
+          add_bonus(character, trait->bonuses[i]);
+        }
+      }
+      
+      for (const auto &mod : character->modificators) {
+        for (const auto &bonus : mod.first->bonuses) {
+          if (!add_bonus(character, bonus)) break;
+        }
+        
+        for (const auto &bonus : mod.second.bonuses) {
+          if (!add_bonus(character, bonus)) break;
+        }
+      }
+      
+      for (const auto &bonus : character->religion->bonuses) {
+        if (!add_bonus(character, bonus)) break;
+      }
+      
+      for (const auto &bonus : character->culture->bonuses) {
+        if (!add_bonus(character, bonus)) break;
+      }
+      
+      // бонусы с династии
+      
+      // бонусы со специализации и вторичек
+      // могут ли откуда нибудь появиться сложные бонусы со скриптов? спеки, вторичка?
+      
+      // модификаторы инкома вычисляются здесь, затем передаются в реалм а из реалма распределяются по провинциям
+      // а из провинций передаются в города
+      // после пересчета всего этого собираем значение налога/торговли по городам и вассалам и передаем все это в персонажа/реалм
     }
   }
 }

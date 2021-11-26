@@ -4,7 +4,7 @@
 #include <string>
 #include <cstdint>
 #include "core/declare_structures.h"
-#include "script/script_header.h"
+#include "script/header.h"
 
 namespace devils_engine {
   namespace core {
@@ -57,37 +57,37 @@ namespace devils_engine {
       
       struct option {
         std::string id;
-        script::script_data name_script;
-        script::script_data description_script;
-        script::script_data potential;
-        script::script_data condition;
-        script::script_data effect;
-        script::script_data ai_will_do;
+        script::string name_script;
+        script::string description_script;
+        script::condition potential;
+        script::condition condition;
+        script::effect effect;
+        script::number ai_will_do;
         // флаг?
       };
       
       static const structure s_type = structure::decision;
       
       std::string id;
-      script::script_data name_script;
-      script::script_data description_script;
+      script::string name_script;
+      script::string description_script;
       enum type type;
       
       // было бы неплохо както сократить количество проверяемых decision
       
       // как задать входные данные?
       size_t input_count;
-      std::array<std::pair<std::string, script::script_data>, 16> input_array;
+//       std::array<std::pair<std::string, script::script_data>, 16> input_array;
       // это наверное будет храниться непосредственно в script::script_data
-      script::script_data potential; // нужно использовать определенное соглашение по именам для переменных (например root и recipient)
-      script::script_data condition; // используется только для major minor (?)
+      script::condition potential; // нужно использовать определенное соглашение по именам для переменных (например root и recipient)
+      script::condition condition; // используется только для major minor (?)
       // то есть мы его должны проверить (когда?) и тогда персонаж которому мы отправляем это дело в любом случае выполнит on_accept
       
       // тут довольно все просто с этим делом, нажимаем кнопку применить если условия проходят делаем эффект
-      script::script_data effect;
+      script::effect effect;
       
       // как ии поймет что ему хочется сделать это решение?
-      script::script_data ai_will_do;
+      script::number ai_will_do;
       
       decision();
       ~decision();
@@ -97,52 +97,52 @@ namespace devils_engine {
       //void setup_input(const uint32_t &count, const script::script_data* &input); // функция для проверки входных данных
       
       // вызов функции происходит по другому, нужно переделать методы
-      bool check_shown_condition(script::context* ctx) const; // тут тоже имеет смысл передавать целый контекст
-      bool check_condition(script::context* ctx) const;
-      // я могу сохранить "скомпилированный" интерфейс, хотя тут не обязательно
-      // нужно добавить еще итерацию по потентиал, там нужно указать два объекта 
-      // (или больше? например для женитьбы так то нужно 3 объекта)
-      void iterate_potential(script::context* ctx) const;
-      void iterate_conditions(script::context* ctx) const; // вставляем функцию луа
-      void iterate_actions(script::context* ctx) const;
-      
-      bool run(script::context* ctx) const;
-      
-      std::string_view get_name(script::context* ctx) const;
-      std::string_view get_description(script::context* ctx) const;
-      
-      // проверка для ии ничем принципиально не отличается
-      bool check_ai(script::context* ctx) const;
-      // тут мы скорее должны получить число (вес), чтобы рандомно понять будет делать это персонаж
-      bool run_ai(script::context* ctx) const;
-      
-      // возвращаем корневого персонажа
-      script::target_t check_input(script::context* ctx) const;
+//       bool check_shown_condition(script::context* ctx) const; // тут тоже имеет смысл передавать целый контекст
+//       bool check_condition(script::context* ctx) const;
+//       // я могу сохранить "скомпилированный" интерфейс, хотя тут не обязательно
+//       // нужно добавить еще итерацию по потентиал, там нужно указать два объекта 
+//       // (или больше? например для женитьбы так то нужно 3 объекта)
+//       void iterate_potential(script::context* ctx) const;
+//       void iterate_conditions(script::context* ctx) const; // вставляем функцию луа
+//       void iterate_actions(script::context* ctx) const;
+//       
+//       bool run(script::context* ctx) const;
+//       
+//       std::string_view get_name(script::context* ctx) const;
+//       std::string_view get_description(script::context* ctx) const;
+//       
+//       // проверка для ии ничем принципиально не отличается
+//       bool check_ai(script::context* ctx) const;
+//       // тут мы скорее должны получить число (вес), чтобы рандомно понять будет делать это персонаж
+//       bool run_ai(script::context* ctx) const;
+//       
+//       // возвращаем корневого персонажа
+//       script::target_t check_input(script::context* ctx) const;
     };
     
-    // мне нужно компилировать десижоны, для того чтобы не пересоздавать конткест несколько раз и не портить рандом
+    // мне нужно компилировать десижоны, для того чтобы не пересоздавать контекст несколько раз и не портить рандом
     // хотя тут возможен абуз, рандом не должен зависеть от пересоздания, нужно чет придумать с рандомом
     // что у нас есть? у нас есть десижон, у нас есть текущий ход, имеет ли смысл абузить раз в ход
     // да поди неплохо использовать для генерации числа текущий ход, было бы неплохо чтобы 
     // луа контролировал время жизни этой штуки
-    struct compiled_decision {
-      const decision* d;
-      size_t state;
-      script::context ctx;
-      
-      compiled_decision(const decision* d, const sol::table &t);
-      
-      bool check_shown_condition() const;
-      bool check_condition() const;
-      void iterate_potential(sol::function func) const;
-      void iterate_conditions(sol::function func) const;
-      void iterate_actions(sol::function func) const;
-      
-      bool run() const;
-      
-      std::string_view get_name() const;
-      std::string_view get_description() const;
-    };
+//     struct compiled_decision {
+//       const decision* d;
+//       size_t state;
+//       script::context ctx;
+//       
+//       compiled_decision(const decision* d, const sol::table &t);
+//       
+//       bool check_shown_condition() const;
+//       bool check_condition() const;
+//       void iterate_potential(sol::function func) const;
+//       void iterate_conditions(sol::function func) const;
+//       void iterate_actions(sol::function func) const;
+//       
+//       bool run() const;
+//       
+//       std::string_view get_name() const;
+//       std::string_view get_description() const;
+//     };
     
     void init_input_array(const sol::object &obj, core::decision* d);
     // вообще имеет смысл сделать инициализацию прямо здесь

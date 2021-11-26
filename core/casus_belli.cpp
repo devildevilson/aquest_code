@@ -1,11 +1,39 @@
 #include "casus_belli.h"
+
 #include "utils/utility.h"
 #include "utils/magic_enum_header.h"
 #include "declare_structures.h"
+#include "script/object.h"
 
 namespace devils_engine {
   namespace core {
-    casus_belli::casus_belli() {}
+    casus_belli::casus_belli() :
+      battle_warscore_mult(1.0f),
+      infamy_modifier(1.0f),
+      ticking_war_score_multiplier(1.0f),
+      att_ticking_war_score_multiplier(1.0f),
+      def_ticking_war_score_multiplier(1.0f),
+      max_defender_occupation_score(50.0f),
+      max_attacker_occupation_score(50.0f),
+      max_defender_battle_score(50.0f),
+      max_attacker_battle_score(50.0f)
+    {}
+    
+    bool casus_belli::can_use(const realm*, const realm*, const titulus*) const { return false; }
+    
+    float casus_belli::authority_cost(const realm*, const realm*, const titulus*) const { return 0.0f; }
+    
+    float casus_belli::esteem_cost(const realm*, const realm*, const titulus*) const { return 0.0f; }
+    
+    float casus_belli::influence_cost(const realm*, const realm*, const titulus*) const { return 0.0f; }
+    
+    float casus_belli::money_cost(const realm*, const realm*, const titulus*) const { return 0.0f; }
+    
+    float casus_belli::ai_probability(const realm*, const realm*, const titulus*) const { return 0.0f; }
+    
+    std::string_view casus_belli::name(const realm*, const realm*, const titulus*) const { return "invalid"; }
+    
+    std::string_view casus_belli::war_name(const realm*, const realm*, const titulus*) const { return "invalid"; }
     
 #define NUMBER_VARIABLE(name) if (const auto proxy = table[#name]; proxy.valid()) { \
         if (proxy.get_type() != sol::type::number) { PRINT("Casus belli " + std::string(id) + " must have a valid " #name " number"); ++counter; } \
@@ -124,30 +152,49 @@ namespace devils_engine {
     
     void parse_casus_belli(core::casus_belli* casus_belli, const sol::table &table) {
       casus_belli->id = table["id"];
+      script::input_data cb_input;
+      cb_input.current = script::object::type_bit::character;
+      cb_input.root = script::object::type_bit::character;
       
-      script::init_string_from_script(static_cast<uint32_t>(core::structure::war), table["name"], &casus_belli->name_script);
-      if (const auto proxy = table["war_name"]; proxy.valid()) script::init_string_from_script(static_cast<uint32_t>(core::structure::war), proxy, &casus_belli->war_name_script);
-      script::init_condition(static_cast<uint32_t>(core::structure::war), table["can_use"], &casus_belli->can_use);
-      script::init_condition(static_cast<uint32_t>(core::structure::war), table["is_valid"], &casus_belli->is_valid);
-      script::init_condition(static_cast<uint32_t>(core::structure::war), table["ai_will_do"], &casus_belli->ai_will_do);
+      script::input_data war_input;
+      war_input.current = script::object::type_bit::war;
+      war_input.root = script::object::type_bit::war;
       
-      if (const auto proxy = table["on_add"]; proxy.valid()) script::init_action(static_cast<uint32_t>(core::structure::war), proxy, &casus_belli->on_add);
-      if (const auto proxy = table["on_add_post"]; proxy.valid()) script::init_action(static_cast<uint32_t>(core::structure::war), proxy, &casus_belli->on_add_post);
-      if (const auto proxy = table["on_success"]; proxy.valid()) script::init_action(static_cast<uint32_t>(core::structure::war), proxy, &casus_belli->on_success);
-      if (const auto proxy = table["on_success_post"]; proxy.valid()) script::init_action(static_cast<uint32_t>(core::structure::war), proxy, &casus_belli->on_success_post);
-      if (const auto proxy = table["on_fail"]; proxy.valid()) script::init_action(static_cast<uint32_t>(core::structure::war), proxy, &casus_belli->on_fail);
-      if (const auto proxy = table["on_fail_post"]; proxy.valid()) script::init_action(static_cast<uint32_t>(core::structure::war), proxy, &casus_belli->on_fail_post);
-      if (const auto proxy = table["on_reverse_demand"]; proxy.valid()) script::init_action(static_cast<uint32_t>(core::structure::war), proxy, &casus_belli->on_reverse_demand);
-      if (const auto proxy = table["on_reverse_demand_post"]; proxy.valid()) script::init_action(static_cast<uint32_t>(core::structure::war), proxy, &casus_belli->on_reverse_demand_post);
-      if (const auto proxy = table["on_attacker_leader_death"]; proxy.valid()) script::init_action(static_cast<uint32_t>(core::structure::war), proxy, &casus_belli->on_attacker_leader_death);
-      if (const auto proxy = table["on_defender_leader_death"]; proxy.valid()) script::init_action(static_cast<uint32_t>(core::structure::war), proxy, &casus_belli->on_defender_leader_death);
-      if (const auto proxy = table["on_thirdparty_death"]; proxy.valid()) script::init_action(static_cast<uint32_t>(core::structure::war), proxy, &casus_belli->on_thirdparty_death);
-      if (const auto proxy = table["on_invalidation"]; proxy.valid()) script::init_action(static_cast<uint32_t>(core::structure::war), proxy, &casus_belli->on_invalidation);
+      // если в луа это не определено, то что? игнорируем? надо просто добавить методы валидации скрипта и потом проверить что нужно
+      script::create_string(   cb_input, &casus_belli->name_script,           table["name"]);
+      script::create_condition(cb_input, &casus_belli->can_use_script,        table["can_use"]);
+      script::create_number(   cb_input, &casus_belli->ai_will_do,            table["ai_will_do"]);
       
-      NUMBER_INIT(authority_cost)
-      NUMBER_INIT(esteem_cost)
-      NUMBER_INIT(influence_cost)
-      NUMBER_INIT(money_cost)
+      script::create_number(   cb_input, &casus_belli->authority_cost_script, table["authority_cost"]);
+      script::create_number(   cb_input, &casus_belli->esteem_cost_script,    table["esteem_cost"]);
+      script::create_number(   cb_input, &casus_belli->influence_cost_script, table["influence_cost"]);
+      script::create_number(   cb_input, &casus_belli->money_cost_script,     table["money_cost"]);
+      
+      script::create_string(   war_input, &casus_belli->war_name_script, table["war_name"]);
+      script::create_condition(war_input, &casus_belli->is_valid,        table["is_valid"]);
+      
+      script::create_effect(war_input, &casus_belli->on_add,                   table["on_add"]);
+      script::create_effect(war_input, &casus_belli->on_add_post,              table["on_add_post"]);
+      script::create_effect(war_input, &casus_belli->on_success,               table["on_success"]);
+      script::create_effect(war_input, &casus_belli->on_success_post,          table["on_success_post"]);
+      script::create_effect(war_input, &casus_belli->on_fail,                  table["on_fail"]);
+      script::create_effect(war_input, &casus_belli->on_fail_post,             table["on_fail_post"]);
+      script::create_effect(war_input, &casus_belli->on_reverse_demand,        table["on_reverse_demand"]);
+      script::create_effect(war_input, &casus_belli->on_reverse_demand_post,   table["on_reverse_demand_post"]);
+      script::create_effect(war_input, &casus_belli->on_attacker_leader_death, table["on_attacker_leader_death"]);
+      script::create_effect(war_input, &casus_belli->on_defender_leader_death, table["on_defender_leader_death"]);
+      script::create_effect(war_input, &casus_belli->on_thirdparty_death,      table["on_thirdparty_death"]);
+      script::create_effect(war_input, &casus_belli->on_invalidation,          table["on_invalidation"]);
+      
+      if (!casus_belli->name_script.valid()) throw std::runtime_error("Casus belli " + casus_belli->id + " must have a name script");
+      if (!casus_belli->ai_will_do.valid()) throw std::runtime_error("Casus belli " + casus_belli->id + " must have a ai_will_do script");
+      if (!casus_belli->is_valid.valid()) throw std::runtime_error("Casus belli " + casus_belli->id + " must have a is_valid script");
+      if (!casus_belli->can_use_script.valid()) throw std::runtime_error("Casus belli " + casus_belli->id + " must have a can_use script");
+      
+//       NUMBER_INIT(authority_cost)
+//       NUMBER_INIT(esteem_cost)
+//       NUMBER_INIT(influence_cost)
+//       NUMBER_INIT(money_cost)
       NUMBER_INIT(battle_warscore_mult)
       NUMBER_INIT(infamy_modifier)
       NUMBER_INIT(ticking_war_score_multiplier)

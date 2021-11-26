@@ -1,6 +1,7 @@
 #ifndef STRUCTURES_HEADER_H
 #define STRUCTURES_HEADER_H
 
+#include "biome.h"
 #include "army.h"
 #include "building_type.h"
 #include "casus_belli.h"

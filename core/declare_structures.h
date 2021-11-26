@@ -1,89 +1,68 @@
-#ifndef DECLARE_STRUCTURES_H
-#define DECLARE_STRUCTURES_H
+#ifndef DEVILS_ENGINE_CORE_DECLARE_STRUCTURES_H
+#define DEVILS_ENGINE_CORE_DECLARE_STRUCTURES_H
 
 #include <cstdint>
+#include <cstddef>
+#include "utils/constexpr_funcs.h"
+
+#define GAME_STRUCTURES_LIST \
+  GAME_STRUCTURE_FUNC(biome) \
+  GAME_STRUCTURE_FUNC(building_type) \
+  GAME_STRUCTURE_FUNC(holding_type) \
+  GAME_STRUCTURE_FUNC(city_type) \
+  GAME_STRUCTURE_FUNC(trait) \
+  GAME_STRUCTURE_FUNC(modificator) \
+  GAME_STRUCTURE_FUNC(troop_type) \
+  GAME_STRUCTURE_FUNC(decision) \
+  GAME_STRUCTURE_FUNC(interaction) \
+  GAME_STRUCTURE_FUNC(religion_group) \
+  GAME_STRUCTURE_FUNC(religion) \
+  GAME_STRUCTURE_FUNC(culture_group) \
+  GAME_STRUCTURE_FUNC(culture) \
+  GAME_STRUCTURE_FUNC(law) \
+  GAME_STRUCTURE_FUNC(event) \
+  GAME_STRUCTURE_FUNC(titulus) \
+  GAME_STRUCTURE_FUNC(casus_belli) \
+  GAME_STRUCTURE_FUNC(city) \
+  GAME_STRUCTURE_FUNC(tile) \
+  GAME_STRUCTURE_FUNC(province) \
+  GAME_STRUCTURE_FUNC(character) \
+  GAME_STRUCTURE_FUNC(dynasty) \
+  GAME_STRUCTURE_FUNC(realm) \
+  GAME_STRUCTURE_FUNC(hero_troop) \
+  GAME_STRUCTURE_FUNC(troop) \
+  GAME_STRUCTURE_FUNC(army) \
+  GAME_STRUCTURE_FUNC(war)
 
 namespace devils_engine {
   namespace core {
-    struct tile;
-    struct province;
-    struct building_type;
-    struct city_type;
-    struct city;
-    struct trait;
-    struct modificator;
-    struct troop_type;
-    struct troop;
-    struct hero;
-    struct decision;
-    struct interaction;
-    struct religion_group;
-    struct religion;
-    struct culture;
-    struct law;
-    struct right;
-    struct event;
-    struct titulus;
-    struct character;
-    struct dynasty;
-    struct realm;
-    struct hero_troop;
-    struct army;
-    struct casus_belli;
-    struct war;
+#define GAME_STRUCTURE_FUNC(val) struct val;
+      GAME_STRUCTURES_LIST
+#undef GAME_STRUCTURE_FUNC
     
-    enum class structure : uint32_t {
-      tile,
-      province,
-      city,
-      building_type,
-      city_type,
-      trait,
-      modificator,
-      troop_type,
-//       troop,
-//       hero,
-      decision,
-      interaction,
-      religion_group,
-      religion,
-      culture,
-      law,
-//       right,
-      event,
-      titulus,
-      casus_belli,
-      
-      character,
-      dynasty,
-      realm,  // создавать отдельно это не нужно
-      hero_troop,
-      army,
-      war,
-      troop,
+    enum class structure : uint32_t {      
+#define GAME_STRUCTURE_FUNC(val) val,
+      GAME_STRUCTURES_LIST
+#undef GAME_STRUCTURE_FUNC
       count,
       
       static_types_count = character,
-      parsing_types_count = realm
+      parsing_types_count = realm,
+      id_types_count = casus_belli + 1
     };
     
-    enum class id_struct {
-      building_type,
-      city_type,
-      trait,
-      modificator,
-      troop_type,
-      decision,
-      interaction,
-      religion_group,
-      religion,
-      culture,
-      law,
-      event,
-      titulus,
-      casus_belli,
-      count
-    };
+    namespace structure_mask {
+      enum values : size_t {
+#define GAME_STRUCTURE_FUNC(val) val = size_t(1) << static_cast<size_t>(structure::val),
+        GAME_STRUCTURES_LIST
+#undef GAME_STRUCTURE_FUNC
+      };
+      
+      constexpr size_t all = make_mask(static_cast<size_t>(structure::count));
+      constexpr size_t none = 0;
+      constexpr size_t count = static_cast<size_t>(structure::count);
+      constexpr size_t bit_container_size = ceil(double(count) / double(SIZE_WIDTH));
+    }
   }
 }
 

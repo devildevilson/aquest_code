@@ -1,26 +1,43 @@
-#ifndef TITULUS_H
-#define TITULUS_H
+#ifndef DEVILS_ENGINE_CORE_TITULUS_H
+#define DEVILS_ENGINE_CORE_TITULUS_H
 
 #include "declare_structures.h"
 #include "utils/structures_utils.h"
 #include "render/shared_structures.h"
+#include "utils/list.h"
+#include "utils/sol.h"
+#include "utils/handle.h"
 
 namespace devils_engine {
+  namespace utils {
+    class world_serializator;
+  }
+  
   namespace core {
-    struct titulus : public utils::flags_container, public utils::events_container {
+    struct titulus : 
+      public utils::flags_container, 
+      public utils::events_container, 
+      public utils::ring::list<titulus, utils::list_type::titles>,
+      public utils::ring::list<titulus, utils::list_type::sibling_titles>
+    {
       static const structure s_type = structure::titulus;
       static const size_t events_container_size = 15;
       static const size_t flags_container_size = 25;
+      static const size_t heraldy_container_size = 32;
       
       enum class type { // скорее всего нужно добавить еще тип владения конкретным городом (для возможности давать этот титул родственникам например)
         city,  // в цк2 существует титул города
-        baron, // в цк2 титул города и баронский титул - это разные вещи, но кажется они каким то образом зависимы друг от друга
+        // в цк2 титул города и баронский титул - это разные вещи, но кажется они каким то образом зависимы друг от друга
+        // в цк2 титул столицы провинции == баронский титул
+        baron,
         duke,
         king,
         imperial,
-//         special,
+        blessing,
         
-        count
+        count,
+        
+        top_type = blessing
       };
       
       // титул может быть формальным или реальным
@@ -32,28 +49,23 @@ namespace devils_engine {
       // если титул не является главным, то де-факто - все земли у владельца титула
       
       std::string id;
-      enum type type;
-      uint32_t count; // если 0 то это специальный титул
-      union {
-        titulus** childs; // реальный титул обладает определенным набором титулов нижнего уровня
-        titulus* child;
-        struct city* city;         // титул города
-        struct province* province; // баронский титул
-//         struct {
-//           uint32_t provinces[2]; // либо это баронский титул
-//         };
-      };
+      enum type t;
+      struct city* city;         // титул города
+      struct province* province; // баронский титул
       titulus* parent; // если мы создем титул, то может ли у текущего быть два титула верхнего уровня?
-      realm* owner;  // у титула может быть только один владелец (фракция титулы наследует и передает)
-      size_t name_str;
-      size_t description_str;
-      size_t adjective_str;
-      titulus* next;
-      titulus* prev;
+      titulus* children; // если нет детей и это не город, то это специальный титул
+      utils::handle<realm> owner;  // у титула может быть только один владелец (фракция титулы наследует и передает)
+      uint64_t static_state;
+      std::string name_id;
+      std::string description_id;
+      std::string adjective_id;
+//       titulus* next;
+//       titulus* prev;
       render::color_t main_color;    // цвет будет использоваться на глобальной карте для страны
       render::color_t border_color1; // думаю двух цветов достаточно, нужно посмотреть как сделано в цк2
       render::color_t border_color2;
-      uint32_t heraldy;
+      uint32_t heraldy_layers_count;
+      std::array<uint32_t, heraldy_container_size> heraldy_container;
       
       // думаю что в титулах маленькие контейнеры потребуются
       //events_container<events_container_size> events; // должно хватить
@@ -63,17 +75,9 @@ namespace devils_engine {
       
       titulus();
       titulus(const enum type &t);
-      titulus(const enum type &t, const uint32_t &count);
       ~titulus();
+      enum type type() const;
       bool is_formal() const;
-      void set_child(const uint32_t &index, titulus* child);
-      titulus* get_child(const uint32_t &index) const;
-      void set_province(struct province* province);
-      struct province* get_province() const;
-      void set_city(struct city* city);
-      struct city* get_city() const;
-      
-      void create_children(const uint32_t &count);
       
       std::string_view full_name() const;
       std::string_view base_name() const;
@@ -81,6 +85,11 @@ namespace devils_engine {
       std::string_view adjective() const;
       std::string_view form_of_address() const; 
     };
+    
+//     size_t add_title(const sol::table &table);
+    bool validate_title(const size_t &index, const sol::table &table);
+    bool validate_title_and_save(const size_t &index, sol::this_state lua, const sol::table &table, utils::world_serializator* container);
+    void parse_title(core::titulus* title, const sol::table &table);
   }
 }
 

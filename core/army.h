@@ -1,5 +1,5 @@
-#ifndef ARMY_H
-#define ARMY_H
+#ifndef DEVILS_ENGINE_CORE_ARMY_H
+#define DEVILS_ENGINE_CORE_ARMY_H
 
 #include <array>
 #include "utils/structures_utils.h"
@@ -7,10 +7,22 @@
 #include "stats.h"
 #include "ai/path_container.h"
 #include "ai/path_finding_data.h"
-#include "troop.h"
+#include "utils/handle.h"
+// #include "troop.h"
+
+// у армий наверное будет несколько состояний: армия может быть разбита (в этом состоянии будет зализывать раны в городе?)
 
 namespace devils_engine {
   namespace core {
+    // тип армии нужен по идее только для графики
+    struct army_type {
+      std::string id;
+      std::string name_id;
+      std::string description_id;
+      
+      // графика
+    };
+    
     // армия создается только когда мы собираем войска
     // при роспуске эту структуру удаляем
     // тут нужно указать еще позицию на карте конкретную, для анимации
@@ -18,6 +30,8 @@ namespace devils_engine {
     // отряды можно передать, нападение на другую армию, нападение на город, 
     // зайти в город? засада? быстрый марш? пока сделаем базовые штуки
     // а как сделана принадлежность армий? пока что вообще ни как
+    // может ли возникнуть ситуация когда провинция отошла другому государству, а армия с этой провинции все еще участвует в битве?
+    // вообще может, что делать? возвращать армию? было бы логично
     struct army : public ai::path_finding_data, public utils::flags_container, public utils::modificators_container, public utils::events_container {
       static const structure s_type = structure::army;
       static const size_t modificators_container_size = 10;
@@ -25,32 +39,38 @@ namespace devils_engine {
       static const size_t flags_container_size = 25;
       static const size_t max_troops_count = 20;
       
+      size_t object_token;
+      
+      // принадлежность армий, может ли реалм уничтожиться до уничтожения армии? мы можем доедать последнюю провку у противника
+      // но тогда должна вызваться чистка, в которой собственно мы должны будем избавиться от армий и прочего
+      utils::handle<realm> owner;
+      const character* general;
       // отряды + полководцы (главный полководец должен быть всегда первым)
-      std::array<troop, max_troops_count> troops; // возьмем в качестве отправной точки 20 юнитов
-      uint32_t troops_count;
+      // количество отрядов в армии может быть больше 20
+      //std::array<troop, max_troops_count> troops; // возьмем в качестве отправной точки 20 юнитов (возможно ограничивать не потребуется)
+      uint32_t troops_count; //???
+      utils::handle<troop> troops;
       // позиция (просто указатель на тайл?)
       uint32_t tile_index;
       // характеристики армии? передвижение, атака, защита (?), все характеристики для отрядов
-//       std::array<stat_container, army_stats::count> computed_stats;
-//       std::array<stat_container, army_stats::count> current_stats;
       utils::stats_container<army_stats::values> stats;
       utils::stats_container<army_stats::values> current_stats;
+      utils::stats_container<army_resources::values> resources;
       // какие то спутники? (спутники по идее у персонажа)
       // графика (иконка и отображение на карте)
       //render::image_t map_img; // на карте это нужно отображать с флагом
       
-      uint32_t army_gpu_slot;
+      const province* origin;
+      //const city* origin;
       
-      float current_pos;
+      //uint32_t army_gpu_slot;
+      glm::vec3 pos;
+      // картинка по идее должна быть в типе армии (там будут культурные особенности видимо отображены)
+      render::image_t image;
+      
       size_t current_time;
+      float current_pos;
       bool advancing;
-      
-//       phmap::flat_hash_map<const modificator*, size_t> modificators;
-//       phmap::flat_hash_map<const event*, event_container> events;
-//       phmap::flat_hash_map<std::string_view, size_t> flags; // забыл зачем тут size_t
-      //modificators_container<modificators_container_size> modificators; // по идее их меньше чем треитов
-      //events_container<events_container_size> events; // должно хватить
-      //flags_container<flags_container_size> flags; // флагов довольно много
       
       army();
       ~army();
@@ -68,6 +88,10 @@ namespace devils_engine {
       void clear_path();
       
       void update(const size_t &time);
+      
+      bool is_home() const;
+      
+      troop* next_troop(const troop* current) const;
     };
   }
 }

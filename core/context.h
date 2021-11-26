@@ -1,50 +1,22 @@
-#ifndef CORE_CONTEXT_H
-#define CORE_CONTEXT_H
+#ifndef DEVILS_ENGINE_CORE_CONTEXT_H
+#define DEVILS_ENGINE_CORE_CONTEXT_H
 
 #include <vector>
 #include <array>
+#include <function2.hpp>
+
+#include "utils/handle.h"
 #include "parallel_hashmap/phmap.h"
 #include "bin/map.h"
 #include "utils/memory_pool.h"
-#include "utils/magic_enum_header.h"
 #include "structures_header.h"
 #include "utils/constexpr_funcs.h"
-
-// #include <foonathan/memory/container.hpp> // vector, list, list_node_size
-// #include <foonathan/memory/memory_pool.hpp> // memory_pool
-// #include <foonathan/memory/smart_ptr.hpp> // allocate_unique
-// #include <foonathan/memory/static_allocator.hpp> // static_allocator_storage, static_block_allocator
-// #include <foonathan/memory/temporary_allocator.hpp> // temporary_allocator
-
-// alias namespace foonathan::memory as memory for easier access
-//#include <foonathan/memory/namespace_alias.hpp>
-
-#define POINTER_MEMORY_SIZE (1 * 1024 * 1024)
-
-// using namespace foonathan;
-
-// количество всех типов структур, кроме персонажей, фракций и династий, заранее определено
+#include "declare_structures_table.h"
 
 namespace devils_engine {
   namespace core {
     class context {
-//       using static_pool_t = memory::memory_pool<memory::array_pool, memory::static_block_allocator>;
     public:
-      // тут тип нужно прикинуть количество провинций * 4, я думаю что провок будет не больше чем 5к (и то скорее всего это много)
-      static const size_t realms_max_count = 5000 * 4;
-      // потенциально каждая провка может сделать уникальную армию, поставим тут пока что от балды 10к
-      static const size_t armies_max_count = 10000;
-      // отряды героя не зависят от количества провинций, но вряд ли из будет слишком много, оставим пока 10к
-      static const size_t hero_troops_max_count = 10000; 
-      // одновременно в мире сколько масимально будет происходить войн? меньше чем всего реалмов
-      static const size_t wars_max_count = 10000;
-      // для того чтобы ввести тип токена в формулу, надо понять насколько большим может быть счетчик, тоже 10к?
-      static const size_t counter_max = 10000;
-      
-      static const size_t maximum_type_count = max(realms_max_count, armies_max_count, hero_troops_max_count, wars_max_count);
-      static_assert(maximum_type_count == realms_max_count);
-      static const size_t type_mult = maximum_type_count * counter_max;
-      
       static const size_t invalid_token = SIZE_MAX;
       
       enum tokenized_type {
@@ -52,22 +24,27 @@ namespace devils_engine {
         army_token,
         hero_troop_token,
         war_token,
+        troop_token,
         count
       };
       
-      static const size_t maximum_value = type_mult * count + maximum_type_count * counter_max + maximum_type_count-1;
-      static_assert(maximum_value < INT64_MAX);
+      static constexpr size_t type_bits_count = count_useful_bits(count);
+      static_assert(type_bits_count == 3);
+      static constexpr size_t counter_bits_count = 20;
+      static constexpr size_t counter_max = make_mask(counter_bits_count); // 1048575
+      static constexpr size_t index_bits_count = SIZE_WIDTH - type_bits_count - counter_bits_count;
+      static constexpr size_t max_index = make_mask(index_bits_count);
       
-      static const uint32_t id_struct_map[];
+      static std::tuple<tokenized_type, size_t, size_t> parse_token(const size_t &token);
       
-      context();
-      ~context();
+      context() noexcept;
+      ~context() noexcept;
       
       template <typename T>
       void create_container(const size_t &count) {
         static_assert(T::s_type < structure::static_types_count);
         const size_t index = static_cast<size_t>(T::s_type);
-        if (containers[index].memory != nullptr) throw std::runtime_error("Memory for type " + std::string(magic_enum::enum_name<structure>(T::s_type)) + " is already created");
+        if (containers[index].memory != nullptr) throw std::runtime_error("Memory for type " + std::string(structure_data::names[index]) + " is already created");
         containers[index].type_size = sizeof(T);
         containers[index].count = count;
         containers[index].memory = new T[count];
@@ -77,7 +54,7 @@ namespace devils_engine {
       T* get_entity(const size_t &index) {
         static_assert(T::s_type < structure::static_types_count);
         auto &c = containers[static_cast<size_t>(T::s_type)];
-        ASSERT(index < c.count);
+        if (index >= c.count) return nullptr;
         auto mem = reinterpret_cast<T*>(c.memory);
         return &mem[index];
       }
@@ -85,9 +62,9 @@ namespace devils_engine {
       template <typename T>
       const T* get_entity(const size_t &index) const {
         static_assert(T::s_type < structure::static_types_count);
-        auto &c = containers[static_cast<size_t>(T::s_type)];
-        ASSERT(index < c.count);
-        auto mem = reinterpret_cast<T*>(c.memory);
+        const auto &c = containers[static_cast<size_t>(T::s_type)];
+        if (index >= c.count) return nullptr;
+        auto mem = reinterpret_cast<const T*>(c.memory);
         return &mem[index];
       }
       
@@ -104,9 +81,9 @@ namespace devils_engine {
       T* get_entity(const std::string_view &id) {
         static_assert(T::s_type < structure::static_types_count);
         const size_t index = static_cast<size_t>(T::s_type);
-        const uint32_t map_index = id_struct_map[index];
-        if constexpr (map_index == UINT32_MAX) throw std::runtime_error("Object of type " + std::string(magic_enum::enum_name(T::s_type)) + " does not have the id");
-        const auto &map = id_maps[map_index];
+        static_assert(index < static_cast<size_t>(core::structure::id_types_count), "Object of this type doesnt contain an id");
+        //if constexpr (index >= static_cast<size_t>(core::structure::id_types_count)) throw std::runtime_error("Object of type " + std::string(magic_enum::enum_name(T::s_type)) + " does not have the id");
+        const auto &map = id_maps[index];
         auto itr = map.find(id);
         return itr != map.end() ? reinterpret_cast<T*>(itr->second) : nullptr;
       }
@@ -115,9 +92,9 @@ namespace devils_engine {
       const T* get_entity(const std::string_view &id) const {
         static_assert(T::s_type < structure::static_types_count);
         const size_t index = static_cast<size_t>(T::s_type);
-        const uint32_t map_index = id_struct_map[index];
-        if constexpr (map_index == UINT32_MAX) throw std::runtime_error("Object of type " + std::string(magic_enum::enum_name(T::s_type)) + " does not have the id");
-        const auto &map = id_maps[map_index];
+        static_assert(index < static_cast<size_t>(core::structure::id_types_count), "Object of this type doesnt contain an id");
+        //if constexpr (index >= static_cast<size_t>(core::structure::id_types_count)) throw std::runtime_error("Object of type " + std::string(magic_enum::enum_name(T::s_type)) + " does not have the id");
+        const auto &map = id_maps[index];
         auto itr = map.find(id);
         return itr != map.end() ? reinterpret_cast<T*>(itr->second) : nullptr;
       }
@@ -126,14 +103,20 @@ namespace devils_engine {
       
       void set_tile(const uint32_t &index, const tile &tile_data);
       tile get_tile(const uint32_t &index) const;
+      tile* get_tile_ptr(const uint32_t &index);
       
       // вообще то количество городов меняется, но другое дело что мы знаем максимальное количество городов
       dynasty* create_dynasty();
       character* create_character(const bool male, const bool dead);
-      size_t create_realm();
-      size_t create_army(); // армии то поди без полководца могут быть
-      size_t create_hero_troop();
-      size_t create_war();
+      utils::handle<realm> create_realm();
+      utils::handle<army> create_army(); // армии то поди без полководца могут быть
+      utils::handle<hero_troop> create_hero_troop();
+      utils::handle<war> create_war();
+      // как создать отряд для армии? есть шанс что он потребуется в интерфейсе
+      // с другой стороны в сипипи я не вижу никакого смысла его где то еще держать
+      // кроме как в армиях и городах (в скриптах?)
+      // (вообще возможно, но для чего? можно ли как нибудь воздействовать на отряд через скрипт?)
+      utils::handle<troop> create_troop();
       
       // удаляет и всех персонажей по всей видимости, удаляем если все члены династии мертвы?
       // мне бы хотелось еще какую историю записать
@@ -143,6 +126,7 @@ namespace devils_engine {
       void destroy_army(const size_t &token);
       void destroy_hero_troop(const size_t &token);
       void destroy_war(const size_t &token);
+      void destroy_troop(const size_t &token);
       
       dynasty* get_dynasty(const size_t &index) const;
       character* get_character(const size_t &index) const;
@@ -150,6 +134,7 @@ namespace devils_engine {
       army* get_army(const size_t &token) const;
       hero_troop* get_hero_troop(const size_t &token) const;
       war* get_war(const size_t &token) const;
+      troop* get_troop(const size_t &token) const;
       
       // операция получения токена довольно опасная, если мы храним указатель
       // имеет смысл задизайнить доступ к объектам без хранения указателей
@@ -162,6 +147,7 @@ namespace devils_engine {
       size_t get_army_token(const army* a) const;
       size_t get_hero_troop_token(const hero_troop* h) const;
       size_t get_war_token(const war* w) const;
+      size_t get_troop_token(const troop* t) const;
       
       size_t characters_count() const;
       size_t dynasties_count() const;
@@ -170,7 +156,12 @@ namespace devils_engine {
       size_t first_not_dead_character() const;
       size_t first_playable_character() const;
       
-      void update_armies(const size_t &time);
+      size_t get_army_container_size() const;
+      army* get_army_raw(const size_t &index) const;
+      
+      void update_armies(const size_t &time, fu2::function_view<void(const size_t &, army*)> func);
+      
+      size_t get_character_debug_index(const character* c) const;
       
       size_t compute_data_memory() const;
     private:
@@ -191,7 +182,7 @@ namespace devils_engine {
       // это будет сериализовано с помощью таблиц
       std::array<tile, core::map::hex_count_d(core::map::detail_level)> tile_array;
       std::array<container, static_cast<size_t>(structure::static_types_count)> containers; // титулам нужно добавить еще немного памяти, чтобы создать особые титулы
-      std::array<phmap::flat_hash_map<std::string_view, void*>, static_cast<size_t>(id_struct::count)> id_maps;
+      std::array<phmap::flat_hash_map<std::string_view, void*>, static_cast<size_t>(structure::id_types_count)> id_maps;
       
       // эти объекты будут существовать практически на всем протяжении игры, но потенциально могут приключится несколько проблем
       utils::memory_pool<dynasty, sizeof(dynasty)*5000> dynasties_pool;
@@ -204,6 +195,7 @@ namespace devils_engine {
       utils::memory_pool<army, sizeof(army)*5000> armies_pool;
       utils::memory_pool<hero_troop, sizeof(hero_troop)*5000> hero_troops_pool;
       utils::memory_pool<war, sizeof(war)*5000> wars_pool;
+      utils::memory_pool<troop, sizeof(troop)*5000> troops_pool;
       
       // гугол подсказал что даже использование shared_ptr - плохая идея
       // типичный подход - это использовать некий ID, 
@@ -224,11 +216,12 @@ namespace devils_engine {
       std::vector<std::pair<size_t, army*>> armies;
       std::vector<std::pair<size_t, hero_troop*>> hero_troops;
       std::vector<std::pair<size_t, war*>> wars;
+      std::vector<std::pair<size_t, troop*>> troops;
 
-      void destroy_container(const structure &s);
+      void destroy_container(const structure &s) noexcept;
       
       template <typename T>
-      void destroy_container() {
+      void destroy_container() noexcept {
         static_assert(T::s_type < structure::static_types_count);
         const size_t index = static_cast<size_t>(T::s_type);
         auto mem = reinterpret_cast<T*>(containers[index].memory);
@@ -242,7 +235,16 @@ namespace devils_engine {
       std::tuple<army*, size_t> get_army_index(const size_t &token) const;
       std::tuple<hero_troop*, size_t> get_hero_troop_index(const size_t &token) const;
       std::tuple<war*, size_t> get_war_index(const size_t &token) const;
+      std::tuple<troop*, size_t> get_troop_index(const size_t &token) const;
+      
+      size_t compute_realm_token(const size_t &index) const;
+      size_t compute_army_token(const size_t &index) const;
+      size_t compute_hero_troop_token(const size_t &index) const;
+      size_t compute_war_token(const size_t &index) const;
+      size_t compute_troop_token(const size_t &index) const;
     };
+    
+    //uint32_t cast_ray(const core::context* ctx, const core::map* map, const utils::ray &ray, float &ray_dist); // лан оставим пока так
   }
 }
 

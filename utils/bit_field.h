@@ -6,6 +6,7 @@
 #include <cstring>
 #include <array>
 #include "assert.h"
+#include "constexpr_funcs.h"
 
 #ifdef _WIN32
   #define SIZE_WIDTH 64
@@ -17,8 +18,8 @@ namespace devils_engine {
     template <size_t N>
     struct bit_field {
       using container_type = size_t;
-//       size_t copy_N;
-      std::array<size_t, N> container; // атомарность? вряд ли
+      static const size_t container_size = ceil(double(N) / double(SIZE_WIDTH));
+      std::array<size_t, container_size> container; // атомарность? вряд ли
 
       inline bit_field() { reset(); }
       inline bool set(const size_t &index, const bool value) {
@@ -39,19 +40,24 @@ namespace devils_engine {
       }
 
       constexpr size_t capacity() const {
-        return SIZE_WIDTH * N;
+        return container_size * SIZE_WIDTH;
       }
 
       inline void reset() {
-        memset(container.data(), 0, sizeof(container_type) * N);
+        memset(container.data(), 0, sizeof(container_type) * container_size);
       }
+      
+      bit_field(const bit_field &other) = default;
+      bit_field(bit_field &&other) = default;
+      bit_field & operator=(const bit_field &other) = default;
+      bit_field & operator=(bit_field &&other) = default;
     };
 
     template <uint32_t N>
     struct bit_field_32 {
       using container_type = uint32_t;
-//       uint32_t copy_N;
-      std::array<container_type, N> container;
+      static const size_t container_size = ceil(double(N) / double(UINT32_WIDTH));
+      std::array<container_type, container_size> container;
 
       inline bit_field_32() { reset(); }
       inline bool set(const size_t &index, const bool value) {
@@ -72,12 +78,17 @@ namespace devils_engine {
       }
 
       constexpr size_t capacity() const {
-        return UINT32_WIDTH * N;
+        return container_size * SIZE_WIDTH;
       }
 
       inline void reset() {
-        memset(container.data(), 0, sizeof(container_type) * N);
+        memset(container.data(), 0, sizeof(container_type) * container_size);
       }
+      
+      bit_field_32(const bit_field_32 &other) = default;
+      bit_field_32(bit_field_32 &&other) = default;
+      bit_field_32 & operator=(const bit_field_32 &other) = default;
+      bit_field_32 & operator=(bit_field_32 &&other) = default;
     };
   }
 }

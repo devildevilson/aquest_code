@@ -6,9 +6,32 @@
 #include "lua_initialization.h"
 #include "magic_enum.hpp"
 
+#include <iostream>
+
 namespace devils_engine {
   namespace utils {
     namespace internal {
+      static float get_stat(const core::city_type* self, const sol::object &obj) {
+        if (obj.get_type() != sol::type::string && obj.get_type() != sol::type::number) throw std::runtime_error("Bad city stat index type");
+        
+        if (obj.get_type() == sol::type::number) {
+          const size_t stat_index = obj.as<size_t>();
+          const size_t final_index = FROM_LUA_INDEX(stat_index);
+          if (final_index < core::offsets::city_stats || final_index >= core::offsets::city_stats + core::city_stats::count) {
+            throw std::runtime_error("Bad city type stat index " + std::to_string(final_index));
+          }
+          
+          const size_t remove_offset = final_index - core::offsets::city_stats;
+          return self->stats.get(remove_offset);
+        }
+        
+        const auto str = obj.as<std::string_view>();
+        const auto itr = core::city_stats::map.find(str);
+        if (itr == core::city_stats::map.end()) throw std::runtime_error("Bad realm stat id " + std::string(str));
+        const size_t final_index = itr->second;
+        return self->stats.get(final_index);
+      }
+      
       void setup_lua_city_type(sol::state_view lua) {
         auto core = lua[magic_enum::enum_name<reserved_lua::core>()].get_or_create<sol::table>();
         sol::usertype<core::city_type> city_type = core.new_usertype<core::city_type>("city_type",
@@ -27,26 +50,7 @@ namespace devils_engine {
               return self->buildings[current];
             };
           },
-          "get_stat", [] (const core::city_type* self, const sol::object &obj) {
-            if (obj.get_type() != sol::type::string && obj.get_type() != sol::type::number) throw std::runtime_error("Bad city stat index type");
-            
-            if (obj.get_type() == sol::type::number) {
-              const size_t stat_index = obj.as<size_t>();
-              const size_t final_index = FROM_LUA_INDEX(stat_index);
-              if (final_index < core::offsets::city_stats || final_index >= core::offsets::city_stats + core::city_stats::count) {
-                throw std::runtime_error("Bad city type stat index " + std::to_string(final_index));
-              }
-              
-              const size_t remove_offset = final_index - core::offsets::city_stats;
-              return self->stats.get(remove_offset);
-            }
-            
-            const auto str = obj.as<std::string_view>();
-            const auto itr = core::city_stats::map.find(str);
-            if (itr == core::city_stats::map.end()) throw std::runtime_error("Bad realm stat id " + std::string(str));
-            const size_t final_index = itr->second;
-            return self->stats.get(final_index);
-          },
+          "get_stat", &get_stat,
           "city_image_top", sol::readonly(&core::city_type::city_image_top),
           "city_image_face", sol::readonly(&core::city_type::city_image_face),
           "city_icon", sol::readonly(&core::city_type::city_icon),

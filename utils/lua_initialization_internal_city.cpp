@@ -12,9 +12,74 @@
 #include "magic_enum.hpp"
 #include "lua_container_iterators.h"
 
+#include <iostream>
+
 namespace devils_engine {
   namespace utils {
     namespace internal {
+      static float get_resource(const core::city* self, const sol::object &obj) {
+        if (obj.get_type() != sol::type::string && obj.get_type() != sol::type::number) throw std::runtime_error("Bad city stat index type");
+        
+        if (obj.get_type() == sol::type::number) {
+          const size_t stat_index = obj.as<size_t>();
+          const size_t final_index = FROM_LUA_INDEX(stat_index);
+          if (final_index < core::offsets::city_resources || final_index >= core::offsets::city_resources + core::city_resources::count) {
+            throw std::runtime_error("Bad city stat index " + std::to_string(final_index));
+          }
+          
+          const size_t remove_offset = final_index - core::offsets::city_resources;
+          return self->resources.get(remove_offset);
+        }
+        
+        const auto str = obj.as<std::string_view>();
+        const auto itr = core::city_resources::map.find(str);
+        if (itr == core::city_resources::map.end()) throw std::runtime_error("Bad city stat id " + std::string(str));
+        const size_t final_index = itr->second;
+        return self->resources.get(final_index);
+      }
+      
+      static float get_stat(const core::city* self, const sol::object &obj) {
+        if (obj.get_type() != sol::type::string && obj.get_type() != sol::type::number) throw std::runtime_error("Bad city stat index type");
+        
+        if (obj.get_type() == sol::type::number) {
+          const size_t stat_index = obj.as<size_t>();
+          const size_t final_index = FROM_LUA_INDEX(stat_index);
+          if (final_index < core::offsets::city_stats || final_index >= core::offsets::city_stats + core::city_stats::count) {
+            throw std::runtime_error("Bad city stat index " + std::to_string(final_index));
+          }
+          
+          const size_t remove_offset = final_index - core::offsets::city_stats;
+          return self->current_stats.get(remove_offset);
+        }
+        
+        const auto str = obj.as<std::string_view>();
+        const auto itr = core::city_stats::map.find(str);
+        if (itr == core::city_stats::map.end()) throw std::runtime_error("Bad city stat id " + std::string(str));
+        const size_t final_index = itr->second;
+        return self->current_stats.get(final_index);
+      }
+      
+      static float get_base_stat(const core::city* self, const sol::object &obj) {
+        if (obj.get_type() != sol::type::string && obj.get_type() != sol::type::number) throw std::runtime_error("Bad city stat index type");
+        
+        if (obj.get_type() == sol::type::number) {
+          const size_t stat_index = obj.as<size_t>();
+          const size_t final_index = FROM_LUA_INDEX(stat_index);
+          if (final_index < core::offsets::city_stats || final_index >= core::offsets::city_stats + core::city_stats::count) {
+            throw std::runtime_error("Bad city stat index " + std::to_string(final_index));
+          }
+          
+          const size_t remove_offset = final_index - core::offsets::city_stats;
+          return self->stats.get(remove_offset);
+        }
+        
+        const auto str = obj.as<std::string_view>();
+        const auto itr = core::city_stats::map.find(str);
+        if (itr == core::city_stats::map.end()) throw std::runtime_error("Bad city stat id " + std::string(str));
+        const size_t final_index = itr->second;
+        return self->stats.get(final_index);
+      }
+      
       void setup_lua_city(sol::state_view lua) {
         auto core = lua[magic_enum::enum_name<reserved_lua::core>()].get_or_create<sol::table>();
         sol::usertype<core::city> city = core.new_usertype<core::city>("city", sol::no_constructor,
@@ -30,66 +95,9 @@ namespace devils_engine {
           "start_building_project_turn", sol::readonly(&core::city::start_building),
           "building_project_index", sol::readonly_property([] (const core::city* self) { return TO_LUA_INDEX(self->building_index); }),
           "tile_index", sol::readonly_property([] (const core::city* self) { return TO_LUA_INDEX(self->tile_index); }),
-          "get_stat", [] (const core::city* self, const sol::object &obj) {
-            if (obj.get_type() != sol::type::string && obj.get_type() != sol::type::number) throw std::runtime_error("Bad city stat index type");
-            
-            if (obj.get_type() == sol::type::number) {
-              const size_t stat_index = obj.as<size_t>();
-              const size_t final_index = FROM_LUA_INDEX(stat_index);
-              if (final_index < core::offsets::city_stats || final_index >= core::offsets::city_stats + core::city_stats::count) {
-                throw std::runtime_error("Bad city stat index " + std::to_string(final_index));
-              }
-              
-              const size_t remove_offset = final_index - core::offsets::city_stats;
-              return self->current_stats.get(remove_offset);
-            }
-            
-            const auto str = obj.as<std::string_view>();
-            const auto itr = core::city_stats::map.find(str);
-            if (itr == core::city_stats::map.end()) throw std::runtime_error("Bad city stat id " + std::string(str));
-            const size_t final_index = itr->second;
-            return self->current_stats.get(final_index);
-          },
-          "get_base_stat", [] (const core::city* self, const sol::object &obj) {
-            if (obj.get_type() != sol::type::string && obj.get_type() != sol::type::number) throw std::runtime_error("Bad city stat index type");
-            
-            if (obj.get_type() == sol::type::number) {
-              const size_t stat_index = obj.as<size_t>();
-              const size_t final_index = FROM_LUA_INDEX(stat_index);
-              if (final_index < core::offsets::city_stats || final_index >= core::offsets::city_stats + core::city_stats::count) {
-                throw std::runtime_error("Bad city stat index " + std::to_string(final_index));
-              }
-              
-              const size_t remove_offset = final_index - core::offsets::city_stats;
-              return self->stats.get(remove_offset);
-            }
-            
-            const auto str = obj.as<std::string_view>();
-            const auto itr = core::city_stats::map.find(str);
-            if (itr == core::city_stats::map.end()) throw std::runtime_error("Bad city stat id " + std::string(str));
-            const size_t final_index = itr->second;
-            return self->stats.get(final_index);
-          },
-          "get_resource", [] (const core::city* self, const sol::object &obj) {
-            if (obj.get_type() != sol::type::string && obj.get_type() != sol::type::number) throw std::runtime_error("Bad city stat index type");
-            
-            if (obj.get_type() == sol::type::number) {
-              const size_t stat_index = obj.as<size_t>();
-              const size_t final_index = FROM_LUA_INDEX(stat_index);
-              if (final_index < core::offsets::city_resources || final_index >= core::offsets::city_resources + core::city_resources::count) {
-                throw std::runtime_error("Bad city stat index " + std::to_string(final_index));
-              }
-              
-              const size_t remove_offset = final_index - core::offsets::city_resources;
-              return self->resources.get(remove_offset);
-            }
-            
-            const auto str = obj.as<std::string_view>();
-            const auto itr = core::city_resources::map.find(str);
-            if (itr == core::city_resources::map.end()) throw std::runtime_error("Bad city stat id " + std::string(str));
-            const size_t final_index = itr->second;
-            return self->resources.get(final_index);
-          },
+          "get_stat", &get_stat,
+          "get_base_stat", &get_base_stat,
+          "get_resource", &get_resource,
 //           "offensive_army", sol::readonly_property([] (const core::city* self) { return lua_handle_army(self->offensive_army); }),
 //           "defensive_army", sol::readonly_property([] (const core::city* self) { return lua_handle_army(self->defensive_army); }),
           // возможно нужно добавить обход юнитов по зданиям?

@@ -20,6 +20,27 @@
 
 namespace devils_engine {
   namespace utils {
+    static std::tuple<double, double, double> domain_warp(FastNoiseLite* self, const sol::variadic_args &args) {
+      if (args.size() < 2) return std::make_tuple(10000.0, 10000.0, 10000.0);
+      if (args.size() == 2) {
+        double x = args.get<double>(0);
+        double y = args.get<double>(1);
+        self->DomainWarp(x, y);
+        return std::make_tuple(x, y, 0.0);
+      }
+      double x = args.get<double>(0);
+      double y = args.get<double>(1);
+      double z = args.get<double>(2);
+      self->DomainWarp(x, y, z);
+      return std::make_tuple(x, y, z);
+    }
+    
+    static float get_noise(FastNoiseLite* self, const sol::variadic_args &args) { 
+      if (args.size() < 2) return 10000.0f;
+      if (args.size() == 2) return self->GetNoise(args.get<double>(0), args.get<double>(1));
+      return self->GetNoise(args.get<double>(0), args.get<double>(1), args.get<double>(2));
+    }
+    
     void setup_lua_noiser(sol::state_view lua) {
       auto utils = lua[magic_enum::enum_name(reserved_lua::utils)].get_or_create<sol::table>();
       const auto noise_type = utils.new_enum(
@@ -128,25 +149,8 @@ namespace devils_engine {
 //         "get_gradient_perturb_amp", &FastNoiseLite::GetGradientPerturbAmp,
         "set_domain_warp_type", &FastNoiseLite::SetDomainWarpType,
         "set_domain_warp_amp", &FastNoiseLite::SetDomainWarpAmp,
-        "get_noise", [] (FastNoiseLite* self, const sol::variadic_args &args) { 
-          if (args.size() < 2) return 10000.0f;
-          if (args.size() == 2) return self->GetNoise(args.get<double>(0), args.get<double>(1));
-          return self->GetNoise(args.get<double>(0), args.get<double>(1), args.get<double>(2));
-        },
-        "domain_warp", [] (FastNoiseLite* self, const sol::variadic_args &args) -> std::tuple<double, double, double> {
-          if (args.size() < 2) return std::make_tuple(10000.0, 10000.0, 10000.0);
-          if (args.size() == 2) {
-            double x = args.get<double>(0);
-            double y = args.get<double>(1);
-            self->DomainWarp(x, y);
-            return std::make_tuple(x, y, 0.0);
-          }
-          double x = args.get<double>(0);
-          double y = args.get<double>(1);
-          double z = args.get<double>(2);
-          self->DomainWarp(x, y, z);
-          return std::make_tuple(x, y, z);
-        },
+        "get_noise", &get_noise,
+        "domain_warp", &domain_warp,
         "noise_type", noise_type,
         "rotation_type3D", rotation_type3D,
         "fractal_type", fractal_type,

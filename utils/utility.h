@@ -29,4 +29,54 @@
 #define CONCAT(a, b) a##b
 #define UNUSED_VARIABLE(var) ((void)var)
 
+namespace devils_engine {
+  inline double cast_to_double(const int64_t &val) {
+    union conv {double d; int64_t i; };
+    conv c{.i = val};
+    return c.d;
+  }
+
+  inline int64_t cast_to_int64(const double &val) {
+    union conv {double d; int64_t i; };
+    conv c{.d = val};
+    return c.i;
+  }
+
+  inline float cast_to_float(const int32_t &val) {
+    union conv {float d; int32_t i; };
+    conv c{.i = val};
+    return c.d;
+  }
+
+  inline int32_t cast_to_int32(const float &val) {
+    union conv {float d; int32_t i; };
+    conv c{.d = val};
+    return c.i;
+  }
+  
+  inline int32_t uns_to_signed32(const uint32_t &val) {
+    union conv { uint32_t u; int32_t i; };
+    conv c{.u = val};
+    return c.i;
+  }
+  
+  inline uint32_t s_to_unsigned32(const int32_t &val) {
+    union conv { uint32_t u; int32_t i; };
+    conv c{.i = val};
+    return c.u;
+  }
+  
+  inline int64_t uns_to_signed64(const uint64_t &val) {
+    union conv { uint64_t u; int64_t i; };
+    conv c{.u = val};
+    return c.i;
+  }
+  
+  inline uint64_t s_to_unsigned64(const int64_t &val) {
+    union conv { uint64_t u; int64_t i; };
+    conv c{.i = val};
+    return c.u;
+  }
+}
+
 #endif

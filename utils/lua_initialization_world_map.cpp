@@ -8,7 +8,7 @@
 
 namespace devils_engine {
   namespace utils {
-    void set_tiles_color(core::map* self, const sol::table t) {
+    static void set_tiles_color(core::map* self, const sol::table t) {
       std::unique_lock<std::mutex> lock(self->mutex);
       size_t counter = 0;
       for (const auto &pair : t) {
@@ -25,7 +25,7 @@ namespace devils_engine {
       ASSERT(counter == self->tiles_count());
     }
     
-    void set_tiles_color(core::map* self, const map::generator::container* cont, const uint32_t &property_index) {
+    static void set_tiles_color(core::map* self, const map::generator::container* cont, const uint32_t &property_index) {
       std::unique_lock<std::mutex> lock(self->mutex);
       assert(self->tiles_count() == cont->entities_count(0));
       for (size_t i = 0; i < self->tiles_count(); ++i) {
@@ -35,7 +35,7 @@ namespace devils_engine {
       }
     }
     
-    void set_tiles_height(core::map* self, const sol::table t) {
+    static void set_tiles_height(core::map* self, const sol::table t) {
       std::unique_lock<std::mutex> lock(self->mutex);
       size_t counter = 0;
       for (const auto &pair : t) {
@@ -52,13 +52,42 @@ namespace devils_engine {
       ASSERT(counter == self->tiles_count());
     }
     
-    void set_tiles_height(core::map* self, const map::generator::container* cont, const uint32_t &property_index) {
+    static void set_tiles_height(core::map* self, const map::generator::container* cont, const uint32_t &property_index) {
       std::unique_lock<std::mutex> lock(self->mutex);
       assert(self->tiles_count() == cont->entities_count(0));
       for (size_t i = 0; i < self->tiles_count(); ++i) {
         const float data = cont->get_data<float>(0, i, FROM_LUA_INDEX(property_index));
         auto tile = self->get_tile_ptr(i);
         tile->height = data;
+      }
+    }
+    
+    static void set_plate_color_and_height(core::map* self, sol::object childs, const uint32_t &color, const float &height) {
+      std::unique_lock<std::mutex> lock(self->mutex);
+      if (childs.is<std::vector<unsigned int>*>()) {
+        const auto &array = *childs.as<std::vector<unsigned int>*>();
+        for (const auto index : array) {
+          auto tile = self->get_tile_ptr(FROM_LUA_INDEX(index));
+          ASSERT(tile != nullptr);
+          tile->color.container = color;
+          tile->height = height;
+        }
+        
+        return;
+      } 
+      
+      if (!childs.is<sol::table>()) throw std::runtime_error("Bad childs type, must be an array");
+                                
+      auto t = childs.as<sol::table>();
+      for (const auto &obj : t) {
+        if (!obj.first.is<uint32_t>()) continue;
+        if (!obj.second.is<uint32_t>()) continue;
+        
+        const uint32_t index = obj.second.as<uint32_t>();
+        auto tile = self->get_tile_ptr(FROM_LUA_INDEX(index));
+        ASSERT(tile != nullptr);
+        tile->color.container = color;
+        tile->height = height;
       }
     }
     
@@ -107,34 +136,7 @@ namespace devils_engine {
           const auto vec = self->get_point(FROM_LUA_INDEX(index));
           return std::tie(vec.x, vec.y, vec.z);
         },
-        "set_plate_color_and_height", [] (core::map* self, sol::object childs, const uint32_t &color, const float &height) {
-          std::unique_lock<std::mutex> lock(self->mutex);
-          if (childs.is<std::vector<unsigned int>*>()) {
-            const auto &array = *childs.as<std::vector<unsigned int>*>();
-            for (const auto index : array) {
-              auto tile = self->get_tile_ptr(FROM_LUA_INDEX(index));
-              ASSERT(tile != nullptr);
-              tile->color.container = color;
-              tile->height = height;
-            }
-            
-            return;
-          } 
-          
-          if (!childs.is<sol::table>()) throw std::runtime_error("Bad childs type, must be an array");
-                                   
-          auto t = childs.as<sol::table>();
-          for (const auto &obj : t) {
-            if (!obj.first.is<uint32_t>()) continue;
-            if (!obj.second.is<uint32_t>()) continue;
-            
-            const uint32_t index = obj.second.as<uint32_t>();
-            auto tile = self->get_tile_ptr(FROM_LUA_INDEX(index));
-            ASSERT(tile != nullptr);
-            tile->color.container = color;
-            tile->height = height;
-          }
-        },
+        "set_plate_color_and_height", &set_plate_color_and_height,
         "set_tiles_color", sol::overload(colorf1, colorf2),
         "set_tiles_height", sol::overload(heightf1, heightf2)
 //         "get_tile_biome", [] (const core::map* self, const uint32_t &index) -> std::string_view { 

@@ -120,6 +120,7 @@ namespace devils_engine {
       stats_container(stats_container &&other) = delete;
       
       float get(const uint32_t &index) const {
+        assert(index < array.size());
         if constexpr (!check_character_stat_type) return array[index].ival;
         switch (core::character_stats::types[index]) {
           case core::stat_value_type::int_t:   return array[index].ival;
@@ -131,6 +132,7 @@ namespace devils_engine {
       }
       
       void set(const uint32_t &index, const float &value) {
+        assert(index < array.size());
         if constexpr (!check_character_stat_type) { array[index].ival = value; return; }
         switch (core::character_stats::types[index]) {
           case core::stat_value_type::int_t:   array[index].ival = value; break;
@@ -141,6 +143,7 @@ namespace devils_engine {
       }
       
       float add(const uint32_t &index, const float &value) {
+        assert(index < array.size());
         if constexpr (!check_character_stat_type) { const int32_t a = array[index].ival; array[index].ival += value; return a; }
         switch (core::character_stats::types[index]) {
           case core::stat_value_type::int_t:   { const  int32_t a = array[index].ival; array[index].ival += value; return a; }

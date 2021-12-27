@@ -7,8 +7,7 @@
 #include "lua_container_iterators.h"
 #include "lua_initialization_handle_types.h"
 
-#define TO_LUA_INDEX(index) ((index)+1)
-#define FROM_LUA_INDEX(index) ((index)-1)
+#include <iostream>
 
 namespace devils_engine {
   namespace utils {
@@ -127,6 +126,17 @@ namespace devils_engine {
         };
       }
       
+      template <typename T>
+      static sol::object make_object(sol::this_state s, T obj) {
+        if constexpr (std::is_same_v<T, utils::handle<core::realm>>) return sol::make_object(s, lua_handle_realm(obj));
+        else if constexpr (std::is_same_v<T, utils::handle<core::army>>) return sol::make_object(s, lua_handle_army(obj));
+        else if constexpr (std::is_same_v<T, utils::handle<core::hero_troop>>) return sol::make_object(s, lua_handle_hero_troop(obj));
+        else if constexpr (std::is_same_v<T, utils::handle<core::war>>) return sol::make_object(s, lua_handle_war(obj));
+        else if constexpr (std::is_same_v<T, utils::handle<core::troop>>) return sol::make_object(s, lua_handle_troop(obj));
+        else if constexpr (std::is_pointer_v<T>) return sol::make_object(s, obj);
+        return sol::nil;
+      }
+      
       void setup_lua_character(sol::state_view lua) {
 //         auto t = lua.create_table_with(sol::meta_function::index, [] (sol::table t, sol::object o) {
 //           
@@ -167,7 +177,7 @@ namespace devils_engine {
           "nick_index", sol::readonly(&core::character::nickname_index),
           "culture", sol::readonly(&core::character::culture),
           "religion", sol::readonly(&core::character::religion),
-          "hidden_religion", sol::readonly(&core::character::hidden_religion),
+          "hidden_religion", sol::readonly(&core::character::secret_religion),
           "family", sol::readonly(&core::character::family),
           "relations", sol::readonly(&core::character::relations),
                                                                  
@@ -183,24 +193,47 @@ namespace devils_engine {
           "resources_end", sol::var(core::offsets::character_resources + core::character_resources::count)
         );
         
-        character_type.set_function("is_independent", &core::character::is_independent);
-        character_type.set_function("is_prisoner", &core::character::is_prisoner);
-        character_type.set_function("is_married", &core::character::is_married);
-        character_type.set_function("is_male", &core::character::is_male);
-        character_type.set_function("is_hero", [] (const core::character* c) { return core::character::is_hero(c); });
-        character_type.set_function("is_player", &core::character::is_player);
-        character_type.set_function("is_dead", &core::character::is_dead);
-        character_type.set_function("has_dynasty", &core::character::has_dynasty);
-        character_type.set_function("is_ai_playable", &core::character::is_ai_playable);
+//         character_type.set_function("is_independent", &core::character::is_independent);
+//         character_type.set_function("is_prisoner", &core::character::is_prisoner);
+//         character_type.set_function("is_married", &core::character::is_married);
+//         character_type.set_function("is_male", &core::character::is_male);
+//         character_type.set_function("is_hero", [] (const core::character* c) { return core::character::is_hero(c); });
+//         character_type.set_function("is_player", &core::character::is_player);
+//         character_type.set_function("is_dead", &core::character::is_dead);
+//         character_type.set_function("has_dynasty", &core::character::has_dynasty);
+//         character_type.set_function("is_ai_playable", &core::character::is_ai_playable);
+        
+#define LUA_GET_FUNCTION(name) \
+    [] (sol::this_state s, const core::character* self) { \
+      const auto obj = self->get_##name(); \
+      return make_object(s, obj); \
+    } \
+        
+#define GET_SCOPE_COMMAND_FUNC(name, a, b, type) character_type.set_function("get_"#name, LUA_GET_FUNCTION(name));
+      CHARACTER_GET_SCOPE_COMMANDS_LIST
+#undef GET_SCOPE_COMMAND_FUNC
+
+#define CONDITION_COMMAND_FUNC(name) character_type.set_function(#name, &core::character::name);
+      CHARACTER_GET_BOOL_NO_ARGS_COMMANDS_LIST
+#undef CONDITION_COMMAND_FUNC
+
+#define CONDITION_COMMAND_FUNC(name) character_type.set_function(#name, &core::character::get_##name);
+      CHARACTER_GET_NUMBER_NO_ARGS_COMMANDS_LIST
+#undef CONDITION_COMMAND_FUNC
+
+#define CONDITION_ARG_COMMAND_FUNC(name, value_type_bit, constness, value_type) character_type.set_function(#name, &core::character::name);
+      CHARACTER_GET_BOOL_ONE_ARG_COMMANDS_LIST
+#undef CONDITION_ARG_COMMAND_FUNC
+        
         character_type.set_function("get_main_title", &core::character::get_main_title);
         character_type.set_function("get_base_stat", &get_base_stat);
         character_type.set_function("get_stat", &get_current_stat);
         character_type.set_function("get_resource", &get_resource);
         character_type.set_function("children", &children);
         character_type.set_function("concubines", &concubines);
-        character_type.set_function("has_flag", &core::character::has_flag);
-        character_type.set_function("has_trait", &core::character::has_trait);
-        character_type.set_function("has_modificator", &core::character::has_modificator);
+//         character_type.set_function("has_flag", &core::character::has_flag);
+//         character_type.set_function("has_trait", &core::character::has_trait);
+//         character_type.set_function("has_modificator", &core::character::has_modificator);
         character_type.set_function("has_event", &core::character::has_event);
         character_type.set_function("flags", &utils::flags_iterator<core::character>);
         character_type.set_function("events", &utils::events_iterator<core::character>);

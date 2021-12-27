@@ -9,6 +9,8 @@
 #include "lua_container_iterators.h"
 #include "lua_initialization_handle_types.h"
 
+#include <iostream>
+
 namespace devils_engine {
   namespace utils {
     namespace internal {
@@ -19,8 +21,10 @@ namespace devils_engine {
           "casus_belli", sol::readonly(&core::war::cb),
           "war_opener", sol::readonly(&core::war::war_opener),
           "target_character", sol::readonly(&core::war::target_character),
-          "opener_realm", sol::readonly_property([] (const core::war* self) { return lua_handle_realm(self->opener_realm); }),
-          "target_realm", sol::readonly_property([] (const core::war* self) { return lua_handle_realm(self->target_realm); }),
+//           "opener_realm", sol::readonly_property([] (const core::war* self) { return lua_handle_realm(self->opener_realm); }),
+//           "target_realm", sol::readonly_property([] (const core::war* self) { return lua_handle_realm(self->target_realm); }),
+          "primary_attacker", sol::readonly_property([] (const core::war* self) { return self->war_opener; }),
+          "primary_defender", sol::readonly_property([] (const core::war* self) { return self->target_character; }),
           "claimat", sol::readonly_property([] (const core::war* self) { return self->claimant; }),
           "target_titles", [] (const core::war* war) {
             size_t counter = 0;
@@ -33,20 +37,20 @@ namespace devils_engine {
           },
           "attackers", [] (const core::war* war) {
             size_t counter = 0;
-            return [war, counter] () mutable -> lua_handle_realm {
+            return [war, counter] () mutable -> core::character* { //lua_handle_realm
               if (counter >= war->attackers.size()) return nullptr;
               auto r = war->attackers[counter];
               ++counter;
-              return lua_handle_realm(r);
+              return r;
             };
           },
           "defenders", [] (const core::war* war) {
             size_t counter = 0;
-            return [war, counter] () mutable -> lua_handle_realm {
+            return [war, counter] () mutable -> core::character* { // lua_handle_realm
               if (counter >= war->defenders.size()) return nullptr;
               auto r = war->defenders[counter];
               ++counter;
-              return lua_handle_realm(r);
+              return r;
             };
           },
           "flags", &utils::flags_iterator<core::war>,
@@ -72,7 +76,7 @@ namespace devils_engine {
           if (war == nullptr) throw std::runtime_error("Invalid input war object");
                           
           for (const auto t : war->attackers) {
-            const auto ret = func(lua_handle_realm(t));
+            const auto ret = func(t);
             CHECK_ERROR_THROW(ret);
             
             if (ret.get_type() == sol::type::boolean) {
@@ -86,7 +90,7 @@ namespace devils_engine {
           if (war == nullptr) throw std::runtime_error("Invalid input war object");
                           
           for (const auto t : war->defenders) {
-            const auto ret = func(lua_handle_realm(t));
+            const auto ret = func(t);
             CHECK_ERROR_THROW(ret);
             
             if (ret.get_type() == sol::type::boolean) {

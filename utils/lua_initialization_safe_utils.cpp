@@ -18,6 +18,8 @@
 #include "bin/map.h"
 #include "ai/path_container.h"
 
+#include <iostream>
+
 #define DEFAULT_LUA_REF_COPY_SIZE 256
 #define DEFAULT_ONE_FUNCTION_MAXIMUM_CALLS 256
 
@@ -75,7 +77,7 @@ namespace devils_engine {
       return std::abs(double(int64_t(num)) - num) < EPSILON;
     }
     
-    size_t count_func(sol::this_state this_s, const sol::object &iterable) {
+    static size_t count_func(sol::this_state this_s, const sol::object &iterable) {
       sol::state_view s = this_s;
       size_t func_counter = 0;
       if (iterable.get_type() == sol::type::table) {

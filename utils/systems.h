@@ -61,6 +61,9 @@ namespace devils_engine {
     class slots;
     class stage_container;
     class image_container;
+    class proxy_stage;
+    class stage;
+    class pass;
     struct container;
     struct world_map_buffers;
     struct image_controller;
@@ -103,7 +106,10 @@ namespace devils_engine {
       //input::data* input_data;
       input::keys* keys_mapping[player::states_count];
       render::container* graphics_container;
-      render::slots* render_slots;
+//       render::slots* render_slots;
+      render::proxy_stage* proxy_compute;
+      render::proxy_stage* proxy_graphics;
+      render::pass* main_pass;
       render::image_container* image_container;
       render::image_controller* image_controller;
       interface::context* context;
@@ -148,6 +154,8 @@ namespace devils_engine {
       map::creator* map_creator;
       render::stage_container* optimizators_container;
       render::stage_container* render_container;
+      render::stage* first_compute;
+      render::stage* first_graphics;
       
       std::string load_world;
       std::string saved_data; // какие здесь данные? только часть мировая, названия и хеш мы заполняем извне
@@ -201,6 +209,8 @@ namespace devils_engine {
       battle::map* map;
       render::stage_container* optimizators_container;
       render::stage_container* render_container;
+      render::stage* first_compute;
+      render::stage* first_graphics;
       components::battle_camera* camera;
       battle::lua_container* lua_states;
       //battle::unit_states_container* unit_states_container;

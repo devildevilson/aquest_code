@@ -5,6 +5,8 @@
 #include "input.h"
 #include "magic_enum.hpp"
 
+#include <iostream>
+
 namespace devils_engine {
   namespace utils {
     void setup_lua_input(sol::state_view lua) {

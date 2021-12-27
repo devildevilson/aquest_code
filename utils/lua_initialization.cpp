@@ -39,6 +39,7 @@ namespace devils_engine {
         utils::setup_lua_safe_utils(lua);
         utils::setup_lua_loading_functions(lua);
         utils::setup_lua_constants(lua);
+        utils::setup_lua_script_utils(lua);
       }
     }
     

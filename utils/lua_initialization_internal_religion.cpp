@@ -5,9 +5,27 @@
 #include "core/realm_mechanics_arrays.h"
 #include "lua_container_iterators.h"
 
+#include <iostream>
+
 namespace devils_engine {
   namespace utils {
     namespace internal {
+      static bool get_feature(const core::religion* self, const sol::object &obj) {
+        if (!obj.is<size_t>() && obj.get_type() == sol::type::string) throw std::runtime_error("Bad input for religion.get_feature");
+        
+        if (obj.is<size_t>()) {
+          const size_t val = FROM_LUA_INDEX(obj.as<size_t>());
+          if (val >= core::religion_mechanics::count) throw std::runtime_error("Invalid religion feature index " + std::to_string(val));
+          return self->get_mechanic(val);
+        }
+        
+        const auto &str = obj.as<std::string_view>();
+        const auto itr = core::religion_mechanics::map.find(str);
+        if (itr == core::religion_mechanics::map.end()) throw std::runtime_error("Could not find religion feature " + std::string(str));
+        const size_t index = itr->second;
+        return self->get_mechanic(index);
+      }
+      
       void setup_lua_religion(sol::state_view lua) {
         auto core = lua["core"].get_or_create<sol::table>();
         core.new_usertype<core::religion_group>(
@@ -60,40 +78,10 @@ namespace devils_engine {
               return ptr;
             };
           },
-          "flags", [] (const core::religion* self) {
-            auto itr = self->flags.begin();
-            return [self, itr] (sol::this_state s) mutable {
-              if (itr == self->flags.end()) return sol::object(sol::nil);
-              const auto current = itr;
-              ++itr;
-              return sol::make_object(s, current->second);
-            };
-          },
-          "events", [] (const core::religion* self) {
-            auto itr = self->events.begin();
-            return [self, itr] () mutable -> std::tuple<const core::event*, size_t> {
-              if (itr == self->events.end()) return std::make_tuple(nullptr, 0);
-              const auto current = itr;
-              ++itr;
-              return std::make_tuple(current->first, current->second.mtth);
-            };
-          },
+          "flags", &utils::flags_iterator<core::religion>,
+          "events", &utils::events_iterator<core::religion>,
           // особенности религии?
-          "get_feature", [] (const core::religion* self, const sol::object &obj) {
-            if (!obj.is<size_t>() && obj.get_type() == sol::type::string) throw std::runtime_error("Bad input for religion.get_feature");
-            
-            if (obj.is<size_t>()) {
-              const size_t val = FROM_LUA_INDEX(obj.as<size_t>());
-              if (val >= core::religion_mechanics::count) throw std::runtime_error("Invalid religion feature index " + std::to_string(val));
-              return self->get_mechanic(val);
-            }
-            
-            const auto &str = obj.as<std::string_view>();
-            const auto itr = core::religion_mechanics::map.find(str);
-            if (itr == core::religion_mechanics::map.end()) throw std::runtime_error("Could not find religion feature " + std::string(str));
-            const size_t index = itr->second;
-            return self->get_mechanic(index);
-          },
+          "get_feature", &get_feature,
           "features_start", sol::var(1),
           "features_count", sol::var(core::religion_mechanics::count)
         );

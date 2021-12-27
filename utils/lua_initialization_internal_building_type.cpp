@@ -4,6 +4,8 @@
 #include "lua_initialization.h"
 #include "magic_enum_header.h"
 
+#include <iostream>
+
 namespace devils_engine {
   namespace utils {
     namespace internal {

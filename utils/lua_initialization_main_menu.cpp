@@ -9,6 +9,21 @@
 
 namespace devils_engine {
   namespace utils {
+    static void choose_world(utils::demiurge* self, const size_t &lua_index) {
+      const size_t index = FROM_LUA_INDEX(lua_index);
+      auto ctx = global::get<systems::core_t>()->game_ctx;
+      ctx->state = utils::quest_state::world_map_loading; // возможно нужно отложить изменение состояния?
+      const auto t = self->world(index);
+      
+      auto proxy = t["path"];
+      if (!proxy.valid()) throw std::runtime_error("Broken world table");
+      if (proxy.get_type() != sol::type::string) throw std::runtime_error("Broken world table");
+      std::string world_path = proxy.get<std::string>();
+      // путь нужно куда то положить
+      auto map = global::get<systems::map_t>();
+      map->load_world = world_path;
+    }
+    
     void setup_lua_main_menu(sol::state_view lua) {
       auto utils = lua[magic_enum::enum_name<reserved_lua::values>(reserved_lua::utils)].get_or_create<sol::table>();
 //       auto main_menu = utils.new_usertype<utils::main_menu>("main_menu",
@@ -40,20 +55,7 @@ namespace devils_engine {
           return self->world(index);
         },
         //"choose_world",     &utils::demiurge::choose_world
-        "choose_world",     [] (utils::demiurge* self, const size_t &lua_index) {
-          const size_t index = FROM_LUA_INDEX(lua_index);
-          auto ctx = global::get<systems::core_t>()->game_ctx;
-          ctx->state = utils::quest_state::world_map_loading; // возможно нужно отложить изменение состояния?
-          const auto t = self->world(index);
-          
-          auto proxy = t["path"];
-          if (!proxy.valid()) throw std::runtime_error("Broken world table");
-          if (proxy.get_type() != sol::type::string) throw std::runtime_error("Broken world table");
-          std::string world_path = proxy.get<std::string>();
-          // путь нужно куда то положить
-          auto map = global::get<systems::map_t>();
-          map->load_world = world_path;
-        }
+        "choose_world",     &choose_world
       );
     }
   }

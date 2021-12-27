@@ -5,9 +5,27 @@
 #include "core/realm_mechanics_arrays.h"
 #include "lua_container_iterators.h"
 
+#include <iostream>
+
 namespace devils_engine {
   namespace utils {
     namespace internal {
+      static bool get_feature(const core::culture* c, const sol::object &obj) {
+        if (!obj.is<size_t>() && obj.get_type() == sol::type::string) throw std::runtime_error("Bad input for culture::get_feature");
+        
+        if (obj.is<size_t>()) {
+          const size_t val = FROM_LUA_INDEX(obj.as<size_t>());
+          if (val >= core::culture_mechanics::count) throw std::runtime_error("Invalid culture feature index " + std::to_string(val));
+          return c->get_mechanic(val);
+        }
+        
+        const auto &str = obj.as<std::string_view>();
+        const auto itr = core::culture_mechanics::map.find(str);
+        if (itr == core::culture_mechanics::map.end()) throw std::runtime_error("Could not find culture feature " + std::string(str));
+        const size_t index = itr->second;
+        return c->get_mechanic(index);
+      }
+      
       void setup_lua_culture(sol::state_view lua) {
         auto core = lua["core"].get_or_create<sol::table>();
         core.new_usertype<core::culture_group>(
@@ -52,21 +70,7 @@ namespace devils_engine {
           // естественно нужно отключить возможность добавлять какой то флаг во время интерфейса
           "flags", &utils::flags_iterator<core::culture>,
           "events", &utils::events_iterator<core::culture>,
-          "get_feature", [] (const core::culture* c, const sol::object &obj) {
-            if (!obj.is<size_t>() && obj.get_type() == sol::type::string) throw std::runtime_error("Bad input for culture::get_feature");
-            
-            if (obj.is<size_t>()) {
-              const size_t val = FROM_LUA_INDEX(obj.as<size_t>());
-              if (val >= core::culture_mechanics::count) throw std::runtime_error("Invalid culture feature index " + std::to_string(val));
-              return c->get_mechanic(val);
-            }
-            
-            const auto &str = obj.as<std::string_view>();
-            const auto itr = core::culture_mechanics::map.find(str);
-            if (itr == core::culture_mechanics::map.end()) throw std::runtime_error("Could not find culture feature " + std::string(str));
-            const size_t index = itr->second;
-            return c->get_mechanic(index);
-          },
+          "get_feature", &get_feature,
           "features_start", sol::var(1),
           "features_count", sol::var(core::culture_mechanics::count)
         );

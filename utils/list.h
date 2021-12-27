@@ -40,6 +40,10 @@ namespace devils_engine {
       army_troops,
       province_cities,
       hero_companions,
+      culture_member,
+      dynasty_member,
+      believer,
+      secret_believer,
     };
     
     namespace forw {
@@ -106,6 +110,13 @@ namespace devils_engine {
       void list_invalidate(T* cur) noexcept {
         list<T, t>* l = cur;
         l->invalidate();
+      }
+      
+      template <list_type t, typename T>
+      size_t list_count(T* cur) noexcept {
+        size_t counter = 0;
+        for (auto c = cur; c != nullptr; c = list_next<t>(c, cur)) { ++counter; }
+        return counter;
       }
     }
     
@@ -200,13 +211,14 @@ namespace devils_engine {
         list<T, t>* l = cur;
         l->invalidate();
       }
+      
+      template <list_type t, typename T>
+      size_t list_count(T* cur) noexcept {
+        size_t counter = 0;
+        for (auto c = cur; c != nullptr; c = list_next<t>(c, cur)) { ++counter; }
+        return counter;
+      }
     }
-    
-//     struct test_struct : public ring_list<test_struct, list_type::siblings> {
-//       int fsf121f2;
-//       int dfdf323;
-//       
-//     };
   }
 }
 

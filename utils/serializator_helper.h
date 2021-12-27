@@ -44,8 +44,8 @@ namespace devils_engine {
       enum types {
         image,
         heraldy_layer,
-        biome,
         
+        biome,
         province,
         building_type,
         holding_type,
@@ -54,16 +54,18 @@ namespace devils_engine {
         trait,
         modificator,
         troop_type,
-        decision,
         religion_group,
         religion,
         culture_group,
         culture,
         law,
-        event,
         title,
         character,
         dynasty,
+        decision,
+        interaction,
+        event,
+        casus_belli,
         
         count
       };

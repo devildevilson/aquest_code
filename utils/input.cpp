@@ -842,7 +842,7 @@ namespace devils_engine {
       cont[key] = id;
       if (!old_id.valid()) return;
       
-      ASSERT(false);
+      //ASSERT(false); // не понял
       auto event_keys_container = container->events_map.find(old_id);
       ASSERT(event_keys_container != container->events_map.end());
       //const size_t old_event_index = event_keys_container->second;

@@ -1,12 +1,16 @@
-#ifndef QUEST_STATE_H
-#define QUEST_STATE_H
+#ifndef DEVILS_ENGINE_UTILS_QUEST_STATE_H
+#define DEVILS_ENGINE_UTILS_QUEST_STATE_H
 
 #include <cstddef>
 #include <cstdint>
 #include <vector>
-#include "render/stage.h"
+// #include "render/stage.h"
 
 namespace devils_engine {
+//   namespace render {
+//     class stage;
+//   }
+  
   namespace utils {
     // не думаю что этот класс будет держать в себе какие то данные
     // скорее только логику, можно его сделать в виде массива при начальной загрузке
@@ -54,18 +58,18 @@ namespace devils_engine {
     };
     
     // вместо этого нужно сделать рендер по слотам
-    class state_controller { // не уверен в целесообразности этого класса
-    public:
-      void change_state(const uint32_t &new_state);
-      void set_render_stage(const uint32_t &slot, render::stage* stage); // слоты для рендера очень помогут удалять и создавать ресурсы
-      void clean_render_stage(const uint32_t &slot);
-      void update(const size_t &time);
-      void update_render();
-    private:
-      uint32_t pending_state;
-      quest_state* current_state;
-      std::vector<render::stage*> rendering_stages;
-    };
+//     class state_controller { // не уверен в целесообразности этого класса
+//     public:
+//       void change_state(const uint32_t &new_state);
+//       void set_render_stage(const uint32_t &slot, render::stage* stage); // слоты для рендера очень помогут удалять и создавать ресурсы
+//       void clean_render_stage(const uint32_t &slot);
+//       void update(const size_t &time);
+//       void update_render();
+//     private:
+//       uint32_t pending_state;
+//       quest_state* current_state;
+//       std::vector<render::stage*> rendering_stages;
+//     };
   }
 }
 

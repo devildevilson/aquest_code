@@ -10,6 +10,8 @@
 #include "lua_container_iterators.h"
 #include "lua_initialization_handle_types.h"
 
+#include <iostream>
+
 namespace devils_engine {
   namespace utils {
     namespace internal {

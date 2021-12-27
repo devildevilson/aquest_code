@@ -5,8 +5,8 @@
 #include "vulkan/vulkan.hpp"
 #include "vk_mem_alloc.hpp"
 
-#ifndef RENDER_VULKAN_HPP_HEADER_H
-#define RENDER_VULKAN_HPP_HEADER_H
+#ifndef DEVILS_ENGINE_RENDER_VULKAN_HPP_HEADER_H
+#define DEVILS_ENGINE_RENDER_VULKAN_HPP_HEADER_H
 
 #include <functional>
 #include "vulkan_declarations.h"
@@ -37,9 +37,11 @@ namespace devils_engine {
       
       vk::CommandPool command_pool;
       vk::CommandPool transfer_command_pool;
-      std::vector<vk::CommandBuffer> command_buffers;
+      //std::vector<vk::CommandBuffer> command_buffers;
       
       vk::Fence transfer_fence;
+      
+      vk::PhysicalDeviceLimits limits;
       
       vulkan_container();
       ~vulkan_container();
@@ -105,15 +107,18 @@ namespace devils_engine {
       void* ptr;
       
       vk_buffer_data();
+      vk_buffer_data(vk::Buffer handle, vma::Allocation allocation, void* ptr);
       void create(vma::Allocator allocator, const vk::BufferCreateInfo &info, const vma::MemoryUsage &mem_usage, const std::string &name = "");
       void destroy(vma::Allocator allocator);
+      
+      vk_buffer_data(const vk_buffer_data &copy) = default;
+      vk_buffer_data(vk_buffer_data &&move) = default;
+      vk_buffer_data & operator=(const vk_buffer_data &copy) = default;
+      vk_buffer_data & operator=(vk_buffer_data &&move) = default;
     };
     
-    struct vk_buffer_data_unique {
+    struct vk_buffer_data_unique : public vk_buffer_data {
       vma::Allocator allocator;
-      vk::Buffer handle;
-      vma::Allocation allocation;
-      void* ptr;
       
       vk_buffer_data_unique(vma::Allocator allocator, vk::Buffer handle, vma::Allocation allocation, void* ptr);
       vk_buffer_data_unique(vk_buffer_data_unique &&move);
@@ -129,15 +134,18 @@ namespace devils_engine {
       void* ptr;
       
       vk_image_data();
+      vk_image_data(vk::Image handle, vma::Allocation allocation, void* ptr);
       void create(vma::Allocator allocator, const vk::ImageCreateInfo &info, const vma::MemoryUsage &mem_usage, const std::string &name = "");
       void destroy(vma::Allocator allocator);
+      
+      vk_image_data(const vk_image_data &copy) = default;
+      vk_image_data(vk_image_data &&move) = default;
+      vk_image_data & operator=(const vk_image_data &copy) = default;
+      vk_image_data & operator=(vk_image_data &&move) = default;
     };
     
-    struct vk_image_data_unique {
+    struct vk_image_data_unique : public vk_image_data {
       vma::Allocator allocator;
-      vk::Image handle;
-      vma::Allocation allocation;
-      void* ptr;
       
       vk_image_data_unique(vma::Allocator allocator, vk::Image handle, vma::Allocation allocation, void* ptr);
       vk_image_data_unique(vk_image_data_unique &&move);

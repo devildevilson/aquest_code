@@ -2,7 +2,8 @@
 #define DEVILS_ENGINE_RENDER_TARGETS_H
 
 #include "target.h"
-#include "stage.h"
+// #include "stage.h"
+#include "interfaces.h"
 #include "utils/utility.h"
 #include "vulkan_hpp_header.h"
 #include "parallel_hashmap/phmap.h"
@@ -15,6 +16,7 @@ namespace devils_engine {
   
   namespace render {
     struct container;
+    class resource_provider;
     
     struct buffers : public target {
       container* c;
@@ -55,6 +57,9 @@ namespace devils_engine {
       void update_cursor_dir(const glm::vec4 &cursor_dir);
       void update_dimensions(const uint32_t &width, const uint32_t &height);
       void update_time(const uint32_t &time);
+      void update_persistent_state(const uint32_t &state);
+      void update_application_state(const uint32_t &state);
+      void update_turn_state(const uint32_t &state);
 //       void set_tile_data(const map::tile &tile, const uint32_t &index);
 //       void set_point_data(const glm::vec3 &point, const uint32_t &index);
 //       void set_tile_indices(const uint32_t &triangle_index, const std::vector<uint32_t> &indices, const uint32_t &offset, const uint32_t &count, const bool has_pentagon);
@@ -70,7 +75,7 @@ namespace devils_engine {
       glm::vec4 get_cursor_dir() const;
       float get_zoom() const;
       
-      void resize_heraldy_buffer(const size_t &heraldy_layers_count);
+      void resize_heraldy_buffer(const size_t &heraldy_layers_buffer_size);
       // мне нужно скопировать старую инфу обратно + добавить новуюб не хочется делать индексы в памяти хоста, 
       // другое дело что во время игры может быть что мы создадим много дворян и еще несколько титулов
       // все довольно просто во время хода компа, хотя в общем то какая разница, нужно просто придумать еще один класс который будет этим заниматься
@@ -96,8 +101,9 @@ namespace devils_engine {
 //       vk_buffer_data tiles_visibility;
       
       vk::DescriptorPool pool;
+      vk::DescriptorSetLayout borders_data_layout;
       vk::DescriptorSet border_set;
-      vk::DescriptorSet types_set;
+//       vk::DescriptorSet types_set;
       vk::DescriptorSetLayout tiles_rendering_data_layout;
       vk::DescriptorSet tiles_rendering_data;
       
@@ -105,7 +111,7 @@ namespace devils_engine {
       ~world_map_buffers();
       
       void recreate(const uint32_t &width, const uint32_t &height) override;
-      void copy(container* ctx) const override;
+      void copy(resource_provider* ctx, vk::CommandBuffer task) const override;
       
       //void set_structure_data(const uint32_t &size, core::city_type* data); 
       // скопировать наверное нужно отдельно, нам потребуется скорпировать еще и данные структур

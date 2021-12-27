@@ -202,13 +202,23 @@ namespace devils_engine {
       pipeline_maker & dstAlpha(const vk::BlendFactor &value);
       pipeline_maker & alphaOp(const vk::BlendOp &value);
       pipeline_maker & colorWriteMask(const vk::ColorComponentFlags &flags = DEFAULT_COLOR_WRITE_MASK);
-
-      vk::Pipeline create(const std::string &name,
-                          vk::PipelineLayout layout,
-                          vk::RenderPass renderPass,
-                          const uint32_t &subpass = 0,
-                          vk::Pipeline base = vk::Pipeline(nullptr),
-                          const int32_t &baseIndex = -1);
+  
+      vk::GraphicsPipelineCreateInfo get_info(
+        vk::PipelineLayout layout,
+        vk::RenderPass renderPass,
+        const uint32_t &subpass = 0,
+        vk::Pipeline base = vk::Pipeline(nullptr),
+        const int32_t &baseIndex = -1
+      );
+      
+      vk::Pipeline create(
+        const std::string &name,
+        vk::PipelineLayout layout,
+        vk::RenderPass renderPass,
+        const uint32_t &subpass = 0,
+        vk::Pipeline base = vk::Pipeline(nullptr),
+        const int32_t &baseIndex = -1
+      );
     protected:
       struct ShaderSpecialization {
         std::vector<vk::SpecializationMapEntry> entries;
@@ -230,6 +240,7 @@ namespace devils_engine {
       vk::PipelineDynamicStateCreateInfo dymStateInfo;
       vk::PipelineColorBlendAttachmentState defaultBlending;
 
+      std::vector<vk::SpecializationInfo> shaders_specs;
       std::vector<vk::PipelineShaderStageCreateInfo> shaders;
       std::vector<ShaderSpecialization> specs;
 
@@ -294,6 +305,7 @@ namespace devils_engine {
       render_pass_maker & dependencyDstAccessMask(const vk::AccessFlags &value);
       render_pass_maker & dependencyDependencyFlags(const vk::DependencyFlags &value);
 
+      vk::RenderPassCreateInfo get_info();
       vk::RenderPass create(const std::string &name);
     protected:
       struct subpass_description {
@@ -311,6 +323,7 @@ namespace devils_engine {
       std::vector<vk::AttachmentDescription> attachments;
       std::vector<vk::SubpassDependency> dependencies;
       std::vector<subpass_description> descriptions;
+      std::vector<vk::SubpassDescription> descs;
     };
 
     // layers такие же как и у инстанса

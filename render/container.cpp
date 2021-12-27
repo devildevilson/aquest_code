@@ -6,6 +6,9 @@
 #include "window.h"
 #include "vulkan_hpp_header.h"
 #include "makers.h"
+#include "queue.h"
+#include "command_buffer.h"
+#include "container_view.h"
 
 #include <iostream>
 
@@ -73,16 +76,28 @@ namespace devils_engine {
     }
     
     container::container() : 
-      mem(sizeof(vulkan_container) + sizeof(vulkan_window) + sizeof(struct window) + sizeof(render::stage_container), 8), 
+      mem(sizeof(vulkan_container) + sizeof(vulkan_window) + sizeof(struct window) + sizeof(class queue) + 
+          sizeof(primary_command_buffer) + sizeof(secondary_command_buffer) + sizeof(render::stage_container) + sizeof(container_view), 8), 
       window(nullptr), 
       vulkan(nullptr), 
       vlk_window(nullptr), 
-      render(nullptr) 
-    {}
+      render_queue(nullptr),
+      command_buffers(nullptr),
+      secondary_command_buffers(nullptr),
+      render(nullptr),
+      view(nullptr)
+    {
+      view = mem.create<container_view>(this);
+    }
+    
     container::~container() {
       vulkan->device.waitIdle();
 
+      mem.destroy(view);
       mem.destroy(render);
+      mem.destroy(secondary_command_buffers);
+      mem.destroy(command_buffers);
+      mem.destroy(render_queue);
       mem.destroy(window);
       mem.destroy(vlk_window);
       mem.destroy(vulkan);
@@ -128,7 +143,7 @@ namespace devils_engine {
     }
 
     struct window* container::create_window(const window_info &info) {
-      window = mem.create<struct window>(window::create_info{this, info.fullscreen, info.width, info.height, 0.0f, info.video_mode});
+      window = mem.create<struct window>(window::create_info{view, info.fullscreen, info.width, info.height, 0.0f, info.video_mode});
       return window;
     }
 
@@ -214,6 +229,7 @@ namespace devils_engine {
       auto dev = dm.beginDevice(choosen).setExtensions(deviceExtensions).createQueues(1).features(f).create(instanceLayers, "Graphics device");
       vulkan->physical_device = choosen;
       vulkan->device = dev;
+      vulkan->limits = deviceProperties.limits;
       
 #ifndef _NDEBUG
       load_debug_extensions_functions(vulkan->device);
@@ -386,25 +402,56 @@ namespace devils_engine {
         set_name(vulkan->device, vlk_window->swapchain.frames[i].fence, "frame fence " + std::to_string(i));
       }
 
-      create_render_pass();
-
-      for (uint32_t i = 0; i < vlk_window->swapchain.images.size(); ++i) {
-        const std::initializer_list<vk::ImageView> views = {
-          vlk_window->swapchain.images[i].view,
-          vlk_window->swapchain.images[i].depth_view
-        };
-        vlk_window->swapchain.images[i].buffer = vulkan->device.createFramebuffer(
-          vk::FramebufferCreateInfo(
-            {},
-            vlk_window->render_pass,
-            views,
-            vlk_window->surface.extent.width,
-            vlk_window->surface.extent.height,
-            1
-          )
-        );
-        set_name(vulkan->device, vlk_window->swapchain.images[i].buffer, "window_framebuffer_"+std::to_string(i));
-      }
+//       create_render_pass();
+      // булшит, рендерпасс должен быть задан еще и во фреймбуфере
+      // думаю что нужно здесь создать совместимый рендерпасс и удалить его после созданияфреймбуфера
+//       render_pass_maker rpm(&vulkan->device);
+//       
+//       auto rp = 
+//         rpm.attachmentBegin(vlk_window->surface.format.format)
+//              .attachmentLoadOp(vk::AttachmentLoadOp::eClear)
+//              .attachmentStoreOp(vk::AttachmentStoreOp::eStore)
+//              .attachmentInitialLayout(vk::ImageLayout::eUndefined)
+//              .attachmentFinalLayout(vk::ImageLayout::ePresentSrcKHR)
+//            .attachmentBegin(vlk_window->swapchain.depth_format)
+//              .attachmentLoadOp(vk::AttachmentLoadOp::eClear)
+//              .attachmentStoreOp(vk::AttachmentStoreOp::eStore)
+//              .attachmentInitialLayout(vk::ImageLayout::eUndefined)
+//              .attachmentFinalLayout(vk::ImageLayout::eDepthStencilAttachmentOptimal)
+//            .subpassBegin(vk::PipelineBindPoint::eGraphics)
+//              .subpassColorAttachment(0, vk::ImageLayout::eColorAttachmentOptimal)
+//              .subpassDepthStencilAttachment(1, vk::ImageLayout::eDepthStencilAttachmentOptimal)
+//            .dependencyBegin(VK_SUBPASS_EXTERNAL, 0)
+//              .dependencySrcStageMask(vk::PipelineStageFlagBits::eComputeShader)
+//              .dependencyDstStageMask(vk::PipelineStageFlagBits::eDrawIndirect)
+//              .dependencySrcAccessMask(vk::AccessFlagBits::eShaderWrite)
+//              .dependencyDstAccessMask(vk::AccessFlagBits::eIndirectCommandRead)
+//            .dependencyBegin(0, VK_SUBPASS_EXTERNAL)
+//              .dependencySrcStageMask(vk::PipelineStageFlagBits::eColorAttachmentOutput)
+//              .dependencyDstStageMask(vk::PipelineStageFlagBits::eTransfer)
+//              .dependencySrcAccessMask(vk::AccessFlagBits::eColorAttachmentWrite)
+//              .dependencyDstAccessMask(vk::AccessFlagBits::eTransferWrite)
+//            .create("default render pass");
+// 
+//       for (uint32_t i = 0; i < vlk_window->swapchain.images.size(); ++i) {
+//         const std::initializer_list<vk::ImageView> views = {
+//           vlk_window->swapchain.images[i].view,
+//           vlk_window->swapchain.images[i].depth_view
+//         };
+//         vlk_window->swapchain.images[i].buffer = vulkan->device.createFramebuffer(
+//           vk::FramebufferCreateInfo(
+//             {},
+//             rp,
+//             views,
+//             vlk_window->surface.extent.width,
+//             vlk_window->surface.extent.height,
+//             1
+//           )
+//         );
+//         set_name(vulkan->device, vlk_window->swapchain.images[i].buffer, "window_framebuffer_"+std::to_string(i));
+//       }
+//       
+//       vulkan->device.destroy(rp);
       
       // на всякий случай
       ASSERT(vlk_window->swapchain.images[0].handle != vlk_window->swapchain.images[1].handle && 
@@ -432,80 +479,80 @@ namespace devils_engine {
 //       vulkan->device.freeCommandBuffers(vulkan->transfer_command_pool, task);
     }
     
-    void container::create_render_pass() {
-      render_pass_maker rpm(&vulkan->device);
-      
-      vlk_window->render_pass = 
-        rpm.attachmentBegin(vlk_window->surface.format.format)
-             //.attachmentLoadOp(VK_ATTACHMENT_LOAD_OP_LOAD)
-             .attachmentLoadOp(vk::AttachmentLoadOp::eClear)
-             .attachmentStoreOp(vk::AttachmentStoreOp::eStore)
-             //.attachmentInitialLayout(VK_IMAGE_LAYOUT_PRESENT_SRC_KHR)
-             .attachmentInitialLayout(vk::ImageLayout::eUndefined)
-             .attachmentFinalLayout(vk::ImageLayout::ePresentSrcKHR)
-           .attachmentBegin(vlk_window->swapchain.depth_format)
-             //.attachmentLoadOp(VK_ATTACHMENT_LOAD_OP_LOAD)
-             .attachmentLoadOp(vk::AttachmentLoadOp::eClear)
-             .attachmentStoreOp(vk::AttachmentStoreOp::eStore)
-             //.attachmentInitialLayout(VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
-             .attachmentInitialLayout(vk::ImageLayout::eUndefined)
-             .attachmentFinalLayout(vk::ImageLayout::eDepthStencilAttachmentOptimal)
-           .subpassBegin(vk::PipelineBindPoint::eGraphics)
-             .subpassColorAttachment(0, vk::ImageLayout::eColorAttachmentOptimal)
-             .subpassDepthStencilAttachment(1, vk::ImageLayout::eDepthStencilAttachmentOptimal)
-           .dependencyBegin(VK_SUBPASS_EXTERNAL, 0)
-    //                          .dependencySrcStageMask(VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT) // VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT
-    //                          .dependencyDstStageMask(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT) // VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT
-    //                          .dependencySrcAccessMask(VK_ACCESS_MEMORY_WRITE_BIT) // VK_ACCESS_SHADER_WRITE_BIT
-    //                          .dependencyDstAccessMask(VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT) // VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_INDIRECT_COMMAND_READ_BIT
-             .dependencySrcStageMask(vk::PipelineStageFlagBits::eComputeShader)
-             .dependencyDstStageMask(vk::PipelineStageFlagBits::eDrawIndirect)
-             .dependencySrcAccessMask(vk::AccessFlagBits::eShaderWrite)
-             .dependencyDstAccessMask(vk::AccessFlagBits::eIndirectCommandRead)
-           .dependencyBegin(0, VK_SUBPASS_EXTERNAL)
-    //                          .dependencySrcStageMask(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT)
-    //                          .dependencyDstStageMask(VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT) // VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT
-    //                          .dependencySrcAccessMask(VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT) //VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | 
-    //                          .dependencyDstAccessMask(0)
-             .dependencySrcStageMask(vk::PipelineStageFlagBits::eColorAttachmentOutput)
-             .dependencyDstStageMask(vk::PipelineStageFlagBits::eTransfer) //VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT
-             // трансфер еще отвечает за задание значений через кмд филл баффер
-             .dependencySrcAccessMask(vk::AccessFlagBits::eColorAttachmentWrite) //VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | 
-             .dependencyDstAccessMask(vk::AccessFlagBits::eTransferWrite)
-           .create("default render pass");
-                       
-       vlk_window->render_pass_objects = 
-         rpm.attachmentBegin(vlk_window->surface.format.format)
-              .attachmentLoadOp(vk::AttachmentLoadOp::eLoad)
-              .attachmentStoreOp(vk::AttachmentStoreOp::eStore)
-              //.attachmentInitialLayout(VK_IMAGE_LAYOUT_PRESENT_SRC_KHR)
-              .attachmentInitialLayout(vk::ImageLayout::ePresentSrcKHR)
-              .attachmentFinalLayout(vk::ImageLayout::ePresentSrcKHR)
-            .attachmentBegin(vlk_window->swapchain.depth_format)
-              .attachmentLoadOp(vk::AttachmentLoadOp::eLoad)
-              .attachmentStoreOp(vk::AttachmentStoreOp::eDontCare)
-              //.attachmentInitialLayout(VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
-              .attachmentInitialLayout(vk::ImageLayout::eDepthStencilAttachmentOptimal)
-              .attachmentFinalLayout(vk::ImageLayout::eDepthStencilAttachmentOptimal)
-            .subpassBegin(vk::PipelineBindPoint::eGraphics)
-              .subpassColorAttachment(0, vk::ImageLayout::eColorAttachmentOptimal)
-              .subpassDepthStencilAttachment(1, vk::ImageLayout::eDepthStencilAttachmentOptimal)
-            .dependencyBegin(VK_SUBPASS_EXTERNAL, 0)
-              .dependencySrcStageMask(vk::PipelineStageFlagBits::eComputeShader) // VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT
-              .dependencyDstStageMask(vk::PipelineStageFlagBits::eDrawIndirect) // VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT
-              .dependencySrcAccessMask(vk::AccessFlagBits::eShaderWrite) // VK_ACCESS_SHADER_WRITE_BIT
-              .dependencyDstAccessMask(vk::AccessFlagBits::eIndirectCommandRead) // VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_INDIRECT_COMMAND_READ_BIT
-  //                                 .dependencySrcStageMask(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT) // VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT
-  //                                 .dependencyDstStageMask(VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT) // VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT
-  //                                 .dependencySrcAccessMask(VK_ACCESS_SHADER_WRITE_BIT) // VK_ACCESS_SHADER_WRITE_BIT
-  //                                 .dependencyDstAccessMask(VK_ACCESS_INDIRECT_COMMAND_READ_BIT) // VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_INDIRECT_COMMAND_READ_BIT
-            .dependencyBegin(0, VK_SUBPASS_EXTERNAL)
-              .dependencySrcStageMask(vk::PipelineStageFlagBits::eColorAttachmentOutput)
-              .dependencyDstStageMask(vk::PipelineStageFlagBits::eTopOfPipe) // VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT
-              .dependencySrcAccessMask(vk::AccessFlagBits::eColorAttachmentWrite) //VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | 
-              .dependencyDstAccessMask({})
-            .create("default render pass objects");
-    }
+//     void container::create_render_pass() {
+//       render_pass_maker rpm(&vulkan->device);
+//       
+//       vlk_window->render_pass = 
+//         rpm.attachmentBegin(vlk_window->surface.format.format)
+//              //.attachmentLoadOp(VK_ATTACHMENT_LOAD_OP_LOAD)
+//              .attachmentLoadOp(vk::AttachmentLoadOp::eClear)
+//              .attachmentStoreOp(vk::AttachmentStoreOp::eStore)
+//              //.attachmentInitialLayout(VK_IMAGE_LAYOUT_PRESENT_SRC_KHR)
+//              .attachmentInitialLayout(vk::ImageLayout::eUndefined)
+//              .attachmentFinalLayout(vk::ImageLayout::ePresentSrcKHR)
+//            .attachmentBegin(vlk_window->swapchain.depth_format)
+//              //.attachmentLoadOp(VK_ATTACHMENT_LOAD_OP_LOAD)
+//              .attachmentLoadOp(vk::AttachmentLoadOp::eClear)
+//              .attachmentStoreOp(vk::AttachmentStoreOp::eStore)
+//              //.attachmentInitialLayout(VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
+//              .attachmentInitialLayout(vk::ImageLayout::eUndefined)
+//              .attachmentFinalLayout(vk::ImageLayout::eDepthStencilAttachmentOptimal)
+//            .subpassBegin(vk::PipelineBindPoint::eGraphics)
+//              .subpassColorAttachment(0, vk::ImageLayout::eColorAttachmentOptimal)
+//              .subpassDepthStencilAttachment(1, vk::ImageLayout::eDepthStencilAttachmentOptimal)
+//            .dependencyBegin(VK_SUBPASS_EXTERNAL, 0)
+//     //                          .dependencySrcStageMask(VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT) // VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT
+//     //                          .dependencyDstStageMask(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT) // VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT
+//     //                          .dependencySrcAccessMask(VK_ACCESS_MEMORY_WRITE_BIT) // VK_ACCESS_SHADER_WRITE_BIT
+//     //                          .dependencyDstAccessMask(VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT) // VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_INDIRECT_COMMAND_READ_BIT
+//              .dependencySrcStageMask(vk::PipelineStageFlagBits::eComputeShader)
+//              .dependencyDstStageMask(vk::PipelineStageFlagBits::eDrawIndirect)
+//              .dependencySrcAccessMask(vk::AccessFlagBits::eShaderWrite)
+//              .dependencyDstAccessMask(vk::AccessFlagBits::eIndirectCommandRead)
+//            .dependencyBegin(0, VK_SUBPASS_EXTERNAL)
+//     //                          .dependencySrcStageMask(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT)
+//     //                          .dependencyDstStageMask(VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT) // VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT
+//     //                          .dependencySrcAccessMask(VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT) //VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | 
+//     //                          .dependencyDstAccessMask(0)
+//              .dependencySrcStageMask(vk::PipelineStageFlagBits::eColorAttachmentOutput)
+//              .dependencyDstStageMask(vk::PipelineStageFlagBits::eTransfer) //VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT
+//              // трансфер еще отвечает за задание значений через кмд филл баффер
+//              .dependencySrcAccessMask(vk::AccessFlagBits::eColorAttachmentWrite) //VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | 
+//              .dependencyDstAccessMask(vk::AccessFlagBits::eTransferWrite)
+//            .create("default render pass");
+//                        
+//        vlk_window->render_pass_objects = 
+//          rpm.attachmentBegin(vlk_window->surface.format.format)
+//               .attachmentLoadOp(vk::AttachmentLoadOp::eLoad)
+//               .attachmentStoreOp(vk::AttachmentStoreOp::eStore)
+//               //.attachmentInitialLayout(VK_IMAGE_LAYOUT_PRESENT_SRC_KHR)
+//               .attachmentInitialLayout(vk::ImageLayout::ePresentSrcKHR)
+//               .attachmentFinalLayout(vk::ImageLayout::ePresentSrcKHR)
+//             .attachmentBegin(vlk_window->swapchain.depth_format)
+//               .attachmentLoadOp(vk::AttachmentLoadOp::eLoad)
+//               .attachmentStoreOp(vk::AttachmentStoreOp::eDontCare)
+//               //.attachmentInitialLayout(VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
+//               .attachmentInitialLayout(vk::ImageLayout::eDepthStencilAttachmentOptimal)
+//               .attachmentFinalLayout(vk::ImageLayout::eDepthStencilAttachmentOptimal)
+//             .subpassBegin(vk::PipelineBindPoint::eGraphics)
+//               .subpassColorAttachment(0, vk::ImageLayout::eColorAttachmentOptimal)
+//               .subpassDepthStencilAttachment(1, vk::ImageLayout::eDepthStencilAttachmentOptimal)
+//             .dependencyBegin(VK_SUBPASS_EXTERNAL, 0)
+//               .dependencySrcStageMask(vk::PipelineStageFlagBits::eComputeShader) // VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT
+//               .dependencyDstStageMask(vk::PipelineStageFlagBits::eDrawIndirect) // VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT
+//               .dependencySrcAccessMask(vk::AccessFlagBits::eShaderWrite) // VK_ACCESS_SHADER_WRITE_BIT
+//               .dependencyDstAccessMask(vk::AccessFlagBits::eIndirectCommandRead) // VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_INDIRECT_COMMAND_READ_BIT
+//   //                                 .dependencySrcStageMask(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT) // VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT
+//   //                                 .dependencyDstStageMask(VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT) // VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT
+//   //                                 .dependencySrcAccessMask(VK_ACCESS_SHADER_WRITE_BIT) // VK_ACCESS_SHADER_WRITE_BIT
+//   //                                 .dependencyDstAccessMask(VK_ACCESS_INDIRECT_COMMAND_READ_BIT) // VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_INDIRECT_COMMAND_READ_BIT
+//             .dependencyBegin(0, VK_SUBPASS_EXTERNAL)
+//               .dependencySrcStageMask(vk::PipelineStageFlagBits::eColorAttachmentOutput)
+//               .dependencyDstStageMask(vk::PipelineStageFlagBits::eTopOfPipe) // VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT
+//               .dependencySrcAccessMask(vk::AccessFlagBits::eColorAttachmentWrite) //VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | 
+//               .dependencyDstAccessMask({})
+//             .create("default render pass objects");
+//     }
 
     render::stage_container* container::create_system(const size_t &system_container_size) {
       render = mem.create<render::stage_container>(system_container_size);
@@ -516,21 +563,34 @@ namespace devils_engine {
       //vulkan->command_buffers.resize(window->swapchain_frames_count(), nullptr);
       //vulkan->command_buffers.shrink_to_fit();
       
-      const vk::CommandBufferAllocateInfo al_info(vulkan->command_pool, vk::CommandBufferLevel::ePrimary, swapchain_frames_count());
-      vulkan->command_buffers = vulkan->device.allocateCommandBuffers(al_info);
-      for (size_t i = 0; i < vulkan->command_buffers.size(); ++i) {
-        set_name(vulkan->device, vulkan->command_buffers[i], "frame command buffer " + std::to_string(i));
-      }
+//       const vk::CommandBufferAllocateInfo al_info(vulkan->command_pool, vk::CommandBufferLevel::ePrimary, swapchain_frames_count());
+//       vulkan->command_buffers = vulkan->device.allocateCommandBuffers(al_info);
+//       for (size_t i = 0; i < vulkan->command_buffers.size(); ++i) {
+//         set_name(vulkan->device, vulkan->command_buffers[i], "frame command buffer " + std::to_string(i));
+//       }
 
 //       for (size_t i = 0 ; i < vulkan->command_buffers.size(); ++i) {
 //         vulkan->command_buffers[i] = vulkan->device.allocateCommandBuffers(al_info);
 //         tasks[i]->pushWaitSemaphore(window->frames[i].image_available, window->frames[i].flags);
 //         tasks[i]->pushSignalSemaphore(window->frames[i].finish_rendering);
 //       }
+      
+      render_queue = mem.create<render::queue>(vulkan->device, vulkan->graphics);
+      command_buffers = mem.create<primary_command_buffer>(vulkan->device, vulkan->command_pool, swapchain_frames_count());
+      secondary_command_buffers = mem.create<secondary_command_buffer>(vulkan->device, vulkan->command_pool, swapchain_frames_count(), 1);
+      // нужно создать вторичные буферы, где? по идее они должны идти до первичных, видимо нужно наследоваться от коммандного буфера
+      secondary_command_buffers->next = command_buffers;
+      render_queue->set_childs(secondary_command_buffers);
+      render_queue->add_provider(command_buffers);
+      command_buffers->add(view);
     }
     
     bool container::is_properties_presented(const uint32_t &index) const {
       return device_properties.get(index);
+    }
+    
+    void container::begin() {
+      render_queue->begin(view);
     }
     
     void container::next_frame() {
@@ -549,6 +609,12 @@ namespace devils_engine {
       }
     }
     
+    void container::draw() {
+      render_queue->process(view, nullptr);
+      const auto res = render_queue->submit();
+      if (res != vk::Result::eSuccess) throw std::runtime_error("Problem occurred during submiting the draw commands!");
+    }
+    
     void container::present() {
       vk::Result res;
       {
@@ -556,15 +622,16 @@ namespace devils_engine {
 
         const auto &s = vlk_window->swapchain.handle;
         const auto &index = vlk_window->swapchain.image_index;
-        const auto &cur_index = vlk_window->swapchain.current_frame;
-        const auto &frames = vlk_window->swapchain.frames;
-        const vk::PresentInfoKHR info(frames[cur_index].finish_rendering, s, index);
+//         const auto &cur_index = vlk_window->swapchain.current_frame;
+//         const auto &frames = vlk_window->swapchain.frames;
+//         const vk::PresentInfoKHR info(frames[cur_index].finish_rendering, s, index);
         
         //PRINT_VAR("current_frame        ", current_frame)
         //PRINT_VAR("swapchain.image_index", swapchain.image_index)
 //         PRINT_VAR("present_family", present_family)
         
-        res = vulkan->present.presentKHR(&info);
+        //res = vulkan->present.presentKHR(&info);
+        res = render_queue->present(s, index);
 
         //vkQueueWaitIdle(queue.handle);
         //vkDeviceWaitIdle(device->handle());
@@ -578,6 +645,15 @@ namespace devils_engine {
         case vk::Result::eErrorOutOfDateKHR: window->resize(); break;
         default: throw std::runtime_error("Problem occurred during image presentation!");
       }
+    }
+    
+    void container::wait() {
+      const auto res = render_queue->wait();
+      if (res != vk::Result::eSuccess) throw std::runtime_error("Drawing takes too long");
+    }
+    
+    void container::clear() {
+      render_queue->clear();
     }
     
     vk::Image* container::image() const {
@@ -614,6 +690,21 @@ namespace devils_engine {
       window->resize();
     }
     
+    void container::set_command_buffer_childs(stage* childs) {
+      auto p = reinterpret_cast<primary_command_buffer*>(command_buffers);
+      p->set_childs(childs);
+    }
+    
+    void container::set_secondary_command_buffer_childs(stage* childs) {
+      auto p = reinterpret_cast<secondary_command_buffer*>(secondary_command_buffers);
+      p->set_childs(childs);
+    }
+    
+    void container::set_secondary_command_buffer_renderpass(pass* renderpass) {
+      auto p = reinterpret_cast<secondary_command_buffer*>(secondary_command_buffers);
+      p->set_renderpass(renderpass);
+    }
+    
     std::tuple<clear_value, clear_value> container::clear_values() const {
       return std::make_tuple(clear_value{0.0f, 0.0f, 0.0f, 1.0f}, clear_value{1.0f, 0});
     }
@@ -635,13 +726,13 @@ namespace devils_engine {
       return { {0, 0}, cast(vlk_window->surface.extent) };
     }
     
-    vk::RenderPass* container::render_pass() const {
-      return &vlk_window->render_pass;
-    }
-    
-    vk::RenderPass* container::render_pass_objects() const {
-      return &vlk_window->render_pass_objects;
-    }
+//     vk::RenderPass* container::render_pass() const {
+//       return &vlk_window->render_pass;
+//     }
+//     
+//     vk::RenderPass* container::render_pass_objects() const {
+//       return &vlk_window->render_pass_objects;
+//     }
     
     vk::Framebuffer* container::current_buffer() const {
       return &vlk_window->swapchain.images[swapchain_current_image()].buffer;
@@ -666,6 +757,18 @@ namespace devils_engine {
     uint32_t container::wait_pipeline_stage() const {
       return uint32_t(vlk_window->swapchain.frames[swapchain_current_frame()].flags);
     }
+    
+    vk::PhysicalDeviceLimits* container::limits() const {
+      return &vulkan->limits;
+    }
+    
+    uint32_t container::get_surface_format() const {
+      return static_cast<uint32_t>(vlk_window->surface.format.format);
+    }
+    
+    uint32_t container::get_depth_format() const {
+      return static_cast<uint32_t>(vlk_window->swapchain.depth_format);
+    }
 
 //     yavf::TaskInterface* container::interface() const {
 //       return tasks[window->current_frame];
@@ -687,9 +790,9 @@ namespace devils_engine {
 //       return nullptr;
 //     }
 
-    vk::CommandBuffer* container::command_buffer() const {
-      return &vulkan->command_buffers[swapchain_current_frame()];
-    }
+//     vk::CommandBuffer* container::command_buffer() const {
+//       return &vulkan->command_buffers[swapchain_current_frame()];
+//     }
     
     void container::recreate(const uint32_t &width, const uint32_t &height) {
       vulkan->device.waitIdle();
@@ -714,6 +817,34 @@ namespace devils_engine {
       const auto [depth_images, depth_mem] = create_images(vulkan->device, vulkan->physical_device, depth_info, vk::MemoryPropertyFlagBits::eDeviceLocal, images_count);
       vlk_window->swapchain.depth_memory = depth_mem;
       set_name(vulkan->device, depth_mem, "swapchain depth image memory");
+      
+//       render_pass_maker rpm(&vulkan->device);
+//       
+//       auto rp = 
+//         rpm.attachmentBegin(vlk_window->surface.format.format)
+//             .attachmentLoadOp(vk::AttachmentLoadOp::eClear)
+//             .attachmentStoreOp(vk::AttachmentStoreOp::eStore)
+//             .attachmentInitialLayout(vk::ImageLayout::eUndefined)
+//             .attachmentFinalLayout(vk::ImageLayout::ePresentSrcKHR)
+//           .attachmentBegin(vlk_window->swapchain.depth_format)
+//             .attachmentLoadOp(vk::AttachmentLoadOp::eClear)
+//             .attachmentStoreOp(vk::AttachmentStoreOp::eStore)
+//             .attachmentInitialLayout(vk::ImageLayout::eUndefined)
+//             .attachmentFinalLayout(vk::ImageLayout::eDepthStencilAttachmentOptimal)
+//           .subpassBegin(vk::PipelineBindPoint::eGraphics)
+//             .subpassColorAttachment(0, vk::ImageLayout::eColorAttachmentOptimal)
+//             .subpassDepthStencilAttachment(1, vk::ImageLayout::eDepthStencilAttachmentOptimal)
+//           .dependencyBegin(VK_SUBPASS_EXTERNAL, 0)
+//             .dependencySrcStageMask(vk::PipelineStageFlagBits::eComputeShader)
+//             .dependencyDstStageMask(vk::PipelineStageFlagBits::eDrawIndirect)
+//             .dependencySrcAccessMask(vk::AccessFlagBits::eShaderWrite)
+//             .dependencyDstAccessMask(vk::AccessFlagBits::eIndirectCommandRead)
+//           .dependencyBegin(0, VK_SUBPASS_EXTERNAL)
+//             .dependencySrcStageMask(vk::PipelineStageFlagBits::eColorAttachmentOutput)
+//             .dependencyDstStageMask(vk::PipelineStageFlagBits::eTransfer)
+//             .dependencySrcAccessMask(vk::AccessFlagBits::eColorAttachmentWrite)
+//             .dependencyDstAccessMask(vk::AccessFlagBits::eTransferWrite)
+//           .create("default render pass");
 
       for (uint32_t i = 0; i < vlk_window->swapchain.images.size(); ++i) {
         // view для основной картинки
@@ -735,25 +866,36 @@ namespace devils_engine {
           set_name(vulkan->device, vlk_window->swapchain.images[i].depth_view, "swapchain depth image " + std::to_string(i) + " view");
         }
         
-        const std::initializer_list<vk::ImageView> views = {
-          vlk_window->swapchain.images[i].view,
-          vlk_window->swapchain.images[i].depth_view
-        };
-        vlk_window->swapchain.images[i].buffer = vulkan->device.createFramebuffer(
-          vk::FramebufferCreateInfo(
-            {},
-            vlk_window->render_pass,
-            views,
-            vlk_window->surface.extent.width,
-            vlk_window->surface.extent.height,
-            1
-          )
-        );
-        set_name(vulkan->device, vlk_window->swapchain.images[i].buffer, "window_framebuffer_"+std::to_string(i));
+//         const std::initializer_list<vk::ImageView> views = {
+//           vlk_window->swapchain.images[i].view,
+//           vlk_window->swapchain.images[i].depth_view
+//         };
+//         vlk_window->swapchain.images[i].buffer = vulkan->device.createFramebuffer(
+//           vk::FramebufferCreateInfo(
+//             {},
+//             rp,
+//             views,
+//             vlk_window->surface.extent.width,
+//             vlk_window->surface.extent.height,
+//             1
+//           )
+//         );
+//         set_name(vulkan->device, vlk_window->swapchain.images[i].buffer, "window_framebuffer_"+std::to_string(i));
       }
+      
+//       vulkan->device.destroy(rp);
 
       // тут была смена лайоута, но я не понимаю зачем это делать если лайоут меняется самостоятельно в рендерпассе
     }
+    
+//     size_t container::get_signaling(const size_t &max, vk::Semaphore* semaphores_arr, vk::PipelineStageFlags* flags_arr) const {
+//       if (max == 0) return SIZE_MAX;
+//       const uint32_t cur_index = vlk_window->swapchain.current_frame;
+//       const auto &frames = vlk_window->swapchain.frames;
+//       semaphores_arr[0] = frames[cur_index].image_available;
+//       if (flags_arr != nullptr) flags_arr[0] = vk::PipelineStageFlagBits::eTopOfPipe;
+//       return 1;
+//     }
     
     void container::print_memory_info() const {
       auto allocator = vulkan->buffer_allocator;

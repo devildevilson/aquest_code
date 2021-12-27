@@ -13,6 +13,8 @@
 #include "window.h"
 #include "container.h"
 #include "makers.h"
+#include "defines.h"
+#include "pass.h"
 
 namespace devils_engine {
   namespace render {
@@ -102,7 +104,7 @@ namespace devils_engine {
         glm::vec4(0.0f, 0.0f, 0.0f, 0.0f)
       };
       
-      void tile_optimizer::begin() {
+      void tile_optimizer::begin(resource_provider*) {
         auto buffers = global::get<render::buffers>();
         
         const auto &mat = buffers->get_matrix();
@@ -147,19 +149,20 @@ namespace devils_engine {
         memset(ptr, 0, selection_buffer_size);
       }
       
-      void tile_optimizer::proccess(container * ctx) {
+      bool tile_optimizer::process(resource_provider* ctx, vk::CommandBuffer task) {
         auto battle = global::get<systems::battle_t>();
-        if (!battle->is_init()) return;
-        auto uniform = global::get<render::buffers>()->uniform_set;
-        auto map = battle->map;
-        auto map_set = *map->get_descriptor_set();
+        if (!battle->is_init()) return false;
+        
+        auto uniform_set = ctx->get_descriptor_set(string_hash(UNIFORM_BUFFERS_DESCRIPTOR_SET_NAME));
+        auto map_set = ctx->get_descriptor_set(string_hash(BATTLE_MAP_TILES_BUFFERS_DESCRIPTOR_SET_NAME));
         
         const auto bind_p = vk::PipelineBindPoint::eCompute;
-        auto task = ctx->command_buffer();
-        task->bindPipeline(bind_p, pipe);
-        task->bindDescriptorSets(bind_p, p_layout, 0, { uniform, map_set, set }, nullptr);
-        const uint32_t count = std::ceil(float(map->tiles_count) / float(work_group_size));
-        task->dispatch(count, 1, 1);
+        task.bindPipeline(bind_p, pipe);
+        task.bindDescriptorSets(bind_p, p_layout, 0, { uniform_set, map_set, set }, nullptr);
+        const uint32_t count = std::ceil(float(battle->map->tiles_count) / float(work_group_size));
+        task.dispatch(count, 1, 1);
+        
+        return true;
       }
       
       void tile_optimizer::clear() {
@@ -309,7 +312,7 @@ namespace devils_engine {
                    .scissor()
                    .dynamicState(vk::DynamicState::eViewport).dynamicState(vk::DynamicState::eScissor)
                    .addDefaultBlending()
-                   .create("battle_tile_render_pipeline", p_layout, info.cont->vlk_window->render_pass);
+                   .create("battle_tile_render_pipeline", p_layout, info.renderpass->get_handle());
         }
       }
       
@@ -322,25 +325,25 @@ namespace devils_engine {
     // виндовс не дает использовать базовый offsetof
 #define offsetof123(s,m) ((::size_t)&reinterpret_cast<char const volatile&>((((s*)0)->m)))
       
-      void tile_render::begin() {}
-      void tile_render::proccess(container * ctx) {
+      void tile_render::begin(resource_provider*) {}
+      bool tile_render::process(resource_provider* ctx, vk::CommandBuffer task) {
         auto battle = global::get<systems::battle_t>();
-        if (!battle->is_init()) return;
-        auto uniform = global::get<render::buffers>()->uniform_set;
-        auto map = battle->map;
-        auto map_set = *map->get_descriptor_set();
+        if (!battle->is_init()) return false;
+        
+        auto uniform_set = ctx->get_descriptor_set(string_hash(UNIFORM_BUFFERS_DESCRIPTOR_SET_NAME));
+        auto map_set = ctx->get_descriptor_set(string_hash(BATTLE_MAP_TILES_BUFFERS_DESCRIPTOR_SET_NAME));
         
         auto indirect_buffer = opt->get_indirect_buffer();
         auto indices_buffer = opt->get_tiles_indices();
         
-        auto task = ctx->command_buffer();
-        
         const auto bind = vk::PipelineBindPoint::eGraphics;
-        task->bindPipeline(bind, pipe);
-        task->bindDescriptorSets(bind, p_layout, 0, {uniform, images_set, map_set}, nullptr);
-        task->bindIndexBuffer(points_indices.handle, 0, vk::IndexType::eUint16); // (!)
-        task->bindVertexBuffers(0, indices_buffer, {0});
-        task->drawIndexedIndirect(indirect_buffer, offsetof123(struct tile_optimizer::indirect_buffer_data, tiles_indirect), 1, sizeof(vk::DrawIndexedIndirectCommand));
+        task.bindPipeline(bind, pipe);
+        task.bindDescriptorSets(bind, p_layout, 0, {uniform_set, images_set, map_set}, nullptr);
+        task.bindIndexBuffer(points_indices.handle, 0, vk::IndexType::eUint16); // (!)
+        task.bindVertexBuffers(0, indices_buffer, {0});
+        task.drawIndexedIndirect(indirect_buffer, offsetof123(struct tile_optimizer::indirect_buffer_data, tiles_indirect), 1, sizeof(vk::DrawIndexedIndirectCommand));
+        
+        return true;
       }
       
       void tile_render::clear() {}
@@ -382,7 +385,7 @@ namespace devils_engine {
                    .scissor()
                    .dynamicState(vk::DynamicState::eViewport).dynamicState(vk::DynamicState::eScissor)
                    .addDefaultBlending()
-                   .create("object_rendering_pipeline", p_layout, info.cont->vlk_window->render_pass);
+                   .create("object_rendering_pipeline", p_layout, info.renderpass->get_handle());
         }
       }
       
@@ -391,13 +394,13 @@ namespace devils_engine {
         device.destroy(pipe);
       }
       
-      void biome_render::begin() {}
-      void biome_render::proccess(container* ctx) {
+      void biome_render::begin(resource_provider*) {}
+      bool biome_render::process(resource_provider* ctx, vk::CommandBuffer task) {
         auto battle = global::get<systems::battle_t>();
-        if (!battle->is_init()) return;
-        auto uniform = global::get<render::buffers>()->uniform_set;
-        auto map = battle->map;
-        auto map_set = *map->get_descriptor_set();
+        if (!battle->is_init()) return false;
+        
+        auto uniform_set = ctx->get_descriptor_set(string_hash(UNIFORM_BUFFERS_DESCRIPTOR_SET_NAME));
+        auto map_set = ctx->get_descriptor_set(string_hash(BATTLE_MAP_TILES_BUFFERS_DESCRIPTOR_SET_NAME));
         
         // алгоритм похож на ворлд мап биом рендер
         
@@ -405,18 +408,19 @@ namespace devils_engine {
         auto biomes_indices = opt->get_biomes_indices();
         
         const auto bind = vk::PipelineBindPoint::eGraphics;
-        auto task = ctx->command_buffer();
-        task->bindPipeline(bind, pipe);
-        task->bindDescriptorSets(bind, p_layout, 0, {uniform, images_set, map_set}, nullptr);
-        task->bindIndexBuffer(biomes_indices, 0, vk::IndexType::eUint32);
+        task.bindPipeline(bind, pipe);
+        task.bindDescriptorSets(bind, p_layout, 0, {uniform_set, images_set, map_set}, nullptr);
+        task.bindIndexBuffer(biomes_indices, 0, vk::IndexType::eUint32);
         
         if (multidraw) {
-          task->drawIndexedIndirect(indirect_buffer, offsetof123(tile_optimizer::indirect_buffer_data, biomes_indirect), BATTLE_BIOMES_MAX_COUNT, sizeof(biome_objects_data_t));
+          task.drawIndexedIndirect(indirect_buffer, offsetof123(tile_optimizer::indirect_buffer_data, biomes_indirect), BATTLE_BIOMES_MAX_COUNT, sizeof(biome_objects_data_t));
         } else {
           for (size_t i = 0; i < BATTLE_BIOMES_MAX_COUNT; ++i) {
-            task->drawIndexedIndirect(indirect_buffer, offsetof123(tile_optimizer::indirect_buffer_data, biomes_indirect)+sizeof(biome_objects_data_t)*i, 1, sizeof(vk::DrawIndexedIndirectCommand));
+            task.drawIndexedIndirect(indirect_buffer, offsetof123(tile_optimizer::indirect_buffer_data, biomes_indirect)+sizeof(biome_objects_data_t)*i, 1, sizeof(vk::DrawIndexedIndirectCommand));
           }
         }
+        
+        return true;
       }
       
       void biome_render::clear() {}
@@ -459,7 +463,7 @@ namespace devils_engine {
                    .scissor()
                    .dynamicState(vk::DynamicState::eViewport).dynamicState(vk::DynamicState::eScissor)
                    .addDefaultBlending()
-                   .create("map_unit_rendering_pipeline", p_layout, info.cont->vlk_window->render_pass);
+                   .create("map_unit_rendering_pipeline", p_layout, info.renderpass->get_handle());
         }
       }
       
@@ -468,12 +472,14 @@ namespace devils_engine {
         device.destroy(pipe);
       }
       
-      void units_render::begin() {}
-      void units_render::proccess(container * ctx) {
+      void units_render::begin(resource_provider*) {}
+      bool units_render::process(resource_provider* ctx, vk::CommandBuffer task) {
         auto battle = global::get<systems::battle_t>();
-        if (!battle->is_init()) return;
-        auto uniform = global::get<render::buffers>()->uniform_set;
-        auto map_set = *battle->map->get_descriptor_set();
+        if (!battle->is_init()) return false;
+        
+        auto uniform_set = ctx->get_descriptor_set(string_hash(UNIFORM_BUFFERS_DESCRIPTOR_SET_NAME));
+        auto map_set = ctx->get_descriptor_set(string_hash(BATTLE_MAP_TILES_BUFFERS_DESCRIPTOR_SET_NAME));
+        //auto map_set = *battle->map->get_descriptor_set();
         
         // алгоритм похож на ворлд мап биом рендер
         
@@ -481,12 +487,13 @@ namespace devils_engine {
         auto units_indices = opt->get_units_indices();
         
         const auto bind = vk::PipelineBindPoint::eGraphics;
-        auto task = ctx->command_buffer();
-        task->bindPipeline(bind, pipe);
-        // имеет смысл сделать один лайоут на несколько пайплайнов
-        task->bindDescriptorSets(bind, p_layout, 0, {uniform, images_set, map_set}, nullptr);
-        task->bindVertexBuffers(0, units_indices, {0});
-        task->drawIndirect(indirect_buffer, offsetof123(tile_optimizer::indirect_buffer_data, units_indirect), 1, sizeof(vk::DrawIndirectCommand));
+        task.bindPipeline(bind, pipe);
+        // имеет смысл сделать один лайоут на несколько пайплайнов, это можно сделать через прокси стейдж (он только подключит несколько дескрипторов)
+        task.bindDescriptorSets(bind, p_layout, 0, {uniform_set, images_set, map_set}, nullptr);
+        task.bindVertexBuffers(0, units_indices, {0});
+        task.drawIndirect(indirect_buffer, offsetof123(tile_optimizer::indirect_buffer_data, units_indirect), 1, sizeof(vk::DrawIndirectCommand));
+        
+        return true;
       }
       
       void units_render::clear() {}

@@ -8,7 +8,7 @@
 namespace devils_engine {
   namespace render {
     class stage;
-    class container;
+    struct container;
     
     class slots {
     public:

@@ -811,14 +811,15 @@ namespace devils_engine {
       return *this;
     }
     
-
-    vk::Pipeline pipeline_maker::create(const std::string &name,
-                                  vk::PipelineLayout layout,
-                                  vk::RenderPass renderPass,
-                                  const uint32_t &subpass,
-                                  vk::Pipeline base,
-                                  const int32_t &baseIndex) {
-      const vk::PipelineVertexInputStateCreateInfo vertex(
+    vk::GraphicsPipelineCreateInfo pipeline_maker::get_info(
+      vk::PipelineLayout layout,
+      vk::RenderPass renderPass,
+      const uint32_t &subpass,
+      vk::Pipeline base,
+      const int32_t &baseIndex
+    ) {
+      
+      vertexInfo = vk::PipelineVertexInputStateCreateInfo(
         {},
         static_cast<uint32_t>(vertexBindings.size()),
         vertexBindings.data(),
@@ -826,7 +827,7 @@ namespace devils_engine {
         vertexAttribs.data()
       );
       
-      const vk::PipelineViewportStateCreateInfo viewport(
+      viewportInfo = vk::PipelineViewportStateCreateInfo(
         {},
         static_cast<uint32_t>(viewports.size()),
         viewports.data(),
@@ -834,7 +835,7 @@ namespace devils_engine {
         scissors.data()
       );
       
-      const vk::PipelineDynamicStateCreateInfo dynInfo(
+      dymStateInfo = vk::PipelineDynamicStateCreateInfo(
         {},
         static_cast<uint32_t>(dynStates.size()),
         dynStates.data()
@@ -843,40 +844,52 @@ namespace devils_engine {
       colorBlendingInfo.attachmentCount = colorBlends.size();
       colorBlendingInfo.pAttachments = colorBlends.data();
 
-      std::vector<vk::SpecializationInfo> infos(shaders.size());
+      shaders_specs.resize(shaders.size());
       for (uint32_t i = 0; i < shaders.size(); ++i) {
-        infos[i].mapEntryCount = specs[i].entries.size();
-        infos[i].pMapEntries = specs[i].entries.data();
-        infos[i].dataSize = specs[i].dataSize;
-        infos[i].pData = specs[i].data;
+        shaders_specs[i].mapEntryCount = specs[i].entries.size();
+        shaders_specs[i].pMapEntries = specs[i].entries.data();
+        shaders_specs[i].dataSize = specs[i].dataSize;
+        shaders_specs[i].pData = specs[i].data;
 
-        shaders[i].pSpecializationInfo = specs[i].entries.empty() ? nullptr : &infos[i];
+        shaders[i].pSpecializationInfo = specs[i].entries.empty() ? nullptr : &shaders_specs[i];
       }
       
-      const vk::GraphicsPipelineCreateInfo info(
+      return vk::GraphicsPipelineCreateInfo(
         {},
         static_cast<uint32_t>(shaders.size()),
         shaders.data(),
-        &vertex,
+        &vertexInfo,
         &inputAssembly,
         tessellationState ? &tessellationInfo : nullptr,
-        &viewport,
+        &viewportInfo,
         &rasterisationInfo,
         &multisamplingInfo,
         &depthStensilInfo,
         &colorBlendingInfo,
-        dynStates.empty() ? nullptr : &dynInfo,
+        dynStates.empty() ? nullptr : &dymStateInfo,
         layout,
         renderPass,
         subpass,
         base,
         baseIndex
       );
+    }
+    
+    vk::Pipeline pipeline_maker::create(
+      const std::string &name,
+      vk::PipelineLayout layout,
+      vk::RenderPass renderPass,
+      const uint32_t &subpass,
+      vk::Pipeline base,
+      const int32_t &baseIndex
+    ) {
+      const auto info = get_info(layout, renderPass, subpass, base, baseIndex);
       
       auto [res, p] = device->createGraphicsPipeline(nullptr, info);
       if (res != vk::Result::eSuccess) throw std::runtime_error("createGraphicsPipeline failed");
       if (!name.empty()) set_name(*device, p, name);
       
+      shaders_specs.clear();
       shaders.clear();
       vertexBindings.clear();
       vertexAttribs.clear();
@@ -1133,10 +1146,7 @@ namespace devils_engine {
       return *this;
     }
     
-
-    vk::RenderPass render_pass_maker::create(const std::string &name) {
-      std::vector<vk::SubpassDescription> descs;
-      
+    vk::RenderPassCreateInfo render_pass_maker::get_info() {
       for (size_t i = 0; i < descriptions.size(); ++i) {
         const vk::SubpassDescription info(
           {},
@@ -1154,7 +1164,7 @@ namespace devils_engine {
         descs.push_back(info);
       }
       
-      const vk::RenderPassCreateInfo info(
+      return vk::RenderPassCreateInfo(
         {},
         static_cast<uint32_t>(attachments.size()),
         attachments.data(),
@@ -1163,6 +1173,10 @@ namespace devils_engine {
         static_cast<uint32_t>(dependencies.size()),
         dependencies.data()
       );
+    }
+
+    vk::RenderPass render_pass_maker::create(const std::string &name) {      
+      const auto info = get_info();
       
       auto newPass = device->createRenderPass(info);
       if (!name.empty()) set_name(*device, newPass, name);

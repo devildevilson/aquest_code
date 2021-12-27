@@ -130,7 +130,8 @@ struct matrices_data {
 
 struct common_data {
   vec4 cursor_dir;
-  uvec4 dim; // x - width, y - heigth, z - zoom, w - time
+  uvec4 dim;   // x - width, y - heigth, z - zoom, w - time
+  uvec4 state; // x - persistent state, y - application state, z - turn state
 };
 
 struct matrices {
@@ -178,7 +179,7 @@ struct map_tile_t {
   uint points[6];
   uint neighbors[6];
   uint center;
-  float height;
+  float height; // как можно поменять высоту?
   uint connections_data;
   uint dummy;
   // эти данные могут измениться

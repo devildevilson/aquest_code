@@ -14,14 +14,16 @@ namespace devils_engine {
     buffers::buffers(container* c) : c(c), uniform_camera(nullptr), uniform_matrices(nullptr), uniform_common(nullptr) {
       auto device = c->vulkan->device;
       auto allocator = c->vulkan->buffer_allocator;
-      const size_t buffer1_size = align_to(sizeof(camera_data),   16);
-      const size_t buffer2_size = align_to(sizeof(matrices_data), 16);
-      const size_t buffer3_size = align_to(sizeof(common_data),   16);
+      const size_t uniform_buffer_alignment = c->limits()->minUniformBufferOffsetAlignment;
+      const size_t storage_buffer_alignment = c->limits()->minStorageBufferOffsetAlignment;
+      const size_t buffer1_size = align_to(sizeof(camera_data),   uniform_buffer_alignment);
+      const size_t buffer2_size = align_to(sizeof(matrices_data), uniform_buffer_alignment);
+      const size_t buffer3_size = align_to(sizeof(common_data),   uniform_buffer_alignment);
        uniform.create(allocator, buffer(buffer1_size + buffer2_size + buffer3_size, vk::BufferUsageFlagBits::eUniformBuffer), vma::MemoryUsage::eCpuOnly, "uniform buffer");
 //       matrices.create(allocator, buffer(buffer2_size, vk::BufferUsageFlagBits::eUniformBuffer), vma::MemoryUsage::eCpuOnly, "matrices buffer");
 //         common.create(allocator, buffer(buffer3_size, vk::BufferUsageFlagBits::eUniformBuffer), vma::MemoryUsage::eCpuOnly, "common buffer");
-       heraldy.create(allocator, buffer(16, vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst), vma::MemoryUsage::eGpuOnly, "heraldy buffer");
-      heraldy_indices.create(allocator, buffer(16, vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst), vma::MemoryUsage::eGpuOnly, "heraldy indices buffer");
+       heraldy.create(allocator, buffer(align_to(16, storage_buffer_alignment), vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst), vma::MemoryUsage::eGpuOnly, "heraldy buffer");
+      heraldy_indices.create(allocator, buffer(align_to(16, storage_buffer_alignment), vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst), vma::MemoryUsage::eGpuOnly, "heraldy indices buffer");
       
       assert(uniform.ptr != nullptr);
 //       assert(matrices.ptr != nullptr);
@@ -133,6 +135,21 @@ namespace devils_engine {
       auto c = reinterpret_cast<common_data*>(uniform_common);
       c->dim.w += time;
     }
+    
+    void buffers::update_persistent_state(const uint32_t &state) {
+      auto c = reinterpret_cast<common_data*>(uniform_common);
+      c->state.x = state;
+    }
+    
+    void buffers::update_application_state(const uint32_t &state) {
+      auto c = reinterpret_cast<common_data*>(uniform_common);
+      c->state.y = state;
+    }
+    
+    void buffers::update_turn_state(const uint32_t &state) {
+      auto c = reinterpret_cast<common_data*>(uniform_common);
+      c->state.z = state;
+    }
 
     void buffers::recreate(const uint32_t &width, const uint32_t &height) {
       const glm::mat4 persp = glm::perspective(glm::radians(75.0f), float(width) / float(height), 0.1f, 256.0f);
@@ -192,10 +209,12 @@ namespace devils_engine {
       return glm::uintBitsToFloat(camera->dim[2]);
     }
     
-    void buffers::resize_heraldy_buffer(const size_t &heraldy_layers_count) {
+    // неудачное название, тут приходит размер
+    void buffers::resize_heraldy_buffer(const size_t &heraldy_layers_buffer_size) {
       auto allocator = c->vulkan->buffer_allocator;
       heraldy.destroy(allocator);
-      heraldy.create(allocator, buffer(heraldy_layers_count, vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst), vma::MemoryUsage::eGpuOnly, "heraldy buffer");
+      const size_t final_size = align_to(heraldy_layers_buffer_size, c->limits()->minStorageBufferOffsetAlignment);
+      heraldy.create(allocator, buffer(final_size, vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst), vma::MemoryUsage::eGpuOnly, "heraldy buffer");
       
       auto device = c->vulkan->device;
       descriptor_set_updater dsu(&device);
@@ -223,13 +242,14 @@ namespace devils_engine {
     
     world_map_buffers::world_map_buffers(container* c) : c(c) {
       auto device = c->vulkan->device;
-      auto storage_layout = c->vulkan->storage_layout;
+//       auto storage_layout = c->vulkan->storage_layout;
       auto allocator = c->vulkan->buffer_allocator;
-      border_buffer.create(allocator, buffer(sizeof(glm::vec4)*4, vk::BufferUsageFlagBits::eStorageBuffer), vma::MemoryUsage::eCpuOnly);
-      border_types.create(allocator, buffer(sizeof(glm::vec4)*4, vk::BufferUsageFlagBits::eStorageBuffer), vma::MemoryUsage::eCpuOnly);
+      const size_t storage_buffer_alignment = std::max(c->limits()->minStorageBufferOffsetAlignment, size_t(16));
+      border_buffer.create(allocator, buffer(align_to(sizeof(glm::vec4)*4, storage_buffer_alignment), vk::BufferUsageFlagBits::eStorageBuffer), vma::MemoryUsage::eCpuOnly);
+      border_types.create(allocator, buffer(align_to(sizeof(glm::vec4)*4, storage_buffer_alignment), vk::BufferUsageFlagBits::eStorageBuffer), vma::MemoryUsage::eCpuOnly);
       
       // один буффер? с точки зрения шейдера ничего не изменится
-      const size_t tile_stat_buffer_size = align_to(ceil(double(core::map::hex_count_d(core::map::detail_level)) / double(UINT32_WIDTH)), 16);
+      const size_t tile_stat_buffer_size = align_to(ceil(double(core::map::hex_count_d(core::map::detail_level)) / double(UINT32_WIDTH)), storage_buffer_alignment);
       tiles_renderable.create(
         allocator, 
         buffer(tile_stat_buffer_size * 3, vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eTransferSrc), 
@@ -257,20 +277,28 @@ namespace devils_engine {
       }
       
       {
-        descriptor_set_maker dsm(&device);
-        border_set = dsm.layout(storage_layout).create(pool, "border buffer set")[0];
-        
-        descriptor_set_updater dsu(&device);
-        dsu.currentSet(border_set).begin(0, 0, vk::DescriptorType::eStorageBuffer).buffer(border_buffer.handle).update();
+        descriptor_set_layout_maker dslm(&device);
+        borders_data_layout = dslm.binding(0, vk::DescriptorType::eStorageBuffer, vk::ShaderStageFlagBits::eAll)
+                                  .binding(1, vk::DescriptorType::eStorageBuffer, vk::ShaderStageFlagBits::eAll)
+                                  .create("borders_data_layout");
       }
       
       {
         descriptor_set_maker dsm(&device);
-        types_set = dsm.layout(storage_layout).create(pool, "border types set")[0];
+        border_set = dsm.layout(borders_data_layout).create(pool, "border buffer set")[0];
         
         descriptor_set_updater dsu(&device);
-        dsu.currentSet(types_set).begin(0, 0, vk::DescriptorType::eStorageBuffer).buffer(border_types.handle).update();
+        dsu.currentSet(border_set).begin(0, 0, vk::DescriptorType::eStorageBuffer).buffer(border_buffer.handle).update();
+        dsu.currentSet(border_set).begin(1, 0, vk::DescriptorType::eStorageBuffer).buffer(border_types.handle).update();
       }
+      
+//       {
+//         descriptor_set_maker dsm(&device);
+//         types_set = dsm.layout(storage_layout).create(pool, "border types set")[0];
+//         
+//         descriptor_set_updater dsu(&device);
+//         dsu.currentSet(types_set).begin(0, 0, vk::DescriptorType::eStorageBuffer).buffer(border_types.handle).update();
+//       }
       
       {
         descriptor_set_maker dsm(&device);
@@ -291,6 +319,7 @@ namespace devils_engine {
       border_types.destroy(allocator);
       tiles_renderable.destroy(allocator);
       gpu_tiles_renderable.destroy(allocator);
+      device.destroy(borders_data_layout);
       device.destroy(tiles_rendering_data_layout);
       device.destroy(pool);
     }
@@ -300,17 +329,18 @@ namespace devils_engine {
       (void)height;
     }
     
-    void world_map_buffers::copy(container* ctx) const {
-      constexpr size_t tile_stat_buffer_size = align_to(ceil(double(core::map::hex_count_d(core::map::detail_level)) / double(UINT32_WIDTH)), 16);
-      constexpr size_t whole_size = tile_stat_buffer_size * 3;
+    void world_map_buffers::copy(resource_provider*, vk::CommandBuffer task) const {
+      const size_t storage_buffer_alignment = std::max(c->limits()->minStorageBufferOffsetAlignment, size_t(16));
+      const size_t tile_stat_buffer_size = align_to(ceil(double(core::map::hex_count_d(core::map::detail_level)) / double(UINT32_WIDTH)), storage_buffer_alignment);
+      const size_t whole_size = tile_stat_buffer_size * 3;
       const size_t render_offset = tile_stat_buffer_size * RENDER_STAT_OFFSET_MULT;
       const size_t next_offset = tile_stat_buffer_size * (RENDER_STAT_OFFSET_MULT+1);
       const vk::BufferCopy c1{render_offset, render_offset, tile_stat_buffer_size};
       const vk::BufferCopy c2{next_offset, next_offset, whole_size - next_offset};
-      auto cb = ctx->command_buffer();
-      cb->copyBuffer(gpu_tiles_renderable.handle, tiles_renderable.handle, c1);
-      cb->copyBuffer(tiles_renderable.handle, gpu_tiles_renderable.handle, c2);
-      cb->fillBuffer(gpu_tiles_renderable.handle, render_offset, tile_stat_buffer_size, 0);
+//       auto cb = ctx->command_buffer();
+      task.copyBuffer(gpu_tiles_renderable.handle, tiles_renderable.handle, c1);
+      task.copyBuffer(tiles_renderable.handle, gpu_tiles_renderable.handle, c2);
+      task.fillBuffer(gpu_tiles_renderable.handle, render_offset, tile_stat_buffer_size, 0);
     }
     
     void world_map_buffers::resize_border_buffer(const size_t &size) {
@@ -330,12 +360,13 @@ namespace devils_engine {
       border_types.create(allocator, buffer(size, vk::BufferUsageFlagBits::eStorageBuffer), vma::MemoryUsage::eCpuOnly, "map border types");
       
       descriptor_set_updater dsu(&device);
-      dsu.currentSet(types_set).begin(0, 0, vk::DescriptorType::eStorageBuffer).buffer(border_types.handle).update();
+      dsu.currentSet(border_set).begin(1, 0, vk::DescriptorType::eStorageBuffer).buffer(border_types.handle).update();
     }
     
     void world_map_buffers::set_map_exploration(const uint32_t &tile_index, const bool explored) {
       assert(tile_index < core::map::hex_count_d(core::map::detail_level));
-      constexpr size_t tile_stat_buffer_size = align_to(ceil(double(core::map::hex_count_d(core::map::detail_level)) / double(UINT32_WIDTH)), 16);
+      const size_t storage_buffer_alignment = std::max(c->limits()->minStorageBufferOffsetAlignment, size_t(16));
+      const size_t tile_stat_buffer_size = align_to(ceil(double(core::map::hex_count_d(core::map::detail_level)) / double(UINT32_WIDTH)), storage_buffer_alignment);
       auto tmp_ptr = reinterpret_cast<char*>(tiles_renderable.ptr);
       auto offset_ptr = reinterpret_cast<uint32_t*>(&tmp_ptr[tile_stat_buffer_size * EXPLORED_STAT_OFFSET_MULT]);
       const uint32_t index_array = tile_index / UINT32_WIDTH;
@@ -347,7 +378,8 @@ namespace devils_engine {
     
     void world_map_buffers::set_map_visibility(const uint32_t &tile_index, const bool visible) {
       assert(tile_index < core::map::hex_count_d(core::map::detail_level));
-      constexpr size_t tile_stat_buffer_size = align_to(ceil(double(core::map::hex_count_d(core::map::detail_level)) / double(UINT32_WIDTH)), 16);
+      const size_t storage_buffer_alignment = std::max(c->limits()->minStorageBufferOffsetAlignment, size_t(16));
+      const size_t tile_stat_buffer_size = align_to(ceil(double(core::map::hex_count_d(core::map::detail_level)) / double(UINT32_WIDTH)), storage_buffer_alignment);
       auto tmp_ptr = reinterpret_cast<char*>(tiles_renderable.ptr);
       auto offset_ptr = reinterpret_cast<uint32_t*>(&tmp_ptr[tile_stat_buffer_size * VISIBILITY_STAT_OFFSET_MULT]);
       const uint32_t index_array = tile_index / UINT32_WIDTH;
@@ -359,7 +391,8 @@ namespace devils_engine {
     
     bool world_map_buffers::get_map_exploration(const uint32_t &tile_index) const {
       assert(tile_index < core::map::hex_count_d(core::map::detail_level));
-      constexpr size_t tile_stat_buffer_size = align_to(ceil(double(core::map::hex_count_d(core::map::detail_level)) / double(UINT32_WIDTH)), 16);
+      const size_t storage_buffer_alignment = std::max(c->limits()->minStorageBufferOffsetAlignment, size_t(16));
+      const size_t tile_stat_buffer_size = align_to(ceil(double(core::map::hex_count_d(core::map::detail_level)) / double(UINT32_WIDTH)), storage_buffer_alignment);
       auto tmp_ptr = reinterpret_cast<char*>(tiles_renderable.ptr);
       auto offset_ptr = reinterpret_cast<uint32_t*>(&tmp_ptr[tile_stat_buffer_size * EXPLORED_STAT_OFFSET_MULT]);
       const uint32_t index_array = tile_index / UINT32_WIDTH;
@@ -371,7 +404,8 @@ namespace devils_engine {
     
     bool world_map_buffers::get_map_visibility(const uint32_t &tile_index) const {
       assert(tile_index < core::map::hex_count_d(core::map::detail_level));
-      constexpr size_t tile_stat_buffer_size = align_to(ceil(double(core::map::hex_count_d(core::map::detail_level)) / double(UINT32_WIDTH)), 16);
+      const size_t storage_buffer_alignment = std::max(c->limits()->minStorageBufferOffsetAlignment, size_t(16));
+      const size_t tile_stat_buffer_size = align_to(ceil(double(core::map::hex_count_d(core::map::detail_level)) / double(UINT32_WIDTH)), storage_buffer_alignment);
       auto tmp_ptr = reinterpret_cast<char*>(tiles_renderable.ptr);
       auto offset_ptr = reinterpret_cast<uint32_t*>(&tmp_ptr[tile_stat_buffer_size * VISIBILITY_STAT_OFFSET_MULT]);
       const uint32_t index_array = tile_index / UINT32_WIDTH;
@@ -383,7 +417,8 @@ namespace devils_engine {
     
     bool world_map_buffers::get_map_renderable(const uint32_t &tile_index) const {
       assert(tile_index < core::map::hex_count_d(core::map::detail_level));
-      constexpr size_t tile_stat_buffer_size = align_to(ceil(double(core::map::hex_count_d(core::map::detail_level)) / double(UINT32_WIDTH)), 16);
+      const size_t storage_buffer_alignment = std::max(c->limits()->minStorageBufferOffsetAlignment, size_t(16));
+      const size_t tile_stat_buffer_size = align_to(ceil(double(core::map::hex_count_d(core::map::detail_level)) / double(UINT32_WIDTH)), storage_buffer_alignment);
       auto tmp_ptr = reinterpret_cast<char*>(tiles_renderable.ptr);
       auto offset_ptr = reinterpret_cast<uint32_t*>(&tmp_ptr[tile_stat_buffer_size * RENDER_STAT_OFFSET_MULT]);
       const uint32_t index_array = tile_index / UINT32_WIDTH;
@@ -394,7 +429,8 @@ namespace devils_engine {
     }
     
     void world_map_buffers::clear_renderable() {
-      constexpr size_t tile_stat_buffer_size = align_to(ceil(double(core::map::hex_count_d(core::map::detail_level)) / double(UINT32_WIDTH)), 16);
+      const size_t storage_buffer_alignment = std::max(c->limits()->minStorageBufferOffsetAlignment, size_t(16));
+      const size_t tile_stat_buffer_size = align_to(ceil(double(core::map::hex_count_d(core::map::detail_level)) / double(UINT32_WIDTH)), storage_buffer_alignment);
       auto tmp_ptr = reinterpret_cast<char*>(tiles_renderable.ptr);
       auto offset_ptr = reinterpret_cast<uint32_t*>(&tmp_ptr[tile_stat_buffer_size * RENDER_STAT_OFFSET_MULT]);
       memset(offset_ptr, 0, tile_stat_buffer_size);

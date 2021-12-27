@@ -152,6 +152,7 @@ namespace devils_engine {
     }
     
     vk_buffer_data::vk_buffer_data() : handle(nullptr), allocation(nullptr), ptr(nullptr) {}
+    vk_buffer_data::vk_buffer_data(vk::Buffer handle, vma::Allocation allocation, void* ptr) : handle(handle), allocation(allocation), ptr(ptr) {}
     void vk_buffer_data::create(vma::Allocator allocator, const vk::BufferCreateInfo &info, const vma::MemoryUsage &mem_usage, const std::string &name) {
       if (handle) throw std::runtime_error("Buffer is already created");
       const auto [buf, mem] = create_buffer(allocator, info, mem_usage, &ptr, name);
@@ -167,21 +168,22 @@ namespace devils_engine {
     }
     
     vk_buffer_data_unique::vk_buffer_data_unique(vma::Allocator allocator, vk::Buffer handle, vma::Allocation allocation, void* ptr) : 
-      allocator(allocator), handle(handle), allocation(allocation), ptr(ptr) {}
+      vk_buffer_data(handle, allocation, ptr), allocator(allocator) {}
     vk_buffer_data_unique::vk_buffer_data_unique(vk_buffer_data_unique &&move) :
-      allocator(move.allocator), handle(move.handle), allocation(move.allocation), ptr(move.ptr) 
+      vk_buffer_data(move.handle, move.allocation, move.ptr), allocator(move.allocator)
     {
       move.allocator = nullptr; move.handle = nullptr; move.allocation = nullptr; move.ptr = nullptr;
     }
-    vk_buffer_data_unique::~vk_buffer_data_unique() { if (handle) allocator.destroyBuffer(handle, allocation); allocator = nullptr; handle = nullptr; allocation = nullptr; ptr = nullptr; }
+    vk_buffer_data_unique::~vk_buffer_data_unique() { if (handle) destroy(allocator); allocator = nullptr; }
     vk_buffer_data_unique & vk_buffer_data_unique::operator=(vk_buffer_data_unique && move) {
-      if (handle) allocator.destroyBuffer(handle, allocation);
+      if (handle) destroy(allocator);
       allocator = move.allocator; handle = move.handle; allocation = move.allocation; ptr = move.ptr;
       move.allocator = nullptr; move.handle = nullptr; move.allocation = nullptr; move.ptr = nullptr;
       return *this;
     }
     
     vk_image_data::vk_image_data() : handle(nullptr), allocation(nullptr), ptr(nullptr) {}
+    vk_image_data::vk_image_data(vk::Image handle, vma::Allocation allocation, void* ptr) : handle(handle), allocation(allocation), ptr(ptr) {}
     void vk_image_data::create(vma::Allocator allocator, const vk::ImageCreateInfo &info, const vma::MemoryUsage &mem_usage, const std::string &name) {
       if (handle) throw std::runtime_error("Buffer is already created");
       const auto [img, mem] = create_image(allocator, info, mem_usage, &ptr, name);
@@ -197,15 +199,15 @@ namespace devils_engine {
     }
     
     vk_image_data_unique::vk_image_data_unique(vma::Allocator allocator, vk::Image handle, vma::Allocation allocation, void* ptr) : 
-      allocator(allocator), handle(handle), allocation(allocation), ptr(ptr) {}
+      vk_image_data(handle, allocation, ptr), allocator(allocator) {}
     vk_image_data_unique::vk_image_data_unique(vk_image_data_unique &&move) :
-      allocator(move.allocator), handle(move.handle), allocation(move.allocation), ptr(move.ptr) 
+      vk_image_data(move.handle, move.allocation, move.ptr), allocator(move.allocator) 
     {
       move.allocator = nullptr; move.handle = nullptr; move.allocation = nullptr; move.ptr = nullptr;
     }
-    vk_image_data_unique::~vk_image_data_unique() { if (handle) allocator.destroyImage(handle, allocation); allocator = nullptr; handle = nullptr; allocation = nullptr; ptr = nullptr; }
+    vk_image_data_unique::~vk_image_data_unique() { if (handle) destroy(allocator); allocator = nullptr; }
     vk_image_data_unique & vk_image_data_unique::operator=(vk_image_data_unique && move) {
-      if (handle) allocator.destroyImage(handle, allocation);
+      if (handle) destroy(allocator);
       allocator = move.allocator; handle = move.handle; allocation = move.allocation; ptr = move.ptr;
       move.allocator = nullptr; move.handle = nullptr; move.allocation = nullptr; move.ptr = nullptr;
       return *this;

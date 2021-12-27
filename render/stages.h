@@ -1,5 +1,5 @@
-#ifndef STAGES_H
-#define STAGES_H
+#ifndef DEVILS_ENGINE_RENDER_STAGES_H
+#define DEVILS_ENGINE_RENDER_STAGES_H
 
 #include <atomic>
 #include <mutex>
@@ -8,7 +8,8 @@
 #include "utils/utility.h"
 #include "utils/frustum.h"
 
-#include "stage.h"
+//#include "stage.h"
+#include "interfaces.h"
 #include "render.h"
 #include "shared_structures.h"
 #include "shared_render_utility.h"
@@ -22,56 +23,18 @@ namespace devils_engine {
   
   namespace render {
     class deffered;
+    class pass;
     struct images;
     struct window;
     struct particles;
     struct world_map_buffers;
     struct container;
-
-    class window_next_frame : public stage {
-    public:
-      window_next_frame();
-      void begin() override;
-      void proccess(container* ctx) override;
-      void clear() override;
-    };
-
-    class task_begin : public stage {
-    public:
-      void begin() override;
-      void proccess(container* ctx) override;
-      void clear() override;
-    };
-
-    class task_end : public stage {
-    public:
-      void begin() override;
-      void proccess(container* ctx) override;
-      void clear() override;
-    };
-
-    class render_pass_begin : public stage {
-    public:
-      render_pass_begin(const uint32_t &index);
-      void begin() override;
-      void proccess(container* ctx) override;
-      void clear() override;
-    private:
-      uint32_t index;
-    };
-
-    class render_pass_end : public stage {
-    public:
-      void begin() override;
-      void proccess(container* ctx) override;
-      void clear() override;
-    };
     
-    void do_copy_tasks(container* ctx, vk::Event event, const size_t &size, const copy_stage* const* stages);
-    void set_event_cmd(container* ctx, vk::Event event);
+    void do_copy_tasks(vk::CommandBuffer task, vk::Event event, const size_t &size, const copy_stage* const* stages);
+    void set_event_cmd(vk::CommandBuffer task, vk::Event event);
     
     template <size_t N>
-    class static_copy_array : public stage, public copy_stage {
+    class static_copy_array final : public stage, public copy_stage {
     public:
       static_copy_array(vk::Device device) : device(device), size(0) { 
         memset(stages.data(), 0, stages.size() * sizeof(stages[0])); 
@@ -79,13 +42,14 @@ namespace devils_engine {
         device.setEvent(event);
       }
       ~static_copy_array() { device.destroy(event); }
-      void begin() override { device.resetEvent(event); }
-      void proccess(container* ctx) override { 
-        copy(ctx);
-        set_event_cmd(ctx, event);
+      void begin(resource_provider*) override { device.resetEvent(event); }
+      bool process(resource_provider* ctx, vk::CommandBuffer task) override { 
+        copy(ctx, task);
+        set_event_cmd(task, event);
+        return true;
       }
       void clear() override {}
-      void copy(container* ctx) const override { for (size_t i = 0; i < size; ++i) { stages[i]->copy(ctx); } }
+      void copy(resource_provider* ctx, vk::CommandBuffer task) const override { for (size_t i = 0; i < size; ++i) { stages[i]->copy(ctx, task); } }
       
       void add(const copy_stage* stage) {
         if (size >= N) throw std::runtime_error("Small copy array size " + std::to_string(N));
@@ -104,7 +68,7 @@ namespace devils_engine {
       std::array<const copy_stage*, N> stages;
     };
     
-    class tile_updater : public stage {
+    class tile_updater final : public stage {
     public:
       struct create_info {
         vk::Device device;
@@ -113,8 +77,8 @@ namespace devils_engine {
       };
       tile_updater(const create_info &info);
       ~tile_updater();
-      void begin() override;
-      void proccess(container* ctx) override;
+      void begin(resource_provider* ctx) override;
+      bool process(resource_provider* ctx, vk::CommandBuffer task) override;
       void clear() override;
       
       void update_texture(const uint32_t tile_index, const render::image_t texture);
@@ -132,15 +96,16 @@ namespace devils_engine {
         uint32_t biome_index;
       };
       
-      bool need_copy;
+      std::atomic_bool need_copy;
       vk::Device device;
       vma::Allocator allocator;
+      vk::Event ev;
       vk_buffer_data updates;
       vk::BufferCopy* copies;
       core::map* map;
     };
     
-    class tile_optimizer : public stage {
+    class tile_optimizer final : public stage {
     public:
       static const uint32_t work_group_size = 256;
       
@@ -178,8 +143,8 @@ namespace devils_engine {
       };
       tile_optimizer(const create_info &info);
       ~tile_optimizer();
-      void begin() override;
-      void proccess(container* ctx) override;
+      void begin(resource_provider* ctx) override;
+      bool process(resource_provider* ctx, vk::CommandBuffer task) override;
       void clear() override;
       
       vk::Buffer indirect_buffer() const;
@@ -246,7 +211,7 @@ namespace devils_engine {
       bool render_borders;
     };
     
-    class tile_objects_optimizer : public stage {
+    class tile_objects_optimizer final : public stage {
     public:
       struct create_info {
         vk::Device device;
@@ -257,8 +222,8 @@ namespace devils_engine {
       };
       tile_objects_optimizer(const create_info &info);
       ~tile_objects_optimizer();
-      void begin() override;
-      void proccess(container* ctx) override;
+      void begin(resource_provider* ctx) override;
+      bool process(resource_provider* ctx, vk::CommandBuffer task) override;
       void clear() override;
     private:
       vk::Device device;
@@ -268,89 +233,10 @@ namespace devils_engine {
       vk::Pipeline pipe;
     };
     
-    // вообще надо бы это удалить
-//     class tile_borders_optimizer : public stage {
-//     public:
-//       static const uint32_t work_group_size = 256;
-//       
-//       struct indirect_buffer {
-//         vk::DrawIndirectCommand border_command;
-//         glm::uvec4 data;
-//         utils::frustum frustum;
-//       };
-//       
-//       static_assert(sizeof(indirect_buffer) % (sizeof(uint32_t)*4) == 0);
-//       
-//       struct create_info {
-//         vk::Device device;
-//         vma::Allocator allocator;
-//         vk::DescriptorSetLayout tiles_data_layout;
-//         vk::DescriptorSetLayout uniform_layout;
-//         world_map_buffers* map_buffers;
-//       };
-//       tile_borders_optimizer(const create_info &info);
-//       ~tile_borders_optimizer();
-//       void begin() override;
-//       void proccess(container* ctx) override;
-//       void clear() override;
-//       
-//       vk::Buffer indirect_buffer() const;
-//       vk::Buffer vertices_buffer() const;
-//       
-//       void set_borders_count(const uint32_t &count);
-//     private:
-//       vk::Device device;
-//       vma::Allocator allocator;
-//       vk_buffer_data indirect;
-//       vk_buffer_data borders_indices;
-//       
-//       vk::DescriptorSet set;
-//       vk::PipelineLayout pipe_layout;
-//       vk::Pipeline pipe;
-//       world_map_buffers* map_buffers;
-//     };
-//     
-//     class tile_walls_optimizer : public stage {
-//     public:
-//       static const uint32_t work_group_size = 256;
-//       
-//       struct indirect_buffer {
-//         VkDrawIndirectCommand walls_command;
-//         glm::uvec4 data;
-//         utils::frustum frustum;
-//       };
-//       
-//       static_assert(sizeof(indirect_buffer) % (sizeof(uint32_t)*4) == 0);
-//       
-//       struct create_info {
-//         vk::Device device;
-//         vk::PhysicalDevice physical_device;
-//         world_map_buffers* map_buffers;
-//       };
-//       tile_walls_optimizer(const create_info &info);
-//       ~tile_walls_optimizer();
-//       
-//       void begin() override;
-//       void proccess(container* ctx) override;
-//       void clear() override;
-//       
-//       yavf::Buffer* indirect_buffer() const;
-//       yavf::Buffer* vertices_buffer() const;
-//       
-//       void set_connections_count(const uint32_t &count);
-//     private:
-//       vk::Device device;
-//       vk::PhysicalDevice physical_device;
-//       vk::Buffer walls_indices;
-//       vk::DescriptorSet set;
-//       vk::Pipeline pipe;
-//       world_map_buffers* map_buffers;
-//     };
-    
-    class barriers : public stage {
+    class barriers final : public stage {
     public:
-      void begin() override;
-      void proccess(container* ctx) override;
+      void begin(resource_provider* ctx) override;
+      bool process(resource_provider* ctx, vk::CommandBuffer task) override;
       void clear() override;
     };
 
@@ -361,16 +247,15 @@ namespace devils_engine {
         vk::DescriptorSetLayout tiles_data_layout;
         vk::DescriptorSetLayout images_layout;
         tile_optimizer* opt;
+        class pass* pass;
+        uint32_t subpass_index;
       };
       tile_render(const create_info &info);
       ~tile_render();
 
-      void begin() override;
-      void proccess(container* ctx) override;
+      void begin(resource_provider* ctx) override;
+      bool process(resource_provider* ctx, vk::CommandBuffer task) override;
       void clear() override;
-
-//       void recreate_pipelines(const game::image_resources_t* resource) override;
-//       void change_rendering_mode(const uint32_t &render_mode, const uint32_t &water_mode, const uint32_t &render_slot, const uint32_t &water_slot, const glm::vec3 &color);
       
       vk::Buffer vertex_indices() const;
     private:
@@ -383,7 +268,7 @@ namespace devils_engine {
       vk::DescriptorSet images_set;
     };
     
-    class tile_border_render : public stage {
+    class tile_border_render final : public stage {
     public:
       struct create_info {
         container* cont;
@@ -391,16 +276,15 @@ namespace devils_engine {
         vk::DescriptorSetLayout images_layout;
         tile_optimizer* opt;
         world_map_buffers* map_buffers;
+        class pass* pass;
+        uint32_t subpass_index;
       };
       tile_border_render(const create_info &info);
       ~tile_border_render();
 
-      void begin() override;
-      void proccess(container* ctx) override;
+      void begin(resource_provider* ctx) override;
+      bool process(resource_provider* ctx, vk::CommandBuffer task) override;
       void clear() override;
-
-//       void recreate_pipelines(const game::image_resources_t* resource) override;
-//       void add(const uint32_t &tile_index); // кажется только индекс тайла нам нужен
     private:
       vk::Device device;
       vma::Allocator allocator;
@@ -411,35 +295,7 @@ namespace devils_engine {
       world_map_buffers* map_buffers;
     };
     
-//     class tile_connections_render : public stage {
-//     public:
-//       struct create_info {
-//         container* cont;
-//         vk::DescriptorSetLayout tiles_data_layout;
-//         vk::DescriptorSetLayout images_layout;
-//         tile_optimizer* opt;
-//         world_map_buffers* map_buffers;
-//       };
-//       tile_connections_render(const create_info &info);
-//       ~tile_connections_render();
-// 
-//       void begin() override;
-//       void proccess(container* ctx) override;
-//       void clear() override;
-// 
-// //       void recreate_pipelines(const game::image_resources_t* resource) override;
-//       void change_rendering_mode(const uint32_t &render_mode, const uint32_t &water_mode, const uint32_t &render_slot, const uint32_t &water_slot, const glm::vec3 &color);
-//     private:
-//       vk::Device device;
-//       vma::Allocator allocator;
-//       tile_optimizer* opt;
-//       vk::PipelineLayout p_layout;
-//       vk::Pipeline pipe;
-//       world_map_buffers* map_buffers;
-//       vk::DescriptorSet images_set;
-//     };
-    
-    class tile_object_render : public stage {
+    class tile_object_render final : public stage {
     public:
       struct create_info {
         container* cont;
@@ -447,16 +303,15 @@ namespace devils_engine {
         vk::DescriptorSetLayout images_layout;
         tile_optimizer* opt;
         world_map_buffers* map_buffers;
+        class pass* pass;
+        uint32_t subpass_index;
       };
       tile_object_render(const create_info &info);
       ~tile_object_render();
 
-      void begin() override;
-      void proccess(container* ctx) override;
+      void begin(resource_provider* ctx) override;
+      bool process(resource_provider* ctx, vk::CommandBuffer task) override;
       void clear() override;
-
-//       void recreate_pipelines(const game::image_resources_t* resource) override;
-//       void change_rendering_mode(const uint32_t &render_mode, const uint32_t &water_mode, const uint32_t &render_slot, const uint32_t &water_slot, const glm::vec3 &color);
     private:
       vk::Device device;
       vma::Allocator allocator;
@@ -474,18 +329,20 @@ namespace devils_engine {
     // как их рисовать? прозрачный слой над обычными тайлами? наверное можно будет придумать что то еще
     // но в остальных стратегиях примерно так и было
     
-    class tile_highlights_render : public stage {
+    class tile_highlights_render final : public stage {
     public:
       struct create_info {
         container* cont;
         vk::DescriptorSetLayout tiles_data_layout;
         world_map_buffers* map_buffers;
+        class pass* pass;
+        uint32_t subpass_index;
       };
       tile_highlights_render(const create_info &info);
       ~tile_highlights_render();
       
-      void begin() override;
-      void proccess(container* ctx) override;
+      void begin(resource_provider* ctx) override;
+      bool process(resource_provider* ctx, vk::CommandBuffer task) override;
       void clear() override;
       
       void add(const uint32_t &tile_index, const color_t &color);
@@ -502,7 +359,7 @@ namespace devils_engine {
       std::atomic<uint32_t> pen_tiles_count;
     };
     
-    class tile_structure_render : public stage, public copy_stage {
+    class tile_structure_render final : public stage, public copy_stage {
     public:
       struct structure_data {
         uint32_t tile_index;
@@ -516,16 +373,18 @@ namespace devils_engine {
         vk::DescriptorSetLayout images_layout;
         tile_optimizer* opt;
         world_map_buffers* map_buffers;
+        class pass* pass;
+        uint32_t subpass_index;
       };
       
       tile_structure_render(const create_info &info);
       ~tile_structure_render();
       
-      void begin() override;
-      void proccess(container* ctx) override;
+      void begin(resource_provider* ctx) override;
+      bool process(resource_provider* ctx, vk::CommandBuffer task) override;
       void clear() override;
       
-      void copy(container* ctx) const override;
+      void copy(resource_provider* ctx, vk::CommandBuffer task) const override;
       
       void add(const structure_data &data);
     private:
@@ -544,7 +403,7 @@ namespace devils_engine {
       vk_buffer_data gpu_structures_instance;
     };
     
-    class heraldies_render : public stage, public copy_stage {
+    class heraldies_render final : public stage, public copy_stage {
     public:
       // или не делать фрейм? просто проскалировать?
       // в цк3 коронками оформлялись геральдики на карте
@@ -580,16 +439,18 @@ namespace devils_engine {
         vk::DescriptorSetLayout images_layout;
         tile_optimizer* opt;
         world_map_buffers* map_buffers;
+        class pass* pass;
+        uint32_t subpass_index;
       };
       
       heraldies_render(const create_info &info);
       ~heraldies_render();
       
-      void begin() override;
-      void proccess(container* ctx) override;
+      void begin(resource_provider* ctx) override;
+      bool process(resource_provider* ctx, vk::CommandBuffer task) override;
       void clear() override;
       
-      void copy(container* ctx) const override;
+      void copy(resource_provider* ctx, vk::CommandBuffer task) const override;
       
       // передаем последовательность слоев геральдики, в массиве только слои? размер мы можем взять из array_size
       size_t add(const heraldy_data &data); // вызывается пару тысяч раз за кадр, мультитрединг?
@@ -616,7 +477,7 @@ namespace devils_engine {
       vk_buffer_data gpu_heraldy_instance;
     };
     
-    class armies_render : public stage, public copy_stage {
+    class armies_render final : public stage, public copy_stage {
     public:
       struct army_data {
         glm::vec3 pos;
@@ -630,16 +491,18 @@ namespace devils_engine {
         vk::DescriptorSetLayout images_layout;
         tile_optimizer* opt;
         world_map_buffers* map_buffers;
+        class pass* pass;
+        uint32_t subpass_index;
       };
       
       armies_render(const create_info &info);
       ~armies_render();
       
-      void begin() override;
-      void proccess(container* ctx) override;
+      void begin(resource_provider* ctx) override;
+      bool process(resource_provider* ctx, vk::CommandBuffer task) override;
       void clear() override;
       
-      void copy(container* ctx) const override;
+      void copy(resource_provider* ctx, vk::CommandBuffer task) const override;
       
       void add(const army_data &data);
     private:
@@ -658,21 +521,7 @@ namespace devils_engine {
       vk_buffer_data gpu_instance;
     };
     
-    class world_map_render : public stage_container { // public pipeline_stage, 
-    public:
-      struct create_info {
-        size_t container_size;
-      };
-      world_map_render(const create_info &info);
-      
-      void begin() override;
-      void proccess(struct container* ctx) override;
-      void clear() override;
-      
-//       void recreate_pipelines(const game::image_resources_t* resource) override;
-    };
-    
-    class interface_stage : public stage { // , public pipeline_stage
+    class interface_stage final : public stage { // , public pipeline_stage
     public:
       struct interface_draw_command {
         unsigned int elem_count;
@@ -684,15 +533,15 @@ namespace devils_engine {
       struct create_info {
         container* cont;
         vk::DescriptorSetLayout images_layout;
+        class pass* pass;
+        uint32_t subpass_index;
       };
       interface_stage(const create_info &info);
       ~interface_stage();
       
-      void begin() override;
-      void proccess(container* ctx) override;
+      void begin(resource_provider* ctx) override;
+      bool process(resource_provider* ctx, vk::CommandBuffer task) override;
       void clear() override;
-
-//       void recreate_pipelines(const game::image_resources_t* resource) override;
     private:
       vk::Device device;
       vma::Allocator allocator;
@@ -707,25 +556,24 @@ namespace devils_engine {
       
       std::vector<interface_draw_command> commands;
     };
-
-    class task_start : public stage {
+    
+    class skybox final : public stage {
     public:
-      task_start(vk::Device device);
-      void begin() override;
-      void proccess(container* ctx) override;
+      skybox(container* cont, class pass* pass, const uint32_t &subpass_index);
+      ~skybox();
+      void begin(resource_provider* ctx) override;
+      bool process(resource_provider* ctx, vk::CommandBuffer task) override;
       void clear() override;
-      void wait();
-      bool status() const; // быстро ли будет работать?
     private:
       vk::Device device;
-      vk::Fence rendering_fence;
+      vk::PipelineLayout p_layout;
+      vk::Pipeline pipe;
     };
-
-    class window_present : public stage {
+    
+    class secondary_buffer_subpass final : public stage {
     public:
-      window_present();
-      void begin() override;
-      void proccess(container* ctx) override;
+      void begin(resource_provider* ctx) override;
+      bool process(resource_provider* ctx, vk::CommandBuffer task) override;
       void clear() override;
     };
   }

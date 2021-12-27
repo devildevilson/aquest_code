@@ -29,6 +29,7 @@ namespace vk {
   class Queue;
   class Fence;
   class Semaphore;
+  struct PhysicalDeviceLimits;
   typedef uint64_t DeviceSize;
 }
 

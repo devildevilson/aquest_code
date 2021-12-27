@@ -6,7 +6,8 @@
 #include <vector>
 
 #include "utils/typeless_container.h"
-#include "stage.h"
+// #include "stage.h"
+#include "interfaces.h"
 #include "target.h"
 
 namespace devils_engine {
@@ -15,7 +16,7 @@ namespace devils_engine {
     class target;
     struct container;
     
-    class stage_container : public stage, public target {
+    class stage_container final : public stage, public target {
     public:
       stage_container(const size_t &container_size);
       virtual ~stage_container();
@@ -34,8 +35,8 @@ namespace devils_engine {
         return ptr;
       }
       
-      void begin() override;
-      void proccess(container* ctx) override;
+      void begin(resource_provider* ctx) override;
+      bool process(resource_provider* ctx, vk::CommandBuffer task) override;
       void clear() override;
       void recreate(const uint32_t &width, const uint32_t &height) override;
     protected:

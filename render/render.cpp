@@ -1,6 +1,6 @@
 #include "render.h"
 
-#include "stage.h"
+//#include "stage.h"
 #include "target.h"
 
 namespace devils_engine {
@@ -16,19 +16,19 @@ namespace devils_engine {
       }
     }
     
-    void stage_container::begin() {
+    void stage_container::begin(resource_provider* ctx) {
       for (auto stage : stages) {
-        stage->begin();
+        stage->begin(ctx);
       }
     }
     
-    void stage_container::proccess(devils_engine::render::container* ctx) {
+    bool stage_container::process(resource_provider* ctx, vk::CommandBuffer task) {
+      bool has_update = false;
       for (auto stage : stages) {
-        stage->proccess(ctx);
+        has_update = has_update || stage->process(ctx, task);
       }
       
-      // начинаем рисовать
-      // возможно этим займется один из стейджев
+      return has_update;
     }
     
     void stage_container::clear() {

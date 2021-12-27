@@ -2,7 +2,8 @@
 #define BATTLE_RENDER_STAGES_H
 
 #include <array>
-#include "stage.h"
+//#include "stage.h"
+#include "interfaces.h"
 #include "utils/utility.h"
 #include "utils/frustum.h"
 #include "shared_structures.h"
@@ -13,6 +14,7 @@
 namespace devils_engine {
   namespace render {
     struct container;
+    class pass;
     
     namespace battle {
       class tile_optimizer : public stage {
@@ -49,8 +51,8 @@ namespace devils_engine {
         tile_optimizer(const create_info &info);
         ~tile_optimizer();
         
-        void begin() override;
-        void proccess(container* ctx) override;
+        void begin(resource_provider* ctx) override;
+        bool process(resource_provider* ctx, vk::CommandBuffer task) override;
         void clear() override;
         
         vk::Buffer get_indirect_buffer() const;
@@ -95,13 +97,14 @@ namespace devils_engine {
           container* cont;
           vk::DescriptorSetLayout map_layout;
           tile_optimizer* opt;
+          class pass* renderpass;
         };
         
         tile_render(const create_info &info);
         ~tile_render();
         
-        void begin() override;
-        void proccess(container * ctx) override;
+        void begin(resource_provider* ctx) override;
+        bool process(resource_provider* ctx, vk::CommandBuffer task) override;
         void clear() override;
       private:
         vk::Device device;
@@ -120,13 +123,14 @@ namespace devils_engine {
           container* cont;
           vk::DescriptorSetLayout map_layout;
           tile_optimizer* opt;
+          class pass* renderpass;
         };
         
         biome_render(const create_info &info);
         ~biome_render();
         
-        void begin() override;
-        void proccess(container * ctx) override;
+        void begin(resource_provider* ctx) override;
+        bool process(resource_provider* ctx, vk::CommandBuffer task) override;
         void clear() override;
       private:
         vk::Device device;
@@ -146,13 +150,14 @@ namespace devils_engine {
           container* cont;
           vk::DescriptorSetLayout map_layout;
           tile_optimizer* opt;
+          class pass* renderpass;
         };
         
         units_render(const create_info &info);
         ~units_render();
         
-        void begin() override;
-        void proccess(container * ctx) override;
+        void begin(resource_provider* ctx) override;
+        bool process(resource_provider* ctx, vk::CommandBuffer task) override;
         void clear() override;
       private:
         vk::Device device;

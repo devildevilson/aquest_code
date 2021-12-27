@@ -1,0 +1,14 @@
+#ifndef DEVILS_ENGINE_RENDER_DEFINES_H
+#define DEVILS_ENGINE_RENDER_DEFINES_H
+
+#define UNIFORM_BUFFERS_DESCRIPTOR_SET_NAME "uniform_set"
+#define MAP_TILES_BUFFERS_DESCRIPTOR_SET_NAME "tiles_set"
+#define BATTLE_MAP_TILES_BUFFERS_DESCRIPTOR_SET_NAME "battle_tiles_set"
+#define HERALDY_BUFFERS_DESCRIPTOR_SET_NAME "heraldy_set"
+#define MAIN_FRAMEBUFFER_NAME "graphics_framebuffer"
+#define BORDERS_BUFFERS_DESCRIPTOR_SET_NAME "borders_set"
+// #define BORDER_TYPES_BUFFERS_DESCRIPTOR_SET_NAME "borders_types_set"
+#define TILE_RENDERING_DATA_DESCRIPTOR_SET_NAME "tiles_rendering_data"
+#define ENVIRONMENT_COMMAND_BUFFER_NAME "environment_command_buffer"
+
+#endif

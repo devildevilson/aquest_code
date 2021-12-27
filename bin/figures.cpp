@@ -217,7 +217,7 @@ namespace devils_engine {
         tiles.emplace_back(i);
       }
 
-      const size_t point_hexes = points.size();
+//       const size_t point_hexes = points.size();
       
 //       std::unordered_map<uint32_t, std::unordered_set<uint32_t>> hex_tri;
 //       for (size_t i = start; i < count; ++i) {

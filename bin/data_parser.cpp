@@ -6,6 +6,8 @@
 #include "utils/utility.h"
 #include "core_structures.h"
 
+#include <iostream>
+
 namespace devils_engine {
   namespace utils {
 #define SAME_TYPE 1
@@ -38,7 +40,7 @@ namespace devils_engine {
       const bool is_stats_array = array_check[0].key == STATS_ARRAY;
       const bool is_numeric_array = array_check[0].key == NUM_ARRAY;
       const bool is_stats_v2_array = array_check[0].key == STATS_V2_ARRAY;
-      const bool basic_check = !is_id_array && !is_stats_array && !is_numeric_array;
+      const bool basic_check = !is_id_array && !is_stats_array && !is_numeric_array && !is_stats_v2_array;
       
       if (!basic_check) {
         ASSERT(current_check->value_type == check_table_value::type::array_t);
@@ -52,15 +54,15 @@ namespace devils_engine {
         if (is_stats_v2_array) { key_type = sol::type::string; value_type = sol::type::number; }
         
         size_t data_counter = 0;
-        for (auto itr = table.begin(); itr != table.end(); ++itr) {
-          int kret = check_sol_type(key_type, (*itr).first);
-          int vret = check_sol_type(value_type, (*itr).second);
+        for (const auto &pair : table) {
+          int kret = check_sol_type(key_type, pair.first);
+          int vret = check_sol_type(value_type, pair.second);
           if (kret == DIFFERENT_TYPE) continue;
           if (vret == DIFFERENT_TYPE) continue;
           if (kret == DONT_CARE && vret == DONT_CARE) continue;
           
           if (key_type == sol::type::number) {
-            const size_t key = (*itr).first.as<size_t>();
+            const size_t key = pair.first.as<size_t>();
             if ((key < minimum_key_num || key >= maximum_key_num) && is_stats_array) { PRINT("Bad stat key value in container " + std::string(current_check->key) + " in table " + std::string(id)); ++counter; }
           }
           

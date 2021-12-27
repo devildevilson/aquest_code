@@ -787,7 +787,14 @@ namespace devils_engine {
     auto map_system = global::get<systems::map_t>();
     if (!map_system->is_init()) return UINT32_MAX;
     if (map_system->map->status() != core::map::status::valid) return UINT32_MAX;
-    const uint32_t tile_index_local1 = map_system->map->cast_ray(intersect_sphere, ray_dist);
+    //const uint32_t tile_index_local1 = map_system->map->cast_ray(intersect_sphere, ray_dist);
+    // в контексте не всегда находятся тайлы, как мы можем это определить?
+    uint32_t tile_index_local1;
+    if (map_system->map->is_tile_data_on_gpu()) {
+      tile_index_local1 = map_system->core_context->cast_ray(map_system->map, intersect_sphere, ray_dist);
+    } else {
+      tile_index_local1 = map_system->map->cast_ray(intersect_sphere, ray_dist);
+    }
 
     return tile_index_local1;
   }
@@ -1400,14 +1407,24 @@ namespace devils_engine {
   // может быть что на один кадр пропадут все армии/города/геральдики при пересоздании буфера
   // может это и ладно?
   void update_render() {
-    auto render_slots = global::get<systems::core_t>()->render_slots;
+    auto cont = global::get<systems::core_t>()->graphics_container;
     // копирование где? должно быть где то повыше, поставил повыше в stages.cpp
-    render_slots->update(global::get<render::container>());
+    cont->begin();
+    cont->next_frame();
+    cont->draw();
+    cont->present();
+    
+    //render_slots->update(global::get<render::container>());
     update_map_objects();
-    global::get<render::task_start>()->wait();
-    render_slots->clear();
+    //global::get<render::task_start>()->wait();
+    //render_slots->clear();
+    cont->wait();
+    cont->clear();
   }
   
+  // нужно избавиться от мьютекса, сделать это можно если заполнять информацию в буферы через посредника
+  // теперь нужно будет только синхронизовать посредника, проблема в том что я обновляю непрерывно посредника
+  // 
   void pre_sync() {
     auto m = get_map_mutex();
     if (m != nullptr) {
@@ -1464,8 +1481,20 @@ end
     break;                                                    \
   }
   
-  void test_decision(core::character* c) {
-    {
+  void draw_nesting(const size_t &nest_level) {
+    for (size_t i = 0; i < nest_level; ++i) { std::cout << "  "; }
+  }
+  
+  void test_decision() {
+    core::character current(true, false);
+    current.make_player();
+    current.current_stats.set(core::character_stats::strength, 8);
+    current.stats.set(core::character_stats::strength, 8);
+    current.resources.set(core::character_resources::money, 50);
+    
+    auto c = &current;
+    
+    if (false) {
       sol::state lua;
       lua.open_libraries(sol::lib::base, sol::lib::math, sol::lib::package, sol::lib::string, sol::lib::table, sol::lib::utf8, sol::lib::coroutine);
       utils::world_map_loading::setup_lua(lua);
@@ -1480,6 +1509,7 @@ end
       // короче нужно написать инициализацию десижона + какой то способ обойти десижоны
       const sol::table t = ret;
       core::decision d;
+      core::validate_decision(0, t);
       core::parse_decision(&d, t);
       
       // теперь у нас есть десижон d что мы можем попробовать сделать?
@@ -1501,36 +1531,293 @@ end
 //       }
       
       const auto draw_func = [] (const script::draw_data* dd) -> bool {
-        std::string nesting(" ", dd->nest_level);
-        
-        std::cout << nesting << "decision " << dd->id << "\n";
-        std::cout << nesting << "method   " << dd->method_name << "\n";
-        std::cout << nesting << "cur func " << dd->function_name << "\n";
-        std::cout << nesting << "cur type " << core::structure_data::names[dd->current.type] << "\n";
-        if (dd->value.get_type() == script::object::type::number) std::cout << nesting << "val type " << "number" << "\n";
-        else if (dd->value.valid()) std::cout << nesting << "val type " << core::structure_data::names[dd->value.type] << "\n";
+//         draw_nesting(dd->nest_level); std::cout << "decision " << dd->id << "\n";
+//         draw_nesting(dd->nest_level); std::cout << "method   " << dd->method_name << "\n";
+        draw_nesting(dd->nest_level); std::cout << "cur func " << dd->function_name << " nest level " << dd->nest_level << "\n";
+        draw_nesting(dd->nest_level); std::cout << "cur type " << core::structure_data::names[size_t(dd->current.get_type())] << "\n";
+        draw_nesting(dd->nest_level);
+        if (dd->value.get_type() == script::object::type::number) std::cout << "value    type " << "number " << dd->value.get<double>() << "\n";
+        else if (dd->value.get_type() == script::object::type::boolean) std::cout << "value    type " << "bool   " << dd->value.get<bool>() << "\n";
+        else if (dd->value.valid()) std::cout << "value    type " << core::structure_data::names[size_t(dd->value.get_type())] << "\n";
+        draw_nesting(dd->nest_level);
+        if (dd->original.valid()) {
+          if (dd->original.get_type() == script::object::type::number) std::cout << "original type " << "number " << dd->original.get<double>() << "\n";
+          else if (dd->value.get_type() == script::object::type::boolean) std::cout << "original type " << "bool   " << dd->original.get<bool>() << "\n";
+          else std::cout << "original type " << core::structure_data::names[size_t(dd->original.get_type())] << "\n";
+        }
+        std::cout << "\n";
       };
       
       // нужно передать сюда персонажа
-      script::context ctx;
-      ctx.id = d.id;
+      script::context ctx(d.id, "", 0);
       ctx.type = 0;
       ctx.root = ctx.current = script::object(c);
       ctx.draw_function = draw_func;
       
+      // прежде чем рисовать нужно наверное сделать какое то обрамление
       ctx.method_name = "condition";
       d.condition.draw(&ctx);
+      std::cout << "\n";
       ctx.method_name = "effect";
       d.effect.draw(&ctx);
+      std::cout << "\n";
       
       const float before_money = c->resources.get(core::character_resources::money);
-      if (d.condition.compute(&ctx)) {
-        d.effect.compute(&ctx);
+      const float before_military = c->stats.get(core::character_stats::military);
+      const float before_intellect = c->stats.get(core::character_stats::intellect);
+      {
+        utils::time_log log("Script compute"); // какие скрипты будут долго бегать? тут скорее интересует скорость не одного скрипта, а скриптов для всех персонажей
+        if (d.potential.compute(&ctx) && d.condition.compute(&ctx)) {
+          d.effect.compute(&ctx);
+        }
       }
       const float after_money = c->resources.get(core::character_resources::money);
+      const float after_military = c->stats.get(core::character_stats::military);
+      const float after_intellect = c->stats.get(core::character_stats::intellect);
       
       PRINT_VAR("before_money", before_money)
       PRINT_VAR("after_money ", after_money)
+      PRINT_VAR("before_military", before_military)
+      PRINT_VAR("after_military ", after_military)
+      PRINT_VAR("before_intellect", before_intellect)
+      PRINT_VAR("after_intellect ", after_intellect)
+      
+      PRINT_VAR("potential  size", d.potential.size())
+      PRINT_VAR("condition  size", d.condition.size())
+      PRINT_VAR("effect     size", d.effect.size())
+      PRINT_VAR("ai_will_do size", d.ai_will_do.size())
+      
+      PRINT_VAR("name", d.name_script.compute(&ctx))
+      PRINT_VAR("description", d.description_script.compute(&ctx))
+    }
+    
+    {
+      sol::state lua;
+      lua.open_libraries(sol::lib::base, sol::lib::math, sol::lib::package, sol::lib::string, sol::lib::table, sol::lib::utf8, sol::lib::coroutine);
+      utils::world_map_loading::setup_lua(lua);
+      
+      const auto ret = lua.script_file(global::root_directory() + "scripts/wife_test.lua");
+      if (!ret.valid()) {
+        sol::error err = ret;
+        std::cout << err.what() << "\n";
+        throw std::runtime_error("There is lua errors");
+      }
+      
+      script::input_data input;
+      input.root = input.current = script::object::type_bit::character;
+      
+      const sol::object script = ret;
+      script::condition cond;
+      script::create_condition(input, &cond, script);
+      PRINT_VAR("cond size", cond.size())
+      
+      utils::calendar calendar;
+      global::get(&calendar);
+      
+      calendar.set_week_days_count(7);
+      calendar.add_month_data({"jan", 31});
+      calendar.add_month_data({"feb", 28});
+      calendar.add_month_data({"mar", 31});
+      calendar.add_month_data({"apr", 30});
+      calendar.add_month_data({"may", 31});
+      calendar.add_month_data({"jun", 30});
+      calendar.add_month_data({"jul", 31});
+      calendar.add_month_data({"aug", 31});
+      calendar.add_month_data({"sep", 30});
+      calendar.add_month_data({"oct", 31});
+      calendar.add_month_data({"nov", 30});
+      calendar.add_month_data({"dec", 31});
+      
+      calendar.set_start_date(0, 0, 0);
+      // получится не ровно 30 лет, а округление в меньшую сторону в зависимости от текущей недели, потому что текущая дата выводится из текущего хода
+      calendar.set_current_date(30, 0, 0);
+      calendar.validate();
+      
+      const auto s_date = calendar.start_date();
+      const auto c_date = calendar.current_date();
+      const int64_t s_day = calendar.convert_date_to_days(s_date);
+      const int64_t c_day = calendar.convert_date_to_days(c_date);
+      std::cout << "Start date year " << s_date.year() << " month " << s_date.month() << " day " << s_date.day() << "\n";
+      std::cout << "Cur   date year " << c_date.year() << " month " << c_date.month() << " day " << c_date.day() << "\n";
+      PRINT_VAR("Start day", s_day)
+      PRINT_VAR("Cur   day", c_day)
+      
+      
+      // лучше будет если я разделю текущий ход и календарь
+      // календарь пусть возвращает количество дней относительно 0
+      const utils::calendar::date last = c_date;
+      const int64_t days_count = calendar.convert_date_to_days(last);
+      PRINT_VAR("days_count", days_count)
+      
+      core::religion rel1;
+      core::religion rel2;
+      
+      rel1.id = "rel1";
+      rel2.id = "rel2";
+      
+      using namespace utils::xoshiro256starstar;
+      state s = init(1);
+      
+      core::character main(true, false);
+      main.religion = &rel1;
+      
+      assert(main.is_male());
+      
+      const size_t count_value = 5000;
+      std::vector<core::character> characters;
+      characters.reserve(count_value);
+      for (size_t i = 0; i < count_value; ++i) {
+        bool male = true;
+        {
+          s = rng(s);
+          const uint64_t val = get_value(s);
+          const double norm = utils::rng_normalize(val);
+          male = norm > 0.5;
+        }
+        
+        core::religion* final_rel = nullptr;
+        {
+          s = rng(s);
+          const uint64_t val = get_value(s);
+          const double norm = utils::rng_normalize(val);
+          final_rel = norm > 0.5 ? &rel1 : &rel2;
+        }
+        
+        int64_t day_born = SIZE_MAX;
+        {
+          s = rng(s);
+          const uint64_t val = get_value(s);
+          const double norm = utils::rng_normalize(val);
+          day_born = norm * days_count; // неправильно генерится возраст
+        }
+        
+        characters.emplace_back(male, false);
+        characters.back().religion = final_rel;
+        characters.back().born_day = day_born;
+      }
+      
+      script::context script_ctx;
+      script_ctx.root = script_ctx.prev = script::object(&main);
+      script_ctx.draw_function = [] (const script::draw_data* data) -> bool {
+        if (data->original.valid()) std::cout << data->function_name << " value " << data->value.get<bool>() << " original " << data->original.get<bool>() << "\n";
+        else std::cout << data->function_name << " value " << data->value.get<bool>() << "\n";
+        return true;
+      };
+      
+//       for (size_t i = 0; i < 10; ++i) {
+//         auto cur = &characters[i];
+//         script_ctx.current = script::object(cur);
+//         PRINT("Character " + std::to_string(i))
+//         cond.draw(&script_ctx);
+//         PRINT("")
+//       }
+//       
+//       assert(false);
+      
+      const auto wife_test = [] (script::context* ctx, const bool print = false) {
+        {
+          auto c = ctx->current.get<core::character*>();
+          if (c->is_married() != false) {
+            if (print) std::cout << "Char " << c << " is_married " << "\n";
+            return false;
+          }
+        }
+        
+        {
+          auto c = ctx->current.get<core::character*>();
+          if (c->is_adult() != true) {
+            if (print) std::cout << "Char " << c << " not is_adult " << "\n";
+            return false;
+          }
+        }
+        
+        {
+          auto c = ctx->current.get<core::character*>();
+          const auto male = c->is_male();
+          auto root = ctx->root.get<core::character*>();
+          const auto r_male = root->is_male();
+          const bool final_b = male != r_male;
+          if (!final_b) {
+            if (print) std::cout << "Char " << c << " is_male == root is_male " << "\n";
+            return false;
+          }
+        }
+        
+        {
+          auto c = ctx->current.get<core::character*>();
+          auto root = ctx->root.get<core::character*>();
+          const bool final_b = c->has_same_religion_as(root);
+          if (!final_b) {
+            if (print) std::cout << "Char " << c << " not has_same_religion_as root " << "\n";
+            return false;
+          }
+        }
+        
+        return true;
+      };
+      
+      const auto draw_func = [] (const script::draw_data* dd) -> bool {
+        std::cout << dd->function_name << " value " << dd->value.get<bool>();
+        if (dd->original.is<bool>()) std::cout << " original " << dd->original.get<bool>() << "\n";
+        else std::cout << "\n";
+        //auto c = dd->current.get<core::character*>();
+        return true;
+      };
+      
+      script_ctx.draw_function = draw_func;
+      
+      // простой скрипт для 5000 персонажей получается около 1782 мкс для дебаг билда, это много или мало? нужно конечно потестить оптимизацию
+      // в релизном билде 700-900 мкс, это много или мало? с чем сравнить? просто написать функцию самому?
+      // просто написанная функция занимает 300-400 мкс, почти в 3 раза быстрее (но это тип с учетом всех оптимизаций, которые тут можно применить без виртуальных функций)
+      // скрипт возвращает не то же самое что и функция =( починил два бага: во первых NAND и NOR с одним ребенком работали как AND
+      // не идеально починил: NAND и NOR будут создаваться каждый раз как будет вызвана функция инициализации, желательно конечно передавать id родительской функции
+      // во вторых в функции инициализации таблицы могут придти последовательно несколько функции из дочерней функции и раньше эта функция перетирала все функции после первой
+      // теперь по идее возврат должен быть эквивалентен ручной функции
+      {
+        std::vector<core::character*> output_characters;
+        output_characters.reserve(count_value);
+        
+        utils::time_log log("Condition for " + std::to_string(count_value) + " characters");
+        for (size_t i = 0; i < count_value; ++i) {
+          auto cur = &characters[i];
+          script_ctx.current = script::object(cur);
+          
+          if (cond.compute(&script_ctx)) {
+            output_characters.push_back(cur);
+          }
+        }
+        
+        for (auto c : output_characters) {
+          script_ctx.current = script::object(c);
+          if (!wife_test(&script_ctx, true)) {
+            const bool male = c->is_male();
+            const double age = c->get_age();
+            std::cout << "character male " << male << '\n';
+            std::cout << "character age  " << age << '\n';
+            cond.draw(&script_ctx);
+            break;
+          }
+        }
+        
+        PRINT_VAR("output_characters size", output_characters.size())
+      }
+      
+      {
+        std::vector<core::character*> output_characters;
+        output_characters.reserve(count_value);
+        
+        utils::time_log log("Lambda    for " + std::to_string(count_value) + " characters");
+        for (size_t i = 0; i < count_value; ++i) {
+          auto cur = &characters[i];
+          script_ctx.current = script::object(cur);
+          
+          if (wife_test(&script_ctx)) {
+            output_characters.push_back(cur);
+          }
+        }
+        
+        PRINT_VAR("output_characters size", output_characters.size())
+      }
     }
     
     // я вроде бы более мнее сделал всю логическую чать скриптов (01.07.2021)
@@ -1539,6 +1826,15 @@ end
     // проблема в том что нам каким то образом нужно получать несколько входных данных, некоторые из этих вещей
     // удобно пихнуть в мапу, а некоторые удобно передать так (например 'потентиал' условия принимают несколько таргетов)
     // (их проще всего их засунуть в массив? хотя зачем? в принципе эти условия должны работать также как и остальные)
+    
+    // переписал скрипт (29.11.2021), теперь легко вычислять числовые значения со сложными условиями
+    // гораздо проще для восприятия, практически отсутствует говнокод (только в функциях инициализации) 
+    // (как с этим разделаться при этом не потеряв в гибкости?), поддерживает все тоже что поддерживала предыдущая версия
+    // побольшому счету осталось только составить разные скрипты для системных вещей и посмотреть чего не хватает
+    // например скрипт расчета отношений двух персонажей или скрипт расчета денежного дохода
+    // в отношениях нужно искать наличие противоположного треита, по идее это как то так:
+    // every_trait = { { condition = { ["context:other"] = { has_trait = "prev.opposite" } }, -15 } }
+    // 
     assert(false);
   }
   
@@ -1880,6 +2176,9 @@ end
 
     system->graphics_container->render->recreate(w, h);
     system->image_controller->update_set();
+    
+    auto rp = reinterpret_cast<render::pass_framebuffer_container*>(system->main_pass);
+    rp->recreate(w, h);
     
     auto map = global::get<systems::map_t>();
     if (map != nullptr && map->optimizators_container != nullptr) {

@@ -133,6 +133,11 @@ namespace devils_engine {
     
     map::~map() {}
     
+    bool map::is_tile_data_on_gpu() const {
+      std::unique_lock<std::mutex> lock(mutex);
+      return data->tiles.ptr == nullptr;
+    }
+    
     bool test_intersect_func(const glm::vec4 &v0, const glm::vec4 &v1, const glm::vec4 &v2, const utils::ray &ray, float &t) {
       const glm::vec3 v0v1 = v1 - v0;
       const glm::vec3 v0v2 = v2 - v0;
@@ -171,50 +176,12 @@ namespace devils_engine {
     
     bool test_intersect_funcd(const glm::dvec4 &v0, const glm::dvec4 &v1, const glm::dvec4 &v2, const utils::ray &ray, double &t) {
       const glm::dvec3 ray_pos = ray.pos;
-//       const glm::dvec3 ray_dir = ray.dir;
       const glm::dvec3 v0v1 = v1 - v0;
       const glm::dvec3 v0v2 = v2 - v0;
-//       const glm::dvec3 N = glm::cross(v0v1, v0v2);
       const glm::dvec3 pvec = glm::cross(glm::dvec3(ray.dir), v0v2);
       const double det = glm::dot(v0v1, pvec);
-//       const double area2 = glm::length(N);
       
-      //if (det > -EPSILON) return false;
-      //if (det < double(EPSILON)) return false;
       if (det > -double(EPSILON) && det < double(EPSILON)) return false;
-      //if (glm::abs(det) < EPSILON) return false;
-      
-      // НЕРАБОТАЕТ =(((
-//       const double not_ray_dir = glm::dot(N, ray_dir);
-//       if (glm::abs(not_ray_dir) < EPSILON) return false;
-//       std::cout << "normal ok" << '\n';
-      
-//       const double d = glm::dot(N, glm::dvec3(v0));
-//       t = (glm::dot(N, ray_pos) + d) / not_ray_dir;
-//       if (t < 0.0) return false;
-//       PRINT_VAR("t", t)
-      
-//       const glm::dvec3 P = ray_pos + t * ray_dir; 
-//       
-//       glm::dvec3 C;
-//       glm::dvec3 edge0 = v1 - v0;
-//       glm::dvec3 vp0 = P - glm::dvec3(v0); 
-//       C = glm::cross(edge0, vp0); 
-//       if (glm::dot(N, C) < 0.0) return false; // P is on the right side 
-//   
-//       // edge 1
-//       glm::dvec3 edge1 = v2 - v1; 
-//       glm::dvec3 vp1 = P - glm::dvec3(v1); 
-//       C = glm::cross(edge1, vp1); 
-//       if (glm::dot(N, C) < 0.0)  return false; // P is on the right side 
-//   
-//       // edge 2
-//       glm::dvec3 edge2 = v0 - v2; 
-//       glm::dvec3 vp2 = P - glm::dvec3(v2); 
-//       C = glm::cross(edge2, vp2); 
-//       if (glm::dot(N, C) < 0.0) return false; // P is on the right side; 
-//   
-//       return true; // this ray hits the triangle 
 
       const double invDet = 1.0f / det;
 
@@ -223,19 +190,13 @@ namespace devils_engine {
       const glm::dvec3 tvec = ray_pos - glm::dvec3(v0);
       u = glm::dot(tvec, pvec) * invDet;
 
-//       std::cout << "u " << u << '\n';
       if (u < 0.0 || u > 1.0) return false;
-      //if (u < -EPSILON || u > 1.0f+EPSILON) return false;
 
       const glm::dvec3 qvec = glm::cross(tvec, v0v1);
       v = glm::dot(glm::dvec3(ray.dir), qvec) * invDet;
-//       std::cout << "v " << v << '\n';
       if (v < 0.0 || u + v > 1.0) return false;
-      //if (v < -EPSILON || u + v > 1.0+EPSILON) return false;
 
       t = glm::dot(v0v2, qvec) * invDet;
-      
-//       std::cout << "triangle ok" << "\n";
       
       return true;
     }
@@ -245,7 +206,7 @@ namespace devils_engine {
       const bool ret = m->intersect_container(tri_index, ray);
       if (!ret) return UINT32_MAX;
       
-      auto ctx = global::get<systems::map_t>()->core_context;
+//       auto ctx = global::get<systems::map_t>()->core_context;
       
       const map::triangle &tri = m->triangles[tri_index];
       
@@ -258,9 +219,11 @@ namespace devils_engine {
           // тут нужно проверить дальность до тайла + проверить пересечение со стенками
           // нужно ли чекать ближайший треугольник? не уверен что это необходимо
           
-          const auto tile = ctx->get_entity<core::tile>(tile_index);
+          //const auto tile = ctx->get_entity<core::tile>(tile_index);
+          const auto tile = m->get_tile_ptr(tile_index);
           
-          const uint32_t p_count = tile->neighbors_count();
+          const uint32_t p_count = tile->points[5] == UINT32_MAX ? 5 : 6;
+          //const uint32_t p_count = tile->neighbors_count();
 //           const uint32_t point_a_index = tile->center;
           const float height = tile->height;
 //           const uint32_t height_layer = render::compute_height_layer(height);

@@ -72,17 +72,16 @@ namespace devils_engine {
             PRINT("Thread compute turn advancing")
             auto ctx = global::get<systems::map_t>()->core_context;
             ctx->sort_characters();
-            const size_t first_not_dead = ctx->first_not_dead_character();
 //             const size_t first_playable = ctx->first_playable_character();
-            const size_t count_not_dead = ctx->characters_count() - first_not_dead;
+            const size_t count_not_dead = ctx->living_characters_count();
 //             const size_t count_playable = ctx->characters_count() - first_playable;
             
             // статы у городов, провинций, фракций, армий и героев (возможно сначало нужно посчитать эвенты)
             
-            utils::submit_works_async(pool, count_not_dead, [ctx, first_not_dead] (const size_t &start, const size_t &count) {
+            utils::submit_works_async(pool, count_not_dead, [ctx] (const size_t &start, const size_t &count) {
               for (size_t i = start; i < start+count; ++i) {
-                const size_t index = i + first_not_dead;
-                auto c = ctx->get_character(index);
+                const size_t index = i;
+                auto c = ctx->get_living_character(index);
                 ASSERT(!c->is_dead());
                 // нужно наверное добавить флажок необходимости обновляться
                 
@@ -150,10 +149,8 @@ namespace devils_engine {
             // сейчас нужно сделать пока что одну подсистему которая должна отвечать за строительство
             
             auto ctx = global::get<systems::map_t>()->core_context;
-            const size_t first_not_dead = ctx->first_not_dead_character();
-            const size_t first_playable = ctx->first_playable_character();
-            const size_t count_not_dead = ctx->characters_count() - first_not_dead;
-            const size_t count_playable = ctx->characters_count() - first_playable;
+            const size_t count_not_dead = ctx->living_characters_count();
+            const size_t count_playable = ctx->living_playable_characters_count();
             
             std::vector<uint32_t> systems_data(count_not_dead); // msvc не хочет работать если используется статик массив
             uint32_t* systems_data_ptr = systems_data.data();
@@ -166,26 +163,47 @@ namespace devils_engine {
               ASSERT(s->get_attrib(ai::sub_system::attrib_threadsave_check));
               
               memset(systems_data_ptr, 0, sizeof(uint32_t) * count_not_dead);
-              const size_t count = s->get_attrib(ai::sub_system::attrib_playable_characters) ? count_playable : count_not_dead;
-              const size_t first = s->get_attrib(ai::sub_system::attrib_playable_characters) ? first_playable : first_not_dead;
+              //const size_t count = s->get_attrib(ai::sub_system::attrib_playable_characters) ? count_playable : count_not_dead;
               
-              utils::submit_works_async(pool, count, [ctx, first, s, systems_data_ptr] (const size_t &start, const size_t &count) {
-                for (size_t i = start; i < start+count; ++i) {
-                  const size_t index = i + first;
-                  auto c = ctx->get_character(index);
-                  if (c->is_player()) continue;
-                  ASSERT(!c->is_dead());
-                  
-                  systems_data_ptr[i] = s->check(c); // похоже что чек не проходит
-                  if (systems_data_ptr[i] == SUB_SYSTEM_SKIP) continue;
-                  // а зачем мне тогда массив? мне он нужен когда ai::sub_system::attrib_threadsave_process == false 
-                  if (s->get_attrib(ai::sub_system::attrib_threadsave_process)) {
-                    s->process(c, systems_data_ptr[i]);
+              if (s->get_attrib(ai::sub_system::attrib_playable_characters)) {
+                const size_t count = count_playable;
+                utils::submit_works_async(pool, count, [ctx, s, systems_data_ptr] (const size_t &start, const size_t &count) {
+                  for (size_t i = start; i < start+count; ++i) {
+                    const size_t index = i;
+                    auto c = ctx->get_living_playable_character(index);
+                    if (c->is_player()) continue;
+                    ASSERT(!c->is_dead());
+                    
+                    systems_data_ptr[i] = s->check(c); // похоже что чек не проходит
+                    if (systems_data_ptr[i] == SUB_SYSTEM_SKIP) continue;
+                    // а зачем мне тогда массив? мне он нужен когда ai::sub_system::attrib_threadsave_process == false 
+                    if (s->get_attrib(ai::sub_system::attrib_threadsave_process)) {
+                      s->process(c, systems_data_ptr[i]);
+                    }
                   }
-                }
-              });
-              
-              pool->compute();
+                });
+                
+                pool->compute();
+              } else {
+                const size_t count = count_not_dead;
+                utils::submit_works_async(pool, count, [ctx, s, systems_data_ptr] (const size_t &start, const size_t &count) {
+                  for (size_t i = start; i < start+count; ++i) {
+                    const size_t index = i;
+                    auto c = ctx->get_living_character(index);
+                    if (c->is_player()) continue;
+                    ASSERT(!c->is_dead());
+                    
+                    systems_data_ptr[i] = s->check(c); // похоже что чек не проходит
+                    if (systems_data_ptr[i] == SUB_SYSTEM_SKIP) continue;
+                    // а зачем мне тогда массив? мне он нужен когда ai::sub_system::attrib_threadsave_process == false 
+                    if (s->get_attrib(ai::sub_system::attrib_threadsave_process)) {
+                      s->process(c, systems_data_ptr[i]);
+                    }
+                  }
+                });
+                
+                pool->compute();
+              }
               
               // должно сработать (текущий тред занят этой конкретной функцией)
               // кажется работает, осталось немного поработать над синхронизацией всего этого дела
@@ -200,16 +218,32 @@ namespace devils_engine {
               // такая ситуация должна быть очень редкой
               // мы можем использовать это для запуска луа функции
               if (!s->get_attrib(ai::sub_system::attrib_threadsave_process)) {
-                const size_t start = 0;
-                for (size_t i = start; i < start+count; ++i) {
-                  const size_t index = i + first;
-                  if (systems_data_ptr[i] == SUB_SYSTEM_SKIP) continue;
-                          
-                  auto c = ctx->get_character(index);
-                  if (c->is_player()) continue;
-                  ASSERT(!c->is_dead());
-                  
-                  s->process(c, systems_data_ptr[i]);
+                if (s->get_attrib(ai::sub_system::attrib_playable_characters)) {
+                  const size_t count = count_playable;
+                  const size_t start = 0;
+                  for (size_t i = start; i < start+count; ++i) {
+                    const size_t index = i;
+                    if (systems_data_ptr[i] == SUB_SYSTEM_SKIP) continue;
+                            
+                    auto c = ctx->get_living_playable_character(index);
+                    if (c->is_player()) continue;
+                    ASSERT(!c->is_dead());
+                    
+                    s->process(c, systems_data_ptr[i]);
+                  }
+                } else {
+                  const size_t count = count_not_dead;
+                  const size_t start = 0;
+                  for (size_t i = start; i < start+count; ++i) {
+                    const size_t index = i;
+                    if (systems_data_ptr[i] == SUB_SYSTEM_SKIP) continue;
+                            
+                    auto c = ctx->get_living_character(index);
+                    if (c->is_player()) continue;
+                    ASSERT(!c->is_dead());
+                    
+                    s->process(c, systems_data_ptr[i]);
+                  }
                 }
               }
             }

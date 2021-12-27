@@ -56,6 +56,8 @@ int main(int argc, char const *argv[]) {
   utils::battle_state battle_state;
   utils::encounter_loading_state encounter_loading_state;
   utils::encounter_state encounter_state;
+  
+  //test_decision();
 
   // по всей видимости луа занимает реально много памяти
   // что то с этим сделать вряд ли можно (интересно есть ли какие нибудь жесткие ограничения на андроиде?)
@@ -305,6 +307,8 @@ int main(int argc, char const *argv[]) {
   // против конкретного персонажа, это тоже довольно тяжелая операция, тут я вижу два контейнера: первый - раскрытые секреты 
   // против персонажа (небольшой контейнер, скорее всего 16 размер подойдет), второй - список хуков, мы храним их по персонажу?
   //
+  
+  // нужно переделать рейкаст!!!!
 
   const std::array<utils::quest_state*, utils::quest_state::count> game_states = {
     &main_menu_loading_state,
@@ -348,6 +352,14 @@ int main(int argc, char const *argv[]) {
     core::troop_type t;
     UNUSED_VARIABLE(n1);
     UNUSED_VARIABLE(t);
+    const auto ptr1 = &core::validate_trait;
+    const auto ptr2 = &core::validate_casus_belli;
+    const auto ptr3 = &core::validate_interaction;
+    const auto ptr4 = &core::validate_event;
+    UNUSED_VARIABLE(ptr1);
+    UNUSED_VARIABLE(ptr2);
+    UNUSED_VARIABLE(ptr3);
+    UNUSED_VARIABLE(ptr4);
   }
 
 //   std::future<void> rendering_future;
@@ -396,10 +408,10 @@ int main(int argc, char const *argv[]) {
       game_ctx->reload_interface = false;
     }
     
-    if (game_ctx->state == utils::quest_state::world_map) {
-      auto c = game_ctx->player_character;
-      test_decision(c);
-    }
+//     if (game_ctx->state == utils::quest_state::world_map) {
+//       auto c = game_ctx->player_character;
+//       test_decision(c);
+//     }
     
     // в текущем виде занимает в среднем от 20-50 мкс, 
     // я так подозреваю что проблемы начнутся только от 1000 юнитов

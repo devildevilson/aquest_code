@@ -605,12 +605,12 @@ namespace devils_engine {
     army2->set_img(view->get_image(0, false, false));
     
     {
-      auto ptr = ctx->get_tile_ptr(army1->tile_index);
+      auto ptr = ctx->get_entity<core::tile>(army1->tile_index);
       ptr->army_token = army1->object_token;
     }
     
     {
-      auto ptr = ctx->get_tile_ptr(army2->tile_index);
+      auto ptr = ctx->get_entity<core::tile>(army2->tile_index);
       ptr->army_token = army2->object_token;
     }
     
@@ -801,13 +801,14 @@ namespace devils_engine {
 
           const uint32_t offset = borders.size();
           uint32_t border_count = 0;
-          const auto &data = render::unpack_data(map->get_tile(tile_index));
-          const uint32_t n_count = render::is_pentagon(data) ? 5 : 6;
+          //const auto &data = render::unpack_data(map->get_tile(tile_index));
+          const auto tile_data = ctx->get_entity<core::tile>(tile_index);
+          const uint32_t n_count = tile_data->neighbors_count();
           for (uint32_t k = 0; k < n_count; ++k) {
-            const uint32_t n_index = data.neighbors[k];
+            const uint32_t n_index = tile_data->neighbors[k];
 
             //const uint32_t n_province_index = container->get_data<uint32_t>(map::debug::entities::tile, n_index, map::debug::properties::tile::province_index);
-            const uint32_t n_province_index = ctx->get_tile(n_index).province;
+            const uint32_t n_province_index = ctx->get_entity<core::tile>(n_index)->province;
             if (province_index == n_province_index) continue;
 
   //           const auto &n_data = render::unpack_data(map->get_tile(n_index));
@@ -873,28 +874,32 @@ namespace devils_engine {
       //for (size_t i = 0; i < borders.size(); ++i) {
         for (size_t i = start; i < start+count; ++i) {
           const auto &current_data = borders[i];
-          const auto &tile_data = render::unpack_data(map->get_tile(current_data.tile_index));
-          const uint32_t n_count = render::is_pentagon(tile_data) ? 5 : 6;
+          const auto tile_data = ctx->get_entity<core::tile>(current_data.tile_index);
+          //const auto &tile_data = render::unpack_data(map->get_tile(current_data.tile_index));
+          //const uint32_t n_count = render::is_pentagon(tile_data) ? 5 : 6;
+          const uint32_t n_count = tile_data->neighbors_count();
 
-          ASSERT(tile_data.neighbors[current_data.edge_index] == current_data.opposite_tile_index);
+          ASSERT(tile_data->neighbors[current_data.edge_index] == current_data.opposite_tile_index);
 
     #ifndef _NDEBUG
           {
             const uint32_t k = current_data.edge_index;
             //const uint32_t k2 = k == 0 ? n_count-1 : k-1;
             const uint32_t k2 = (k+1)%n_count;
-            const uint32_t point1 = tile_data.points[k];
-            const uint32_t point2 = tile_data.points[k2];
+            const uint32_t point1 = tile_data->points[k];
+            const uint32_t point2 = tile_data->points[k2];
             ASSERT(point1 != UINT32_MAX);
             ASSERT(point2 != UINT32_MAX);
             ASSERT(point1 != point2);
-
-            const auto &n_tile_data = render::unpack_data(map->get_tile(current_data.opposite_tile_index));
-            const uint32_t n_count2 = render::is_pentagon(n_tile_data) ? 5 : 6;
+            
+            const auto n_tile_data = ctx->get_entity<core::tile>(current_data.tile_index);
+            const uint32_t n_count2 = n_tile_data->neighbors_count();
+//             const auto &n_tile_data = render::unpack_data(map->get_tile(current_data.opposite_tile_index));
+//             const uint32_t n_count2 = render::is_pentagon(n_tile_data) ? 5 : 6;
             bool found1 = false;
             bool found2 = false;
             for (uint32_t j = 0; j < n_count2; ++j) {
-              const uint32_t n_point_index = n_tile_data.points[j];
+              const uint32_t n_point_index = n_tile_data->points[j];
               if (n_point_index == point1) found1 = true;
               if (n_point_index == point2) found2 = true;
             }
@@ -904,8 +909,8 @@ namespace devils_engine {
     #endif
 
           const uint32_t tmp_index = (current_data.edge_index)%n_count;
-          const uint32_t adjacent1 = tile_data.neighbors[(tmp_index+1)%n_count];
-          const uint32_t adjacent2 = tile_data.neighbors[tmp_index == 0 ? n_count-1 : tmp_index-1];
+          const uint32_t adjacent1 = tile_data->neighbors[(tmp_index+1)%n_count];
+          const uint32_t adjacent2 = tile_data->neighbors[tmp_index == 0 ? n_count-1 : tmp_index-1];
 
     #ifndef _NDEBUG
           {
@@ -913,10 +918,10 @@ namespace devils_engine {
             const uint32_t k2 = k == 0 ? n_count-1 : k-1;
             const uint32_t k3 = (tmp_index+2)%n_count;
             const uint32_t k4 = k == 0 ? n_count-2 : (k == 1 ? n_count-1 : k-2);
-            const uint32_t point1 = tile_data.points[k];
-            const uint32_t point2 = tile_data.points[k2];
-            const uint32_t point3 = tile_data.points[k3];
-            const uint32_t point4 = tile_data.points[k4];
+            const uint32_t point1 = tile_data->points[k];
+            const uint32_t point2 = tile_data->points[k2];
+            const uint32_t point3 = tile_data->points[k3];
+            const uint32_t point4 = tile_data->points[k4];
             ASSERT(point1 != UINT32_MAX);
             ASSERT(point2 != UINT32_MAX);
             ASSERT(point1 != point2);
@@ -927,10 +932,12 @@ namespace devils_engine {
               bool found3 = false;
               bool found4 = false;
 
-              const auto &n_tile_data = render::unpack_data(map->get_tile(adjacent1));
-              const uint32_t n_count2 = render::is_pentagon(n_tile_data) ? 5 : 6;
+              const auto n_tile_data = ctx->get_entity<core::tile>(current_data.tile_index);
+              const uint32_t n_count2 = n_tile_data->neighbors_count();
+//               const auto &n_tile_data = render::unpack_data(map->get_tile(adjacent1));
+//               const uint32_t n_count2 = render::is_pentagon(n_tile_data) ? 5 : 6;
               for (uint32_t j = 0; j < n_count2; ++j) {
-                const uint32_t n_point_index = n_tile_data.points[j];
+                const uint32_t n_point_index = n_tile_data->points[j];
                 if (n_point_index == point1) found1 = true;
                 if (n_point_index == point2) found2 = true;
                 if (n_point_index == point3) found3 = true;
@@ -949,10 +956,12 @@ namespace devils_engine {
               bool found3 = false;
               bool found4 = false;
 
-              const auto &n_tile_data = render::unpack_data(map->get_tile(adjacent2));
-              const uint32_t n_count2 = render::is_pentagon(n_tile_data) ? 5 : 6;
+              const auto n_tile_data = ctx->get_entity<core::tile>(current_data.tile_index);
+              const uint32_t n_count2 = n_tile_data->neighbors_count();
+//               const auto &n_tile_data = render::unpack_data(map->get_tile(adjacent2));
+//               const uint32_t n_count2 = render::is_pentagon(n_tile_data) ? 5 : 6;
               for (uint32_t j = 0; j < n_count2; ++j) {
-                const uint32_t n_point_index = n_tile_data.points[j];
+                const uint32_t n_point_index = n_tile_data->points[j];
                 if (n_point_index == point1) found1 = true;
                 if (n_point_index == point2) found2 = true;
                 if (n_point_index == point3) found3 = true;
@@ -984,8 +993,8 @@ namespace devils_engine {
           const uint32_t k = (tmp_index+1)%n_count;
           const uint32_t k2 = k == 0 ? n_count-1 : k-1;
           //const uint32_t k2 = (k+1)%n_count;
-          const uint32_t point1_index = tile_data.points[k];
-          const uint32_t point2_index = tile_data.points[k2];
+          const uint32_t point1_index = tile_data->points[k];
+          const uint32_t point2_index = tile_data->points[k2];
           const glm::vec4 point1 = map->get_point(point1_index);
           const glm::vec4 point2 = map->get_point(point2_index);
           arr[i].points[0] = point2;
@@ -995,28 +1004,28 @@ namespace devils_engine {
           // нужно проверить принадлежат ли смежные тайлы к тем же государствам
           // тут же мы определяем тип границы (государственная, вассальная, граница провинции)
 
-          const uint32_t province_index = ctx->get_tile(current_data.tile_index).province;
-          const uint32_t opposite_province_index = ctx->get_tile(current_data.opposite_tile_index).province;
+          const uint32_t province_index = ctx->get_entity<core::tile>(current_data.tile_index)->province;
+          const uint32_t opposite_province_index = ctx->get_entity<core::tile>(current_data.opposite_tile_index)->province;
 
-          const uint32_t adjacent1_province_index = ctx->get_tile(adjacent1).province;
-          const uint32_t adjacent2_province_index = ctx->get_tile(adjacent2).province;
+          const uint32_t adjacent1_province_index = ctx->get_entity<core::tile>(adjacent1)->province;
+          const uint32_t adjacent2_province_index = ctx->get_entity<core::tile>(adjacent2)->province;
 
           if (province_index != adjacent1_province_index) {
-            const glm::vec4 center = map->get_point(tile_data.center);
+            const glm::vec4 center = map->get_point(tile_data->center);
             arr[i].dirs[1] = glm::normalize(center - arr[i].points[1]);
           } else {
             const uint32_t k3 = (tmp_index+2)%n_count;
-            const uint32_t point3_index = tile_data.points[k3];
+            const uint32_t point3_index = tile_data->points[k3];
             const glm::vec4 point3 = map->get_point(point3_index);
             arr[i].dirs[1] = glm::normalize(point3 - arr[i].points[1]);
           }
 
           if (province_index != adjacent2_province_index) {
-            const glm::vec4 center = map->get_point(tile_data.center);
+            const glm::vec4 center = map->get_point(tile_data->center);
             arr[i].dirs[0] = glm::normalize(center - arr[i].points[0]);
           } else {
             const uint32_t k4 = k == 0 ? n_count-2 : (k == 1 ? n_count-1 : k-2);
-            const uint32_t point4_index = tile_data.points[k4];
+            const uint32_t point4_index = tile_data->points[k4];
             const glm::vec4 point4 = map->get_point(point4_index);
             arr[i].dirs[0] = glm::normalize(point4 - arr[i].points[0]);
           }
@@ -1264,7 +1273,7 @@ namespace devils_engine {
           for (const auto &tile_index : province->tiles) {
             auto itr = tile_city_map.find(tile_index);
             
-            const auto tile = ctx->get_tile_ptr(tile_index);
+            const auto tile = ctx->get_entity<core::tile>(tile_index);
             ASSERT(tile->province == UINT32_MAX);
             tile->city = itr == tile_city_map.end() ? UINT32_MAX : itr->second;;
             tile->province = i;
@@ -2153,7 +2162,7 @@ namespace devils_engine {
 //     }
     
     template <typename T>
-    std::vector<sol::table> create_entity_without_id(
+    static std::vector<sol::table> create_entity_without_id(
       core::context* ctx, 
       const utils::world_serializator* world, 
       sol::state_view state, 
@@ -2171,7 +2180,7 @@ namespace devils_engine {
     }
     
     template <typename T>
-    std::vector<sol::table> create_entity(
+    static std::vector<sol::table> create_entity(
       core::context* ctx, 
       utils::data_string_container* to_data, 
       const utils::world_serializator* world, 

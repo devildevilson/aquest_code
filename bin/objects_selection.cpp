@@ -4,6 +4,8 @@
 #include "utils/interface_container.h"
 #include "utils/utility.h"
 
+#include <iostream>
+
 namespace devils_engine {
   namespace utils {
     bool valid_object(const sol::object &obj) {

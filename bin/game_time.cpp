@@ -5,7 +5,7 @@ namespace devils_engine {
   namespace utils {
     calendar::date::date() : m_year(INT32_MAX), m_month(INT16_MAX), m_day(INT16_MAX) {}
     calendar::date::date(const int32_t &m_year, const uint16_t &m_month, const uint16_t &m_day) : m_year(m_year), m_month(m_month), m_day(m_day) {}
-    int32_t calendar::date::year() const { return m_year; }
+    int32_t calendar::date::year() const { return before_zero() ? m_year+1 : m_year; }
     uint32_t calendar::date::month() const { return m_month; }
     uint32_t calendar::date::day() const { return m_day; }
     bool calendar::date::before_zero() const { return m_year < 0; }
@@ -63,17 +63,16 @@ namespace devils_engine {
     }
     
     int64_t calendar::convert_date_to_days(const struct date &date) const {
-      // положительное число
       int64_t days_count = date.day();
       for (uint32_t month_index = 0; month_index < date.month(); ++month_index) {
         days_count += m_months[month_index].days_count;
       }
       
-      const bool before_zero = date.year() < 0;
+      const bool before_zero = date.before_zero();
       days_count = before_zero ? -days_count : days_count;
       days_count += date.year() * m_year_days; // это количество дней прошедшее от 0 года
       if (before_zero) {ASSERT(days_count < 0);}
-      return std::abs(m_start_day) + days_count;
+      return days_count - m_start_day; // количество дней от начала игры, если дата задана неверно то может придти отрицательное число
     }
     
     size_t calendar::days_to_years(const size_t &days) const {
@@ -102,7 +101,15 @@ namespace devils_engine {
         m_year_days += data.days_count;
       }
       
-      m_start_day = convert_date_to_days(load_start_date);
+      m_start_day = load_start_date.day();
+      for (uint32_t month_index = 0; month_index < load_start_date.month(); ++month_index) {
+        m_start_day += m_months[month_index].days_count;
+      }
+      
+      const bool before_zero = load_start_date.before_zero();
+      m_start_day += load_start_date.year() * m_year_days; // это количество дней прошедшее от 0 года
+      m_start_day = load_start_date.year() == 0 && before_zero ? -m_start_day : m_start_day;
+      
       m_current_turn = convert_date_to_turn(load_current_date);
       
       const int64_t current_day = convert_turn_to_days(m_current_turn);
@@ -111,7 +118,7 @@ namespace devils_engine {
         PRINT("Bad current date. Start date must not be later then current date")
       }
       
-      //if (counter != 0) throw std::runtime_error("Calendar validation failed");
+      if (counter != 0) throw std::runtime_error("Calendar validation failed");
     }
     
     bool operator==(const calendar::date &date1, const calendar::date &date2) {

@@ -141,6 +141,8 @@ namespace devils_engine {
       map(const create_info &info);
       ~map();
       
+      bool is_tile_data_on_gpu() const;
+      
       // это дело нужно вынести куда? в контекст? там ближе всего эти вещи
       uint32_t cast_ray(const utils::ray &ray, float &ray_dist) const;
       bool intersect_container(const uint32_t &tri_index, const utils::ray &ray) const;

@@ -34,6 +34,7 @@
 #include "render/stages.h"
 #include "render/targets.h"
 #include "render/container.h"
+#include "render/pass.h"
 #include "render/shared_structures.h"
 #include "render/render_mode_container.h"
 #include "render/pipeline_mode_updater.h"
@@ -145,7 +146,7 @@ namespace devils_engine {
   
   void check_tile(const map::container* map, const uint32_t &tile_index);
   
-  void test_decision(core::character* c);
+  void test_decision();
   
 //   void draw_army_path();
   

@@ -113,8 +113,8 @@ if (WIN32 OR MINGW)
 else()
   set(CPPFS_LIB_PATH libs)
   set(MEMORY_LIB_PATH include/memory/build/src/)
-  set(LUA_LIB lua5.3)
-  set(LUA_LIBRARIES /usr/include/lua5.3)
+  set(LUA_LIB lua)
+  set(LUA_LIBRARIES /usr/include)
 
   # находим указанные зависимости (нужно чекнуть все ли это зависимости?)
   # вместо glm у меня установлен gli
@@ -212,6 +212,8 @@ file(GLOB_RECURSE GLSL_SOURCE_FILES
   raw_shaders/battle_biome_objects.frag
   raw_shaders/battle_map_unit.vert
   raw_shaders/battle_map_unit.frag
+  raw_shaders/skybox.vert
+  raw_shaders/skybox.frag
 )
 
 foreach(GLSL ${GLSL_SOURCE_FILES})
@@ -264,50 +266,6 @@ set(SRC_LIST
   #utils/ecs.cpp
   utils/random_engine.cpp
   utils/linear_rng.cpp
-  utils/lua_initialization_game_logic.cpp
-  utils/lua_initialization_input.cpp
-  utils/lua_initialization_types.cpp
-  utils/lua_initialization_main_menu.cpp
-  utils/lua_initialization_constants.cpp
-  utils/lua_initialization_package.cpp
-  utils/lua_initialization_settings.cpp
-  utils/lua_initialization_tiles.cpp
-  utils/lua_initialization_internal_enums.cpp
-  utils/lua_initialization_internal_building_type.cpp
-  utils/lua_initialization_internal_character.cpp
-  utils/lua_initialization_internal_city.cpp
-  utils/lua_initialization_internal_city_type.cpp
-  utils/lua_initialization_internal_faction.cpp
-  utils/lua_initialization_internal_province.cpp
-  utils/lua_initialization_internal_titulus.cpp
-  utils/lua_initialization_internal_army.cpp
-  utils/lua_initialization_internal_war.cpp
-  utils/lua_initialization_internal_religion.cpp
-  utils/lua_initialization_internal_culture.cpp
-  utils/lua_initialization_internal_troop.cpp
-  utils/lua_initialization_internal_troop_type.cpp
-  #utils/lua_initialization_internal_trait.cpp
-  #utils/lua_initialization_internal_modificator.cpp
-  #utils/lua_initialization_internal_casus_belli.cpp
-  utils/lua_initialization_battle_map.cpp
-  utils/lua_initialization_generator_container.cpp
-  utils/lua_initialization_noiser.cpp
-  utils/lua_initialization_random_engine.cpp
-  utils/lua_initialization_progress_container.cpp
-  utils/lua_initialization_battle_generator_functions.cpp
-  utils/lua_initialization_battle_unit.cpp
-  utils/lua_initialization_world_map.cpp
-  utils/lua_initialization_world_map_generator_functions.cpp
-  utils/lua_initialization_calendar.cpp
-  utils/lua_initialization_safe_utils.cpp
-  utils/lua_initialization_interface_utils.cpp
-  utils/lua_initialization_game_context.cpp
-  utils/lua_initialization_localization.cpp
-  utils/lua_initialization_core_loading.cpp
-  utils/lua_initialization_camera.cpp
-  utils/lua_initialization_selection.cpp
-  #utils/lua_initialization_script_utils.cpp
-  utils/lua_initialization.cpp
   utils/deferred_tasks.cpp
   utils/lua_environment.cpp
   utils/string_container.cpp
@@ -329,6 +287,7 @@ set(SRC_LIST
   bin/battle_context.cpp
   bin/battle_structures.cpp
   utils/structures_utils.cpp
+  utils/type_info.cpp
   #include/FastNoise/FastNoise.cpp
   include/whereami/src/whereami.c
   include/fmt/src/format.cc
@@ -361,9 +320,6 @@ set(HDR_LIST
   utils/linear_rng.h
   utils/table_container.h
   utils/bit_field.h
-  utils/lua_initialization.h
-  utils/lua_initialization_hidden.h
-  utils/lua_initialization_internal.h
   utils/deferred_tasks.h
   utils/lua_environment.h
   utils/string_container.h
@@ -385,6 +341,7 @@ set(HDR_LIST
   bin/battle_context.h
   bin/battle_structures.h
   utils/structures_utils.h
+  utils/type_info.h
   include/FastNoise/Cpp/FastNoiseLite.h
   include/whereami/src/whereami.h
   
@@ -398,7 +355,7 @@ set(HDR_LIST
 #   set_property(TARGET lua53 PROPERTY IMPORTED_LOCATION "/usr/lib/liblua5.3.so")
 # endif()
 add_library(utils ${SRC_LIST} ${HDR_LIST})
-target_link_libraries(utils ${LUA_LIB}) # PUBLIC foonathan_memory moonnuklear
+target_link_libraries(utils) # PUBLIC foonathan_memory moonnuklear
 # нужно сделать одинаковый файл что в линуксе что в винде
 # в любом случае нужно компилировать с одной версией луа
 
@@ -419,12 +376,17 @@ set(SRC_LIST
   render/image_container.cpp
   render/image_controller.cpp
   #render/persistent_resources.cpp
-  render/slots.cpp
+  #render/slots.cpp
   render/battle_render_stages.cpp
   render/utils.cpp
   render/makers.cpp
   render/vulkan_hpp_header.cpp
   render/vk_mem_alloc_impl.cpp
+  render/queue.cpp
+  render/pass.cpp
+  render/command_buffer.cpp
+  render/proxy_stage.cpp
+  render/container_view.cpp
 )
 
 set(HDR_LIST
@@ -438,7 +400,7 @@ set(HDR_LIST
   render/container.h
   render/context.h
   render/shared_structures.h
-  render/stage.h
+  #render/stage.h
   render/stages.h
   render/target.h
   render/targets.h
@@ -450,7 +412,7 @@ set(HDR_LIST
   render/image_container.h
   render/image_controller.h
   #render/persistent_resources.h
-  render/slots.h
+  #render/slots.h
   render/shared_battle_structures.h
   render/battle_render_stages.h
   render/utils.h
@@ -458,6 +420,11 @@ set(HDR_LIST
   render/vulkan_declarations.h
   render/vulkan_hpp_header.h
   render/makers.h
+  render/queue.h
+  render/pass.h
+  render/command_buffer.h
+  render/proxy_stage.h
+  render/container_view.h
 )
 
 add_library(render ${SRC_LIST} ${HDR_LIST})
@@ -490,6 +457,7 @@ set(SRC_LIST
   script/numeric_functions.cpp
   script/condition_functions.cpp
   script/change_context_commands.cpp
+  script/get_scope_commands.cpp
   script/logic_commands.cpp
   script/action_functions.cpp
   script/common_commands.cpp
@@ -509,6 +477,8 @@ set(HDR_LIST
   script/action_functions.h
   script/change_context_commands_macro.h
   script/change_context_commands.h
+  script/get_scope_commands_macro.h
+  script/get_scope_commands.h
   script/logic_commands_macro.h
   script/logic_commands.h
   script/common_commands.h
@@ -572,6 +542,7 @@ set(SRC_LIST
   core/generator_begin.cpp
   core/biome.cpp
   core/declare_structures_table.cpp
+  core/realm_rights_checker.cpp
 )
 
 set(HDR_LIST
@@ -607,18 +578,73 @@ set(HDR_LIST
   core/generator_begin.h
   core/biome.h
   core/declare_structures_table.h
+  core/realm_rights_checker.h
 )
 
 add_library(core ${SRC_LIST} ${HDR_LIST})
 target_link_libraries(core systems utils)
 
 set(SRC_LIST
+  utils/lua_initialization_game_logic.cpp
+  utils/lua_initialization_input.cpp
+  utils/lua_initialization_types.cpp
+  utils/lua_initialization_main_menu.cpp
+  utils/lua_initialization_constants.cpp
+  utils/lua_initialization_package.cpp
+  utils/lua_initialization_settings.cpp
+  utils/lua_initialization_tiles.cpp
+  utils/lua_initialization_battle_map.cpp
+  utils/lua_initialization_generator_container.cpp
+  utils/lua_initialization_noiser.cpp
+  utils/lua_initialization_random_engine.cpp
+  utils/lua_initialization_progress_container.cpp
+  utils/lua_initialization_battle_generator_functions.cpp
+  utils/lua_initialization_battle_unit.cpp
+  utils/lua_initialization_world_map.cpp
+  utils/lua_initialization_world_map_generator_functions.cpp
+  utils/lua_initialization_calendar.cpp
+  utils/lua_initialization_safe_utils.cpp
+  utils/lua_initialization_interface_utils.cpp
+  utils/lua_initialization_game_context.cpp
+  utils/lua_initialization_localization.cpp
+  utils/lua_initialization_core_loading.cpp
+  utils/lua_initialization_camera.cpp
+  utils/lua_initialization_selection.cpp
+  utils/lua_initialization_script_utils.cpp
+  utils/lua_initialization.cpp
+  utils/lua_initialization_internal_enums.cpp
+  utils/lua_initialization_internal_building_type.cpp
+  utils/lua_initialization_internal_character.cpp
+  utils/lua_initialization_internal_city.cpp
+  utils/lua_initialization_internal_city_type.cpp
+  utils/lua_initialization_internal_faction.cpp
+  utils/lua_initialization_internal_province.cpp
+  utils/lua_initialization_internal_titulus.cpp
+  utils/lua_initialization_internal_army.cpp
+  utils/lua_initialization_internal_war.cpp
+  utils/lua_initialization_internal_religion.cpp
+  utils/lua_initialization_internal_culture.cpp
+  utils/lua_initialization_internal_troop.cpp
+  utils/lua_initialization_internal_troop_type.cpp
+  #utils/lua_initialization_internal_trait.cpp
+  #utils/lua_initialization_internal_modificator.cpp
+  #utils/lua_initialization_internal_casus_belli.cpp
+)
+
+set(HDR_LIST
+  utils/lua_initialization.h
+  utils/lua_initialization_hidden.h
+  utils/lua_initialization_internal.h
+)
+
+add_library(lua_init ${SRC_LIST} ${HDR_LIST})
+target_link_libraries(lua_init core script ai render utils ${LUA_LIB})
+
+set(SRC_LIST
   bin/interface_context.cpp
   #bin/interfaces.cpp
   #bin/overlay.cpp
   bin/figures.cpp
-  bin/main.cpp
-  bin/helper.cpp
   bin/camera.cpp
   bin/generator_system2.cpp
   #bin/map_generators2.cpp
@@ -645,13 +671,15 @@ set(SRC_LIST
   bin/battle_troop_parser.cpp
   bin/battle_troop_type_parser.cpp
   bin/battle_unit_state_parser.cpp
+  
+  bin/main.cpp
+  bin/helper.cpp
 )
 
 set(HDR_LIST
   bin/interface_context.h
   #bin/interfaces.h
   bin/overlay.h
-  bin/helper.h
   bin/figures.h
   bin/camera.h
   bin/generator_system2.h
@@ -676,9 +704,11 @@ set(HDR_LIST
   bin/battle_troop_parser.h
   bin/battle_troop_type_parser.h
   bin/battle_unit_state_parser.h
+  
+  bin/helper.h
 )
 add_executable(${TARGET_NAME} ${SRC_LIST} ${HDR_LIST})
-target_link_libraries(${TARGET_NAME} systems core script ai render utils serialization tcmalloc unwind)
+target_link_libraries(${TARGET_NAME} systems lua_init core script ai render utils serialization tcmalloc unwind)
 add_dependencies(${TARGET_NAME} shaders)
 
 if (MSVC)

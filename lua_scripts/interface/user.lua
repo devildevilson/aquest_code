@@ -119,7 +119,7 @@ local function core_main_menu(ctx, game_ctx, timer, local_table, menu_stack, ent
   end
 
   local hover_one = false
-  if nk.window_begin(ctx, "main_menu_window", {0, 0, fbw, fbh}, window_flags) then
+  if nk.window_begin(ctx, "main_menu_window", {0, 0, 100, 100}, window_flags) then
     nk.layout_space_begin(ctx, nk.STATIC, fbh, 10);
     nk.layout_space_push(ctx, {0, 0, fbw, fbh})
     local bounds = nk.layout_space_bounds(ctx)

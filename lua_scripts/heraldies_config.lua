@@ -7,6 +7,8 @@
 -- геральдику видимо нужно будет еще подцепить... где? в интерфейсе? нет, это глупо
 -- делать отдельный стейт не хочется (хотя он мне скорее всего потребуется)
 
+-- скорее всего слоев будет сильно меньше чем 65к, можно аккуратно все уместить рядом
+
 -- local function west_europe_heraldy_generator(seed)
 --   local num = utils.pnrg64(seed)
 -- end
@@ -80,6 +82,7 @@ local heraldies_table = {
 -- для генерации по сути нужно решить сколько раундов всяких красивостей пихнуть на щит
 -- функции принимают на вход seed, по этому сиду мы можем погенерировать списки id слоев
 local function default_heraldy(_)
+  -- цвет можно задавать через двоеточие после id слоя
   return {"shield_layer", "lion_layer", "quarterly_layer"}
 end
 
@@ -90,4 +93,5 @@ end
 heraldies_table.default_heraldy = default_heraldy
 heraldies_table.default_player_heraldy = default_player_heraldy
 
+-- как цвета задать? через запятую?
 return heraldies_table

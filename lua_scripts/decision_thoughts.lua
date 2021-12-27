@@ -88,14 +88,14 @@ return {
   id = "test_decision123",
   name = "decisions.names.test_decision123",
   --description = "decisions.descriptions.test_decision123",
-  description = { -- ожидается строка
+  description = { -- такой массив возьмет последнюю строку
     {
       -- desc или str?
-      string = "decisions.descriptions.test_decision123",
+      "decisions.descriptions.test_decision123",
       -- условия
     },
     {
-      string = "decisions.descriptions.test_decision456",
+      "decisions.descriptions.test_decision456",
       -- условия
     }
   },
@@ -103,7 +103,9 @@ return {
   -- так теперь мы задаем конкретные имена для входных данных
   -- root - это специальное имя, также его можно указать просто без имени
   -- все остальные входные вещи должны задаваться по имени
-  input = { root = script_utils.target.character }, -- , attacker = script_utils.target.realm
+  -- в десижонах очевидно что приходит в качестве рута, в интеракциях более менее очевидно, в казус белли
+  -- неочевидно только в эветах, но там какие либо гарантии дать сложно
+  --input = { root = script_utils.target.character }, -- , attacker = script_utils.target.realm
   type = script_utils.decision.minor,
   potential = {
     is_player = true,
@@ -111,65 +113,83 @@ return {
     is_married = false
   },
   -- условие или условия?
-  conditions = {
+  condition = {
     --is_character = true, -- ???
     money = script_utils.less(100),
     strength = script_utils.less(10),
     -- если есть хотя бы один вассал по заданным условиям
     -- has_vassal = vassal_cond,
   },
-  effects = {
-    --add_money = script_utils.context(2)
-    add_money = 20,
+  effect = {
+    { add_money = 20 },
     -- lvalue, берем, условно, у атакующего государства лидера, а у него дипломатию
     -- как указать тип сравнения? можно в начале строки указать тип
-    add_diplomacy = "less:context:attacker.leader.diplomacy",
-    add_military = {
-      value = 20,
-      factor = 2,
-      condition = { -- если в таком виде не выполняется, то что? ноль?
-        -- проверяем получим ли мы эту прибавку
-      }
-    },
-    -- если все условия проходят, то расчитывается как (5 * 1 + 11) * 2 + 22
-    add_intellect = {
-      value = 5, -- здесь также можно указать lvalue
-      {
-        factor = 1,
-        value = 11,
-
-        -- таблицу condition здесь указывать необязательно
-        -- все что не factor и не value расценивается как условие
-      },
-      {
-        factor = 2,
-        value = 22,
+    --add_diplomacy = "context:attacker.leader.diplomacy",
+    {add_military = {
+      20,
+      multiply = {
+        2,
         condition = { -- если в таком виде не выполняется, то что? ноль?
           -- проверяем получим ли мы эту прибавку
+          strength = 8,
+        }
+      }
+    }},
+    -- если все условия проходят, то расчитывается как (5 * 1 + 11) * 2 + 22
+    add_intellect = {
+      22,
+      multiply = {
+        2,
+        {
+          11,
+          multiply = {
+            5,
+            2
+          }
         }
       }
     },
+    -- add_intellect = {
+    --   5, -- здесь также можно указать lvalue
+    --   {
+    --     factor = 1,
+    --     value = 11,
+    --
+    --     -- таблицу condition здесь указывать необязательно
+    --     -- все что не factor и не value расценивается как условие
+    --   },
+    --   {
+    --     factor = 2,
+    --     value = 22,
+    --     condition = { -- если в таком виде не выполняется, то что? ноль?
+    --       -- проверяем получим ли мы эту прибавку
+    --     }
+    --   }
+    -- },
     -- по умолчанию операция add, дефолтное значение 0
     -- вообще сложение неважно в каком порядке происходит, поэтому наверное мы можем задать multiply в общем котле
     add_money = {
       5, -- константа
-      "char.military", -- lvalue - из контекста подгружаем объект char и берем у него стат military
+      -- баг, если расположить взятие базового стата после add_military, то возьмется уже модифицированный стат
+      -- можно ли как то это избежать? отложенное применение эффекта? вообще неплохой вариант
+      -- все эффекты я могу сложить как функции в контекст
+      "root.base_military", -- rvalue - из контекста подгружаем объект char и берем у него стат military
       { -- сложная переменная
-        condition = {}, -- если кондитион не проходит, то игнорируем это число и не ссумируем
-        value = 5, -- значение = 5
+        condition = { true }, -- если кондитион не проходит, то игнорируем это число и не ссумируем
+        5, -- значение = 5
       },
       {
         -- перемножаем все числа которые тут получим, дефолтное значение 1
         -- (если мультиплай пустой, то что? добавляем единицу?)
         multiply = {
           5, -- константа
-          {
-            value = {}, -- по умолчанию операция add
-            condition = {} -- если кондитион не проходит, то игнорируем это число и не ссумируем
+          { -- по умолчанию операция add
+            546546326,
+            condition = { false } -- если кондитион не проходит, то игнорируем это число и не ссумируем
           }
         }
       }
-    }
+    },
     -- случайный один вассал, можно задать условия что и выше
     -- random_vassal = {
     --   condition = vassal_cond,
@@ -178,5 +198,6 @@ return {
     -- эту функцию, как и другие, можно будет поставить лишь раз в блок скрипта,
     -- нужны ли мне повторяющиеся блоки? для блоков AND, OR, NAND и проч нужны
     --[script_utils.context("character")] = {}
-  }
+  },
+  ai_will_do = 0.5
 }

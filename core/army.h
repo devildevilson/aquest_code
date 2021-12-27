@@ -8,6 +8,7 @@
 #include "ai/path_container.h"
 #include "ai/path_finding_data.h"
 #include "utils/handle.h"
+#include "script/get_scope_commands_macro.h"
 // #include "troop.h"
 
 // у армий наверное будет несколько состояний: армия может быть разбита (в этом состоянии будет зализывать раны в городе?)
@@ -44,7 +45,7 @@ namespace devils_engine {
       // принадлежность армий, может ли реалм уничтожиться до уничтожения армии? мы можем доедать последнюю провку у противника
       // но тогда должна вызваться чистка, в которой собственно мы должны будем избавиться от армий и прочего
       utils::handle<realm> owner;
-      const character* general;
+      character* general;
       // отряды + полководцы (главный полководец должен быть всегда первым)
       // количество отрядов в армии может быть больше 20
       //std::array<troop, max_troops_count> troops; // возьмем в качестве отправной точки 20 юнитов (возможно ограничивать не потребуется)
@@ -60,7 +61,7 @@ namespace devils_engine {
       // графика (иконка и отображение на карте)
       //render::image_t map_img; // на карте это нужно отображать с флагом
       
-      const province* origin;
+      province* origin;
       //const city* origin;
       
       //uint32_t army_gpu_slot;
@@ -92,6 +93,10 @@ namespace devils_engine {
       bool is_home() const;
       
       troop* next_troop(const troop* current) const;
+      
+#define GET_SCOPE_COMMAND_FUNC(name, a, b, type) type get_##name() const;
+      ARMY_GET_SCOPE_COMMANDS_LIST
+#undef GET_SCOPE_COMMAND_FUNC
     };
   }
 }

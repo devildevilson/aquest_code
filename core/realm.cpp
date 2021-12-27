@@ -4,6 +4,7 @@
 #include "context.h"
 #include "character.h"
 #include "titulus.h"
+#include "realm_rights_checker.h"
 
 namespace devils_engine {
   namespace core {
@@ -32,7 +33,24 @@ namespace devils_engine {
     // нужно еще убрать этот объект из всех листов, пока не знаю как это делается, но скорее всего можно просто в деструкторе
     realm::~realm() { object_token = SIZE_MAX; }
     
+    bool realm::is_state() const noexcept { return state == this; }
+    bool realm::is_council() const noexcept { return council == this; }
+    bool realm::is_tribunal() const noexcept { return tribunal == this; }
+    bool realm::is_assembly() const noexcept { return assembly == this; }
+    bool realm::is_clergy() const noexcept { return clergy == this; }
+    bool realm::is_state_independent_power() const noexcept { return is_state() && !is_council() && !is_tribunal() && !is_assembly() && !is_clergy(); }
+    bool realm::is_independent_realm() const noexcept { return liege == nullptr; }
     bool realm::is_self() const noexcept { return leader->self == this; }
+    bool realm::has_council() const noexcept { return  council.valid() && !is_council(); }
+    bool realm::has_tribunal() const noexcept { return tribunal.valid() && !is_tribunal(); }
+    bool realm::has_assembly() const noexcept { return assembly.valid() && !is_assembly(); }
+    bool realm::has_clergy() const noexcept { return clergy.valid() && !is_clergy(); }
+    bool realm::has_capital() const noexcept { return capital != nullptr; }
+    bool realm::has_titles() const noexcept { return titles != nullptr; }
+    
+    bool realm::has_right(const size_t &data) const noexcept { return get_power_mechanic(data); }
+    bool realm::has_state_right(const size_t &data) const noexcept { return is_state() && get_state_mechanic(data); }
+    bool realm::has_enacted_law_with_flag(const size_t &) const noexcept { return false; }
     
     void realm::succession() {
       ASSERT(is_state() || is_self());
@@ -291,5 +309,22 @@ namespace devils_engine {
       assert(is_self());
       return c->self == this;
     }
+    
+    OUTPUT_CITY_TYPE2 realm::get_capital_city() const { return capital; }
+    OUTPUT_TITLE_TYPE realm::get_capital_barony() const { return capital->province->title; }
+    OUTPUT_PROVINCE_TYPE realm::get_capital_province() const { return capital->province; }
+    OUTPUT_TITLE_TYPE realm::get_main_title() const { return main_title; }
+    OUTPUT_RELIGION_TYPE realm::get_dominant_religion() const {
+      const auto state = get_state();
+      return state->clergy.valid() ? state->clergy->dominant_religion : state->dominant_religion;
+    }
+    
+    OUTPUT_REALM_TYPE realm::get_state() const { return state; }
+    OUTPUT_REALM_TYPE realm::get_council() const { return council; }
+    OUTPUT_REALM_TYPE realm::get_tribunal() const { return tribunal; }
+    OUTPUT_REALM_TYPE realm::get_assembly() const { return assembly; }
+    OUTPUT_REALM_TYPE realm::get_clergy() const { return clergy; }
+    OUTPUT_REALM_TYPE realm::get_liege() const { return liege; }
+    OUTPUT_REALM_TYPE realm::get_top_liege() const { return liege.valid() ? (liege->liege.valid() ? liege->get_top_liege() : liege) : utils::handle<core::realm>(); }
   }
 }

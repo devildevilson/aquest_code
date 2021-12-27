@@ -5,6 +5,8 @@
 #include "declare_structures.h"
 #include "script/object.h"
 
+#include <iostream>
+
 namespace devils_engine {
   namespace core {
     casus_belli::casus_belli() :

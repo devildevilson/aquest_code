@@ -35,6 +35,15 @@ namespace devils_engine {
       return utils::ring::list_next<utils::list_type::province_cities>(city, cities);
     }
     
+    OUTPUT_TITLE_TYPE province::get_title() const { return title; }
+    OUTPUT_ARMY_TYPE province::get_army() const { return offensive_army; }
+    OUTPUT_CITY_TYPE2 province::get_capital() const { return capital; }
+    
+    core::culture* province::get_culture() const { return culture; }
+    core::culture_group* province::get_culture_group() const { return culture->group; }
+    core::religion* province::get_religion() const { return religion; }
+    core::religion_group* province::get_religion_group() const { return religion->group; }
+    
     const utils::check_table_value province_table[] = {
       {
         "neighbors",

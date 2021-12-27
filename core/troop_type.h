@@ -9,6 +9,7 @@
 #include "stats.h"
 #include "utils/structures_utils.h"
 #include "render/shared_structures.h"
+#include "utils/sol.h"
 
 // в тотал воре у отрядов есть: название, описание (иконки к описанию), сильные/слабые стороны (или дополнительное описание),
 // количество людей в отряде (иконка), количество убийств отрядом (иконка), опыт, основные статы, иконки состояния
@@ -43,6 +44,9 @@ namespace devils_engine {
       
       troop_type();
     };
+    
+    bool validate_troop_type(const size_t &index, const sol::table &table);
+    void parse_troop_type(core::troop_type* troop_type, const sol::table &table);
   }
 }
 

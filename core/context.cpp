@@ -80,20 +80,20 @@ namespace devils_engine {
       FILL_TYPE_FUNC(casus_belli)
     }
     
-    void context::set_tile(const uint32_t &index, const tile &tile_data) {
-      ASSERT(index < core::map::hex_count_d(core::map::detail_level));
-      tile_array[index] = tile_data;
-    }
-    
-    tile context::get_tile(const uint32_t &index) const {
-      ASSERT(index < core::map::hex_count_d(core::map::detail_level));
-      return tile_array[index];
-    }
-    
-    tile* context::get_tile_ptr(const uint32_t &index) {
-      ASSERT(index < core::map::hex_count_d(core::map::detail_level));
-      return &tile_array[index];
-    }
+//     void context::set_tile(const uint32_t &index, const tile &tile_data) {
+//       ASSERT(index < core::map::hex_count_d(core::map::detail_level));
+//       tile_array[index] = tile_data;
+//     }
+//     
+//     tile context::get_tile(const uint32_t &index) const {
+//       ASSERT(index < core::map::hex_count_d(core::map::detail_level));
+//       return tile_array[index];
+//     }
+//     
+//     tile* context::get_tile_ptr(const uint32_t &index) {
+//       ASSERT(index < core::map::hex_count_d(core::map::detail_level));
+//       return &tile_array[index];
+//     }
     
     dynasty* context::create_dynasty() {
       auto ptr = dynasties_pool.create();
@@ -101,9 +101,14 @@ namespace devils_engine {
       return ptr;
     }
     
+    // как добавить в плейабле? при добавлении титула?
+    // всех персонажей все таки нужно пихнуть в один массив, 
+    // при создании персонажей все связи настраиваются с помощью индексов
     character* context::create_character(const bool male, const bool dead) {
       auto ptr = characters_pool.create(male, dead);
       characters.push_back(ptr);
+      if (dead) dead_characters.push_back(ptr);
+      else living_characters.push_back(ptr);
       return ptr;
     }
     
@@ -244,14 +249,8 @@ namespace devils_engine {
     }
     
     void context::destroy(character* c) {
-      for (size_t i = 0; i < characters.size(); ++i) {
-        if (characters[i] == c) {
-          characters_pool.destroy(characters[i]);
-          std::swap(characters.back(), characters[i]);
-          characters.pop_back();
-          break;
-        }
-      }
+      if (c->is_dead()) destroy_dead_character(c);
+      else throw std::runtime_error("Trying to delete living character");
     }
     
     void context::destroy_army(const size_t &token) {
@@ -291,10 +290,10 @@ namespace devils_engine {
       return dynasties[index];
     }
     
-    character* context::get_character(const size_t &index) const {
-      ASSERT(index < characters.size());
-      return characters[index];
-    }
+//     character* context::get_character(const size_t &index) const {
+//       ASSERT(index < characters.size());
+//       return characters[index];
+//     }
     
     realm* context::get_realm(const size_t &token) const {
       auto [ptr, index] = get_realm_index(token);
@@ -382,28 +381,94 @@ namespace devils_engine {
     }
     
     void context::sort_characters() {
-      std::sort(characters.begin(), characters.end(), [] (const character* first, const character* second) -> bool {
-        const uint32_t first_attribs = uint32_t(!first->is_dead()) + uint32_t(first->is_ai_playable());
-        const uint32_t second_attribs = uint32_t(!second->is_dead()) + uint32_t(second->is_ai_playable());
-        return first_attribs < second_attribs;
+//       std::sort(characters.begin(), characters.end(), [] (const character* first, const character* second) -> bool {
+//         const uint32_t first_attribs = uint32_t(!first->is_dead()) + uint32_t(first->is_ai_playable());
+//         const uint32_t second_attribs = uint32_t(!second->is_dead()) + uint32_t(second->is_ai_playable());
+//         return first_attribs < second_attribs;
+//       });
+      std::sort(living_playable_characters.begin(), living_playable_characters.end(), [] (const character* first, const character* second) -> bool {
+        return first->get_age() < second->get_age();
       });
     }
     
-    size_t context::first_not_dead_character() const {
-      for (size_t i = 0; i < characters.size(); ++i) {
-        if (!characters[i]->is_dead()) return i;
-        ASSERT(!characters[i]->is_ai_playable());
-      }
-      
-      throw std::runtime_error("All characters are dead");
+//     size_t context::first_not_dead_character() const {
+//       for (size_t i = 0; i < characters.size(); ++i) {
+//         if (!characters[i]->is_dead()) return i;
+//         ASSERT(!characters[i]->is_ai_playable());
+//       }
+//       
+//       throw std::runtime_error("All characters are dead");
+//     }
+//     
+//     size_t context::first_playable_character() const {
+//       for (size_t i = 0; i < characters.size(); ++i) {
+//         if (characters[i]->is_ai_playable()) return i;
+//       }
+//       
+//       throw std::runtime_error("All characters are unplayable");
+//     }
+
+    size_t context::dead_characters_count() const { return dead_characters.size(); }
+    size_t context::living_characters_count() const { return living_characters.size(); }
+    size_t context::living_playable_characters_count() const { return living_playable_characters.size(); }
+    character* context::get_character(const size_t &index) const {
+      if (index >= characters_count()) return nullptr;
+      return characters[index];
     }
     
-    size_t context::first_playable_character() const {
-      for (size_t i = 0; i < characters.size(); ++i) {
-        if (characters[i]->is_ai_playable()) return i;
+    character* context::get_dead_character(const size_t &index) const {
+      if (index >= dead_characters_count()) return nullptr;
+      return dead_characters[index];
+    }
+    
+    character* context::get_living_character(const size_t &index) const {
+      if (index >= living_characters_count()) return nullptr;
+      return living_characters[index];
+    }
+    
+    character* context::get_living_playable_character(const size_t &index) const {
+      if (index >= living_playable_characters_count()) return nullptr;
+      return living_playable_characters[index];
+    }
+    
+    // нужно ли делать удаление живых персонажей? не думаю что удаление живых персонажей хорошая идея
+    void context::destroy_dead_character(character* c) {
+      assert(c->is_dead());
+      for (size_t i = 0; i < dead_characters.size(); ++i) {
+        if (dead_characters[i] != c) continue;
+        characters_pool.destroy(dead_characters[i]);
+        std::swap(dead_characters[i], dead_characters.back());
+        dead_characters.pop_back();
+        break;
       }
-      
-      throw std::runtime_error("All characters are unplayable");
+    }
+    
+    template <typename T>
+    static void remove_from_vector(std::vector<T> &array, T obj) {
+      for (size_t i = 0; i < array.size(); ++i) {
+        if (array[i] != obj) continue;
+        std::swap(array[i], array.back());
+        array.pop_back();
+        break;
+      }
+    }
+    
+    void context::make_dead(character* c) {
+      remove_from_vector(living_characters, c);
+      remove_from_vector(living_playable_characters, c);
+      dead_characters.push_back(c);
+      assert(c->is_dead());
+    }
+    
+    void context::make_not_playable(character* c) {
+      assert(!c->is_dead());
+      remove_from_vector(living_playable_characters, c);
+    }
+    
+    void context::make_playable(character* c) {
+      assert(!c->is_ai_playable());
+      assert(!c->is_dead());
+      living_playable_characters.push_back(c);
     }
     
     size_t context::get_army_container_size() const {
@@ -436,6 +501,169 @@ namespace devils_engine {
 //     void context::update_armies(const size_t &time) {
 //       
 //     }
+
+#define MAX_VALUE 1000000.0f
+    uint32_t cast_ray_reck(const context* ctx, const map* m, const utils::ray &ray, const uint32_t &tri_index, float &distance) {
+      const bool ret = m->intersect_container(tri_index, ray);
+      if (!ret) return UINT32_MAX;
+      
+      const map::triangle &tri = m->triangles[tri_index];
+      
+      const uint32_t level = tri.current_level;
+      if (level == map::detail_level) {
+        uint32_t final_tile_index = UINT32_MAX;
+        float final_tile_dist = MAX_VALUE;
+        for (size_t i = 0; i < 4; ++i) {
+          const uint32_t tile_index = tri.next_level[i];
+          // тут нужно проверить дальность до тайла + проверить пересечение со стенками
+          // нужно ли чекать ближайший треугольник? не уверен что это необходимо
+          
+          const auto tile = ctx->get_entity<core::tile>(tile_index);
+          
+          const uint32_t p_count = tile->neighbors_count();
+//           const uint32_t point_a_index = tile->center;
+          const float height = tile->height;
+//           const uint32_t height_layer = render::compute_height_layer(height);
+//           const float final_height = render::layer_height * height_layer;
+//           const float computed_height = final_height * render::render_tile_height;
+          const float computed_height = height;
+          
+//           glm::vec4 center = m->get_point(point_a_index);
+//           glm::vec4 center_height = center + glm::normalize(glm::vec4(glm::vec3(center), 0.0f)) * (computed_height);
+          glm::vec4 local_points[6];
+          glm::vec4 local_points_height[6];
+          for (uint32_t j = 0; j < p_count; ++j) {
+            const uint32_t point1_index = tile->points[j];
+            const glm::vec4 point = m->get_point(point1_index);
+            const glm::vec4 point_normal = glm::vec4(glm::vec3(point) / map::world_radius, 0.0f);
+            const glm::vec4 point_height = point + point_normal * (computed_height);
+            local_points[j] = point;
+            local_points_height[j] = point_height;
+          }
+          
+          // проверяем теугольники тайла, возможно имеет смысл брать треугольники как при рендеринге - меньше треугольников
+          static const uint32_t indices_hex[] = {0, 1, 5, 2, 4, 3};
+          static const uint32_t indices_pen[] = {0, 1, 4, 2, 3};
+          uint32_t index1 = 0;
+          uint32_t index2 = 1;
+          uint32_t index3 = 2;
+          for (uint32_t j = 0; j < p_count-2; ++j) {
+            const uint32_t final_index1 = p_count == 6 ? indices_hex[index1] : indices_pen[index1];
+            const uint32_t final_index2 = p_count == 6 ? indices_hex[index2] : indices_pen[index2];
+            const uint32_t final_index3 = p_count == 6 ? indices_hex[index3] : indices_pen[index3];
+            
+            const auto point1 = local_points_height[final_index1];
+            const auto point2 = local_points_height[final_index2];
+            const auto point3 = local_points_height[final_index3];
+            
+            float dist = MAX_VALUE;
+            const bool ret = m->intersect_tri(point1, point2, point3, ray, dist);
+            if (ret && dist < final_tile_dist) {
+              final_tile_index = tile_index;
+              final_tile_dist = dist;
+              break;
+            }
+            
+            index1 = index2;
+            index2 = index3;
+            index3 = (index3+1)%p_count;
+          }
+          
+//           for (uint32_t j = 0; j < p_count; ++j) {
+//             const uint32_t b_index = j;
+//             const uint32_t c_index = (j+1)%p_count;
+//             
+//             ASSERT(c_index < p_count);
+//             
+//             float dist = MAX_VALUE;
+// //               const bool ret = intersect_tri(get_point(point_a_index), get_point(point_b_index), get_point(point_c_index), ray, dist);
+//             const bool ret = m->intersect_tri(center_height, local_points_height[b_index], local_points_height[c_index], ray, dist);
+//             if (ret && dist < final_tile_dist) {
+//               final_tile_index = tile_index;
+//               final_tile_dist = dist;
+//               //break;
+//             }
+//           }
+          
+          if (final_tile_index != UINT32_MAX) {
+            distance = final_tile_dist;
+            return final_tile_index;
+          }
+
+          // почему то по приоритету берутся стенки
+          for (uint32_t j = 0; j < p_count; ++j) {
+            const uint32_t b_index = j;
+            const uint32_t c_index = (j+1)%p_count;
+            const glm::vec4 point1 = local_points[b_index];
+            const glm::vec4 point2 = local_points[c_index];
+            const glm::vec4 point3 = local_points_height[b_index];
+            const glm::vec4 point4 = local_points_height[c_index];
+            // две стенки
+            const std::tuple<glm::vec4, glm::vec4, glm::vec4> wall_triangle[] = {
+              std::tie(point1, point2, point3),
+              std::tie(point4, point3, point2)
+            };
+            
+            float dist1 = MAX_VALUE;
+            float dist2 = MAX_VALUE;
+            const bool ret1 = m->intersect_tri(std::get<0>(wall_triangle[0]), std::get<1>(wall_triangle[0]), std::get<2>(wall_triangle[0]), ray, dist1);
+            const bool ret2 = m->intersect_tri(std::get<0>(wall_triangle[1]), std::get<1>(wall_triangle[1]), std::get<2>(wall_triangle[1]), ray, dist2);
+            
+            if (ret1 && dist1 < final_tile_dist) {
+              final_tile_dist = dist1;
+              final_tile_index = tile_index;
+            }
+            
+            if (ret2 && dist2 < final_tile_dist) {
+              final_tile_dist = dist2;
+              final_tile_index = tile_index;
+            }
+          }
+        }
+        
+        distance = final_tile_dist;
+        return final_tile_index;
+      }
+      
+      float global_dist = MAX_VALUE;
+      uint32_t global_index = UINT32_MAX;
+      for (size_t i = 0; i < 4; ++i) {
+        const uint32_t tri_index = tri.next_level[i];
+        
+        float dist = MAX_VALUE;
+        const uint32_t index = cast_ray_reck(ctx, m, ray, tri_index, dist); // может я тут что то не так делаю
+        
+        if (index == UINT32_MAX) continue;
+        
+        if (dist < global_dist) {
+          global_dist = dist;
+          global_index = index;
+        }
+      }
+      
+      distance = global_dist;
+      return global_index;
+    }
+
+
+    uint32_t context::cast_ray(const core::map* map, const utils::ray &ray, float &ray_dist) {
+      size_t current_detail_level = 0;
+      
+      float dist = MAX_VALUE;
+      uint32_t final_tile = UINT32_MAX;
+      for (size_t i = 0; i < 20*power4(current_detail_level); ++i) {
+        float local_dist = MAX_VALUE;
+        const uint32_t tile_index = cast_ray_reck(this, map, ray, i, local_dist);
+        
+        if (local_dist < dist) {
+          dist = local_dist;
+          final_tile = tile_index;
+        }
+      }
+      
+      ray_dist = dist;
+      return final_tile;
+    }
     
     size_t context::compute_data_memory() const {
       size_t counter = 0;

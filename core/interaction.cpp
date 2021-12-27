@@ -4,6 +4,8 @@
 #include "target_type.h"
 #include "structures_header.h"
 
+#include <iostream>
+
 namespace devils_engine {
   namespace core {
     interaction::interaction() : input_count(0), options_count(0) {}

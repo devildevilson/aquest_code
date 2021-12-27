@@ -17,7 +17,6 @@
 namespace devils_engine {
   namespace core {
     const structure city::s_type;
-    const size_t city::bit_field_size;
     
     city::building_view::building_view() : off_troops_count(0), def_troops_count(0), off_troops(nullptr), def_troops(nullptr) {}
     city::building_view::~building_view() { clear(); }
@@ -302,6 +301,14 @@ namespace devils_engine {
           }
         }
       }
+    }
+    
+    core::titulus* city::get_title() const {
+      return title;
+    }
+    
+    const core::city_type* city::get_city_type() const {
+      return type;
     }
     
     const utils::check_table_value city_table[] = {

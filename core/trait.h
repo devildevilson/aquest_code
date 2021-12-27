@@ -8,6 +8,8 @@
 #include "traits_modifier_attribs.h"
 #include "utils/bit_field.h"
 #include "render/shared_structures.h"
+#include "utils/sol.h"
+#include "script/get_scope_commands_macro.h"
 
 // можно еще указать противоположный треит тип мужественный/трусливый
 // группы трейтов можно сделать как религиозные группы
@@ -24,6 +26,7 @@ namespace devils_engine {
       
       // отношение во флоатах? может все таки инт? тут скорее вопрос как обозначить отсутствие какого значение? можно использовать NAN
       // нужно ли добавлять общие опинион модификаторы?
+      float same_trait_opinion;
       float same_group_opinion;
       float different_group_opinion;
       float opposite_opinion;
@@ -40,7 +43,7 @@ namespace devils_engine {
       
       // шанс унаследовать от родителя и шанс унаследовать от обоих родителей
       struct numeric_attribs {
-        float birth;
+        float birth_chance;
         float inherit_chance;
         float both_parent_inherit_chance;
         float dummy; // тут что?
@@ -55,18 +58,19 @@ namespace devils_engine {
       // еще неплохо было бы сделать какие нибудь констреинты, то есть можно/нельзя получить этот трейт если есть другой
       // 64 типа, 0 игнорируем проверки типов, что делаем если пытаемся добавить по плохому констреинту?
       // мы что то должны заменять, не уверен
-      size_t type;
-      size_t constraint;
+//       size_t type;
+//       size_t constraint;
       
       const trait* opposite; // мужественный/трусливый
       const trait_group* group;
       
       struct numeric_attribs numeric_attribs;
       render::image_t icon;
-      utils::bit_field_32<core::trait_attributes::bit_container_size> attribs;
+      utils::bit_field_32<core::trait_attributes::count> attribs;
       std::array<stat_modifier, max_stat_modifiers_count> bonuses;
       std::array<opinion_modifier, max_opinion_modifiers_count> opinion_mods;
       
+      float same_trait_opinion;
       float same_group_opinion;
       float different_group_opinion;
       float opposite_opinion;
@@ -76,11 +80,22 @@ namespace devils_engine {
       inline bool get_attrib(const uint32_t &index) const { return attribs.get(index); }
       inline bool set_attrib(const uint32_t &index, const bool value) { return attribs.set(index, value); }
       
+      float get_same_trait_opinion() const;
       float get_same_group_opinion() const;
       float get_different_group_opinion() const;
       float get_opposite_opinion() const;
       float get_nogroup_opinion() const;
+      
+#define GET_SCOPE_COMMAND_FUNC(name, a, b, type) type get_##name() const;
+      TRAIT_GET_SCOPE_COMMANDS_LIST
+#undef GET_SCOPE_COMMAND_FUNC
     };
+    
+    bool validate_trait_group(const size_t &index, const sol::table &table);
+    void parse_trait_group(core::trait_group* trait, const sol::table &table);
+    
+    bool validate_trait(const size_t &index, const sol::table &table);
+    void parse_trait(core::trait* trait, const sol::table &table);
   }
 }
 

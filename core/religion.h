@@ -1,5 +1,5 @@
-#ifndef RELIGION_H
-#define RELIGION_H
+#ifndef DEVILS_ENGINE_CORE_RELIGION_H
+#define DEVILS_ENGINE_CORE_RELIGION_H
 
 #include <string>
 #include "render/shared_structures.h"
@@ -10,6 +10,9 @@
 #include "utils/sol.h"
 #include "realm_mechanics.h"
 #include "declare_structures.h"
+
+// к сожалению в скриптах требуется задавать объект без конст модификатора
+// ну хотя наверное можно обмануть сипипи
 
 namespace devils_engine {
   namespace core {  
@@ -55,12 +58,12 @@ namespace devils_engine {
       std::string name_id;
       // описание (?) (возможно частично должно быть сгенерировано например на основе прав)
       std::string description_id;
-      const religion_group* group;
-      const religion* parent;   // родительская религия? эта конкретная религия может быть определенным верованием
-      const religion* children; // верования религии
+      religion_group* group;
+      religion* parent;   // родительская религия? эта конкретная религия может быть определенным верованием
+      religion* children; // верования религии
       // как сделать организованность религии?
       // по идее это вопрос института, а значит можно добавить сюда указатель на реалм по идее
-      const religion* reformed;
+      religion* reformed;
       
       // сколько жен или наложниц? (нужно ли?) (это определяется светскими законами)
       // мультипликатор к короткому правлению
@@ -99,7 +102,7 @@ namespace devils_engine {
       // и прочее и прочее, религиозный ии должен положительно относится к инициативам ведущим к 
       // традициям, я тут подумал: касты должны быть отнесены скорее к культурам
       // так же некоторые вещи отсюда должны быть скорее отнесены к ии и стоять где то отдельно
-      utils::bit_field_32<religion_mechanics::bit_container_size> mechanics;
+      utils::bit_field_32<religion_mechanics::count> mechanics;
       
       // переопределяем здесь данные из религиозной группы или из родительской религии
       religion_opinion_data different_groups;
@@ -113,9 +116,29 @@ namespace devils_engine {
       
       // священные земли?
       
+      // тут все? или только живые? мы можем убирать из списка мертвых, но оставлять им указатель на религию
+      // нужны ли нам тут мервые в принципе? вряд ли
+      core::character* head; // с точки зрения религии главу просто в какой то момент назначаем, например при смерти текущего
+      core::character* head_heir;
+      mutable core::character* believers;
+      mutable core::character* secret_believers;
+      
       religion();
       inline bool get_mechanic(const size_t &index) const { return mechanics.get(index); }
       inline bool set_mechanic(const size_t &index, const bool value) { return mechanics.set(index, value); }
+      
+      void set_head(core::character* c);
+      void set_head_heir(core::character* c);
+      
+      // тут только проверяем чтобы у нас не указывал на пустой следующий элемент листа
+      void add_believer(core::character* believer) const;
+      void add_secret_believer(core::character* believer) const;
+      void remove_believer(core::character* believer) const;
+      void remove_secret_believer(core::character* believer) const;
+      
+      core::religion_group* get_religion_group() const;
+      core::character* get_head() const;
+      core::character* get_head_heir() const;
     };
     
     size_t add_religion_group(const sol::table &table);

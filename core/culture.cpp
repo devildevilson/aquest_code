@@ -19,6 +19,19 @@ namespace devils_engine {
       children(nullptr)
     {}
     
+    void culture::add_member(core::character* member) const {
+      if (members == nullptr) members = member;
+      else utils::ring::list_radd<utils::list_type::culture_member>(members, member);
+    }
+    
+    void culture::remove_member(core::character* member) const {
+      if (members == member) members = utils::ring::list_next<utils::list_type::culture_member>(members, members);
+    }
+    
+    core::culture_group* culture::get_culture_group() const {
+      return group;
+    }
+    
     const utils::check_table_value culture_group_table[] = {
       {
         "id",

@@ -64,7 +64,7 @@ namespace devils_engine {
       script::effect on_auto_accept;
       script::effect on_decline; // другой персонаж может например отказаться от принятия подарка
       script::effect pre_auto_accept; // ???
-      script::effect on_blocked_effect; // персонаж может заблокировать интеракцию, например с помощью 
+      script::effect on_blocked_effect; // персонаж может заблокировать интеракцию, например с помощью хука
       
       script::number ai_accept;    // число с описанием
       script::number ai_will_do;   // смотрим будем ли мы это делать

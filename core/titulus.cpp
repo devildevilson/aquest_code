@@ -8,6 +8,7 @@
 #include "core/internal_lua_state.h"
 #include "utils/systems.h"
 #include "province.h"
+#include "realm_rights_checker.h"
 
 namespace devils_engine {
   namespace core {
@@ -56,6 +57,19 @@ namespace devils_engine {
     bool titulus::is_formal() const {
       return t != type::city && t != type::baron && children == nullptr;
     }
+    
+    OUTPUT_TITLE_TYPE titulus::get_parent() { return parent; }
+    OUTPUT_CITY_TYPE2 titulus::get_city() { return city; }
+    OUTPUT_PROVINCE_TYPE titulus::get_province() { return province; }
+    OUTPUT_TITLE_TYPE titulus::get_barony() { return t == type::city ? parent : (t == type::baron ? this : nullptr); }
+    OUTPUT_TITLE_TYPE titulus::get_duchy() { return rights::get_duchy(this); }
+    OUTPUT_TITLE_TYPE titulus::get_kingdom() { return rights::get_kingdom(this); }
+    OUTPUT_TITLE_TYPE titulus::get_empire() { return rights::get_empire(this); }
+    OUTPUT_TITLE_TYPE titulus::get_top_title() { return rights::get_top_title(this); }
+    OUTPUT_TITLE_TYPE titulus::get_de_facto_liege() { return owner.valid() && owner->liege.valid() ? owner->liege->main_title : nullptr; }
+    OUTPUT_TITLE_TYPE titulus::get_de_jure_liege() { return get_parent(); }
+    OUTPUT_PROVINCE_TYPE titulus::get_main_province() { return nullptr; } // не знаю что тут
+    OUTPUT_REALM_TYPE titulus::get_owner() { return owner; }
     
     const utils::check_table_value title_table[] = {
       {

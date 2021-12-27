@@ -6,6 +6,8 @@
 #include "utils/systems.h"
 #include "render/image_controller.h"
 
+#include <iostream>
+
 #define MAKE_MAP_PAIR(name) std::make_pair(biome_attributes_names[size_t(biome::attributes::name)], biome::attributes::name)
 
 namespace devils_engine {

@@ -16,8 +16,45 @@ namespace devils_engine {
       reformed(nullptr), 
       aggression(0.0f), 
       opinion_stat_index(UINT32_MAX),
-      image{GPU_UINT_MAX}
+      image{GPU_UINT_MAX},
+      head(nullptr),
+      head_heir(nullptr),
+      believers(nullptr),
+      secret_believers(nullptr)
     {}
+    
+    void religion::set_head(core::character* c) { head = c; }
+    void religion::set_head_heir(core::character* c) { head_heir = c; }
+    
+    void religion::add_believer(core::character* believer) const {
+      if (believers == nullptr) believers = believer;
+      else utils::ring::list_radd<utils::list_type::believer>(believers, believer);
+    }
+    
+    void religion::add_secret_believer(core::character* believer) const {
+      if (secret_believers == nullptr) secret_believers = believer;
+      else utils::ring::list_radd<utils::list_type::secret_believer>(secret_believers, believer);
+    }
+    
+    void religion::remove_believer(core::character* believer) const {
+      if (believers == believer) believers = utils::ring::list_next<utils::list_type::believer>(believers, believers);
+    }
+    
+    void religion::remove_secret_believer(core::character* believer) const {
+      if (secret_believers == believer) secret_believers = utils::ring::list_next<utils::list_type::secret_believer>(secret_believers, secret_believers);
+    }
+    
+    core::religion_group* religion::get_religion_group() const {
+      return group;
+    }
+    
+    core::character* religion::get_head() const {
+      return head;
+    }
+    
+    core::character* religion::get_head_heir() const {
+      return head_heir;
+    }
     
     const utils::check_table_value religion_group_table[] = {
       {

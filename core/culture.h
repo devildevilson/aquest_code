@@ -34,6 +34,8 @@ namespace devils_engine {
       
       render::image_t image; // ???
       render::color_t color;
+      
+      // имеет смысл сюда добавить все культуры одной группы
     };
     
     // сюда нужно добавить касты как в индуизме, было бы неплохо связать как нибудь религию и культуру, 
@@ -58,21 +60,28 @@ namespace devils_engine {
       // династические префиксы
       float grandparent_name_chance;
       // родительская культура
-      const culture_group* group;
-      const culture* parent; // культурная группа?
-      const culture* children; // дочерняя культура по аналогии с религией?
+      culture_group* group;
+      culture* parent; // культурная группа?
+      culture* children; // дочерняя культура по аналогии с религией?
       render::image_t image; // ???
       render::color_t color;
       std::array<stat_modifier, max_stat_modifiers_count> bonuses; // модификаторы юнитов?
-      utils::bit_field_32<core::culture_mechanics::bit_container_size> mechanics;
+      utils::bit_field_32<core::culture_mechanics::count> mechanics;
       
       culture_opinion_data different_groups;
       culture_opinion_data different_cultures;
       culture_opinion_data different_child_cultures;
       
+      mutable core::character* members;
+      
       culture();
       inline bool get_mechanic(const size_t &index) const { return mechanics.get(index); }
       inline void set_mechanic(const size_t &index, const bool value) { mechanics.set(index, value); }
+      
+      void add_member(core::character* member) const;
+      void remove_member(core::character* member) const;
+      
+      core::culture_group* get_culture_group() const;
     };
     
     size_t add_culture_group(const sol::table &table);

@@ -15,6 +15,8 @@
 
 namespace devils_engine {
   namespace core {
+    struct map;
+    
     class context {
     public:
       static const size_t invalid_token = SIZE_MAX;
@@ -101,9 +103,9 @@ namespace devils_engine {
       
       void fill_id_maps();
       
-      void set_tile(const uint32_t &index, const tile &tile_data);
-      tile get_tile(const uint32_t &index) const;
-      tile* get_tile_ptr(const uint32_t &index);
+//       void set_tile(const uint32_t &index, const tile &tile_data);
+//       tile get_tile(const uint32_t &index) const;
+//       tile* get_tile_ptr(const uint32_t &index);
       
       // вообще то количество городов меняется, но другое дело что мы знаем максимальное количество городов
       dynasty* create_dynasty();
@@ -129,7 +131,7 @@ namespace devils_engine {
       void destroy_troop(const size_t &token);
       
       dynasty* get_dynasty(const size_t &index) const;
-      character* get_character(const size_t &index) const;
+//       character* get_character(const size_t &index) const;
       realm* get_realm(const size_t &token) const;
       army* get_army(const size_t &token) const;
       hero_troop* get_hero_troop(const size_t &token) const;
@@ -153,8 +155,21 @@ namespace devils_engine {
       size_t dynasties_count() const;
       
       void sort_characters();
-      size_t first_not_dead_character() const;
-      size_t first_playable_character() const;
+//       size_t first_not_dead_character() const;
+//       size_t first_playable_character() const;
+//       size_t characters_count() const;
+      size_t dead_characters_count() const;
+      size_t living_characters_count() const;
+      size_t living_playable_characters_count() const;
+      character* get_character(const size_t &index) const;
+      character* get_dead_character(const size_t &index) const;
+      character* get_living_character(const size_t &index) const;
+      character* get_living_playable_character(const size_t &index) const;
+      
+      void destroy_dead_character(character* c);
+      void make_dead(character* c);
+      void make_not_playable(character* c);
+      void make_playable(character* c);
       
       size_t get_army_container_size() const;
       army* get_army_raw(const size_t &index) const;
@@ -162,6 +177,9 @@ namespace devils_engine {
       void update_armies(const size_t &time, fu2::function_view<void(const size_t &, army*)> func);
       
       size_t get_character_debug_index(const character* c) const;
+      
+      // для индекса тайла нужно что? мапа и луч?
+      uint32_t cast_ray(const core::map* map, const utils::ray &ray, float &ray_dist);
       
       size_t compute_data_memory() const;
     private:
@@ -180,7 +198,7 @@ namespace devils_engine {
 //       static_pool_t pointer_static_pool;
       
       // это будет сериализовано с помощью таблиц
-      std::array<tile, core::map::hex_count_d(core::map::detail_level)> tile_array;
+//       std::array<tile, core::map::hex_count_d(core::map::detail_level)> tile_array;
       std::array<container, static_cast<size_t>(structure::static_types_count)> containers; // титулам нужно добавить еще немного памяти, чтобы создать особые титулы
       std::array<phmap::flat_hash_map<std::string_view, void*>, static_cast<size_t>(structure::id_types_count)> id_maps;
       
@@ -211,6 +229,9 @@ namespace devils_engine {
       // ну за один раз реально много, хотя наверное не сильно больше 1000, а то и меньше
       std::vector<dynasty*> dynasties; // здесь можно придумать какой нибудь большой начальный капасити
       std::vector<character*> characters;
+      std::vector<character*> dead_characters;
+      std::vector<character*> living_characters;
+      std::vector<character*> living_playable_characters; // желательно разделить массив персонажей на живых/не живых
       // пара счетчик, указатель? хорошая идея
       std::vector<std::pair<size_t, realm*>> realms;
       std::vector<std::pair<size_t, army*>> armies;

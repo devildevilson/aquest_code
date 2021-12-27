@@ -7,36 +7,110 @@
 namespace devils_engine {
   namespace core {
     namespace rights {
-      // тут мы должны получить государство, которое управляет челиком или его личную вотчину?
-      const realm* get_state(const realm* invoker) {
-        auto state = invoker;
-        if (invoker->is_assembly() || 
-            invoker->is_council()  ||
-            invoker->is_tribunal() ||
-            invoker->is_clergy()) 
-          state = invoker->state.get();
-        
-        ASSERT(state != nullptr);
-        return state;
+      const realm* get_government(const character* invoker) {
+        if (invoker->suzerain.valid()) return invoker->suzerain.get();
+        assert(invoker->self.valid());
+        if (invoker->is_independent()) return invoker->self->get_state().get();
+        return invoker->self->liege.get(); // по идее льедж всегда указывает на государство или на селф льеджа
       }
       
-      const realm* get_government(const realm* invoker) {
-        if (invoker->is_independent()) return get_state(invoker);
-        return invoker->liege.get(); // по идее льедж всегда указывает на государство или на селф льеджа
+      realm* get_government(character* invoker) {
+        if (invoker->suzerain.valid()) return invoker->suzerain.get();
+        assert(invoker->self.valid());
+        if (invoker->is_independent()) return invoker->self->get_state().get();
+        return invoker->self->liege.get(); // по идее льедж всегда указывает на государство или на селф льеджа
       }
       
-      const religion* get_dominant_religion(const realm* invoker) {
-        const auto state = get_state(invoker);
-        return state->clergy.valid() ? state->clergy->dominant_religion : state->dominant_religion;
+      const titulus* get_duchy(const titulus* cur) {
+        if (cur->type() > core::titulus::type::duke) return nullptr;
+        if (cur->type() == core::titulus::type::duke) return cur;
+        auto parent = cur->parent;
+        while (parent != nullptr && parent->type() < core::titulus::type::duke) {
+          parent = cur->parent;
+        }
+        return parent;
+      }
+      
+      const titulus* get_kingdom(const titulus* cur) {
+        if (cur->type() > core::titulus::type::king) return nullptr;
+        if (cur->type() == core::titulus::type::king) return cur;
+        auto parent = cur->parent;
+        while (parent != nullptr && parent->type() < core::titulus::type::king) {
+          parent = cur->parent;
+        }
+        return parent;
+      }
+      
+      const titulus* get_empire(const titulus* cur) {
+        if (cur->type() > core::titulus::type::imperial) return nullptr;
+        if (cur->type() == core::titulus::type::imperial) return cur;
+        auto parent = cur->parent;
+        while (parent != nullptr && parent->type() < core::titulus::type::imperial) {
+          parent = cur->parent;
+        }
+        return parent;
+      }
+      
+      const titulus* get_top_title(const titulus* cur) {
+        auto parent = cur->parent;
+        while (parent != nullptr) {
+          parent = cur->parent;
+        }
+        return parent;
+      }
+      
+      titulus* get_duchy(titulus* cur) {
+        if (cur->type() > core::titulus::type::duke) return nullptr;
+        if (cur->type() == core::titulus::type::duke) return cur;
+        auto parent = cur->parent;
+        while (parent != nullptr && parent->type() < core::titulus::type::duke) {
+          parent = cur->parent;
+        }
+        return parent;
+      }
+      
+      titulus* get_kingdom(titulus* cur) {
+        if (cur->type() > core::titulus::type::king) return nullptr;
+        if (cur->type() == core::titulus::type::king) return cur;
+        auto parent = cur->parent;
+        while (parent != nullptr && parent->type() < core::titulus::type::king) {
+          parent = cur->parent;
+        }
+        return parent;
+      }
+      
+      titulus* get_empire(titulus* cur) {
+        if (cur->type() > core::titulus::type::imperial) return nullptr;
+        if (cur->type() == core::titulus::type::imperial) return cur;
+        auto parent = cur->parent;
+        while (parent != nullptr && parent->type() < core::titulus::type::imperial) {
+          parent = cur->parent;
+        }
+        return parent;
+      }
+      
+      titulus* get_top_title(titulus* cur) {
+        auto parent = cur->parent;
+        while (parent != nullptr) {
+          parent = cur->parent;
+        }
+        return parent;
       }
       
       bool is_government_of(const realm* invoker, const realm* of) {
         // of - может быть какой то ветвью власти у вассала
-        if (of->is_independent()) return false;
+        if (of->is_independent_realm()) return false;
         
-        const auto &of_liege = get_state(of->liege.get());
-        auto state = get_state(invoker);
+        const auto &of_liege = of->liege->get_state();
+        auto state = invoker->get_state();
         return state == of_liege;
+      }
+      
+      bool is_vassal_of(const character* c, const realm* of) {
+        if (c->is_independent()) return false;
+        const auto &of_state = of->get_state();
+        auto state = get_government(c)->get_state();
+        return state == of_state;
       }
       
       bool is_prisoner(const realm* invoker, const character* c) {
@@ -45,7 +119,7 @@ namespace devils_engine {
         // вообще у каждой силы в государстве может быть своя тюрьма
         // и для того чтобы это работало так нужно будет добавлять механик
         // сейчас пока будем пользоваться гос тюрьмой
-        auto state = get_state(invoker);
+        auto state = invoker->get_state();
         return c->imprisoner == state;
       }
       
@@ -66,12 +140,12 @@ namespace devils_engine {
       }
       
       bool is_vassal(const character* c) {
-        const auto self = c->realms[character::self].get();
+        const auto self = c->self.get();
         return self != nullptr && self->main_title != nullptr;
       }
       
       bool has_landed_title(const character* c) {
-        const auto r = c->realms[core::character::self];
+        const auto r = c->self;
         if (r == nullptr) return false;
         // это ошибка
         ASSERT(r->is_self() && r->titles != nullptr);
@@ -80,10 +154,10 @@ namespace devils_engine {
       }
       
       bool is_considered_shunned(const character* c) {
-        const auto self = c->realms[character::self].get();
+        const auto self = c->self.get();
         const auto suzerain = c->suzerain.get();
         assert(size_t(self != nullptr) + size_t(suzerain != nullptr) == 1);
-        const auto state = self == nullptr ? get_state(self) : get_state(suzerain);
+        const auto state = self != nullptr ? self->get_state() : suzerain->get_state();
         for (size_t i = 0; i < c->known_secrets.size(); ++i) {
           const auto &data = c->known_secrets[i];
           ASSERT(data.type < secret_types::count);
@@ -96,10 +170,10 @@ namespace devils_engine {
       }
       
       bool is_considered_criminal(const character* c) {
-        const auto self = c->realms[character::self].get();
+        const auto self = c->self.get();
         const auto suzerain = c->suzerain.get();
         assert(size_t(self != nullptr) + size_t(suzerain != nullptr) == 1);
-        const auto state = self == nullptr ? get_state(self) : get_state(suzerain);
+        const auto state = self != nullptr ? self->get_state() : suzerain->get_state();
         for (size_t i = 0; i < c->known_secrets.size(); ++i) {
           const auto &data = c->known_secrets[i];
           ASSERT(data.type < secret_types::count);
@@ -111,44 +185,102 @@ namespace devils_engine {
         return false;
       }
       
-      bool is_liege(const character* c) {
-        const auto self = c->realms[character::self].get();
+      bool is_in_realm_of(const realm* minor, const realm* of) {
+        // of может не быть государством, но тут требуется проверить господина или господина господина и проч
+        auto main_realm = of->get_state();
+        auto liege = minor->liege->get_state();
+        while (liege != nullptr && liege != main_realm) {
+          liege = liege->liege->get_state();
+        }
+        
+        return liege == nullptr && liege == main_realm;
+      }
+      
+      bool is_liege_or_above(const realm* liege, const realm* minor) {
+        auto m_liege = minor->liege.get();
+        while (m_liege != nullptr && m_liege != liege) {
+          m_liege = m_liege->liege.get();
+        }
+        
+        return m_liege == nullptr && m_liege == liege;
+      }
+      
+      bool is_parent_or_above(const titulus* parent, const titulus* cur) {
+        auto cur_parent = cur->parent;
+        while (cur_parent != nullptr && cur_parent != parent) {
+          cur_parent = cur_parent->parent;
+        }
+        
+        return cur_parent != nullptr && cur_parent == parent;
+      }
+      
+      bool is_ruler(const character* c) {
+        const auto self = c->self.get();
         const auto suzerain = c->suzerain.get();
         assert(size_t(self != nullptr) + size_t(suzerain != nullptr) == 1);
-        const auto state = self == nullptr ? get_state(self) : get_state(suzerain);
+        const auto state = self != nullptr ? self->get_state() : suzerain->get_state();
         return state->leader == c;
       }
       
       bool is_councilor(const character* c) {
-        return c->realms[character::council].valid();
+        return c->is_council_member();
       }
       
       bool is_magistrate(const character* c) {
-        return c->realms[character::tribunal].valid();
+        return c->is_tribunal_member();
       }
       
       bool is_assembler(const character* c) {
-        return c->realms[character::assembly].valid();
+        return c->is_assembly_member();
       }
       
       bool is_clergyman(const character* c) {
-        return c->realms[character::clergy].valid();
+        return c->is_clergy_member();
       }
       
       bool is_council_elector(const character* c) {
-        return c->electorate[character::council].valid();
+        return c->is_council_elector();
       }
       
       bool is_tribunal_elector(const character* c) {
-        return c->electorate[character::tribunal].valid();
+        return c->is_tribunal_elector();
       }
       
       bool is_assembly_elector(const character* c) {
-        return c->electorate[character::assembly].valid();
+        return c->is_assembly_elector();
       }
       
       bool is_clergy_elector(const character* c) {
-        return c->electorate[character::clergy].valid();
+        return c->is_clergy_elector();
+      }
+      
+      bool is_member_of(const character* c, const realm* of) {
+        // тут по идее простая проверка, указатели на то членами чего мы являемся должны быть перечисленны в персонаже
+        if (of->leader == c) return true; // нужно добавить эту логику в скрипт
+        if (of->heir == c) return true;
+        
+        for (const auto &r : c->realms) {
+          if (r == of) return true;
+        }
+        
+        return false;
+      }
+      
+      bool is_elector_of(const character* c, const realm* of) {
+        for (const auto &r : c->electorate) {
+          if (r == of) return true;
+        }
+        
+        return false;
+      }
+      
+      uint32_t get_realm_type(const realm* r) {
+        // возвратим число - тип чем является реалм
+        if (r->is_council()) return character::council;
+        if (r->is_tribunal()) return character::tribunal;
+        if (r->is_assembly()) return character::assembly;
+        if (r->is_clergy()) return character::clergy;
+        return character::establishment;
       }
       
       bool can_force_to_return_a_title(const realm* invoker, const realm* target, const titulus* title) {
@@ -167,7 +299,7 @@ namespace devils_engine {
             bool revoke = invoker->get_power_mechanic(core::power_rights::can_revoke_title);
             if (!revoke) return false;
             {
-              const bool is_state = target == get_state(invoker);
+              const bool is_state = target == invoker->get_state();
               const bool not_a_main_title_type = !is_title_type_same_as_main_title(target, title);
               const bool has_right = invoker->get_power_mechanic(core::power_rights::can_revoke_title_from_state);
               if (revoke && is_state && has_right && not_a_main_title_type) return true;
@@ -184,14 +316,14 @@ namespace devils_engine {
             // тут нам нужно сделать институт религии, в котором можно будет проверить все эти вещи
             {
               const bool is_ex = target->leader->is_excommunicated();
-              const bool same_rel = get_dominant_religion(invoker) == target->leader->religion;
+              const bool same_rel = invoker->get_dominant_religion() == target->leader->religion;
               const bool has_right = invoker->get_power_mechanic(core::power_rights::can_revoke_title_from_excommunicated);
               if (revoke && has_right && is_ex && same_rel) return true;
             }
             
             {
               // опять берем доминантную религию?
-              const auto rel = get_dominant_religion(invoker);
+              const auto rel = invoker->get_dominant_religion();
               const auto another_rel = rel != target->leader->religion;
               const bool has_right = invoker->get_power_mechanic(core::power_rights::can_revoke_title_from_infidel);
               if (revoke && has_right && another_rel) return true;
@@ -220,9 +352,9 @@ namespace devils_engine {
         // а зачем мне нужен отдельно ревок титул? у кого я могу отнимать титул в этом случае?
         const bool give = invoker->get_power_mechanic(core::power_rights::can_give_title);
         if (!give) return false;
-        if (target->suzerain.valid() && get_state(target->suzerain.get()) != get_state(invoker)) return false;
-        const auto self_realm = target->realms[character::self];
-        if (self_realm.valid() && get_state(self_realm->liege.get()) != get_state(invoker)) return false;
+        if (target->suzerain.valid() && target->suzerain->get_state() != invoker->get_state()) return false;
+        const auto self_realm = target->self;
+        if (self_realm.valid() && self_realm->liege->get_state() != invoker->get_state()) return false;
         
         const bool has_l_title = has_landed_title(target);
         const bool big_title_type = title->type() > titulus::type::baron;
@@ -234,7 +366,7 @@ namespace devils_engine {
           if (!has_right && pleb) return false;
         }
         
-        const bool same_rel = get_dominant_religion(invoker) == target->religion;
+        const bool same_rel = invoker->get_dominant_religion() == target->religion;
         
         // тут нам нужно сделать институт религии, в котором можно будет проверить все эти вещи
         if (same_rel && target->is_excommunicated()) {
@@ -262,10 +394,10 @@ namespace devils_engine {
         if (invoker == nullptr || target == nullptr) return false;
         if (target->is_prisoner()) return false;
         
-        const auto state = get_state(invoker);
-        const auto self_realm = target->realms[character::self];
-        if (target->suzerain.valid() && get_state(target->suzerain.get()) != state) return false;
-        if (self_realm.valid() && get_state(self_realm->liege.get()) != state) return false;
+        const auto state = invoker->get_state();
+        const auto self_realm = target->self;
+        if (target->suzerain.valid() && target->suzerain->get_state() != state) return false;
+        if (self_realm.valid() && self_realm->liege->get_state() != state) return false;
         
         const bool imprison = invoker->get_power_mechanic(core::power_rights::can_imprison);
         if (!imprison) return false;
@@ -273,7 +405,7 @@ namespace devils_engine {
         const bool imprison_freely = invoker->get_power_mechanic(core::power_rights::can_imprison_freely);
         if (imprison_freely) return true;
         
-        const bool same_rel = get_dominant_religion(invoker) == target->religion;
+        const bool same_rel = invoker->get_dominant_religion() == target->religion;
         
         if (same_rel && target->is_excommunicated()) {
           const bool has_right = invoker->get_power_mechanic(core::power_rights::can_imprison_excommunicated);
@@ -297,10 +429,10 @@ namespace devils_engine {
         if (invoker == nullptr || target == nullptr) return false;
         if (!target->is_prisoner()) return false;
         
-        const auto state = get_state(invoker);
-        const auto self_realm = target->realms[character::self];
-        if (target->suzerain.valid() && get_state(target->suzerain.get()) != state) return false;
-        if (self_realm.valid() && get_state(self_realm->liege.get()) != state) return false;
+        const auto state = invoker->get_state();
+        const auto self_realm = target->self;
+        if (target->suzerain.valid() && target->suzerain->get_state() != state) return false;
+        if (self_realm.valid() && self_realm->liege->get_state() != state) return false;
         
         const bool execution_allowed = state->get_state_mechanic(state_rights::execution_allowed);
         if (!execution_allowed) return false;
@@ -311,7 +443,7 @@ namespace devils_engine {
         const bool can_execute_freely = invoker->get_power_mechanic(power_rights::can_execute_freely);
         if (can_execute_freely) return true;
         
-        const bool same_rel = get_dominant_religion(invoker) == target->religion;
+        const bool same_rel = invoker->get_dominant_religion() == target->religion;
         
         if (same_rel && target->is_excommunicated()) {
           const bool has_right = invoker->get_power_mechanic(core::power_rights::can_execute_excommunicated);
@@ -331,10 +463,10 @@ namespace devils_engine {
       bool can_banish(const realm* invoker, const character* target) {
         if (invoker == nullptr || target == nullptr) return false;
         
-        const auto state = get_state(invoker);
-        const auto self_realm = target->realms[character::self];
-        if (target->suzerain.valid() && get_state(target->suzerain.get()) != state) return false;
-        if (self_realm.valid() && get_state(self_realm->liege.get()) != state) return false;
+        const auto state = invoker->get_state();
+        const auto self_realm = target->self;
+        if (target->suzerain.valid() && target->suzerain->get_state() != state) return false;
+        if (self_realm.valid() && self_realm->liege->get_state() != state) return false;
         
         const bool banishment_allowed = state->get_state_mechanic(state_rights::banishment_allowed);
         if (!banishment_allowed) return false;
@@ -345,7 +477,7 @@ namespace devils_engine {
         const bool can_banish_freely = invoker->get_power_mechanic(power_rights::can_banish_freely);
         if (can_banish_freely) return true;
         
-        const bool same_rel = get_dominant_religion(invoker) == target->religion;
+        const bool same_rel = invoker->get_dominant_religion() == target->religion;
         
         if (same_rel && target->is_excommunicated()) {
           const bool has_right = invoker->get_power_mechanic(core::power_rights::can_banish_excommunicated);
@@ -369,15 +501,15 @@ namespace devils_engine {
         if (invoker == nullptr || target == nullptr) return false;
         if (!target->is_prisoner()) return false;
         
-        const auto state = get_state(invoker);
-        const auto self_realm = target->realms[character::self];
-        if (target->suzerain.valid() && get_state(target->suzerain.get()) != state) return false;
-        if (self_realm.valid() && get_state(self_realm->liege.get()) != state) return false;
+        const auto state = invoker->get_state();
+        const auto self_realm = target->self;
+        if (target->suzerain.valid() && target->suzerain->get_state() != state) return false;
+        if (self_realm.valid() && self_realm->liege->get_state() != state) return false;
         
         const bool can_free = invoker->get_power_mechanic(power_rights::can_free_from_prison);
         if (!can_free) return false;
         
-        const bool same_rel = get_dominant_religion(invoker) == target->religion;
+        const bool same_rel = invoker->get_dominant_religion() == target->religion;
         
         if (same_rel && target->is_excommunicated()) {
           const bool has_right = invoker->get_power_mechanic(core::power_rights::can_free_excommunicated_from_prison);
@@ -414,7 +546,7 @@ namespace devils_engine {
       }
       
       bool can_become_general(const character* invoker) {
-        const auto state = get_government(invoker->realms[character::self].get());
+        const auto state = get_government(invoker);
         const bool male = invoker->is_male();
         const bool is_criminal = is_considered_criminal(invoker);
         if (is_criminal) return false;
@@ -435,17 +567,17 @@ namespace devils_engine {
         }
         
         // льежу прост по умолчанию дать возможность становится генералом?
-        const bool is_l = is_liege(invoker);
+        const bool is_l = is_ruler(invoker);
         if (is_l) { return true; }
         
-        const bool is_hero = core::character::is_hero(invoker);
+        const bool is_hero = invoker->is_hero();
         if (is_hero) {
           //const bool has_right = state->council->get_power_mechanic(power_rights::hero_can_get_this_status);
           const bool has_right = state->get_state_mechanic(state_rights::hero_can_become_a_general);
           if (has_right && gender_allowed) return true;
         }
         
-        const bool is_priest = core::character::is_priest(invoker);
+        const bool is_priest = invoker->is_priest();
         if (is_priest) {
           //const bool has_right = state->council->get_power_mechanic(power_rights::priest_can_get_this_status);
           const bool has_right = state->get_state_mechanic(state_rights::priest_can_become_a_general);
@@ -459,11 +591,11 @@ namespace devils_engine {
       }
       
       bool can_become_hero(const character* invoker) {
-        const auto state = get_government(invoker->realms[character::self].get());
+        const auto state = get_government(invoker);
         const bool male = invoker->is_male();
         const bool is_criminal = is_considered_criminal(invoker);
         if (is_criminal) return false;
-        if (core::character::is_hero(invoker)) return false;
+        if (invoker->is_hero()) return false;
         
         const bool gender_allowed = male ? 
           state->get_state_mechanic(state_rights::man_can_become_a_hero) : 
@@ -480,10 +612,10 @@ namespace devils_engine {
         }
         
         // льежу прост по умолчанию дать возможность становится генералом?
-        const bool is_l = is_liege(invoker);
+        const bool is_l = is_ruler(invoker);
         if (is_l) { return true; }
         
-        const bool is_priest = core::character::is_priest(invoker);
+        const bool is_priest = invoker->is_priest();
         if (is_priest) {
           const bool has_right = state->get_state_mechanic(state_rights::priest_can_become_a_hero);
           if (has_right && gender_allowed) return true;
@@ -495,207 +627,353 @@ namespace devils_engine {
         return gender_allowed;
       }
       
-      bool can_become_councillor(const character* invoker) {
-        const auto state = get_government(invoker->realms[character::self].get());
-        const bool male = invoker->is_male();
-        const bool is_criminal = is_considered_criminal(invoker);
-        if (is_criminal) return false;
-        if (!state->council.valid()) return false;
-        if (invoker->realms[character::council].valid()) return false;
-        
-        const bool noble = is_noble(invoker);
-        
-        const bool man_can_become_a_councillor = state->get_state_mechanic(state_rights::man_can_become_a_councillor);
-        const bool woman_can_become_a_councillor = state->get_state_mechanic(state_rights::woman_can_become_a_councillor);
-        assert(man_can_become_a_councillor || woman_can_become_a_councillor);
-        
-        // можно ли сделать проверки при которых другой гендер ставится в менее выгодную позицию?
-        // то есть примерно как в цк2? мы по идее можем отменить гендерность для конкретных статусов челиков
-        const bool gender_allowed = male ? man_can_become_a_councillor : woman_can_become_a_councillor;
-        
-        //const bool get_status = state->council.valid() && state->council->get_power_mechanic(power_rights::);
-        // тут мы должны проверить разные статусы
-        // кстати а как чел становится генералом? генерал поидее просто должность, может ли чел перестать быть генералом?
-        // может по идее, да генерал должен быть скорее технической должностью
-        const bool is_general = invoker->is_general();
-        if (is_general) {
-          const bool has_right = state->council->get_power_mechanic(power_rights::general_can_get_this_status);
-          //const bool has_right = state->get_state_mechanic(state_rights::general);
-          if (has_right && gender_allowed) return true;
-        }
-        
-        const bool is_l = is_liege(invoker);
-        if (is_l) {
-          const bool has_right = state->council->get_power_mechanic(power_rights::liege_can_get_this_status);
-          if (has_right) return true;
-        }
-        
-        const bool is_hero = core::character::is_hero(invoker);
-        if (is_hero) {
-          //const bool has_right = state->council->get_power_mechanic(power_rights::hero_can_get_this_status);
-          const bool has_right = state->get_state_mechanic(state_rights::hero_can_become_a_councillor);
-          if (has_right && gender_allowed) return true;
-        }
-        
-        const bool is_priest = core::character::is_priest(invoker);
-        if (is_priest) {
-          //const bool has_right = state->council->get_power_mechanic(power_rights::priest_can_get_this_status);
-          const bool has_right = state->get_state_mechanic(state_rights::priest_can_become_a_councillor);
-          if (has_right && gender_allowed) return true;
-        }
-        
-        const bool vassal = is_vassal(invoker);
-        if (vassal) {
-          const bool has_right = state->get_state_mechanic(state_rights::vassal_can_become_a_councillor);
-          if (has_right && gender_allowed) return true;
-        }
-        
-        if (noble) return gender_allowed && state->get_state_mechanic(state_rights::noble_can_become_a_councillor);
-        if (!state->get_state_mechanic(state_rights::courtier_can_become_a_councillor)) return false;
-        
-        return gender_allowed;
-      }
-      
-      bool can_become_magistrate(const character* invoker) {
-        const auto state = get_government(invoker->realms[character::self].get());
-        const bool male = invoker->is_male();
-        const bool is_criminal = is_considered_criminal(invoker);
-        if (is_criminal) return false;
-        if (!state->tribunal.valid()) return false;
-        if (invoker->realms[character::tribunal].valid()) return false;
-        
-        const bool noble = is_noble(invoker);
-        
-        const bool man_can_become_a_magistrate = state->get_state_mechanic(state_rights::man_can_become_a_magistrate);
-        const bool woman_can_become_a_magistrate = state->get_state_mechanic(state_rights::woman_can_become_a_magistrate);
-        assert(man_can_become_a_magistrate || woman_can_become_a_magistrate);
-        
-        // можно ли сделать проверки при которых другой гендер ставится в менее выгодную позицию?
-        // то есть примерно как в цк2? мы по идее можем отменить гендерность для конкретных статусов челиков
-        const bool gender_allowed = male ? man_can_become_a_magistrate : woman_can_become_a_magistrate;
-        
-        //const bool get_status = state->council.valid() && state->council->get_power_mechanic(power_rights::);
-        // тут мы должны проверить разные статусы
-        // кстати а как чел становится генералом? генерал поидее просто должность, может ли чел перестать быть генералом?
-        // может по идее, да генерал должен быть скорее технической должностью
-        const bool is_general = invoker->is_general();
-        if (is_general) {
-          const bool has_right = state->tribunal->get_power_mechanic(power_rights::general_can_get_this_status);
-          //const bool has_right = state->get_state_mechanic(state_rights::general);
-          if (has_right && gender_allowed) return true;
-        }
-        
-        const bool is_l = is_liege(invoker);
-        if (is_l) {
-          const bool has_right = state->tribunal->get_power_mechanic(power_rights::liege_can_get_this_status);
-          if (has_right) return true;
-        }
-        
-        const bool is_hero = core::character::is_hero(invoker);
-        if (is_hero) {
-          //const bool has_right = state->council->get_power_mechanic(power_rights::hero_can_get_this_status);
-          const bool has_right = state->get_state_mechanic(state_rights::hero_can_become_a_magistrate);
-          if (has_right && gender_allowed) return true;
-        }
-        
-        const bool is_priest = core::character::is_priest(invoker);
-        if (is_priest) {
-          //const bool has_right = state->council->get_power_mechanic(power_rights::priest_can_get_this_status);
-          const bool has_right = state->get_state_mechanic(state_rights::priest_can_become_a_magistrate);
-          if (has_right && gender_allowed) return true;
-        }
-        
-        const bool vassal = is_vassal(invoker);
-        if (vassal) {
-          const bool has_right = state->get_state_mechanic(state_rights::vassal_can_become_a_magistrate);
-          if (has_right && gender_allowed) return true;
-        }
-        
-        if (noble) return gender_allowed && state->get_state_mechanic(state_rights::noble_can_become_a_magistrate);
-        if (!state->get_state_mechanic(state_rights::courtier_can_become_a_magistrate)) return false;
-        
-        return gender_allowed;
-      }
-      
-      bool can_become_elector(const character* invoker) {
-        
-      }
-      
-      bool can_become_clergyman(const character* invoker) {
-        const auto state = get_government(invoker->realms[character::self].get());
-        const bool male = invoker->is_male();
-        const bool is_criminal = is_considered_criminal(invoker);
-        if (is_criminal) return false;
-        if (!state->clergy.valid()) return false;
-        if (invoker->realms[character::clergy].valid()) return false;
-        
-        const bool noble = is_noble(invoker);
-        
-        const bool man_can_become_a_clergyman = state->get_state_mechanic(state_rights::man_can_become_a_clergyman);
-        const bool woman_can_become_a_clergyman = state->get_state_mechanic(state_rights::woman_can_become_a_clergyman);
-        assert(man_can_become_a_clergyman || woman_can_become_a_clergyman);
-        
-        // можно ли сделать проверки при которых другой гендер ставится в менее выгодную позицию?
-        // то есть примерно как в цк2? мы по идее можем отменить гендерность для конкретных статусов челиков
-        const bool gender_allowed = male ? man_can_become_a_clergyman : woman_can_become_a_clergyman;
-        
-        //const bool get_status = state->council.valid() && state->council->get_power_mechanic(power_rights::);
-        // тут мы должны проверить разные статусы
-        // кстати а как чел становится генералом? генерал поидее просто должность, может ли чел перестать быть генералом?
-        // может по идее, да генерал должен быть скорее технической должностью
-        const bool is_general = invoker->is_general();
-        if (is_general) {
-          const bool has_right = state->tribunal->get_power_mechanic(power_rights::general_can_get_this_status);
-          //const bool has_right = state->get_state_mechanic(state_rights::general);
-          if (has_right && gender_allowed) return true;
-        }
-        
-        const bool is_l = is_liege(invoker);
-        if (is_l) {
-          const bool has_right = state->tribunal->get_power_mechanic(power_rights::liege_can_get_this_status);
-          if (has_right) return true;
-        }
-        
-        const bool is_hero = core::character::is_hero(invoker);
-        if (is_hero) {
-          //const bool has_right = state->council->get_power_mechanic(power_rights::hero_can_get_this_status);
-          const bool has_right = state->get_state_mechanic(state_rights::hero_can_become_a_clergyman);
-          if (has_right && gender_allowed) return true;
-        }
-        
-        const bool is_priest = core::character::is_priest(invoker);
-        if (is_priest) {
-          //const bool has_right = state->council->get_power_mechanic(power_rights::priest_can_get_this_status);
-          const bool has_right = state->get_state_mechanic(state_rights::priest_can_become_a_clergyman);
-          if (has_right && gender_allowed) return true;
-        }
-        
-        const bool vassal = is_vassal(invoker);
-        if (vassal) {
-          const bool has_right = state->get_state_mechanic(state_rights::vassal_can_become_a_clergyman);
-          if (has_right && gender_allowed) return true;
-        }
-        
-        if (noble) return gender_allowed && state->get_state_mechanic(state_rights::noble_can_become_a_clergyman);
-        if (!state->get_state_mechanic(state_rights::courtier_can_become_a_clergyman)) return false;
-        
-        return gender_allowed;
-      }
-      
-      bool can_become_liege(const character* invoker) {
-        // тут что? 
-        (void)invoker;
-        return true;
-      }
-      
       bool can_become_noble(const character* invoker) {
         // нубл или нет отпределяется за счет наличия или отсутствия династии
         // и вообще то говоря наверное у пристов не должно быть династии даже при начии титулов
         // хотя это открытый вопрос
         // короче говоря довольно сложно кого то как то ограничить от становления дворянином
         // не думаю что имеет смысл ограничивать
-        (void)invoker;
+        return !invoker->is_noble();
+      }
+      
+      // нужно разделить на технически может ли чел стать консулом и по праву
+      bool can_become_stateman(const character* invoker) { return can_become_member(invoker, get_government(invoker)->get_state().get()); }
+      bool can_become_councillor(const character* invoker) { 
+        const auto realm = get_government(invoker)->get_state()->get_council();
+        if (!realm.valid()) return false;
+        return can_become_member(invoker, realm.get()); 
+      }
+      
+      bool can_become_magistrate(const character* invoker) { 
+        const auto realm = get_government(invoker)->get_state()->get_tribunal();
+        if (!realm.valid()) return false;
+        return can_become_member(invoker, realm.get()); 
+      }
+      
+      bool can_become_assembler(const character* invoker) { 
+        const auto realm = get_government(invoker)->get_state()->get_assembly();
+        if (!realm.valid()) return false;
+        return can_become_member(invoker, realm.get()); 
+      }
+      
+      bool can_become_clergyman(const character* invoker) { 
+        const auto realm = get_government(invoker)->get_state()->get_clergy();
+        if (!realm.valid()) return false;
+        return can_become_member(invoker, realm.get()); 
+      }
+      
+      bool has_right_to_become_stateman(const character* invoker) {
+        return has_right_to_become_member(invoker, get_government(invoker)->get_state().get());
+      }
+      
+      bool has_right_to_become_councillor(const character* invoker) {
+        const auto realm = get_government(invoker)->get_state()->get_council();
+        if (!realm.valid()) return false;
+        return has_right_to_become_member(invoker, realm.get());
+      }
+      
+      bool has_right_to_become_magistrate(const character* invoker) {
+        const auto realm = get_government(invoker)->get_state()->get_tribunal();
+        if (!realm.valid()) return false;
+        return has_right_to_become_member(invoker, realm.get());
+      }
+      
+      bool has_right_to_become_assembler(const character* invoker) {
+        const auto realm = get_government(invoker)->get_state()->get_assembly();
+        if (!realm.valid()) return false;
+        return has_right_to_become_member(invoker, realm.get());
+      }
+      
+      bool has_right_to_become_clergyman(const character* invoker) {
+        const auto realm = get_government(invoker)->get_state()->get_clergy();
+        if (!realm.valid()) return false;
+        return has_right_to_become_member(invoker, realm.get());
+      }
+      
+      bool can_become_stateman_elector(const character* invoker) { return can_become_elector(invoker, get_government(invoker)->get_state().get()); }
+      bool can_become_councillor_elector(const character* invoker) {
+        const auto realm = get_government(invoker)->get_state()->get_council();
+        if (!realm.valid()) return false;
+        return can_become_elector(invoker, realm.get()); 
+      }
+      
+      bool can_become_tribunal_elector(const character* invoker) {
+        const auto realm = get_government(invoker)->get_state()->get_tribunal();
+        if (!realm.valid()) return false;
+        return can_become_elector(invoker, realm.get()); 
+      }
+      
+      bool can_become_assembly_elector(const character* invoker) {
+        const auto realm = get_government(invoker)->get_state()->get_assembly();
+        if (!realm.valid()) return false;
+        return can_become_elector(invoker, realm.get()); 
+      }
+      
+      bool can_become_clergyman_elector(const character* invoker) {
+        const auto realm = get_government(invoker)->get_state()->get_clergy();
+        if (!realm.valid()) return false;
+        return can_become_elector(invoker, realm.get()); 
+      }
+      
+      bool has_right_to_become_stateman_elector(const character* invoker) {
+        return has_right_to_become_elector(invoker, get_government(invoker)->get_state().get());
+      }
+      
+      bool has_right_to_become_councillor_elector(const character* invoker) {
+        const auto realm = get_government(invoker)->get_state()->get_council();
+        if (!realm.valid()) return false;
+        return has_right_to_become_elector(invoker, realm.get()); 
+      }
+      
+      bool has_right_to_become_tribunal_elector(const character* invoker) {
+        const auto realm = get_government(invoker)->get_state()->get_tribunal();
+        if (!realm.valid()) return false;
+        return has_right_to_become_elector(invoker, realm.get()); 
+      }
+      
+      bool has_right_to_become_assembly_elector(const character* invoker) {
+        const auto realm = get_government(invoker)->get_state()->get_assembly();
+        if (!realm.valid()) return false;
+        return has_right_to_become_elector(invoker, realm.get()); 
+      }
+      
+      bool has_right_to_become_clergyman_elector(const character* invoker) {
+        const auto realm = get_government(invoker)->get_state()->get_clergy();
+        if (!realm.valid()) return false;
+        return has_right_to_become_elector(invoker, realm.get());
+      }
+      
+      bool can_become_member(const character* invoker, const realm* target) {
+        const auto state = get_government(invoker)->get_state();
+        uint32_t index = UINT32_MAX;
+        if (target->is_state_independent_power()) index = character::establishment;
+        if (target->is_council()) index = character::council;
+        if (target->is_tribunal()) index = character::tribunal;
+        if (target->is_assembly()) index = character::assembly;
+        if (target->is_clergy()) index = character::clergy;
+        assert(index != UINT32_MAX);
+        
+        // что делать с реалмом который abroad (например с папством?), по идее какие то челики могут стать его частью и быть не совсем частью текущего государства
+        // нужно добавить указатель на другой реалм, указатель на другой реалм будет лежать в льедже (что собственно логично)
+        // но в любом случае мы не можем быть частью чиновников какого то другого государства 
+        if (state != target->get_state()) return false;
+        if (invoker->realms[index].valid()) return false;
+        // по идее эти проверки не нужны если есть проверка совпадают ли стейты
+//         if (target->is_council()  && !state->council.valid())  return false;
+//         if (target->is_tribunal() && !state->tribunal.valid()) return false;
+//         if (target->is_assembly() && !state->assembly.valid()) return false;
+//         if (target->is_clergy()   && !state->clergy.valid())   return false;
+        
         return true;
+      }
+      
+      bool has_right_to_become_member(const character* invoker, const realm* target) {
+        if (!can_become_member(invoker, target)) return false;
+        if (is_considered_criminal(invoker)) return false;
+        
+        const bool male = invoker->is_male();
+        const bool man_has_right = target->get_power_mechanic(power_rights::man_can_become_a_member);
+        const bool woman_has_right = target->get_power_mechanic(power_rights::woman_can_become_a_member);
+        //assert(man_has_right || woman_has_right);
+        
+        const bool gender_allowed = man_has_right || woman_has_right ? (male ? man_has_right : woman_has_right) : male;
+        //const bool gender_allowed = male ? man_has_right : woman_has_right;
+        
+        const auto state = target->get_state();
+        const auto council = target->get_council();
+        const auto tribunal = target->get_tribunal();
+        const auto assembly = target->get_assembly();
+        const auto clergy = target->get_clergy();
+        
+        //const bool get_status = state->council.valid() && state->council->get_power_mechanic(power_rights::);
+        // тут мы должны проверить разные статусы
+        const bool is_l = is_ruler(invoker);
+        if (is_l) {
+          const bool has_right = target->get_power_mechanic(power_rights::ruler_can_get_this_status);
+          if (has_right) return true;
+        }
+        
+        // кстати а как чел становится генералом? генерал поидее просто должность, может ли чел перестать быть генералом?
+        // может по идее, да генерал должен быть скорее технической должностью
+        const bool is_general = invoker->is_general();
+        if (is_general) {
+          const bool has_right = target->get_power_mechanic(power_rights::general_can_get_this_status); // наверное в этом случае такого права быть не должно?
+          if (has_right) return true; // gender_allowed
+        }
+        
+        const bool is_hero = invoker->is_hero();
+        if (is_hero) {
+          // это право стать членом в любой момент после получения статуса, должно ли оно тут учитываться? что на счет права получить членство?
+          const bool has_right_to_get_status = target->get_power_mechanic(power_rights::hero_can_get_this_status);
+          const bool has_right_to_become_member = target->get_power_mechanic(power_rights::hero_can_become_a_member);
+          if (has_right_to_get_status || (has_right_to_become_member && gender_allowed)) return true; // гендер? get_status вне зависимости от гендера
+        }
+        
+        const bool is_priest = invoker->is_priest();
+        if (is_priest) {
+          const bool has_right_to_get_status = target->get_power_mechanic(power_rights::priest_can_get_this_status);
+          const bool has_right_to_become_member = target->get_power_mechanic(power_rights::priest_can_become_a_member);
+          if (has_right_to_get_status || (has_right_to_become_member && gender_allowed)) return true; // гендер? get_status вне зависимости от гендера
+        }
+        
+        if (state->leader == invoker) {
+          const bool has_right = target->get_power_mechanic(power_rights::ruler_can_get_this_status);
+          if (has_right) return true;
+        }
+        
+        if (target != state && state->is_state_independent_power() && is_member_of(invoker, state.get())) {
+          const bool has_right = target->get_power_mechanic(power_rights::stateman_can_get_this_status);
+          if (has_right) return true;
+        }
+        
+        if (target != council && council.valid() && is_member_of(invoker, council.get())) {
+          const bool has_right_to_get_status = target->get_power_mechanic(power_rights::councillor_can_get_this_status);
+          if (has_right_to_get_status) return true;  // gender_allowed
+        }
+        
+        if (target != assembly && assembly.valid() && is_member_of(invoker, assembly.get())) {
+          const bool has_right = target->get_power_mechanic(power_rights::assembler_can_get_this_status);
+          if (has_right) return true;  // gender_allowed
+        }
+        
+        if (target != tribunal && tribunal.valid() && is_member_of(invoker, tribunal.get())) {
+          const bool has_right = target->get_power_mechanic(power_rights::magistrate_can_get_this_status);
+          if (has_right) return true;  // gender_allowed
+        }
+        
+        if (target != clergy && clergy.valid() && is_member_of(invoker, clergy.get())) {
+          const bool has_right = target->get_power_mechanic(power_rights::clergyman_can_get_this_status);
+          if (has_right) return true;  // gender_allowed
+        }
+        
+        if (is_considered_shunned(invoker)) {
+          const auto state = target->get_state();
+          // какое право у шаннед?
+          //const bool has_right = target->get_power_mechanic(power_rights::shunn);
+        }
+        
+        const bool noble = is_noble(invoker);
+        const bool noble_has_right = target->get_power_mechanic(power_rights::noble_can_become_a_member);
+        const bool pleb_has_right = target->get_power_mechanic(power_rights::pleb_can_become_a_member);
+        
+        const bool vassal = is_vassal(invoker);
+        if (vassal) {
+          const bool has_right = target->get_power_mechanic(power_rights::vassal_can_become_a_member);
+          if (noble) {
+            if (has_right && noble_has_right && gender_allowed) return true;
+            else return false;
+          } else {
+            assert(invoker->is_pleb());
+            if (has_right && pleb_has_right && gender_allowed) return true;
+            else return false;
+          }
+        }
+        
+        const bool courtier_has_right = target->get_power_mechanic(power_rights::courtier_can_become_a_member);
+        if (!courtier_has_right) return false;
+        
+        if (noble) return noble_has_right && gender_allowed;
+        return pleb_has_right && gender_allowed;
+      }
+      
+      bool can_become_elector(const character* invoker, const realm* target) {
+        const auto state = get_government(invoker)->get_state();
+        uint32_t index = UINT32_MAX;
+        if (target->is_state_independent_power()) index = character::establishment;
+        if (target->is_council()) index = character::council;
+        if (target->is_tribunal()) index = character::tribunal;
+        if (target->is_assembly()) index = character::assembly;
+        if (target->is_clergy()) index = character::clergy;
+        assert(index != UINT32_MAX);
+        
+        // что делать с реалмом который abroad (например с папством?), по идее какие то челики могут стать его частью и быть не совсем частью текущего государства
+        // нужно добавить указатель на другой реалм, указатель на другой реалм будет лежать в льедже (что собственно логично)
+        // но в любом случае мы не можем быть частью чиновников какого то другого государства 
+        if (state != target->get_state()) return false;
+        // может ли мембер этого реалма быть электором? вообще может быть
+        if (invoker->electorate[index].valid()) return false; // уже электор
+        // по идее эти проверки не нужны если есть проверка совпадают ли стейты
+//         if (target->is_council()  && !state->council.valid())  return false;
+//         if (target->is_tribunal() && !state->tribunal.valid()) return false;
+//         if (target->is_assembly() && !state->assembly.valid()) return false;
+//         if (target->is_clergy()   && !state->clergy.valid())   return false;
+        
+        return true;
+      }
+      
+      bool has_right_to_become_elector(const character* invoker, const realm* target) {
+        if (!can_become_elector(invoker, target)) return false;
+        if (is_considered_criminal(invoker)) return false; // по умолчанию криминал не может ничего
+        
+        const bool male = invoker->is_male();
+        const bool man_has_right = target->get_power_mechanic(power_rights::man_can_become_an_elector);
+        const bool woman_has_right = target->get_power_mechanic(power_rights::woman_can_become_an_elector);
+        //assert(man_has_right || woman_has_right);
+        
+        // по умолчанию предпочтение отдается мужчине (чисто чтобы не вылетать на базовых проверках)
+        const bool gender_allowed = man_has_right || woman_has_right ? (male ? man_has_right : woman_has_right) : male;
+        //const bool gender_allowed = male ? man_can_become_a_elector : woman_can_become_a_elector;
+        
+        //const bool get_status = state->council.valid() && state->council->get_power_mechanic(power_rights::);
+        // тут мы должны проверить разные статусы
+        // вообще правитель может стать электором для консила например
+//         const bool is_l = is_ruler(invoker);
+//         if (is_l) {
+//           const bool has_right = target->get_power_mechanic(power_rights::ruler_can_get_this_status);
+//           if (has_right) return true;
+//         }
+//         
+//         // кстати а как чел становится генералом? генерал поидее просто должность, может ли чел перестать быть генералом?
+//         // может по идее, да генерал должен быть скорее технической должностью
+//         // может ли генерал быть электором? в текущий момент нет, кто такой вообще генерал? взрослый человек с землей?
+//         // нужно ли их количество как то ограничить?
+//         const bool is_general = invoker->is_general();
+//         if (is_general) {
+//           const bool has_right = target->get_power_mechanic(power_rights::general_can_get_this_status); // наверное в этом случае такого права быть не должно?
+//           if (has_right) return true; // gender_allowed
+//         }
+        
+        const bool is_hero = invoker->is_hero();
+        if (is_hero) {
+          // это право стать членом в любой момент после получения статуса, должно ли оно тут учитываться? что на счет права получить членство?
+          const bool has_right_to_become_member = target->get_power_mechanic(power_rights::hero_can_become_an_elector);
+          if (has_right_to_become_member && gender_allowed) return true;
+        }
+        
+        const bool is_priest = invoker->is_priest();
+        if (is_priest) {
+          const bool has_right_to_become_member = target->get_power_mechanic(power_rights::priest_can_become_an_elector);
+          if (has_right_to_become_member && gender_allowed) return true;
+        }
+        
+        if (is_considered_shunned(invoker)) {
+          const auto state = target->get_state();
+          // какое право у шаннед?
+          //const bool has_right = target->get_power_mechanic(power_rights::shunn);
+        }
+        
+        const bool noble = is_noble(invoker);
+        const bool noble_has_right = target->get_power_mechanic(power_rights::noble_can_become_an_elector);
+        const bool pleb_has_right = target->get_power_mechanic(power_rights::pleb_can_become_an_elector);
+        
+        const bool vassal = is_vassal(invoker);
+        if (vassal) {
+          const bool has_right = target->get_power_mechanic(power_rights::vassal_can_become_an_elector);
+          if (noble) {
+            if (has_right && noble_has_right && gender_allowed) return true;
+            else return false;
+          } else {
+            assert(invoker->is_pleb());
+            if (has_right && pleb_has_right && gender_allowed) return true;
+            else return false;
+          }
+        }
+        
+        const bool courtier_has_right = target->get_power_mechanic(power_rights::courtier_can_become_an_elector);
+        if (!courtier_has_right) return false;
+        
+        if (noble) return noble_has_right && gender_allowed;
+        return pleb_has_right && gender_allowed;
       }
       
       bool can_become_diplomat(const character* invoker) {
@@ -714,236 +992,110 @@ namespace devils_engine {
       }
       
       bool can_apply_to_the_tribunal(const character* invoker) {
-        const auto state = get_government(invoker->realms[character::self].get());
-        const bool is_criminal = is_considered_criminal(invoker);
-        if (is_criminal) return false;
-        if (!state->tribunal.valid()) return false;
-        //if (state->tribunal->get_power_mechanic(power_rights::)) return false;
-        // по идее мы можем обратиться и к авторитарному правителю
-        
-        const bool member = is_magistrate(invoker);
-        const bool elector = is_tribunal_elector(invoker);
-        if ((member || elector)) return state->tribunal->get_power_mechanic(power_rights::initiative);
-        
-        const bool male = invoker->is_male();
-        const bool noble = is_noble(invoker);
-        
-        const bool man_has_right = state->get_state_mechanic(state_rights::man_can_apply_to_the_tribunal);
-        const bool woman_has_right = state->get_state_mechanic(state_rights::woman_can_apply_to_the_tribunal);
-        // такого рода ошибка в таких функциях, будет честно говоря как издевательство, другое дело что ситуация 
-        // когда никто не может подать в трибунал может существовать, но не с помощью гендерных законов
-        // наверное нужно поставить в качестве дефолтного значения male
-        //assert(man_has_right || woman_has_right);
-        
-        // можно ли сделать проверки при которых другой гендер ставится в менее выгодную позицию?
-        // то есть примерно как в цк2? мы по идее можем отменить гендерность для конкретных статусов челиков
-        const bool gender_allowed = man_has_right || woman_has_right ? (male ? man_has_right : woman_has_right) : male;
-        
-        // никакой дополнительной спецификации для генерала
-        
-        const bool is_hero = core::character::is_hero(invoker);
-        if (is_hero) {
-          //const bool has_right = state->council->get_power_mechanic(power_rights::hero_can_get_this_status);
-          const bool has_right = state->get_state_mechanic(state_rights::hero_can_apply_to_the_tribunal);
-          if (has_right && gender_allowed) return true;
-        }
-        
-        const bool is_priest = core::character::is_priest(invoker);
-        if (is_priest) {
-          //const bool has_right = state->council->get_power_mechanic(power_rights::priest_can_get_this_status);
-          const bool has_right = state->get_state_mechanic(state_rights::priest_can_apply_to_the_tribunal);
-          if (has_right && gender_allowed) return true;
-        }
-        
-        const bool vassal = is_vassal(invoker);
-        if (vassal) {
-          const bool has_right = state->get_state_mechanic(state_rights::vassal_can_apply_to_the_tribunal);
-          if (has_right && gender_allowed) return true;
-        }
-        
-        if (noble) return gender_allowed && state->get_state_mechanic(state_rights::noble_can_apply_to_the_tribunal);
-        if (!state->get_state_mechanic(state_rights::courtier_can_apply_to_the_tribunal)) return false;
-        
-        return gender_allowed;
+        const auto state = get_government(invoker)->get_state();
+        const auto r = state->get_tribunal();
+        if (!r.valid()) return false;
+        return can_apply_to(invoker, r.get());
       }
       
       bool can_apply_to_the_council(const character* invoker) {
-        const auto state = get_government(invoker->realms[character::self].get());
-        const bool is_criminal = is_considered_criminal(invoker);
-        if (is_criminal) return false;
-        if (!state->council.valid()) return false;
-        //if (state->tribunal->get_power_mechanic(power_rights::)) return false;
-        // по идее мы можем обратиться и к авторитарному правителю
-        
-        const bool member = is_councilor(invoker);
-        const bool elector = is_council_elector(invoker);
-        if ((member || elector)) return state->council->get_power_mechanic(power_rights::initiative);
-        
-        const bool male = invoker->is_male();
-        const bool noble = is_noble(invoker);
-        
-        const bool man_has_right = state->get_state_mechanic(state_rights::man_can_apply_to_the_council);
-        const bool woman_has_right = state->get_state_mechanic(state_rights::woman_can_apply_to_the_council);
-        // такого рода ошибка в таких функциях, будет честно говоря как издевательство, другое дело что ситуация 
-        // когда никто не может подать в трибунал может существовать, но не с помощью гендерных законов
-        // наверное нужно поставить в качестве дефолтного значения male
-        //assert(man_has_right || woman_has_right);
-        
-        // можно ли сделать проверки при которых другой гендер ставится в менее выгодную позицию?
-        // то есть примерно как в цк2? мы по идее можем отменить гендерность для конкретных статусов челиков
-        const bool gender_allowed = man_has_right || woman_has_right ? (male ? man_has_right : woman_has_right) : male;
-        
-        // никакой дополнительной спецификации для генерала
-        
-        const bool is_hero = core::character::is_hero(invoker);
-        if (is_hero) {
-          //const bool has_right = state->council->get_power_mechanic(power_rights::hero_can_get_this_status);
-          const bool has_right = state->get_state_mechanic(state_rights::hero_can_apply_to_the_council);
-          if (has_right && gender_allowed) return true;
-        }
-        
-        const bool is_priest = core::character::is_priest(invoker);
-        if (is_priest) {
-          //const bool has_right = state->council->get_power_mechanic(power_rights::priest_can_get_this_status);
-          const bool has_right = state->get_state_mechanic(state_rights::priest_can_apply_to_the_council);
-          if (has_right && gender_allowed) return true;
-        }
-        
-        const bool vassal = is_vassal(invoker);
-        if (vassal) {
-          const bool has_right = state->get_state_mechanic(state_rights::vassal_can_apply_to_the_council);
-          if (has_right && gender_allowed) return true;
-        }
-        
-        if (noble) return gender_allowed && state->get_state_mechanic(state_rights::noble_can_apply_to_the_council);
-        if (!state->get_state_mechanic(state_rights::courtier_can_apply_to_the_council)) return false;
-        
-        return gender_allowed;
+        const auto state = get_government(invoker)->get_state();
+        const auto r = state->get_council();
+        if (!r.valid()) return false;
+        return can_apply_to(invoker, r.get());
       }
       
       bool can_apply_to_the_assembly(const character* invoker) {
-        const auto state = get_government(invoker->realms[character::self].get());
-        const bool is_criminal = is_considered_criminal(invoker);
-        if (is_criminal) return false;
-        if (!state->assembly.valid()) return false;
-        //if (state->tribunal->get_power_mechanic(power_rights::)) return false;
-        // по идее мы можем обратиться и к авторитарному правителю
-        
-        const bool member = is_assembler(invoker);
-        const bool elector = is_assembly_elector(invoker);
-        if ((member || elector)) return state->assembly->get_power_mechanic(power_rights::initiative);
-        
-        const bool male = invoker->is_male();
-        const bool noble = is_noble(invoker);
-        
-        const bool man_has_right = state->get_state_mechanic(state_rights::man_can_apply_to_the_assembly);
-        const bool woman_has_right = state->get_state_mechanic(state_rights::woman_can_apply_to_the_assembly);
-        // такого рода ошибка в таких функциях, будет честно говоря как издевательство, другое дело что ситуация 
-        // когда никто не может подать в трибунал может существовать, но не с помощью гендерных законов
-        // наверное нужно поставить в качестве дефолтного значения male
-        //assert(man_has_right || woman_has_right);
-        
-        // можно ли сделать проверки при которых другой гендер ставится в менее выгодную позицию?
-        // то есть примерно как в цк2? мы по идее можем отменить гендерность для конкретных статусов челиков
-        const bool gender_allowed = man_has_right || woman_has_right ? (male ? man_has_right : woman_has_right) : male;
-        
-        // никакой дополнительной спецификации для генерала
-        
-        const bool is_hero = core::character::is_hero(invoker);
-        if (is_hero) {
-          const bool has_right = state->get_state_mechanic(state_rights::hero_can_apply_to_the_assembly);
-          if (has_right && gender_allowed) return true;
-        }
-        
-        const bool is_priest = core::character::is_priest(invoker);
-        if (is_priest) {
-          const bool has_right = state->get_state_mechanic(state_rights::priest_can_apply_to_the_assembly);
-          if (has_right && gender_allowed) return true;
-        }
-        
-        const bool vassal = is_vassal(invoker);
-        if (vassal) {
-          const bool has_right = state->get_state_mechanic(state_rights::vassal_can_apply_to_the_assembly);
-          if (has_right && gender_allowed) return true;
-        }
-        
-        if (noble) return gender_allowed && state->get_state_mechanic(state_rights::noble_can_apply_to_the_assembly);
-        if (!state->get_state_mechanic(state_rights::courtier_can_apply_to_the_assembly)) return false;
-        
-        return gender_allowed;
+        const auto state = get_government(invoker)->get_state();
+        const auto r = state->get_assembly();
+        if (!r.valid()) return false;
+        return can_apply_to(invoker, r.get());
       }
       
       bool can_apply_to_the_clergy(const character* invoker) {
-        const auto state = get_government(invoker->realms[character::self].get());
-        const bool is_criminal = is_considered_criminal(invoker);
-        if (is_criminal) return false;
-        if (!state->clergy.valid()) return false;
-        //if (state->tribunal->get_power_mechanic(power_rights::)) return false;
-        // по идее мы можем обратиться и к авторитарному правителю
-        
-        const bool member = is_assembler(invoker);
-        const bool elector = is_assembly_elector(invoker);
-        if ((member || elector)) return state->clergy->get_power_mechanic(power_rights::initiative);
-        
-        const bool male = invoker->is_male();
-        const bool noble = is_noble(invoker);
-        
-        const bool man_has_right = state->get_state_mechanic(state_rights::man_can_apply_to_the_clergy);
-        const bool woman_has_right = state->get_state_mechanic(state_rights::woman_can_apply_to_the_clergy);
-        // такого рода ошибка в таких функциях, будет честно говоря как издевательство, другое дело что ситуация 
-        // когда никто не может подать в трибунал может существовать, но не с помощью гендерных законов
-        // наверное нужно поставить в качестве дефолтного значения male
-        //assert(man_has_right || woman_has_right);
-        
-        // можно ли сделать проверки при которых другой гендер ставится в менее выгодную позицию?
-        // то есть примерно как в цк2? мы по идее можем отменить гендерность для конкретных статусов челиков
-        const bool gender_allowed = man_has_right || woman_has_right ? (male ? man_has_right : woman_has_right) : male;
-        
-        // никакой дополнительной спецификации для генерала
-        
-        const bool is_hero = core::character::is_hero(invoker);
-        if (is_hero) {
-          const bool has_right = state->get_state_mechanic(state_rights::hero_can_apply_to_the_clergy);
-          if (has_right && gender_allowed) return true;
-        }
-        
-        const bool is_priest = core::character::is_priest(invoker);
-        if (is_priest) {
-          const bool has_right = state->get_state_mechanic(state_rights::priest_can_apply_to_the_clergy);
-          if (has_right && gender_allowed) return true;
-        }
-        
-        const bool vassal = is_vassal(invoker);
-        if (vassal) {
-          const bool has_right = state->get_state_mechanic(state_rights::vassal_can_apply_to_the_clergy);
-          if (has_right && gender_allowed) return true;
-        }
-        
-        if (noble) return gender_allowed && state->get_state_mechanic(state_rights::noble_can_apply_to_the_clergy);
-        if (!state->get_state_mechanic(state_rights::courtier_can_apply_to_the_clergy)) return false;
-        
-        return gender_allowed;
+        const auto state = get_government(invoker)->get_state();
+        const auto clergy = state->get_clergy();
+        if (!clergy.valid()) return false;
+        return can_apply_to(invoker, clergy.get());
       }
       
       bool can_apply_to_the_state(const character* invoker) {
-        // в стейт мы тоже можем обратиться, более того мы еще и частью стейта можем быть
-        // например если стейт коллективный
-        const auto state = get_state(invoker->realms[character::self].get());
-        const bool is_criminal = is_considered_criminal(invoker);
-        if (is_criminal) return false;
+        const auto state = get_government(invoker)->get_state();
+        return can_apply_to(invoker, state.get());
+      }
+      
+      bool has_right_to_apply_to_the_tribunal(const character* invoker) {
+        const auto state = get_government(invoker)->get_state();
+        const auto r = state->get_tribunal();
+        if (!r.valid()) return false;
+        return can_apply_to(invoker, r.get());
+      }
+      
+      bool has_right_to_apply_to_the_council(const character* invoker) {
+        const auto state = get_government(invoker)->get_state();
+        const auto r = state->get_council();
+        if (!r.valid()) return false;
+        return has_right_to_apply_to(invoker, r.get());
+      }
+      
+      bool has_right_to_apply_to_the_assembly(const character* invoker) {
+        const auto state = get_government(invoker)->get_state();
+        const auto r = state->get_assembly();
+        if (!r.valid()) return false;
+        return can_apply_to(invoker, r.get());
+      }
+      
+      bool has_right_to_apply_to_the_clergy(const character* invoker) {
+        const auto state = get_government(invoker)->get_state();
+        const auto clergy = state->get_clergy();
+        if (!clergy.valid()) return false;
+        return can_apply_to(invoker, clergy.get());
+      }
+      
+      bool has_right_to_apply_to_the_state(const character* invoker) {
+        const auto state = get_government(invoker)->get_state();
+        return has_right_to_apply_to(invoker, state.get());
+      }
+      
+      bool can_apply_to(const character* invoker, const realm* target) {
+        // нужно проверить во первых чтобы таргет был в одном государстве с инвокером
+        // что то еще? дальше по идее только права
+        const auto state = get_government(invoker)->get_state();
+        
+        // а может быть все таки криминал просто не имеет прав пользоваться услугами там разными?
+        // вообще правда вылета не произойдет, поэтому наверное пусть перемещается в разряд прав
+        // можем ли мы обратиться в какой то стейт вне текущего государства? да, по идее в религиозную организацию
+        // как это сделать? нужно найти какого то иного хозяина среди стейтов, хотя если только в религиозную организацию
+        // то можно проверить иначе, оставим это "на подумать"
+        return state == target->get_state();
+      }
+      
+      bool has_right_to_apply_to(const character* invoker, const realm* target) {
+        if (!can_apply_to(invoker, target)) return false;
+        if (is_considered_criminal(invoker)) return false;
+        
+        const auto state = target->get_state();
         if (state == nullptr) return false;
         //if (state->tribunal->get_power_mechanic(power_rights::)) return false;
         // по идее мы можем обратиться и к авторитарному правителю
         
-        const bool member = is_assembler(invoker);
-        const bool elector = is_assembly_elector(invoker);
-        if ((member || elector)) return state->clergy->get_power_mechanic(power_rights::initiative);
+        const bool member = is_member_of(invoker, target);
+        const bool elector = is_elector_of(invoker, target); // может ли электор обладать инициативой?
+        if (member) return target->get_power_mechanic(power_rights::initiative);
+        if (elector) { // считаем что электор - это часть силы
+          if (target->get_power_mechanic(power_rights::elector_can_apply)) return target->get_power_mechanic(power_rights::initiative);
+        }
+        
+        // по идее из таргета мы можем получить все необходимое
+        const auto council = target->get_council();
+        const auto tribunal = target->get_tribunal();
+        const auto assembly = target->get_assembly();
+        const auto clergy = target->get_clergy();
         
         const bool male = invoker->is_male();
-        const bool noble = is_noble(invoker);
         
-        const bool man_has_right = state->get_state_mechanic(state_rights::man_can_apply_to_the_clergy);
-        const bool woman_has_right = state->get_state_mechanic(state_rights::woman_can_apply_to_the_clergy);
+        const bool man_has_right = target->get_power_mechanic(power_rights::man_can_apply);
+        const bool woman_has_right = target->get_power_mechanic(power_rights::woman_can_apply);
         // такого рода ошибка в таких функциях, будет честно говоря как издевательство, другое дело что ситуация 
         // когда никто не может подать в трибунал может существовать, но не с помощью гендерных законов
         // наверное нужно поставить в качестве дефолтного значения male
@@ -955,28 +1107,74 @@ namespace devils_engine {
         
         // никакой дополнительной спецификации для генерала
         
-        const bool is_hero = core::character::is_hero(invoker);
+        // осуждаемый может ли направить запрос?
+        
+        // герой и священник освобождены от проверок на гендер
+        const bool is_hero = invoker->is_hero();
         if (is_hero) {
-          const bool has_right = state->get_state_mechanic(state_rights::hero_can_apply_to_the_clergy);
-          if (has_right && gender_allowed) return true;
+          const bool has_right = target->get_power_mechanic(power_rights::hero_can_apply);
+          if (has_right) return true; // gender_allowed
         }
         
-        const bool is_priest = core::character::is_priest(invoker);
+        const bool is_priest = invoker->is_priest();
         if (is_priest) {
-          const bool has_right = state->get_state_mechanic(state_rights::priest_can_apply_to_the_clergy);
-          if (has_right && gender_allowed) return true;
+          const bool has_right = target->get_power_mechanic(power_rights::priest_can_apply);
+          if (has_right) return true; // gender_allowed
         }
+        
+        if (state->leader == invoker) {
+          const bool has_right = target->get_power_mechanic(power_rights::ruler_can_apply);
+          if (has_right) return true;
+        }
+        
+        // еще мемберы и электоры могут направить запросы, нужно ли им проверять гендер?
+        if (target != state && state->is_state_independent_power() && is_member_of(invoker, state.get())) {
+          const bool has_right = target->get_power_mechanic(power_rights::stateman_can_apply);
+          if (has_right) return true;
+        }
+        
+        if (target != council && council.valid() && is_member_of(invoker, council.get())) {
+          const bool has_right = target->get_power_mechanic(power_rights::councillor_can_apply);
+          if (has_right) return true;
+        }
+        
+        if (target != tribunal && tribunal.valid() && is_member_of(invoker, tribunal.get())) {
+          const bool has_right = target->get_power_mechanic(power_rights::magistrate_can_apply);
+          if (has_right) return true;
+        }
+        
+        if (target != assembly && assembly.valid() && is_member_of(invoker, assembly.get())) {
+          const bool has_right = target->get_power_mechanic(power_rights::assembler_can_apply);
+          if (has_right) return true;
+        }
+        
+        if (target != clergy && clergy.valid() && is_member_of(invoker, clergy.get())) {
+          const bool has_right = target->get_power_mechanic(power_rights::clergyman_can_apply);
+          if (has_right) return true;
+        }
+        
+        const bool noble = is_noble(invoker);
+        const bool noble_has_right = target->get_power_mechanic(power_rights::noble_can_apply);
+        const bool pleb_has_right = target->get_power_mechanic(power_rights::pleb_can_apply);
         
         const bool vassal = is_vassal(invoker);
         if (vassal) {
-          const bool has_right = state->get_state_mechanic(state_rights::vassal_can_apply_to_the_clergy);
-          if (has_right && gender_allowed) return true;
+          const bool has_right = target->get_power_mechanic(power_rights::vassal_can_apply);
+          if (noble) {
+            if (has_right && noble_has_right && gender_allowed) return true;
+            else return false;
+          } else {
+            assert(invoker->is_pleb());
+            if (has_right && pleb_has_right && gender_allowed) return true;
+            else return false;
+          }
         }
         
-        if (noble) return gender_allowed && state->get_state_mechanic(state_rights::noble_can_apply_to_the_clergy);
-        if (!state->get_state_mechanic(state_rights::courtier_can_apply_to_the_clergy)) return false;
+        const bool courtier_has_right = target->get_power_mechanic(power_rights::courtier_can_apply);
+        if (!courtier_has_right) return false;
         
-        return gender_allowed;
+        if (noble) return noble_has_right && gender_allowed;
+        return pleb_has_right && gender_allowed;
       }
       
       bool can_appoint_an_elector(const realm* invoker, const character* target) {

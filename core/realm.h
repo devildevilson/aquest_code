@@ -10,6 +10,9 @@
 #include "utils/structures_utils.h"
 #include "utils/list.h"
 #include "utils/handle.h"
+#include "diplomacy.h"
+#include "script/get_scope_commands_macro.h"
+#include "script/condition_commands_macro.h"
 
 namespace devils_engine {
   namespace core {
@@ -22,20 +25,30 @@ namespace devils_engine {
     // возможна еще узурпация элективного государства, по идее как и в случае с наследованием (непосредственно узурпация должна вызвать войну, но это не здесь)
     // по идее тут флаги и модификаторы должны быть еще, эвенты? тоже наверное, но с ними чуть позже тогда
     
-    // короче говоря, 
+    // нужно добавить методы для обхода мемберов и электората, нужно совместить мапу с войной с мапой с отношениями и добавить туда дольше данных
     struct realm : 
       public utils::flags_container, 
       public utils::modificators_container, 
       public utils::events_container, // должны ли быть эвенты у целого государства? скорее да чем нет
       public utils::ring::list<realm, utils::list_type::vassals> 
     {
+      // как обойти эту структуру? можно создать для этого несколько методов типа every_war, every_ally, every_dynasty_ally
+      // какие типы: война, союз, данник, протекция, было бы неплохо создать какую нибудь сложную но понятную систему дипломатии
+      // может быть экономическая (некий модификатор на доход или на товары, добавится позже видимо) или политическая (один из реалмов - часть другого государства) зависимость
+      // + к этому могут быть некоторые гарантии (например независимость (хотя это просто династический брак? а может и нет)), гарантия экономической помощи? коалиция?
       struct relation {
         // тут мы должны описать какие то договоренности и видимо скрипты при конце отношений
         // что такое договоренность? например гарантия независимости, или сбор дани
         // или договорной альянс, должно быть время договора, 
         // гарантия независимости дает возможность игроку абузить некоторые тактики, так что тут нужны какие то ограничения
         // ограничения по теху, по стоимости, по приросту, и наконец количественное ограничение
-        uint32_t relation_state;
+        // тут должна быть полная информация о взаимоотношении: война, сторона в войне, альянс, тип альянса, связанные персонажи
+        // по этой информации нам нужно прекращать союз при определенных условиях например если умирает друг с которым мы подписали соглашение
+        // или если распадается династический брак (или он становится неважен (при каких условиях?))
+        uint32_t relation_type;
+        utils::handle<core::war> war;
+        utils::handle<core::realm> related_realm;
+        character* related_characters;
       };
       
       static const structure s_type = structure::realm;
@@ -66,7 +79,10 @@ namespace devils_engine {
       utils::handle<core::realm> tribunal;  // реалм суда (кто входит в суд?)
       utils::handle<core::realm> assembly;  // прямая демократия? как ее сделать в рамках моей игры? придворные? вообще да, как представители всего народа пусть будут придворные
       utils::handle<core::realm> clergy;    // религиозный институт, наполняем только священниками, может быть связан с реалмом из другого государства в зависимости от чтого что за религия
-      const religion* dominant_religion;
+      
+      //utils::handle<core::realm> abroad; // для того чтобы задать ситуацию как с папством то можно просто указать liege
+      
+      religion* dominant_religion;
       
       // вассалам хендл добавить сложно
       realm* vassals;
@@ -88,14 +104,15 @@ namespace devils_engine {
       // статы должны пересчитываться после наследования? я пока не очень понимаю как тут вообще статы будут
       // принятые законы (законы по категориям, причем первые две категории всегда про наследование)
       // права жителей фракции (скорее всего едины с законами) (состоят из прав религии и локальных прав, что то еще?) (более менее сделано)
-      utils::bit_field_32<power_rights::bit_container_size> power_rights;
-      utils::bit_field_32<state_rights::bit_container_size> state_rights; // имеет смысл если is_state()
+      utils::bit_field_32<power_rights::count> power_rights;
+      utils::bit_field_32<state_rights::count> state_rights; // имеет смысл если is_state()
       // конкретные законы и их группировка задается в структуре
       // механики законов я так понимаю будут раскиданы повсеместно, где в одном месте вряд ли возможно их проработать
       // точнее мы можем вынести основные функции в отдельный файл и там попробовать сгруппировать все что у нас есть
       
       // где то тут мы должны указать дипломатию, то есть текущие войны + текущие договоренности
-      phmap::flat_hash_map<utils::handle<core::realm>, utils::handle<core::war>> wars;
+      // скорее всего дипломатия уйдет в персонажа
+//       phmap::flat_hash_map<utils::handle<core::realm>, utils::handle<core::war>> wars;
       phmap::flat_hash_map<utils::handle<core::realm>, relation> relations;
       
       realm();
@@ -114,18 +131,18 @@ namespace devils_engine {
       inline bool set_state_mechanic(const size_t &index, const bool value) noexcept { return state_rights.set(index, value); }
       
       // нужно выделить 4 состояния: государство независимого персонажа, государство зависимого персонажа, элективное государство и зависимое элективное государство
-      inline bool is_independent() const noexcept { return liege == nullptr; }
-      inline bool is_state() const noexcept { return state == this; }
-      inline bool is_council() const noexcept { return council == this; }
-      inline bool is_tribunal() const noexcept { return tribunal == this; }
-      inline bool is_assembly() const noexcept { return assembly == this; }
-      inline bool is_clergy() const noexcept { return clergy == this; }
-      inline bool is_state_independent_power() const noexcept { return is_state() && !is_council() && !is_tribunal() && !is_assembly() && !is_clergy(); }
+//       inline bool is_independent() const noexcept { return liege == nullptr; }
+//       inline bool is_state() const noexcept { return state == this; }
+//       inline bool is_council() const noexcept { return council == this; }
+//       inline bool is_tribunal() const noexcept { return tribunal == this; }
+//       inline bool is_assembly() const noexcept { return assembly == this; }
+//       inline bool is_clergy() const noexcept { return clergy == this; }
+//       inline bool is_state_independent_power() const noexcept { return is_state() && !is_council() && !is_tribunal() && !is_assembly() && !is_clergy(); }
       // собственный реалм может быть стейтом? когда страной владеет некий монарх, кто в таком случае является мембером? глава и наследник?
       // видимо да, возможно придется немного законы поменять, нужен другой способ определить что это собственный реалм
       //inline bool is_self() const noexcept { return !is_council() && !is_tribunal() && !is_assembly() && !is_clergy(); } // !is_state() &&
       // определяется как leader->self == this, если стейт избираемый то это будет другой реалм, стейт может еще являться одним из сил в государстве
-      bool is_self() const noexcept;
+//       bool is_self() const noexcept;
       
       void succession();
       void usurped_by_self();
@@ -158,6 +175,18 @@ namespace devils_engine {
       void set_capital(city* c);
       
       bool include(character* c) const;
+      
+#define GET_SCOPE_COMMAND_FUNC(name, a, b, type) type get_##name() const;
+      REALM_GET_SCOPE_COMMANDS_LIST
+#undef GET_SCOPE_COMMAND_FUNC
+
+#define CONDITION_COMMAND_FUNC(name) bool name() const noexcept;
+      REALM_GET_BOOL_NO_ARGS_COMMANDS_LIST
+#undef CONDITION_COMMAND_FUNC
+
+#define CONDITION_ARG_COMMAND_FUNC(name, unused1, unused2, type) bool name(const type &data) const noexcept;
+      REALM_GET_BOOL_EXISTED_ARG_COMMANDS_LIST
+#undef CONDITION_ARG_COMMAND_FUNC
     };
   }
 }

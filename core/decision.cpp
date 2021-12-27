@@ -4,6 +4,8 @@
 #include "structures_header.h"
 #include "target_type.h"
 
+#include <iostream>
+
 namespace devils_engine {
   namespace core {
     const structure decision::s_type;
@@ -202,11 +204,6 @@ namespace devils_engine {
         if (proxy.get_type() != sol::type::string && proxy.get_type() != sol::type::table) { PRINT("Decision " + std::string(id) + " must have a valid description"); ++counter; }
       }
       
-      // что с инпутом? инпут должен быть
-      if (const auto proxy = table["input"]; !(proxy.valid() && proxy.get_type() == sol::type::table)) {
-        PRINT("Decision " + std::string(id) + " must have an expected input table"); ++counter;
-      }
-      
       // должен ли потентиал присутствовать всегда?
       if (const auto proxy = table["potential"]; !(proxy.valid() && proxy.get_type() == sol::type::table)) {
         PRINT("Decision " + std::string(id) + " must have a potential check script"); ++counter;
@@ -220,7 +217,7 @@ namespace devils_engine {
         PRINT("Decision " + std::string(id) + " must have an effect script"); ++counter;
       }
       
-      if (const auto proxy = table["ai_will_do"]; !(proxy.valid() && (proxy.get_type() == sol::type::number || proxy.get_type() == sol::type::table))) {
+      if (const auto proxy = table["ai_will_do"]; !proxy.valid() || (proxy.get_type() != sol::type::number && proxy.get_type() != sol::type::table)) {
         PRINT("Decision " + std::string(id) + " must have a valid ai_will_do number script"); ++counter;
       }
       
@@ -242,8 +239,10 @@ namespace devils_engine {
       
       script::create_string(inter_input, &decision->name_script, table["name"]);
       script::create_string(inter_input, &decision->description_script, table["description"]);
-      script::create_condition(inter_input, &decision->potential, table["potential"]);
       script::create_condition(inter_input, &decision->condition, table["condition"]);
+      // ДА ЧТО ЗА БРЕДЯТИНА? ПОТЕНТИАЛ ОТВАЛИВАЕТСЯ В ЛУА ПРИ ПРОВЕРКИ НАЛИЧИЯ КОНДИШЕНА!
+      // с != sol::nil работает....
+      script::create_condition(inter_input, &decision->potential, table["potential"]);
       script::create_effect(inter_input, &decision->effect, table["effect"]);
       script::create_number(inter_input, &decision->ai_will_do, table["ai_will_do"]);
       

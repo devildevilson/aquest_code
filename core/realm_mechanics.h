@@ -45,88 +45,91 @@
 #define POWER_RIGHTS_LIST \
   /* права государственной силы (глава государства, совет, трибунал, ассебли, церковь) */ \
   POWER_RIGHT_FUNC(communal) \
-  POWER_RIGHT_FUNC(elective) /* элективный орган, избирается из электоров */ \
+  POWER_RIGHT_FUNC(elective)   /* элективный орган, избирается из электоров */ \
   POWER_RIGHT_FUNC(initiative) /* орган обладает инициативой - может сам принимать какие то законы или выполнять какие то действия */ \
-  POWER_RIGHT_FUNC(abroad) /* орган управлется извне - то есть например церковный орган управлется из рима */ \
-  POWER_RIGHT_FUNC(can_force_vassal_to_return_a_title) /* если в войне между вассалами был отобран титул, то орган может потребовать его вернуть (нужно еще сделать какую то историю титулу) */ \
-  POWER_RIGHT_FUNC(can_revoke_title) /* может ли орган отобрать титул безусловно (или это возможность отобрать титул в принципе? у кого?) */ \
-  POWER_RIGHT_FUNC(can_revoke_title_from_criminal) /* может ли орган отобрать титул у "преступника" (преступники определены по секретам, но скорее всего чел сначала должен оказаться в тюрьме) */ \
-  POWER_RIGHT_FUNC(can_revoke_title_from_infidel) /* может ли орган отобрать титул у неверного (было бы неплохо еще аккуратно сделать смену религии в государстве) */ \
+  POWER_RIGHT_FUNC(abroad)     /* орган управлется извне - то есть например церковный орган управлется из рима */ \
+  POWER_RIGHT_FUNC(can_force_vassal_to_return_a_title)   /* если в войне между вассалами был отобран титул, то орган может потребовать его вернуть (нужно еще сделать какую то историю титулу) */ \
+  POWER_RIGHT_FUNC(can_revoke_title)                     /* может ли орган отобрать титул безусловно (или это возможность отобрать титул в принципе? у кого?) */ \
+  POWER_RIGHT_FUNC(can_revoke_title_from_criminal)       /* может ли орган отобрать титул у "преступника" (преступники определены по секретам, но скорее всего чел сначала должен оказаться в тюрьме) */ \
+  POWER_RIGHT_FUNC(can_revoke_title_from_infidel)        /* может ли орган отобрать титул у неверного (было бы неплохо еще аккуратно сделать смену религии в государстве) */ \
   POWER_RIGHT_FUNC(can_revoke_title_from_excommunicated) /* может ли орган отобрать титул у отлученного */ \
-  POWER_RIGHT_FUNC(can_revoke_title_from_state) /* может ли орган отобрать титул у государства в пользу себя (наверное нужно сделать для каждой силы) */ \
-  POWER_RIGHT_FUNC(can_interfere_in_vassal_realm) /* может ли орган юридически вмешиваться в законы вассала (например изменив им способ наследования) (как это сделать?) */ \
-  POWER_RIGHT_FUNC(can_give_title) /* совет может запретить раздавать титулы господину, вместо него будет раздавать титулы либо совет (парламент) либо суд, должен ли быть какой то общий пул титулов? */ \
-  POWER_RIGHT_FUNC(can_give_title_to_realm_leader) /* орган может дать титул без определенного хозяина главе органа (например совет - председателю совета) */ \
-  POWER_RIGHT_FUNC(can_give_title_to_infidel) /* может ли орган дать титул неверному */ \
+  POWER_RIGHT_FUNC(can_revoke_title_from_state)          /* может ли орган отобрать титул у государства в пользу себя (наверное нужно сделать для каждой силы) */ \
+  POWER_RIGHT_FUNC(can_interfere_in_vassal_realm)        /* может ли орган юридически вмешиваться в законы вассала (например изменив им способ наследования) (как это сделать?) */ \
+  POWER_RIGHT_FUNC(can_give_title)                   /* совет может запретить раздавать титулы господину, вместо него будет раздавать титулы либо совет (парламент) либо суд, должен ли быть какой то общий пул титулов? */ \
+  POWER_RIGHT_FUNC(can_give_title_to_realm_leader)   /* орган может дать титул без определенного хозяина главе органа (например совет - председателю совета) */ \
+  POWER_RIGHT_FUNC(can_give_title_to_infidel)        /* может ли орган дать титул неверному */ \
   POWER_RIGHT_FUNC(can_give_title_to_excommunicated) /* может ли орган дать титул отлученному */ \
-  POWER_RIGHT_FUNC(can_give_title_to_pleb) /* орган может дать титул плебею */ \
-  POWER_RIGHT_FUNC(can_give_title_to_state) /* будет зависеть от того что такое пул титулов (наверное пул свободных титулов должен быть один, но на него через законы могут претендовать разные силы) */ \
-  POWER_RIGHT_FUNC(can_inherit_main_titles) /* скорее всего заменится на наследственность положения (то есть может ли председатель наследовать свой статус, или человек может наследовать только принадлежность к совету?) */ \
+  POWER_RIGHT_FUNC(can_give_title_to_pleb)           /* орган может дать титул плебею */ \
+  POWER_RIGHT_FUNC(can_give_title_to_state)          /* будет зависеть от того что такое пул титулов (наверное пул свободных титулов должен быть один, но на него через законы могут претендовать разные силы) */ \
+  POWER_RIGHT_FUNC(can_inherit_main_titles)          /* скорее всего заменится на наследственность положения (то есть может ли председатель наследовать свой статус, или человек может наследовать только принадлежность к совету?), сформулировано плохо, нужно делать через несколько законов о наследовании */ \
   POWER_RIGHT_FUNC(can_declare_war) /* может ли совет начать войну, кто тогда воюет? */ \
   POWER_RIGHT_FUNC(can_declare_holy_war) /* может ли совет начать священную войну, у священной войны немного другая механика */ \
   POWER_RIGHT_FUNC(can_enact_laws) /* может ли глава изменить (принять?) закон, законы можно отменить? */ \
   POWER_RIGHT_FUNC(has_the_veto_right) /* право вето, после голосования по закону мы можем его отменить */ \
-  POWER_RIGHT_FUNC(can_imprison) /* может ли орган в принципе сажать в тюрьму (нужен для этого повод) (иначе нужно чтобы совет рассмотрел) */ \
-  POWER_RIGHT_FUNC(can_imprison_infidel) /* может ли орган сажать в тюрьму неверных */ \
+  /* тюрьма */ \
+  POWER_RIGHT_FUNC(can_imprison)                /* может ли орган в принципе сажать в тюрьму (нужен для этого повод) (иначе нужно чтобы совет рассмотрел) */ \
+  POWER_RIGHT_FUNC(can_imprison_infidel)        /* может ли орган сажать в тюрьму неверных */ \
   POWER_RIGHT_FUNC(can_imprison_excommunicated) /* может ли орган сажать в тюрьму отлученных */ \
-  POWER_RIGHT_FUNC(can_imprison_freely) /* может ли орган сажать в тюрьму всех подряд */ \
-  POWER_RIGHT_FUNC(can_execute) /* может ли орган в принципе казнить (должен быть в тюрьме) (иначе нужно чтобы совет рассмотрел) */ \
-  POWER_RIGHT_FUNC(can_execute_infidel) /* может ли орган казнить неверных */ \
+  POWER_RIGHT_FUNC(can_imprison_freely)         /* может ли орган сажать в тюрьму всех подряд */ \
+  /* казнь преступников */ \
+  POWER_RIGHT_FUNC(can_execute)                /* может ли орган в принципе казнить (должен быть в тюрьме) (иначе нужно чтобы совет рассмотрел) */ \
+  POWER_RIGHT_FUNC(can_execute_infidel)        /* может ли орган казнить неверных */ \
   POWER_RIGHT_FUNC(can_execute_excommunicated) /* может ли орган казнить отлученных */ \
-  POWER_RIGHT_FUNC(can_execute_freely) /* может ли орган казнить всех подряд */ \
-  /* казнь преступников? */ \
-  POWER_RIGHT_FUNC(can_banish) /* может ли орган в принципе высылать из страны (нужен повод) (иначе нужно чтобы совет рассмотрел) */ \
-  POWER_RIGHT_FUNC(can_banish_shunned) /* может ли орган высылать осуждаемых */ \
-  POWER_RIGHT_FUNC(can_banish_infidel) /* может ли орган высылать неверных */ \
+  POWER_RIGHT_FUNC(can_execute_freely)         /* может ли орган казнить всех подряд */ \
+  /* высылка из страны */ \
+  POWER_RIGHT_FUNC(can_banish)                /* может ли орган в принципе высылать из страны (нужен повод) (иначе нужно чтобы совет рассмотрел) */ \
+  POWER_RIGHT_FUNC(can_banish_shunned)        /* может ли орган высылать осуждаемых */ \
+  POWER_RIGHT_FUNC(can_banish_infidel)        /* может ли орган высылать неверных */ \
   POWER_RIGHT_FUNC(can_banish_excommunicated) /* может ли орган высылать отлученных */ \
-  POWER_RIGHT_FUNC(can_banish_freely) /* может ли орган высылать всех подряд */ \
-  POWER_RIGHT_FUNC(can_free_from_prison) /* может ли орган освобождать из тюрьмы (тюрьма кстати общая? неуверен) */ \
-  POWER_RIGHT_FUNC(can_free_criminal_from_prison) /* может ли орган освобождать из тюрьмы преступников */ \
-  POWER_RIGHT_FUNC(can_free_infidel_from_prison) /* может ли орган освобождать из тюрьмы неверных */ \
+  POWER_RIGHT_FUNC(can_banish_freely)         /* может ли орган высылать всех подряд */ \
+  /* освождение из тюрьмы */ \
+  POWER_RIGHT_FUNC(can_free_from_prison)                /* может ли орган освобождать из тюрьмы (тюрьма кстати общая? неуверен) */ \
+  POWER_RIGHT_FUNC(can_free_criminal_from_prison)       /* может ли орган освобождать из тюрьмы преступников */ \
+  POWER_RIGHT_FUNC(can_free_infidel_from_prison)        /* может ли орган освобождать из тюрьмы неверных */ \
   POWER_RIGHT_FUNC(can_free_excommunicated_from_prison) /* может ли орган освобождать из тюрьмы отлученных */ \
   POWER_RIGHT_FUNC(can_demand_religious_conversion) /* орган может потребовать сменить религию */ \
   POWER_RIGHT_FUNC(can_legitimate_divorce_with_shunned) /* орган может обеспечить развод с осуждаемым */ \
   POWER_RIGHT_FUNC(can_legitimate_divorce) /* орган может обеспечить развод любой (?) */ \
   POWER_RIGHT_FUNC(can_fire_shunned) /* орган может уволить осуждаемых с должности (с любой?) */ \
-  POWER_RIGHT_FUNC(can_remove_hero_status_if_shunned) /* орган может убрать статус героя */ \
-  POWER_RIGHT_FUNC(can_remove_priest_status_if_shunned) /* орган может убрать статус священника */ \
+  POWER_RIGHT_FUNC(can_remove_hero_status_if_shunned)    /* орган может убрать статус героя */ \
+  POWER_RIGHT_FUNC(can_remove_priest_status_if_shunned)  /* орган может убрать статус священника */ \
   POWER_RIGHT_FUNC(can_remove_general_status_if_shunned) /* орган может убрать статус генерала */ \
-  POWER_RIGHT_FUNC(can_indulge_shunned_secret) /* орган может "искупить" осуждаемый секрет */ \
+  POWER_RIGHT_FUNC(can_indulge_shunned_secret)  /* орган может "искупить" осуждаемый секрет */ \
   POWER_RIGHT_FUNC(can_indulge_criminal_secret) /* орган может "искупить" преступный секрет */ \
-  POWER_RIGHT_FUNC(can_appoint_a_heir) /* орган может назначит наследника (себе? или главе государства?) */ \
-  POWER_RIGHT_FUNC(can_appoint_a_noble) /* орган может выдать дворянство */ \
-  POWER_RIGHT_FUNC(can_appoint_a_priest) /* орган может выдать статус священника */ \
-  POWER_RIGHT_FUNC(can_appoint_a_hero) /* орган может выдать статус героя */ \
-  POWER_RIGHT_FUNC(can_appoint_a_general) /* орган может назначить генерала */ \
-  POWER_RIGHT_FUNC(can_appoint_a_liege) /* орган может назначить главу (то есть выборный глава государства?) */ \
-  POWER_RIGHT_FUNC(can_appoint_a_councillor) /* огран может назначить консула */ \
-  POWER_RIGHT_FUNC(can_appoint_a_magister) /* огран может назначить магистра */ \
-  POWER_RIGHT_FUNC(can_appoint_an_assembler) /* огран может назначить ассемблера */ \
-  POWER_RIGHT_FUNC(can_appoint_a_clergyman) /* огран может назначить представителя церкви */ \
-  POWER_RIGHT_FUNC(can_appoint_a_state_elector) /* огран может назначить электора государства */ \
-  POWER_RIGHT_FUNC(can_appoint_a_councillor_elector) /* огран может назначить электора совета */ \
-  POWER_RIGHT_FUNC(can_appoint_a_magister_elector) /* огран может назначить электора магистрата */ \
-  POWER_RIGHT_FUNC(can_appoint_an_assembler_elector) /* огран может назначить электора ассебли */ \
-  POWER_RIGHT_FUNC(can_appoint_a_clergyman_elector) /* огран может назначить электора церкви */ \
+  POWER_RIGHT_FUNC(can_appoint_a_heir)               /* орган может назначит наследника (себе? или главе государства? себе, как избирается глава государства нужно смотреть в основной стейте) */ \
+  POWER_RIGHT_FUNC(can_appoint_a_noble)              /* орган может выдать дворянство */ \
+  POWER_RIGHT_FUNC(can_appoint_a_priest)             /* орган может выдать статус священника */ \
+  POWER_RIGHT_FUNC(can_appoint_a_hero)               /* орган может выдать статус героя */ \
+  POWER_RIGHT_FUNC(can_appoint_a_general)            /* орган может назначить генерала */ \
+  POWER_RIGHT_FUNC(can_appoint_a_liege)              /* орган может назначить главу (то есть выборный глава государства?) */ \
+  POWER_RIGHT_FUNC(can_appoint_a_councillor)         /* орган может назначить консула */ \
+  POWER_RIGHT_FUNC(can_appoint_a_magistrate)           /* орган может назначить магистра */ \
+  POWER_RIGHT_FUNC(can_appoint_an_assembler)         /* орган может назначить ассемблера */ \
+  POWER_RIGHT_FUNC(can_appoint_a_clergyman)          /* орган может назначить представителя церкви */ \
+  POWER_RIGHT_FUNC(can_appoint_a_state_elector)      /* орган может назначить электора государства */ \
+  POWER_RIGHT_FUNC(can_appoint_a_councillor_elector) /* орган может назначить электора совета */ \
+  POWER_RIGHT_FUNC(can_appoint_a_tribunal_elector)   /* орган может назначить электора магистрата */ \
+  POWER_RIGHT_FUNC(can_appoint_an_assembler_elector) /* орган может назначить электора ассебли */ \
+  POWER_RIGHT_FUNC(can_appoint_a_clergyman_elector)  /* орган может назначить электора церкви */ \
   POWER_RIGHT_FUNC(elector_can_appoint_an_elector) /* электор этой силы может назничать другого электора (наверное это не нужно) */ \
-  POWER_RIGHT_FUNC(elected_from_electors) /* член органа избирается из электоров */ \
-  POWER_RIGHT_FUNC(elected_from_nobles) /* член органа избирается из дворян (могут быть придвоными) */ \
-  POWER_RIGHT_FUNC(elected_from_heroes) /* член органа избирается из героев */ \
-  POWER_RIGHT_FUNC(elected_from_generals) /* член органа избирается из генералов */ \
-  POWER_RIGHT_FUNC(elected_from_statemans) /* член органа избирается из членов стейта (может быть коллективным органом) */ \
-  POWER_RIGHT_FUNC(elected_from_councillors) /* член органа избирается из консулов */ \
-  POWER_RIGHT_FUNC(elected_from_magisters) /* член органа избирается из магистров */ \
-  POWER_RIGHT_FUNC(elected_from_assemblers) /* член органа избирается из ассемблеров */ \
-  POWER_RIGHT_FUNC(elected_from_clergyman) /* член органа избирается из церковников */ \
-  POWER_RIGHT_FUNC(elected_from_vassals) /* член органа избирается из вассалов (ну то есть дворян с землей) */ \
-  POWER_RIGHT_FUNC(elected_from_court) /* член органа избирается из придворных (исключая дворян с землей) */ \
-  POWER_RIGHT_FUNC(elected_from_priests) /* член органа избирается из священников (особый статус) */ \
+  POWER_RIGHT_FUNC(elected_from_electors)     /* член органа избирается из электоров */ \
+  POWER_RIGHT_FUNC(elected_from_nobles)       /* член органа избирается из дворян (могут быть придвоными) */ \
+  POWER_RIGHT_FUNC(elected_from_heroes)       /* член органа избирается из героев */ \
+  POWER_RIGHT_FUNC(elected_from_generals)     /* член органа избирается из генералов */ \
+  POWER_RIGHT_FUNC(elected_from_statemans)    /* член органа избирается из членов стейта (может быть коллективным органом) */ \
+  POWER_RIGHT_FUNC(elected_from_councillors)  /* член органа избирается из консулов */ \
+  POWER_RIGHT_FUNC(elected_from_magistrates)    /* член органа избирается из магистров */ \
+  POWER_RIGHT_FUNC(elected_from_assemblers)   /* член органа избирается из ассемблеров */ \
+  POWER_RIGHT_FUNC(elected_from_clergyman)    /* член органа избирается из церковников */ \
+  POWER_RIGHT_FUNC(elected_from_vassals)      /* член органа избирается из вассалов (ну то есть дворян с землей) */ \
+  POWER_RIGHT_FUNC(elected_from_court)        /* член органа избирается из придворных (исключая дворян с землей) */ \
+  POWER_RIGHT_FUNC(elected_from_priests)      /* член органа избирается из священников (особый статус) */ \
   POWER_RIGHT_FUNC(elected_from_liege_family) /* член органа избирается из близкой семьи главы государства (а если коллективный орган у стейта?) */ \
   POWER_RIGHT_FUNC(elected_from_liege_extended_family) /* член органа избирается из расширенной семьи главы государства */ \
   POWER_RIGHT_FUNC(elected_from_liege_dynasty) /* член органа избирается из династии главы государства */ \
-  POWER_RIGHT_FUNC(elected_normally) /* орган избирается по нормальным правилам (по каким? больше голосов электората? скорее всего) */ \
-  POWER_RIGHT_FUNC(elected_random) /* избирательная система настолько сложная что фактически случайная (можно ли как то повлиять? хороший вопрос) */ \
-  POWER_RIGHT_FUNC(elected_thru_tournament) /* претендент на должность должен победить в специальном турнире (среди других претендентов? логично что так) */ \
+  POWER_RIGHT_FUNC(elected_normally)          /* орган избирается по нормальным правилам (по каким? больше голосов электората? скорее всего) */ \
+  POWER_RIGHT_FUNC(elected_random)            /* избирательная система настолько сложная что фактически случайная (можно ли как то повлиять? хороший вопрос) */ \
+  POWER_RIGHT_FUNC(elected_thru_tournament)   /* претендент на должность должен победить в специальном турнире (среди других претендентов? логично что так) */ \
   /* что в случае с стейтом? наследная монархия = -коммунал, -электив, инитиатив, -аброад, электед_фром_фамили, инхеритансе_тайп, тип, (достаточно?)  */ \
   POWER_RIGHT_FUNC(vassal_can_become_a_member)   /* в этот орган могут входить вассалы (тут разрешительный или запретительный закон? по умолчанию ограничений по типу нет, с отрицанием не удобно) */ \
   POWER_RIGHT_FUNC(courtier_can_become_a_member) /* в этот орган могут входить придворные */ \
@@ -136,15 +139,16 @@
   POWER_RIGHT_FUNC(man_can_become_a_member)      /* в этот орган могут входить мужчины */ \
   POWER_RIGHT_FUNC(woman_can_become_a_member)    /* в этот орган могут входить женщины */ \
   POWER_RIGHT_FUNC(hero_can_become_a_member)     /* в этот орган могут входить герои */ \
-  POWER_RIGHT_FUNC(vassal_can_become_an_elector)   /* в этот орган могут входить вассалы (тут разрешительный или запретительный закон? по умолчанию ограничений по типу нет) */ \
-  POWER_RIGHT_FUNC(courtier_can_become_an_elector) /* в этот орган могут входить придворные */ \
-  POWER_RIGHT_FUNC(pleb_can_become_an_elector)     /* в этот орган могут входить плебеи */ \
-  POWER_RIGHT_FUNC(noble_can_become_an_elector)    /* в этот орган могут входить дворяне */ \
-  POWER_RIGHT_FUNC(priest_can_become_an_elector)   /* в этот орган могут входить священники */ \
-  POWER_RIGHT_FUNC(man_can_become_an_elector)      /* в этот орган могут входить мужчины */ \
-  POWER_RIGHT_FUNC(woman_can_become_an_elector)    /* в этот орган могут входить женщины */ \
-  POWER_RIGHT_FUNC(hero_can_become_an_elector)     /* в этот орган могут входить герои */ \
-  POWER_RIGHT_FUNC(vassal_can_apply)   /* в этот орган могут обращаться персонажи с землей (просьба или суд) */ \
+  POWER_RIGHT_FUNC(vassal_can_become_an_elector)   /* в электорат органа могут входить вассалы (тут разрешительный или запретительный закон? по умолчанию ограничений по типу нет) */ \
+  POWER_RIGHT_FUNC(courtier_can_become_an_elector) /* в электорат органа могут входить придворные */ \
+  POWER_RIGHT_FUNC(pleb_can_become_an_elector)     /* в электорат органа могут входить плебеи */ \
+  POWER_RIGHT_FUNC(noble_can_become_an_elector)    /* в электорат органа могут входить дворяне */ \
+  POWER_RIGHT_FUNC(priest_can_become_an_elector)   /* в электорат органа могут входить священники */ \
+  POWER_RIGHT_FUNC(man_can_become_an_elector)      /* в электорат органа могут входить мужчины */ \
+  POWER_RIGHT_FUNC(woman_can_become_an_elector)    /* в электорат органа могут входить женщины */ \
+  POWER_RIGHT_FUNC(hero_can_become_an_elector)     /* в электорат органа могут избирать герои */ \
+  POWER_RIGHT_FUNC(ruler_can_apply)    /* в этот орган может обращаться правитель */ \
+  POWER_RIGHT_FUNC(vassal_can_apply)   /* в этот орган могут обращаться люди с землей (просьба или суд) */ \
   POWER_RIGHT_FUNC(courtier_can_apply) /* в этот орган могут обращаться придворные */ \
   POWER_RIGHT_FUNC(pleb_can_apply)     /* в этот орган могут обращаться плебеи */ \
   POWER_RIGHT_FUNC(noble_can_apply)    /* в этот орган могут обращаться дворяне */ \
@@ -152,30 +156,32 @@
   POWER_RIGHT_FUNC(man_can_apply)      /* в этот орган могут обращаться мужчины */ \
   POWER_RIGHT_FUNC(woman_can_apply)    /* в этот орган могут обращаться женщины */ \
   POWER_RIGHT_FUNC(hero_can_apply)     /* в этот орган могут обращаться герои */ \
+  POWER_RIGHT_FUNC(stateman_can_apply)   /* в этот орган могут обращаться представители независимого эстеблешмента */ \
+  POWER_RIGHT_FUNC(councillor_can_apply) /* в этот орган могут обращаться консулы */ \
+  POWER_RIGHT_FUNC(magistrate_can_apply) /* в этот орган могут обращаться магистры */ \
+  POWER_RIGHT_FUNC(assembler_can_apply)  /* в этот орган могут обращаться ассемблеры */ \
+  POWER_RIGHT_FUNC(clergyman_can_apply)  /* в этот орган могут обращаться церковники */ \
+  POWER_RIGHT_FUNC(state_elector_can_apply)    /* в этот орган могут обращаться электоры эстеблишмента */ \
+  POWER_RIGHT_FUNC(council_elector_can_apply)  /* в этот орган могут обращаться электоры консила */ \
+  POWER_RIGHT_FUNC(tribunal_elector_can_apply) /* в этот орган могут обращаться электоры трибунала */ \
+  POWER_RIGHT_FUNC(assembly_elector_can_apply) /* в этот орган могут обращаться электоры ассембли */ \
+  POWER_RIGHT_FUNC(clergy_elector_can_apply)   /* в этот орган могут обращаться электоры церкви */ \
+  POWER_RIGHT_FUNC(elector_can_apply) /* в этот орган могут обращаться электоры текущего органа */ \
   \
-  POWER_RIGHT_FUNC(liege_can_get_this_status) /* глава государства автоматически получает членство в этом органе */ \
-  POWER_RIGHT_FUNC(noble_can_get_this_status) /* дворянин автоматически получает членство в этом органе */ \
-  POWER_RIGHT_FUNC(hero_can_get_this_status) /* герой автоматически получает членство в этом органе */ \
-  POWER_RIGHT_FUNC(priest_can_get_this_status) /* священник автоматически получает членство в этом органе */ \
-  POWER_RIGHT_FUNC(general_can_get_this_status) /* генерал автоматически получает членство в этом органе */ \
-  POWER_RIGHT_FUNC(clergyman_can_get_this_status) /* церковник автоматически получает членство в этом органе */ \
+  POWER_RIGHT_FUNC(ruler_can_get_this_status)      /* глава государства автоматически получает членство в этом органе */ \
+  POWER_RIGHT_FUNC(noble_can_get_this_status)      /* дворянин автоматически получает членство в этом органе */ \
+  POWER_RIGHT_FUNC(hero_can_get_this_status)       /* герой автоматически получает членство в этом органе */ \
+  POWER_RIGHT_FUNC(priest_can_get_this_status)     /* священник автоматически получает членство в этом органе */ \
+  POWER_RIGHT_FUNC(general_can_get_this_status)    /* генерал автоматически получает членство в этом органе */ \
+  POWER_RIGHT_FUNC(stateman_can_get_this_status)  /* церковник автоматически получает членство в этом органе */ \
+  POWER_RIGHT_FUNC(clergyman_can_get_this_status)  /* церковник автоматически получает членство в этом органе */ \
   POWER_RIGHT_FUNC(councillor_can_get_this_status) /* консул автоматически получает членство в этом органе */ \
-  POWER_RIGHT_FUNC(magister_can_get_this_status) /* магистр автоматически получает членство в этом органе */ \
-  POWER_RIGHT_FUNC(assembler_can_get_this_status) /* ассемблер автоматически получает членство в этом органе */ \
-  POWER_RIGHT_FUNC(member_can_inherit) /* член органа может унаследовать членство */ \
+  POWER_RIGHT_FUNC(magistrate_can_get_this_status)   /* магистр автоматически получает членство в этом органе */ \
+  POWER_RIGHT_FUNC(assembler_can_get_this_status)  /* ассемблер автоматически получает членство в этом органе */ \
+  POWER_RIGHT_FUNC(member_can_inherit)  /* член органа может унаследовать членство */ \
   POWER_RIGHT_FUNC(elector_can_inherit) /* электорат органа может унаследовать статус электора */ \
-  POWER_RIGHT_FUNC(member_can_apply_to_the_state) /* член органа может направить запрос к стейту (просьба или судебное решение какое нибудь) */ \
-  POWER_RIGHT_FUNC(member_can_apply_to_the_council) /* член органа может направить запрос в совет */ \
-  POWER_RIGHT_FUNC(member_can_apply_to_the_tribunal) /* член органа может направить запрос в магистрат */ \
-  POWER_RIGHT_FUNC(member_can_apply_to_the_assembly) /* член органа может направить запрос в ассембли */ \
-  POWER_RIGHT_FUNC(member_can_apply_to_the_clergy) /* член органа может направить запрос в церковь */ \
-  POWER_RIGHT_FUNC(elector_can_apply_to_the_state) /* электор органа может направить запрос в стейт */ \
-  POWER_RIGHT_FUNC(elector_can_apply_to_the_council) /* электор органа может направить запрос в совет */ \
-  POWER_RIGHT_FUNC(elector_can_apply_to_the_tribunal) /* электор органа может направить запрос в трибунал */ \
-  POWER_RIGHT_FUNC(elector_can_apply_to_the_assembly) /* электор органа может направить запрос в ассембли */ \
-  POWER_RIGHT_FUNC(elector_can_apply_to_the_clergy) /* электор органа может направить запрос в церковь */ \
-  POWER_RIGHT_FUNC(inheritance_type_primogeniture) /* тип наследования (для кого?) - примогенитура (первый ребенок) */ \
-  POWER_RIGHT_FUNC(inheritance_type_ultimogeniture) /* тип наследования (для кого?) - ультимогенитура (младший ребенок) */ \
+  POWER_RIGHT_FUNC(inheritance_type_primogeniture)   /* тип наследования (для кого?) - примогенитура (первый ребенок), я так понимаю это имеет смысл только для селфреалма */ \
+  POWER_RIGHT_FUNC(inheritance_type_ultimogeniture)  /* тип наследования (для кого?) - ультимогенитура (младший ребенок) */ \
   POWER_RIGHT_FUNC(inheritance_type_house_seniority) /* тип наследования - старшинство дома */ \
   POWER_RIGHT_FUNC(inheritance_type_gavelkind)
   
@@ -196,6 +202,18 @@
 //   STATE_RIGHT_FUNC(vassal_can_become_a_tribunal_elector) /* персонажи с землями не могут становиться электорами трибунала */  
 //   STATE_RIGHT_FUNC(vassal_can_become_an_assembler_elector) /*  */  
 //   STATE_RIGHT_FUNC(vassal_can_become_a_clergyman_elector) /*  */  
+  
+// POWER_RIGHT_FUNC(member_can_apply_to_the_state)    /* член органа может направить запрос к стейту (просьба или судебное решение какое нибудь) */ 
+// POWER_RIGHT_FUNC(member_can_apply_to_the_council)  /* член органа может направить запрос в совет */ 
+// POWER_RIGHT_FUNC(member_can_apply_to_the_tribunal) /* член органа может направить запрос в магистрат */ 
+// POWER_RIGHT_FUNC(member_can_apply_to_the_assembly) /* член органа может направить запрос в ассембли */ 
+// POWER_RIGHT_FUNC(member_can_apply_to_the_clergy)   /* член органа может направить запрос в церковь */ 
+// POWER_RIGHT_FUNC(elector_can_apply_to_this) /*  */ 
+// POWER_RIGHT_FUNC(elector_can_apply_to_the_state)    /* электор органа может направить запрос в стейт, эти законы не работают если текущий тип силы это тип указанный в законе */ 
+// POWER_RIGHT_FUNC(elector_can_apply_to_the_council)  /* электор органа может направить запрос в совет, (то есть законы не работают сами для себя, эти штуки выполняют другие законы) */ 
+// POWER_RIGHT_FUNC(elector_can_apply_to_the_tribunal) /* электор органа может направить запрос в трибунал, (initiative для мемберов, elector_can_apply_to_this для электоров) */ 
+// POWER_RIGHT_FUNC(elector_can_apply_to_the_assembly) /* электор органа может направить запрос в ассембли */ 
+// POWER_RIGHT_FUNC(elector_can_apply_to_the_clergy)   /* электор органа может направить запрос в церковь */ 
   
 #define STATE_RIGHTS_LIST \
   /* означает всех персонажей с землей, имеет меньший приоритет */ \
@@ -424,7 +442,6 @@ namespace devils_engine {
       };
       
       constexpr size_t offset = 0;
-      constexpr uint32_t bit_container_size = ceil(double(count) / double(UINT32_WIDTH));
     }
     
     namespace state_rights {
@@ -447,7 +464,6 @@ namespace devils_engine {
       };
       
       constexpr size_t offset = power_rights::count;
-      constexpr uint32_t bit_container_size = ceil(double(count) / double(UINT32_WIDTH));
     }
     
     // тип главенства, наследование, как избирают, влияние, механики
@@ -469,8 +485,6 @@ namespace devils_engine {
         
         count
       };
-      
-      constexpr uint32_t bit_container_size = ceil(double(count) / double(UINT32_WIDTH));
     }
     
     namespace culture_mechanics {
@@ -481,8 +495,6 @@ namespace devils_engine {
         
         count
       };
-      
-      constexpr uint32_t bit_container_size = ceil(double(count) / double(UINT32_WIDTH));
     }
   }
 }

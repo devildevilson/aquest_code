@@ -26,7 +26,7 @@ namespace devils_engine {
       size_t constraint;
       size_t time;
       render::image_t icon;
-      utils::bit_field_32<core::modificator_attributes::bit_container_size> attribs;
+      utils::bit_field_32<core::modificator_attributes::count> attribs;
       std::array<stat_modifier, max_stat_modifiers_count> bonuses;
       std::array<opinion_modifier, max_opinion_modifiers_count> opinion_mods;
       

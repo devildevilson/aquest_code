@@ -9,6 +9,7 @@
 #include "utils/structures_utils.h"
 #include "utils/sol.h"
 #include "utils/handle.h"
+#include "script/get_scope_commands_macro.h"
 
 namespace devils_engine {
   namespace utils {
@@ -24,9 +25,9 @@ namespace devils_engine {
       
       // название (или название по столице провинции?)
       // удобно и герб тоже по столице провинции дать (нет, титул для баронства существует)
-      const titulus* title; // не будет меняться, но нужно заполнить титул (или его заполнять в другом месте?)
-      const struct culture* culture;
-      const struct religion* religion;
+      titulus* title; // не будет меняться, но нужно заполнить титул (или его заполнять в другом месте?)
+      struct culture* culture;
+      struct religion* religion;
       std::vector<uint32_t> tiles;
       std::vector<uint32_t> neighbours;
       // какие техи распространились в этой провинции
@@ -52,6 +53,15 @@ namespace devils_engine {
       province();
       
       city* next_city(const core::city* city) const;
+      
+      core::titulus* get_title() const;
+      utils::handle<core::army> get_army() const;
+      core::city* get_capital() const;
+      
+      core::culture* get_culture() const;
+      core::culture_group* get_culture_group() const;
+      core::religion* get_religion() const;
+      core::religion_group* get_religion_group() const;
     };
     
 //     size_t add_province(const sol::table &table);

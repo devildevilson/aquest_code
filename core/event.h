@@ -6,16 +6,14 @@
 #include "declare_structures.h"
 #include "render/shared_structures.h"
 #include "script/header.h"
+#include "utils/sol.h"
 
 // тут в принципе ничего сложного, проверяем триггер, эвент сидит у объекта, проверяем мттх
 // эвент может быть скрытым, делаем эффект, даем игроку подумать над опциями
-// эвенты полегче чем десижоны
+// эвенты полегче чем десижоны, не, десижоны проще
 
 namespace devils_engine {
   namespace core {
-    // эвенты можно генерировать даже нужно, изменятся основные данные
-    // данные эвента не должны меняться по ходу игры вообще
-    // константные эвенты удобнее использовать с std vector
     struct event {
       static const structure s_type = structure::event;
       static const size_t max_options_count = 8;
@@ -23,7 +21,7 @@ namespace devils_engine {
       struct option {
         script::string name_script;
         script::string description_script;
-        script::condition conditions;
+        script::condition condition;
         script::effect effects;
         script::number ai_weight;
         
@@ -34,26 +32,23 @@ namespace devils_engine {
       script::string name_script;
       script::string description_script;
       
-      // какой инпут? есть ли тут рут? кажется тут вполне можно использовать те же правила что и в десижоне
-      // то есть мы можем запомнить рут в скоуп, но здесь не нужно пушить необходимость присутствия рута
-      // а значит нужно аккуратно сделать рвалуе
-      // нет, у нас рут - это то объект для которого вызывается эвент
-      
-      // вообще это тоже нужно пихнуть в скрипт
+      // вообще это тоже нужно пихнуть в скрипт, как изображение можно запихнуть в скрипт? пока что неуверен
+      // по идее так же как строку - это по сути строковый скрипт, только по полученной стороке мы ищем изображение
       render::image_t image;
+      script::string image_id;
       script::condition potential;
-      //size_t mtth; // среднее время возникновения, должны быть модификаторы для этого 
-      script::number mtth_script;
-      //immediate
+      script::number mtth_script; // среднее время возникновения, должны быть модификаторы для этого 
+      //immediate effect
       
       // наверное нужно пихнуть это дело в вектор
       uint32_t options_count;
       std::array<option, max_options_count> options;
       
       event();
-      
-      void fire(struct character* c);
     };
+    
+    bool validate_event(const size_t &index, const sol::table &table);
+    void parse_event(core::event* event, const sol::table &table);
   }
 }
 

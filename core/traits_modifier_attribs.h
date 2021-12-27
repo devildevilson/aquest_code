@@ -1,5 +1,5 @@
-#ifndef TRAITS_MODIFIER_ATTRIBS_H
-#define TRAITS_MODIFIER_ATTRIBS_H
+#ifndef DEVILS_ENGINE_CORE_TRAITS_MODIFIER_ATTRIBS_H
+#define DEVILS_ENGINE_CORE_TRAITS_MODIFIER_ATTRIBS_H
 
 #include <cstdint>
 #include <string_view>
@@ -9,6 +9,7 @@
 #define TRAIT_ATTRIBUTES_LIST \
   TRAIT_ATTRIBUTE_FUNC(is_hero) \
   TRAIT_ATTRIBUTE_FUNC(is_bastard) \
+  TRAIT_ATTRIBUTE_FUNC(is_concubine_child) \
   TRAIT_ATTRIBUTE_FUNC(is_agnatic) \
   TRAIT_ATTRIBUTE_FUNC(is_enatic) \
   TRAIT_ATTRIBUTE_FUNC(is_hidden) \
@@ -78,8 +79,6 @@ namespace devils_engine {
         count
       };
       
-      constexpr const uint32_t bit_container_size = ceil(double(count) / double(UINT32_WIDTH));
-      
       extern const std::string_view names[];
       extern const phmap::flat_hash_map<std::string_view, values> map;
     }
@@ -92,8 +91,6 @@ namespace devils_engine {
         
         count
       };
-      
-      constexpr const uint32_t bit_container_size = ceil(double(count) / double(UINT32_WIDTH));
       
       extern const std::string_view names[];
       extern const phmap::flat_hash_map<std::string_view, values> map;

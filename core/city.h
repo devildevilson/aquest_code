@@ -28,8 +28,6 @@ namespace devils_engine {
     // город довольно сильно зависит от титула, в нем будет хранится название, id у города в этом случае не будет видимо
     struct city : public utils::flags_container, public utils::modificators_container, public utils::events_container, public utils::ring::list<core::city, utils::list_type::province_cities> {
       static const structure s_type = structure::city;
-      static const size_t bit_field_size = ceil(double(city_type::maximum_buildings) / double(SIZE_WIDTH));
-      static_assert(bit_field_size == 2);
       
       enum class state {
         not_exist,
@@ -51,17 +49,17 @@ namespace devils_engine {
       };
       
       struct province* province; // по идее можно смело ставить const
-      const struct titulus* title; // герб, тут же имя
+      struct titulus* title; // герб, тут же имя
       const city_type* type;
-      utils::bit_field<bit_field_size> available_buildings;
-      utils::bit_field<bit_field_size> completed_buildings;
-      utils::bit_field<bit_field_size> visible_buildings; // тут быстрый способ проверить что нужно рисовать в интерфейсе а что нет
+      utils::bit_field<city_type::maximum_buildings> available_buildings;
+      utils::bit_field<city_type::maximum_buildings> completed_buildings;
+      utils::bit_field<city_type::maximum_buildings> visible_buildings; // тут быстрый способ проверить что нужно рисовать в интерфейсе а что нет
       size_t start_building;
       uint32_t building_index;
       uint32_t tile_index;
       enum state state;
       // характеристики (текущие характеристики города, база + со всех зданий) (характеристики довольно ограничены, нужно ли дать возможность их модифицировать?)
-      utils::stats_container<city_stats::values> stats;
+      utils::stats_container<city_stats::values> stats; // база по идее хранится в типе города
       utils::stats_container<city_stats::values> current_stats;
       utils::stats_container<city_resources::values> resources;
       
@@ -107,6 +105,9 @@ namespace devils_engine {
       
       void update_turn();
       void update_troops();
+      
+      core::titulus* get_title() const;
+      const core::city_type* get_city_type() const;
     };
     
 //     size_t add_city(const sol::table &table);

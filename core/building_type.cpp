@@ -7,6 +7,7 @@
 #include "utils/serializator_helper.h"
 #include "core/context.h"
 #include "core/stats_table.h"
+#include "utils/type_info.h"
 
 namespace devils_engine {
   namespace core {
@@ -95,7 +96,7 @@ namespace devils_engine {
         0, core::building_type::maximum_stat_modifiers,
         {
           {
-            STATS_ARRAY,
+            STATS_V2_ARRAY,
             utils::check_table_value::type::int_t,
             0, core::offsets::troop_stats, {}
           }
@@ -334,54 +335,92 @@ namespace devils_engine {
           if (pair.first.get_type() != sol::type::string) continue;
           if (pair.second.get_type() != sol::type::number) continue;
           
-          auto stat = pair.first.as<std::string_view>();
-          auto value = pair.second.as<double>();
+          const auto stat = pair.first.as<std::string_view>();
+          const auto value = pair.second.as<double>();
           
           if (current_stat >= core::building_type::maximum_stat_modifiers) throw std::runtime_error("Maximum building stat modifiers is " + std::to_string(core::building_type::maximum_stat_modifiers));
           
-          // статы персонажа? давать только владельцу? или всем по иерархии?
-          if (const auto itr = core::character_stats::map.find(stat); itr != core::character_stats::map.end()) {
-            const auto stat_id = itr->second;
-            const stat_modifier m(core::stat_type::character_stat, stat_id, value);
-            building_type->mods[current_stat] = m;
-            ++current_stat;
-            continue;
+          // как теперь это дело положить в stat_modifier? достаточно если я просто положу индекс из листа
+          // а дальше что? как понять кому этот модификатор? сначала армии, потом городу, потом провинции, потом реалму?
+          // можно указывать кому этот модификатор перед названием стата через "_", у меня нет коллизий с именами типов
+          // то есть примерно вот так: character_military (увеличивает милитари персонажу), character_tax_factor
+          // realm_tax_factor, так легко добавлять в таблицу луа и парсить тоже несложно
+          const size_t symbol_index = stat.find('_');
+          std::string_view game_type;
+          std::string_view final_stat;
+          if (symbol_index != std::string_view::npos) {
+            game_type = stat.substr(0, symbol_index);
+            final_stat = stat.substr(symbol_index+1);
+          } else {
+            final_stat = stat;
           }
           
-          // геройские статы? вряд ли
-          if (const auto itr = core::hero_stats::map.find(stat); itr != core::hero_stats::map.end()) {
-            const auto stat_id = itr->second;
-            const stat_modifier m(core::stat_type::hero_stat, stat_id, value);
-            building_type->mods[current_stat] = m;
-            ++current_stat;
-            continue;
+           core::stat_type::values mod_type = stat_type::invalid;
+          if (!game_type.empty()) {
+            // проверяем является ли это названием какого то типа
+            constexpr size_t char_type_hash = string_hash(utils::remove_namespaces(utils::type_name<core::character>()));
+            constexpr size_t realm_type_hash = string_hash(utils::remove_namespaces(utils::type_name<core::realm>()));
+            constexpr size_t prov_type_hash = string_hash(utils::remove_namespaces(utils::type_name<core::province>()));
+            constexpr size_t army_type_hash = string_hash(utils::remove_namespaces(utils::type_name<core::army>()));
+            static_assert(
+              char_type_hash != realm_type_hash && char_type_hash != prov_type_hash && char_type_hash != army_type_hash && 
+              realm_type_hash != prov_type_hash && realm_type_hash != army_type_hash && prov_type_hash != army_type_hash
+            );
+            
+            const size_t type_hash = string_hash(game_type);
+            
+            switch (type_hash) {
+              case char_type_hash:  { mod_type = core::stat_type::character_stat; break; }
+              case realm_type_hash: { mod_type = core::stat_type::realm_stat;     break; }
+              case prov_type_hash:  { mod_type = core::stat_type::province_stat;  break; }
+              case army_type_hash:  { mod_type = core::stat_type::army_stat;      break; }
+              default:              { mod_type = core::stat_type::city_stat;      break; }
+            }
           }
           
-          if (const auto itr = core::city_stats::map.find(stat); itr != core::city_stats::map.end()) {
-            const auto stat_id = itr->second;
-            const stat_modifier m(core::stat_type::city_stat, stat_id, value);
-            building_type->mods[current_stat] = m;
-            ++current_stat;
-            continue;
+          uint32_t stat_id = UINT32_MAX;
+          if (mod_type == core::stat_type::city_stat) {
+            const auto itr = core::stats_list::map.find(stat);
+            if (itr == core::stats_list::map.end()) throw std::runtime_error("Could not find stat " + std::string(stat));
+            stat_id = itr->second;
+          } else {
+            const auto itr = core::stats_list::map.find(final_stat);
+            if (itr == core::stats_list::map.end()) throw std::runtime_error("Could not find stat " + std::string(stat));
+            stat_id = itr->second;
           }
           
-          if (const auto itr = core::province_stats::map.find(stat); itr != core::province_stats::map.end()) {
-            const auto stat_id = itr->second;
-            const stat_modifier m(core::stat_type::province_stat, stat_id, value);
-            building_type->mods[current_stat] = m;
-            ++current_stat;
-            continue;
+          uint32_t final_stat_id = UINT32_MAX;
+          switch (mod_type) {
+            case core::stat_type::character_stat: { 
+              final_stat_id = core::stats_list::to_character_stat(static_cast<core::stats_list::values>(stat_id));
+              if (final_stat_id == UINT32_MAX) throw std::runtime_error("Could not find stat " + std::string(stat) + " among character stats");
+              break; 
+            }
+            case core::stat_type::realm_stat: { 
+              final_stat_id = core::stats_list::to_realm_stat(static_cast<core::stats_list::values>(stat_id));
+              if (final_stat_id == UINT32_MAX) throw std::runtime_error("Could not find stat " + std::string(stat) + " among realm stats");
+              break; 
+            }
+            case core::stat_type::province_stat: { 
+              final_stat_id = core::stats_list::to_province_stat(static_cast<core::stats_list::values>(stat_id));
+              if (final_stat_id == UINT32_MAX) throw std::runtime_error("Could not find stat " + std::string(stat) + " among province stats");
+              break; 
+            }
+            case core::stat_type::army_stat: { 
+              final_stat_id = core::stats_list::to_army_stat(static_cast<core::stats_list::values>(stat_id));
+              if (final_stat_id == UINT32_MAX) throw std::runtime_error("Could not find stat " + std::string(stat) + " among army stats");
+              break; 
+            }
+            default: { 
+              final_stat_id = core::stats_list::to_city_stat(static_cast<core::stats_list::values>(stat_id));      
+              if (final_stat_id == UINT32_MAX) throw std::runtime_error("Could not find stat " + std::string(stat) + " among city stats");
+              break; 
+            }
           }
           
-          if (const auto itr = core::army_stats::map.find(stat); itr != core::army_stats::map.end()) {
-            const auto stat_id = itr->second;
-            const stat_modifier m(core::stat_type::army_stat, stat_id, value);
-            building_type->mods[current_stat] = m;
-            ++current_stat;
-            continue;
-          }
-          
-          throw std::runtime_error("Could not find stat " + std::string(stat));
+          const stat_modifier m(mod_type, final_stat_id, value);
+          building_type->mods[current_stat] = m;
+          ++current_stat;
         }
       }
       
@@ -460,3 +499,46 @@ namespace devils_engine {
   }
 }
 
+// // статы персонажа? давать только владельцу? или всем по иерархии?
+//           if (const auto itr = core::character_stats::map.find(stat); itr != core::character_stats::map.end()) {
+//             const auto stat_id = itr->second;
+//             const stat_modifier m(core::stat_type::character_stat, stat_id, value);
+//             building_type->mods[current_stat] = m;
+//             ++current_stat;
+//             continue;
+//           }
+//           
+//           // геройские статы? вряд ли
+//           if (const auto itr = core::hero_stats::map.find(stat); itr != core::hero_stats::map.end()) {
+//             const auto stat_id = itr->second;
+//             const stat_modifier m(core::stat_type::hero_stat, stat_id, value);
+//             building_type->mods[current_stat] = m;
+//             ++current_stat;
+//             continue;
+//           }
+//           
+//           if (const auto itr = core::city_stats::map.find(stat); itr != core::city_stats::map.end()) {
+//             const auto stat_id = itr->second;
+//             const stat_modifier m(core::stat_type::city_stat, stat_id, value);
+//             building_type->mods[current_stat] = m;
+//             ++current_stat;
+//             continue;
+//           }
+//           
+//           if (const auto itr = core::province_stats::map.find(stat); itr != core::province_stats::map.end()) {
+//             const auto stat_id = itr->second;
+//             const stat_modifier m(core::stat_type::province_stat, stat_id, value);
+//             building_type->mods[current_stat] = m;
+//             ++current_stat;
+//             continue;
+//           }
+//           
+//           if (const auto itr = core::army_stats::map.find(stat); itr != core::army_stats::map.end()) {
+//             const auto stat_id = itr->second;
+//             const stat_modifier m(core::stat_type::army_stat, stat_id, value);
+//             building_type->mods[current_stat] = m;
+//             ++current_stat;
+//             continue;
+//           }
+//           
+//           throw std::runtime_error("Could not find stat " + std::string(stat));

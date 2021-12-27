@@ -94,18 +94,6 @@ namespace devils_engine {
         }
       },
       {
-        "hero_stats",
-        utils::check_table_value::type::array_t,
-        0, core::hero_stats::count,
-        {
-          {
-            STATS_ARRAY,
-            utils::check_table_value::type::int_t,
-            core::offsets::hero_stats, core::offsets::hero_stats + core::hero_stats::count, {}
-          }
-        }
-      },
-      {
         "hidden_religion",
         utils::check_table_value::type::string_t,
         0, 0, {}
@@ -126,9 +114,21 @@ namespace devils_engine {
         utils::check_table_value::value_required, 0,
         {
           {
-            STATS_ARRAY,
+            STATS_V2_ARRAY,
             utils::check_table_value::type::int_t,
             core::offsets::character_stats, core::offsets::realm_stats + core::realm_stats::count, {}
+          }
+        }
+      },
+      {
+        "realm_stats",
+        utils::check_table_value::type::array_t,
+        0, core::hero_stats::count,
+        {
+          {
+            STATS_V2_ARRAY,
+            utils::check_table_value::type::int_t,
+            core::offsets::hero_stats, core::offsets::hero_stats + core::hero_stats::count, {}
           }
         }
       },
@@ -199,7 +199,10 @@ namespace devils_engine {
     void parse_character(core::character* character, const sol::table &table) {
       auto ctx = global::get<core::context>();
       
-      const size_t char_index1 = ctx->get_character_debug_index(character);
+//       const size_t char_index1 = ctx->get_character_debug_index(character);
+      const auto dbg = [ctx, character] () {
+        return ctx->get_character_debug_index(character);
+      };
 
       // откуда брать персонажей то и династии
 
@@ -236,14 +239,14 @@ namespace devils_engine {
           if (const auto &tmp = parents[1]; tmp.valid()) {
             const size_t index = FROM_LUA_INDEX(tmp.get<size_t>());
             auto c = ctx->get_character(index);
-            if (c == nullptr) throw std::runtime_error("Could not find parent character " + std::to_string(index) + " for character " + std::to_string(char_index1));
+            if (c == nullptr) throw std::runtime_error("Could not find parent character " + std::to_string(index) + " for character " + std::to_string(dbg()));
             character->family.parents[0] = c;
           }
 
           if (const auto &tmp = parents[2]; tmp.valid()) {
             const size_t index = FROM_LUA_INDEX(tmp.get<size_t>());
             auto c = ctx->get_character(index);
-            if (c == nullptr) throw std::runtime_error("Could not find parent character " + std::to_string(index) + " for character " + std::to_string(char_index1));
+            if (c == nullptr) throw std::runtime_error("Could not find parent character " + std::to_string(index) + " for character " + std::to_string(dbg()));
             character->family.parents[1] = c;
           }
 
@@ -258,14 +261,14 @@ namespace devils_engine {
         if (const auto &o = family_table["owner"]; o.valid()) {
           const size_t index = FROM_LUA_INDEX(o.get<size_t>());
           auto c = ctx->get_character(index);
-          if (c == nullptr) throw std::runtime_error("Could not find owner character " + std::to_string(index) + " for character " + std::to_string(char_index1));
+          if (c == nullptr) throw std::runtime_error("Could not find owner character " + std::to_string(index) + " for character " + std::to_string(dbg()));
           character->family.owner = c;
         }
 
         if (const auto &c = family_table["consort"]; c.valid()) {
           const size_t index = FROM_LUA_INDEX(c.get<size_t>());
           auto ch = ctx->get_character(index);
-          if (c == nullptr) throw std::runtime_error("Could not find consort character " + std::to_string(index) + " for character " + std::to_string(char_index1));
+          if (c == nullptr) throw std::runtime_error("Could not find consort character " + std::to_string(index) + " for character " + std::to_string(dbg()));
           character->family.consort = ch;
         }
 
@@ -273,7 +276,7 @@ namespace devils_engine {
         if (const auto &d = family_table["dynasty"]; d.valid()) {
           const size_t index = FROM_LUA_INDEX(d.get<size_t>()); // тут по идее нужен id
           auto dynasty = ctx->get_dynasty(index);
-          if (dynasty == nullptr) throw std::runtime_error("Could not find dynasty " + std::to_string(index) + " for character " + std::to_string(char_index1));
+          if (dynasty == nullptr) throw std::runtime_error("Could not find dynasty " + std::to_string(index) + " for character " + std::to_string(dbg()));
           character->family.dynasty = dynasty;
         }
       }
@@ -346,7 +349,7 @@ namespace devils_engine {
         auto ptr = ctx->get_entity<core::religion>(str);
         if (ptr == nullptr) throw std::runtime_error("Could not find religion " + std::string(str));
         if (character->religion == ptr) throw std::runtime_error("Hidden religion must not be main religion");
-        character->hidden_religion = ptr;
+        character->secret_religion = ptr;
       }
       
       if (const auto proxy = table["titles"]; proxy.valid() && proxy.get_type() == sol::type::table) {
@@ -362,7 +365,7 @@ namespace devils_engine {
           // было бы неплохо тут идентифицировать кому мы пытаемся пихнуть чей титул
           if (title->owner.valid()) {
             const size_t char_index2 = ctx->get_character_debug_index(title->owner.get()->leader);
-            throw std::runtime_error("Title " + std::string(title_id) + " is already has an owner " + std::to_string(char_index2) + ". Trying to add title to character " + std::to_string(char_index1));
+            throw std::runtime_error("Title " + std::string(title_id) + " is already has an owner " + std::to_string(char_index2) + ". Trying to add title to character " + std::to_string(dbg()));
           }
           
           if (!character->self.valid()) {
@@ -390,7 +393,10 @@ namespace devils_engine {
     void parse_character_goverment(core::character* character, const sol::table &table) {
       auto ctx = global::get<core::context>();
       
-      const size_t char_index1 = ctx->get_character_debug_index(character);
+      //const size_t char_index1 = ctx->get_character_debug_index(character);
+      const auto dbg = [ctx, character] () {
+        return ctx->get_character_debug_index(character);
+      };
 
       // нужно бы проверить есть ли титулы у сюзерена
       if (const auto &suzerain = table["suzerain"]; suzerain.valid() && suzerain.get_type() == sol::type::number) {
@@ -398,7 +404,7 @@ namespace devils_engine {
         auto c = ctx->get_character(index);
         if (c == nullptr) throw std::runtime_error("Could not find character " + std::to_string(index));
         auto r = c->self;
-        if (!r.valid()) throw std::runtime_error("Character " + std::to_string(index) + " could not be a suzerain to character " + std::to_string(char_index1));
+        if (!r.valid()) throw std::runtime_error("Character " + std::to_string(index) + " could not be a suzerain to character " + std::to_string(dbg()));
         r->add_courtier(character);
       }
 
@@ -408,10 +414,11 @@ namespace devils_engine {
         auto c = ctx->get_character(index);
         if (c == nullptr) throw std::runtime_error("Could not find character " + std::to_string(index));
         auto r = c->self;
-        if (!r.valid()) throw std::runtime_error("Character " + std::to_string(index) + " could not be an imprisoner to character " + std::to_string(char_index1));
+        if (!r.valid()) throw std::runtime_error("Character " + std::to_string(index) + " could not be an imprisoner to character " + std::to_string(dbg()));
         r->add_prisoner(character);
       }
       
+      // статы у персонажа или реалма могут совпадать, разделить статы перса и реалма?
       if (const auto proxy = table["stats"]; proxy.valid() && proxy.get_type() == sol::type::table) {
         const auto &stats = proxy.get<sol::table>();
         for (const auto &pair : stats) {
@@ -419,28 +426,54 @@ namespace devils_engine {
           if (pair.second.get_type() != sol::type::number) continue;
           
           const auto &stat = pair.first.as<std::string_view>();
-          const float value = pair.second.as<float>();
+          const float value = pair.second.as<double>();
           
-          if (const auto itr = core::character_stats::map.find(stat); itr != core::character_stats::map.end()) {
-            character->stats.set(itr->second, value);
+          const auto itr = core::stats_list::map.find(stat);
+          if (itr == core::stats_list::map.end()) throw std::runtime_error("Could not find stat " + std::string(stat));
+          
+          if (const uint32_t index = stats_list::to_character_stat(itr->second); index != UINT32_MAX) {
+            character->stats.set(index, value);
             continue;
           }
           
-          if (const auto itr = core::hero_stats::map.find(stat); itr != core::hero_stats::map.end()) {
-            character->hero_stats.set(itr->second, value);
+          if (const uint32_t index = stats_list::to_hero_stat(itr->second); index != UINT32_MAX) {
+            character->hero_stats.set(index, value);
             continue;
           }
           
-          if (const auto itr = core::realm_stats::map.find(stat); itr != core::realm_stats::map.end()) {
-            if (!character->self.valid()) {
-              throw std::runtime_error("Could not set realm stat to character " + std::to_string(char_index1));
-            }
-            auto r = character->self;
-            r->stats.set(itr->second, value);
+          if (const uint32_t index = stats_list::to_character_resource(itr->second); index != UINT32_MAX) {
+            character->resources.set(index, value);
             continue;
           }
           
-          throw std::runtime_error("Could not find character stat " + std::string(stat));
+          throw std::runtime_error("Stat " + std::string(stat) + " is not belongs to charater stats");
+        }
+      }
+      
+      if (const auto proxy = table["realm_stats"]; proxy.valid() && proxy.get_type() == sol::type::table && character->self.valid()) {
+        auto r = character->self;
+        const auto &stats = proxy.get<sol::table>();
+        for (const auto &pair : stats) {
+          if (pair.first.get_type() != sol::type::string) continue;
+          if (pair.second.get_type() != sol::type::number) continue;
+          
+          const auto &stat = pair.first.as<std::string_view>();
+          const float value = pair.second.as<double>();
+          
+          const auto itr = core::stats_list::map.find(stat);
+          if (itr == core::stats_list::map.end()) throw std::runtime_error("Could not find stat " + std::string(stat));
+          
+          if (const uint32_t index = stats_list::to_realm_stat(itr->second); index != UINT32_MAX) {
+            r->stats.set(index, value);
+            continue;
+          }
+          
+          if (const uint32_t index = stats_list::to_realm_resource(itr->second); index != UINT32_MAX) {
+            r->resources.set(index, value);
+            continue;
+          }
+          
+          throw std::runtime_error("Stat " + std::string(stat) + " is not belongs to realm stats");
         }
       }
 

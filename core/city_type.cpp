@@ -206,7 +206,6 @@ namespace devils_engine {
       {
         // то есть тут у нас только статы города? иначе это были бы модификаторы, наверное да
         const auto &stats = table.get<sol::table>("stats");
-        size_t counter = 0;
         for (const auto &pair : stats) {
           if (pair.first.get_type() != sol::type::string) continue;
           if (pair.second.get_type() != sol::type::number) continue;
@@ -214,11 +213,12 @@ namespace devils_engine {
           auto stat = pair.first.as<std::string_view>();
           auto value = pair.second.as<float>();
           
-          if (const auto itr = core::city_stats::map.find(stat); itr != core::city_stats::map.end()) {
-            const uint32_t stat = itr->second;
-            city_type->stats.set(stat, value);
-            ++counter;
-          } else throw std::runtime_error("Could not find city stat " + std::string(stat));
+          const auto itr = core::stats_list::map.find(stat);
+          if (itr == core::stats_list::map.end()) throw std::runtime_error("Could not find city stat " + std::string(stat));
+          
+          if (const uint32_t index = stats_list::to_city_stat(itr->second); index != UINT32_MAX) {
+            city_type->stats.set(index, value);
+          } else throw std::runtime_error("Stat " + std::string(stat) + " is not belongs to city stats");
         }
       }
       

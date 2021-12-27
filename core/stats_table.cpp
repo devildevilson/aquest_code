@@ -4,6 +4,163 @@
 
 namespace devils_engine {
   namespace core {
+    namespace stats_list {
+      const std::string_view names[] = {
+#define STAT_FUNC(val) #val,
+#define CHARACTER_PENALTY_STAT_FUNC(val) #val "_penalty",
+        UNIQUE_STATS_RESOURCES_LIST
+#undef STAT_FUNC
+#undef CHARACTER_PENALTY_STAT_FUNC
+      };
+      
+      const phmap::flat_hash_map<std::string_view, values> map = {
+#define STAT_FUNC(val) MAKE_MAP_PAIR(val),
+#define CHARACTER_PENALTY_STAT_FUNC(val) MAKE_MAP_PAIR(val##_penalty),
+        UNIQUE_STATS_RESOURCES_LIST
+#undef STAT_FUNC
+#undef CHARACTER_PENALTY_STAT_FUNC
+      };
+      
+      const size_t array_size = sizeof(names) / sizeof(names[0]);
+      static_assert(array_size == values::count);
+      
+      uint32_t to_invalid(const values &val) { return UINT32_MAX; }
+      
+      uint32_t to_character_stat(const values &val_id) {
+        switch (val_id) {
+#define STAT_FUNC(val) case values::val: return character_stats::val;
+#define CHARACTER_PENALTY_STAT_FUNC(val) STAT_FUNC(val##_penalty)
+          CHARACTER_STATS_LIST
+#undef STAT_FUNC
+#undef CHARACTER_PENALTY_STAT_FUNC
+          default: break;
+        }
+        
+        return UINT32_MAX;
+      }
+      
+      uint32_t to_realm_stat(const values &val_id) {
+        switch (val_id) {
+#define STAT_FUNC(val) case values::val: return realm_stats::val;
+          REALM_STATS_LIST
+#undef STAT_FUNC
+          default: break;
+        }
+        
+        return UINT32_MAX;
+      }
+      
+      uint32_t to_province_stat(const values &val_id) {
+        switch (val_id) {
+#define STAT_FUNC(val) case values::val: return province_stats::val;
+          PROVINCE_STATS_LIST
+#undef STAT_FUNC
+          default: break;
+        }
+        
+        return UINT32_MAX;
+      }
+      
+      uint32_t to_city_stat(const values &val_id) {
+        switch (val_id) {
+#define STAT_FUNC(val) case values::val: return city_stats::val;
+          CITY_STATS_LIST
+#undef STAT_FUNC
+          default: break;
+        }
+        
+        return UINT32_MAX;
+      }
+      
+      uint32_t to_army_stat(const values &val_id) {
+        switch (val_id) {
+#define STAT_FUNC(val) case values::val: return army_stats::val;
+          ARMY_STATS_LIST
+#undef STAT_FUNC
+          default: break;
+        }
+        
+        return UINT32_MAX;
+      }
+      
+      uint32_t to_hero_troop_stat(const values &val_id) {
+        switch (val_id) {
+#define STAT_FUNC(val) case values::val: return hero_troop_stats::val;
+          HERO_TROOP_STATS_LIST
+#undef STAT_FUNC
+          default: break;
+        }
+        
+        return UINT32_MAX;
+      }
+      
+      uint32_t to_troop_stat(const values &val_id) {
+        switch (val_id) {
+#define STAT_FUNC(val) case values::val: return troop_stats::val;
+          TROOP_STATS_LIST
+#undef STAT_FUNC
+          default: break;
+        }
+        
+        return UINT32_MAX;
+      }
+      
+      uint32_t to_hero_stat(const values &val_id) {
+        switch (val_id) {
+#define STAT_FUNC(val) case values::val: return hero_stats::val;
+          HERO_STATS_LIST
+#undef STAT_FUNC
+          default: break;
+        }
+        
+        return UINT32_MAX;
+      }
+      
+      uint32_t to_character_resource(const values &val_id) {
+        switch (val_id) {
+#define STAT_FUNC(val) case values::val: return character_resources::val;
+          RESOURCE_STATS_LIST
+#undef STAT_FUNC
+          default: break;
+        }
+        
+        return UINT32_MAX;
+      }
+      
+      uint32_t to_realm_resource(const values &val_id) {
+        switch (val_id) {
+#define STAT_FUNC(val) case values::val: return realm_resources::val;
+          RESOURCE_STATS_LIST
+#undef STAT_FUNC
+          default: break;
+        }
+        
+        return UINT32_MAX;
+      }
+      
+      uint32_t to_city_resource(const values &val_id) {
+        switch (val_id) {
+#define STAT_FUNC(val) case values::val: return city_resources::val;
+          CITY_RESOURCE_STATS_LIST
+#undef STAT_FUNC
+          default: break;
+        }
+        
+        return UINT32_MAX;
+      }
+      
+      uint32_t to_army_resource(const values &val_id) {
+        switch (val_id) {
+#define STAT_FUNC(val) case values::val: return army_resources::val;
+          ARMY_RESOURCE_STATS_LIST
+#undef STAT_FUNC
+          default: break;
+        }
+        
+        return UINT32_MAX;
+      }
+    }
+    
     namespace character_stats {
       const std::string_view names[] = {
 #define STAT_FUNC(val) #val,

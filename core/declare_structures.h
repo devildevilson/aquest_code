@@ -24,8 +24,8 @@
   GAME_STRUCTURE_FUNC(titulus) \
   GAME_STRUCTURE_FUNC(casus_belli) \
   GAME_STRUCTURE_FUNC(city) \
-  GAME_STRUCTURE_FUNC(tile) \
   GAME_STRUCTURE_FUNC(province) \
+  GAME_STRUCTURE_FUNC(tile) \
   GAME_STRUCTURE_FUNC(character) \
   GAME_STRUCTURE_FUNC(dynasty) \
   GAME_STRUCTURE_FUNC(realm) \
@@ -46,8 +46,8 @@ namespace devils_engine {
 #undef GAME_STRUCTURE_FUNC
       count,
       
-      static_types_count = character,
-      parsing_types_count = realm,
+      static_types_count = tile + 1,
+      parsing_types_count = dynasty + 1,
       id_types_count = casus_belli + 1
     };
     

@@ -7,6 +7,15 @@
 
 namespace devils_engine {
   namespace core {
+    namespace stats_list {
+      extern const std::string_view names[];
+      extern const phmap::flat_hash_map<std::string_view, values> map;
+      
+#define STAT_TYPES_FUNC(val) uint32_t to_##val(const values &val);
+      STAT_TYPES_LIST
+#undef STAT_TYPES_FUNC
+    }
+    
     namespace character_stats {
       extern const std::string_view names[];
       extern const phmap::flat_hash_map<std::string_view, values> map;

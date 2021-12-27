@@ -19,6 +19,9 @@
 #include "utils/sol.h"
 #include "utils/handle.h"
 
+#include "script/get_scope_commands_macro.h"
+#include "script/condition_commands_macro.h"
+
 // взаимоотношения между персонажами должны быть сделанны с помощью таблицы
 // я думал использовать какую-нибудь базу данных 
 // для того чтобы не писать самому всякие вещи связанные с сериализацией
@@ -55,7 +58,7 @@ namespace devils_engine {
       static const structure s_type = structure::dynasty;
       
       size_t name_str;
-      std::vector<character*> characters;
+      character* characters;
       // герб (нужно выбрать тип щита, темплейт, изображения на темплейт, изображения сверху, цвета для всего этого, можно ли за один раз нарисовать?)
       // некие механики династии?
       // возможно какие то улучшения авторитета, уважение и влияния?
@@ -81,6 +84,7 @@ namespace devils_engine {
     // нужно придумать способ ссылаться именно на этого перса при генерации, индекс? 
     // похоже самый адекватный способ (с id не понятно че делать, он нужен только при генерации)
     // можно еще добавить хронику - эвенты заполняют историю мира
+    // тут имеет смысл еще добавить листы с религией, культурой и династией, возможно лист с тайной религией
     struct character : 
       public utils::flags_container, 
       public utils::events_container, 
@@ -89,12 +93,15 @@ namespace devils_engine {
       public utils::hooks_container,
       public utils::ring::list<character, utils::list_type::prisoners>,
       public utils::ring::list<character, utils::list_type::courtiers>,
-      // вообще у нас могут быть дети по отцовской линии и по материнской, надо бы разделить
-      public utils::ring::list<character, utils::list_type::father_line_siblings>,
-      public utils::ring::list<character, utils::list_type::mother_line_siblings>,
       public utils::ring::list<character, utils::list_type::concubines>,
       public utils::ring::list<character, utils::list_type::victims>,
       public utils::ring::list<character, utils::list_type::hero_companions>,
+      public utils::ring::list<character, utils::list_type::culture_member>,
+      public utils::ring::list<character, utils::list_type::dynasty_member>,
+      public utils::ring::list<character, utils::list_type::believer>,
+      public utils::ring::list<character, utils::list_type::secret_believer>,
+      public utils::ring::list<character, utils::list_type::father_line_siblings>,
+      public utils::ring::list<character, utils::list_type::mother_line_siblings>,
       // члены политических сил, как отделить электоров? еще запихивать листы? еще 80 байт лол
       public utils::ring::list<character, utils::list_type::statemans>, // этого скорее всего не будет, в качестве стейта выступает либо собственный реалм, либо один из коллективных
       public utils::ring::list<character, utils::list_type::councilors>,
@@ -116,21 +123,6 @@ namespace devils_engine {
       static const size_t flags_container_size = 25;
       
       using state = utils::xoshiro256plusplus::state;
-      
-      static bool is_cousin(const character* a, const character* b);
-      static bool is_sibling(const character* a, const character* b);
-      static bool is_full_sibling(const character* a, const character* b);
-      static bool is_half_sibling(const character* a, const character* b);
-      static bool is_relative(const character* a, const character* b);
-      static bool is_bastard(const character* a);
-      static bool is_concubine_child(const character* a);
-      static bool is_concubine(const character* a, const character* b);
-      static bool is_parent(const character* a, const character* b);
-      static bool is_child(const character* a, const character* b);
-      static bool is_hero(const character* a);
-      static bool is_priest(const character* a);
-      static bool is_sick(const character* a);
-      static bool can_marry(const character* a);
       
       // придется создавать несколько фракции: собственно персонаж,
       // совет (парламент), суд, элективный огран, все это для того чтобы 
@@ -166,6 +158,7 @@ namespace devils_engine {
         family() noexcept;
       };
       
+      // отношения должны быть сложнее, скорее нужно список расширить и сделать единственным
       struct relations {
         enum friendship_level : int32_t {
           nemesis = -3,
@@ -217,6 +210,16 @@ namespace devils_engine {
         inline secret() : type(UINT32_MAX), character(nullptr), trait(nullptr) {}
       };
       
+      struct relation {
+        uint32_t type;
+        utils::handle<core::war> war;
+        utils::handle<core::realm> realm; 
+        // например жена, или супруг ребенка, вообще уз может быть несколько (до бесконечности)
+        // как быть? опять массив? кто дает гарантии? только семья? близкие родственники?
+        // нужно начать с того чтобы определить кто есть кто, все близкие родственники могут оказаться причиной возникновения дипломатии
+        character* related_character;
+      };
+      
       utils::stats_container<character_stats::values, true> stats;
       utils::stats_container<character_stats::values, true> current_stats;
       utils::stats_container<hero_stats::values> hero_stats;
@@ -229,13 +232,14 @@ namespace devils_engine {
       int64_t born_day;
       int64_t death_day; // причина?
       // что имя, что никнейм нам нужны скомпилированные для поиска
+      // для никнейма наверное нужно сделать отдельную структуру, и там могут храниться дополнительные данные, например за что этот никнейм дали
       std::string name_table_id; // теперь нам не обязательно хранить индексы
       std::string nickname_table_id;
       uint32_t name_index;
       uint32_t nickname_index; // как выдается ник? 
       utils::handle<realm> suzerain; // может ли быть при дворе государства?
       utils::handle<realm> imprisoner; // мы можем сидеть во фракционной тюрьме (государственная тюрьма)
-      character* victims; // удалиться может первая жертва
+      character* victims; // если вообще я буду делать удаление персонажей, то может удалиться первая жертва, вообще наверное мы можем предусмотреть это в деструкторе
       character* killer;
       
       // здесь еще должны добавиться указатели на данные героя и армии
@@ -250,9 +254,9 @@ namespace devils_engine {
       
       struct family family;
       struct relations relations;
-      const struct culture* culture;
-      const struct religion* religion;
-      const struct religion* hidden_religion;
+      struct culture* culture;
+      struct religion* religion;
+      struct religion* secret_religion;
       // в элективных монархиях существует фракция персонажа, фракция элективного государства (в этой фракции титулы передаются к избранному наследнику),
       // по идее нужно будет создать еще фракцию совета, там временно будут храниться отобранные титулы
       utils::handle<realm> self;
@@ -261,7 +265,7 @@ namespace devils_engine {
       // вообще указатели на эти вещи есть и у реалма, но как быстро проверить куда входит персонаж?
       std::array<utils::handle<realm>, faction_type_count> electorate; // self - игнорируем
       
-      utils::bit_field<1> data;
+      utils::bit_field<64> data;
       uint64_t static_state;
       state rng_state; // нужно ли передать в луа? нет
       
@@ -269,41 +273,20 @@ namespace devils_engine {
       // в цк2 трейты разделены на группы, некоторые трейты замещают другие в одной группе
       // некоторые трейты не могут быть взяты из-за религии
       
+      // как тут сделать отношения и дипломатию? отношения сделал неудачно - лучше пусть просто будет список всех типов отношений, который и будем хранить 
+      // в массиве, дипломатия должна быть здесь потому что она собственно только здесь и имеет смысл, как ее устроить? слева указатель на персонажа,
+      // справа тип, война, персонаж, сколько всего может быть дипломатий? нужно ли смешивать дипломатию и отношения? не думаю что хорошая идея
+      
+      
       character(const bool male, const bool dead);
       ~character();
-      bool is_independent() const;
-      bool is_prisoner() const;
-      bool is_married() const;
-      bool is_male() const;
-      // герой должен определяться по трейтам, но для героев меняется геймплей довольно сильно
-      // может ли персонаж перестать быть героем? эта функция наверное должна быть технической
-      bool is_hero() const;
-      bool is_player() const;
-      bool is_dead() const;
-      bool has_dynasty() const;
-      bool is_ai_playable() const;
-      bool is_troop_owner() const; // было бы неплохо оставить указатель после смерти, чтобы разместить там известных членов партии для истории
-      bool is_army_owner() const;
-      bool is_excommunicated() const;
-      bool is_general() const;
       
-      bool is_establishment_member() const;
-      bool is_council_member() const;
-      bool is_tribunal_member() const;
-      bool is_assembly_member() const;
-      bool is_clergy_member() const;
-      
-      bool is_elector() const;
-      bool is_establishment_elector() const;
-      bool is_council_elector() const;
-      bool is_tribunal_elector() const;
-      bool is_assembly_elector() const;
-      bool is_clergy_elector() const;
-      
+      // нужна функция которая вернет текущий "главный" (больший ранг титула) реалм лидером которого является персонаж
+      // ну и проверить если таковой имеется
       utils::handle<core::realm> get_leader_of_realm() const;
       
-      character* get_father() const; // может вернуть nullptr
-      character* get_mother() const;
+//       character* get_father() const; // может вернуть nullptr
+//       character* get_mother() const;
       
       void set_dead();
       void make_hero();
@@ -329,21 +312,21 @@ namespace devils_engine {
       
 //       void add_child(character* child); // ребенок должен быть чей то
       void add_child_raw(character* child); // возможно будет только эта функция 
-//       void remove_child(character* child); // врядли вообще когда нибудь я этим воспользуюсь
+//       void remove_child(character* child); // врядли вообще когда нибудь я этим воспользуюсь (как быть с незаконно рожденными? должны же мы как то обращаться к этому ребенку у не своего отца?)
       
       // наверное не нужно
       bool get_bit(const size_t &index) const; // тут по максимуму от того что останется
       bool set_bit(const size_t &index, const bool value);
       
-      bool has_flag(const std::string_view &flag) const;
+//       bool has_flag(const std::string_view &flag) const;
       void add_flag(const std::string_view &flag, const size_t &turn);
       void remove_flag(const std::string_view &flag);
       
-      bool has_trait(const trait* t) const;
+//       bool has_trait(const trait* t) const;
       void add_trait(const trait* t);
       void remove_trait(const trait* t);
       
-      bool has_modificator(const modificator* m) const;
+//       bool has_modificator(const modificator* m) const;
       void add_modificator(const modificator* m, const utils::modificators_container::modificator_data &data);
       void remove_modificator(const modificator* m);
       
@@ -353,7 +336,29 @@ namespace devils_engine {
       
       uint64_t get_random();
       
-      uint32_t get_age() const;
+      uint32_t compute_age() const;
+      
+#define GET_SCOPE_COMMAND_FUNC(name, a, b, type) type get_##name() const;
+      CHARACTER_GET_SCOPE_COMMANDS_LIST
+#undef GET_SCOPE_COMMAND_FUNC
+
+#define CONDITION_COMMAND_FUNC(name) bool name() const;
+      CHARACTER_GET_BOOL_NO_ARGS_COMMANDS_LIST
+#undef CONDITION_COMMAND_FUNC
+
+// надо бы тут гет использовать
+#define CONDITION_COMMAND_FUNC(name) double get_##name() const;
+      CHARACTER_GET_NUMBER_NO_ARGS_COMMANDS_LIST
+#undef CONDITION_COMMAND_FUNC
+
+#define CONDITION_ARG_COMMAND_FUNC(name, value_type_bit, constness, value_type) bool name(const value_type) const;
+      CHARACTER_GET_BOOL_ONE_ARG_COMMANDS_LIST
+#undef CONDITION_ARG_COMMAND_FUNC
+
+      core::culture* get_culture() const;
+      const core::culture_group* get_culture_group() const;
+      core::religion* get_religion() const;
+      const core::religion_group* get_religion_group() const;
       
       // откуда это брать? по идее это задано по умолчанию, но при этом нужно как то локализацию сделать
       // стрингвью брать не удастся... или нет? не знаю как работает std::string_view в sol

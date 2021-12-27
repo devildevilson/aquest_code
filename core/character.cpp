@@ -16,23 +16,6 @@
 
 namespace devils_engine {
   namespace core {
-//     hero::hero() : character(nullptr) {}
-    
-    // короче я подумал что фиг там, возможно нужно разные строки возвращать
-    // мало того нужно еще и локализированные строки возвращать, поэтому нахой
-    // другое дело что где это все должно быть?
-//     std::string_view titulus::ruler_title() const {
-//       switch (type) {
-//         case type::city: return "";
-//         case type::baron: return "Baron";
-//         case type::duke: return "Duke";
-//         case type::king: return "King";
-//         case type::imperial: return "Emperior";
-//         default: throw std::runtime_error("wtf");
-//       }
-//       
-//       return "";
-//     }
     
     namespace system {
       enum character_enum {
@@ -54,120 +37,6 @@ namespace devils_engine {
     const size_t character::modificators_container_size;
     const size_t character::events_container_size;
     const size_t character::flags_container_size;
-    bool character::is_cousin(const character* a, const character* b) {
-      bool ret = false;
-      for (uint8_t i = 0; i < 2; ++i) {
-        auto p1 = a->family.parents[i];
-        for (uint8_t j = 0; j < 2; ++j) {
-          auto gp1 = p1->family.parents[j];
-          for (uint8_t k = 0; k < 2; ++k) {
-            auto p2 = b->family.parents[k];
-            for (uint8_t c = 0; c < 2; ++c) {
-              auto gp2 = p2->family.parents[c];
-              ret = ret || (gp1 == gp2);
-            }
-          }
-        }
-      }
-      
-      return !is_sibling(a, b) && ret;
-    }
-    
-    bool character::is_sibling(const character* a, const character* b) {
-      return a->family.parents[0] == b->family.parents[0] || a->family.parents[1] == b->family.parents[1] || a->family.parents[0] == b->family.parents[1] || a->family.parents[1] == b->family.parents[0];
-    }
-    
-    bool character::is_full_sibling(const character* a, const character* b) {
-      return (a->family.parents[0] == b->family.parents[0] && a->family.parents[1] == b->family.parents[1]) || (a->family.parents[0] == b->family.parents[1] && a->family.parents[1] == b->family.parents[0]);
-    }
-    
-    bool character::is_half_sibling(const character* a, const character* b) {
-      return is_sibling(a, b) && !is_full_sibling(a, b);
-    }
-    
-    bool character::is_relative(const character* a, const character* b) {
-      // нужно проверить династию
-      return false;
-    }
-    
-    bool character::is_bastard(const character* a) {
-      // незаконное рождение - нужно проверить законных жен
-      // можно проверить по трейтам... или нет? 
-      // нет нужен трейт бастард
-//       auto parent1 = a->family.parents[0];
-//       auto parent2 = a->family.parents[1];
-//       bool ret = parent1->family.consort == parent2;
-//       for (auto consort : parent1->family.consorts) {
-//         
-//       }
-//       while (consort != nullptr) {
-//         ret = ret || prev_consort == parent2;
-//         consort =  prev_consort->family.previous_consorts;
-//       }
-//       
-//       return !ret;
-      
-      for (const auto trait : a->traits) {
-        if (trait->get_attrib(core::trait_attributes::is_bastard)) return true;
-      }
-      return false;
-    }
-    
-    bool character::is_concubine_child(const character* a) {
-      auto parent1 = a->family.parents[0];
-      auto parent2 = a->family.parents[1];
-      return (parent1->family.owner == parent2) || (parent1 == parent2->family.owner);
-    }
-    
-    bool character::is_concubine(const character* a, const character* b) {
-      return a->family.owner == b;
-    }
-    
-    bool character::is_parent(const character* a, const character* b) {
-      return a != nullptr && b != nullptr && (b->family.parents[0] == a || b->family.parents[1] == a);
-    }
-    
-    bool character::is_child(const character* a, const character* b) {
-      return a != nullptr && b != nullptr && (a->family.parents[0] == b || a->family.parents[1] == b);
-    }
-    
-    // проверка героя, у меня тут есть несколько проблем, получается что если я заберу аттрибут
-    // то персонаж перестанет быть героем, что это значит? он может быть на геройской миссии
-    // в этом случае как только герой вернется в город, то у него должна пропасть возможность
-    // выходить в приключения
-    bool character::is_hero(const character* a) {
-      for (const auto trait : a->traits) {
-        if (trait->get_attrib(core::trait_attributes::is_hero)) return true;
-      }
-      
-      return false;
-    }
-    
-    bool character::is_priest(const character* a) {
-      for (const auto trait : a->traits) {
-        if (trait->get_attrib(core::trait_attributes::is_priest)) return true;
-      }
-      
-      return false;
-    }
-    
-    bool character::is_sick(const character* a) {
-      for (const auto trait : a->traits) {
-        if (trait->get_attrib(core::trait_attributes::is_disease) || trait->get_attrib(core::trait_attributes::is_magic_disease)) return true;
-      }
-      
-      return false;
-    }
-    
-    bool character::can_marry(const character* a) {
-      if (a->is_married()) return false;
-      
-      for (const auto trait : a->traits) {
-        if (trait->get_attrib(core::trait_attributes::cannot_marry)) return false;
-      }
-      
-      return true;
-    }
     
     character::family::family() noexcept :
       real_parents{nullptr, nullptr},
@@ -243,7 +112,7 @@ namespace devils_engine {
       killer(nullptr),
       culture(nullptr),
       religion(nullptr),
-      hidden_religion(nullptr)
+      secret_religion(nullptr)
     {
       data.set(system::male, male);
       data.set(system::dead, dead);
@@ -252,16 +121,17 @@ namespace devils_engine {
         modificators.reserve(modificators_container_size);
         events.reserve(events_container_size);
         flags.reserve(flags_container_size);
-      }
+      } 
+//       else global::get<core::context>()->make_dead(this); // происходит в контексте
     }
     
     character::~character() {
-      modificators.clear();
-      modificators.reserve(0);
-      flags.clear();
-      flags.reserve(0);
-      events.clear();
-      events.reserve(0);
+//       modificators.clear(); // ???
+//       modificators.reserve(0);
+//       flags.clear();
+//       flags.reserve(0);
+//       events.clear();
+//       events.reserve(0);
     }
     
     bool character::is_independent() const {
@@ -270,55 +140,37 @@ namespace devils_engine {
         return false;
       }
       
-      return self->is_independent(); //  || suzerain == nullptr // персонаж без титулов и не придворный это ошибка!
+      return self->is_independent_realm(); //  || suzerain == nullptr // персонаж без титулов и не придворный это ошибка!
     }
     
-    bool character::is_prisoner() const {
-      return !imprisoner.valid();
+    // нужно потрудиться и при смене реалма не забыть обновить эту информацию
+    bool character::is_prisoner() const { return !imprisoner.valid(); }
+    bool character::is_married() const { return family.consort != nullptr; }
+    bool character::is_male() const { return data.get(system::male); }
+    bool character::is_female() const { return !is_male(); }
+    bool character::is_adult() const { return get_age() >= CHARACTER_ADULT_AGE; }
+    
+    bool character::is_player() const { return data.get(system::player); }
+    bool character::is_dead() const { return data.get(system::dead); }
+    bool character::has_dynasty() const { return family.dynasty != nullptr || family.blood_dynasty != nullptr; }
+    bool character::is_ai_playable() const { return self.valid() && self->main_title->type() != titulus::type::city; }
+    bool character::is_troop_leader() const { return troop.valid(); }
+    bool character::is_army_commander() const { return army.valid(); }
+    bool character::is_excommunicated() const { return data.get(system::excommunicated); }
+    bool character::is_general() const { return data.get(system::general); }
+    bool character::is_bastard() const {
+      for (const auto trait : traits) {
+        if (trait->get_attrib(core::trait_attributes::is_bastard)) return true;
+      }
+      return false;
     }
     
-    bool character::is_married() const {
-      return family.consort != nullptr;
-    }
-    
-    bool character::is_male() const {
-      return data.get(system::male);
-    }
-    
-    bool character::is_hero() const {
-      return data.get(system::hero);
-    }
-    
-    bool character::is_player() const {
-      return data.get(system::player);
-    }
-    
-    bool character::is_dead() const {
-      return data.get(system::dead);
-    }
-    
-    bool character::has_dynasty() const {
-      return family.dynasty != nullptr || family.blood_dynasty != nullptr;
-    }
-    
-    bool character::is_ai_playable() const {
-      return self.valid() && self->main_title->type() != titulus::type::city;
-    }
-    
-    bool character::is_troop_owner() const {
-      return data.get(system::has_troop);
-    }
-    
-    bool character::is_army_owner() const {
-      return data.get(system::has_army);
-    }
-    
-    bool character::is_excommunicated() const {
-      return data.get(system::excommunicated);
-    }
-    
-    bool character::is_general() const {
-      return data.get(system::general);
+    // помоему в цк это делалось с помощью треита, правильно если один родитель перестанет быть наложником то эта функция сломается
+    bool character::is_concubine_child() const {
+      for (const auto trait : traits) {
+        if (trait->get_attrib(core::trait_attributes::is_concubine_child)) return true;
+      }
+      return false;
     }
     
     bool character::is_establishment_member() const { return realms[establishment].valid(); }
@@ -334,18 +186,167 @@ namespace devils_engine {
     bool character::is_assembly_elector() const      { return electorate[assembly].valid(); }
     bool character::is_clergy_elector() const        { return electorate[clergy].valid(); }
     
-    character* character::get_father() const {
-      character* c = nullptr;
-      c = family.parents[0] != nullptr && family.parents[0]->is_male() ? family.parents[0] : c;
-      c = family.parents[1] != nullptr && family.parents[1]->is_male() ? family.parents[1] : c;
-      return c;
+    bool character::is_ai() const { return !is_player(); }
+    bool character::is_alive() const { return !is_dead(); }
+    bool character::is_vassal() const { return self.valid() && !is_independent(); }
+    bool character::is_courtier() const { return suzerain.valid(); }
+    bool character::is_pleb() const { return !has_dynasty(); }
+    bool character::is_noble() const { return has_dynasty(); }
+    
+    bool character::has_self_realm() const { return self.valid(); }
+    bool character::has_owner() const { return family.owner != nullptr; }
+    bool character::has_father() const { return get_father() != nullptr; }
+    bool character::has_mother() const { return get_mother() != nullptr; }
+    double character::get_age() const { return double(compute_age()); }
+    
+    // когда доступны механики героя?
+    bool character::is_hero() const {
+      for (const auto trait : traits) {
+        if (trait->get_attrib(core::trait_attributes::is_hero)) return true;
+      }
+      return false;
     }
     
-    character* character::get_mother() const {
-      character* c = nullptr;
-      c = family.parents[0] != nullptr && !family.parents[0]->is_male() ? family.parents[0] : c;
-      c = family.parents[1] != nullptr && !family.parents[1]->is_male() ? family.parents[1] : c;
-      return c;
+    bool character::is_priest() const {
+      for (const auto trait : traits) { if (trait->get_attrib(core::trait_attributes::is_priest)) return true; }
+      return false;
+    }
+    
+    bool character::is_sick() const {
+      for (const auto trait : traits) { 
+        if (trait->get_attrib(core::trait_attributes::is_disease) || trait->get_attrib(core::trait_attributes::is_magic_disease)) return true;
+      }
+      return false;
+    }
+    
+    bool character::is_in_war() const {
+      // персонаж может быть в войне когда? есть некий реалм в котором он глава или его собственный реалм 
+      return false;
+    }
+    
+    bool character::is_in_society() const { // как это будет реализовано?
+      return false;
+    }
+    
+    bool character::is_clan_head() const {
+      // наверное заменится на главу династии
+      return false;
+    }
+    
+    bool character::is_religious_head() const { return religion->head == this; }
+    
+    bool character::is_father_alive() const {
+      auto c = get_father();
+      return c != nullptr && c->is_alive();
+    }
+    
+    bool character::is_mother_alive() const {
+      auto c = get_mother();
+      return c != nullptr && c->is_alive();
+    }
+    
+    bool character::is_among_most_powerful_vassals() const {
+      // как силу считать?
+      return false;
+    }
+    
+    bool character::can_change_religion() const {
+      // по идее должен быть какой то треит
+      return true;
+    }
+    
+    bool character::can_call_crusade() const {
+      // должен быть наверное главой религии? и что еще? не должно быть текущий крусейдов?
+    }
+    
+    bool character::can_grant_title() const {
+      // тут видимо должны быть какие то хардовые проверки, являются ли законы хардовыми проверками?
+    }
+    
+    bool character::can_marry() const {
+      if (is_married()) return false;
+      
+      for (const auto trait : traits) {
+        if (trait->get_attrib(core::trait_attributes::cannot_marry)) return false;
+      }
+      
+      return true;
+    }
+    
+    bool character::has_culture(const core::culture* culture) const { return this->culture == culture; }
+    bool character::has_culture_group(const core::culture_group* group) const { return culture->group == group; }
+    bool character::has_religion(const core::religion* religion) const { return this->religion == religion; }
+    bool character::has_religion_group(const core::religion_group* group) const { return religion->group == group; }
+    
+    bool character::is_child_of(const core::character* of) const { return family.parents[0] == of || family.parents[1] == of; }
+    bool character::is_parent_of(const core::character* of) const { return of->is_child_of(this); }
+    bool character::is_sibling_of(const core::character* of) const { 
+      return family.parents[0] != nullptr && family.parents[1] != nullptr && 
+            ((family.parents[0] == of->family.parents[0] && family.parents[1] == of->family.parents[1]) || 
+             (family.parents[0] == of->family.parents[1] && family.parents[1] == of->family.parents[0]));
+    }
+    
+    bool character::is_half_sibling_of(const core::character* of) const {
+      return (family.parents[0] != nullptr && (family.parents[0] == of->family.parents[0] || family.parents[0] == of->family.parents[1])) || 
+             (family.parents[1] != nullptr && (family.parents[1] == of->family.parents[0] || family.parents[1] == of->family.parents[1]));
+    }
+    
+    bool character::is_grandchild_of(const core::character* of) const {
+      for (uint8_t i = 0; i < 2; ++i) {
+        const auto p = family.parents[i];
+        for (uint8_t j = 0; j < 2; ++j) {
+          const auto g = p->family.parents[i];
+          if (g == of) return true;
+        }
+      }
+      
+      return false;
+    }
+    
+    bool character::is_grandparent_of(const core::character* of) const {
+      return of->is_grandchild_of(this);
+    }
+    
+    bool character::is_close_relative_of(const core::character* of) const {
+      return is_child_of(of) || is_parent_of(of) || is_sibling_of(of) || is_half_sibling_of(of) || is_grandparent_of(of) || is_grandchild_of(of);
+    }
+    
+    bool character::is_uncle_or_aunt_of(const core::character* of) const {
+      return (of->family.parents[0] != nullptr && is_sibling_of(of->family.parents[0])) || (of->family.parents[1] != nullptr && is_sibling_of(of->family.parents[1]));
+    }
+    
+    bool character::is_cousin_of(const core::character* of) const {
+      return (family.parents[0] != nullptr && family.parents[0]->is_uncle_or_aunt_of(of)) || (family.parents[1] != nullptr && family.parents[1]->is_uncle_or_aunt_of(of));
+    }
+    
+    bool character::is_nibling_of(const core::character* of) const {
+      return (family.parents[0] != nullptr && family.parents[0]->is_sibling_of(of)) || (family.parents[1] != nullptr && family.parents[1]->is_sibling_of(of));
+    }
+    
+    bool character::is_extended_relative_of(const core::character* of) const {
+      return is_uncle_or_aunt_of(of) || is_cousin_of(of) || is_nibling_of(of);
+    }
+    
+    bool character::is_close_or_extended_relative_of(const core::character* of) const {
+      return is_close_relative_of(of) || is_extended_relative_of(of);
+    }
+    
+    // а если без династии? хороший вопрос, но будет тяжеловато найти кого то еще
+    bool character::is_blood_relative_of(const core::character* of) const {
+      return is_close_or_extended_relative_of(of) || (family.blood_dynasty != nullptr && family.blood_dynasty == of->family.blood_dynasty);
+    }
+    
+    // это супруги близких родственников
+    bool character::is_relative_of(const core::character* of) const {
+      return (of->family.consort != nullptr && is_close_relative_of(of->family.consort));
+    }
+    
+    bool character::is_owner_of(const core::character* of) const {
+      return of->family.owner == this;
+    }
+    
+    bool character::is_concubine_of(const core::character* of) const {
+      return of->is_owner_of(this);
     }
     
     void character::set_dead() {
@@ -374,6 +375,7 @@ namespace devils_engine {
       }
       
       death_day = global::get<utils::calendar>()->current_day();
+      global::get<core::context>()->make_dead(this);
     }
     
     void character::make_hero() {
@@ -403,19 +405,25 @@ namespace devils_engine {
     }
     
     void character::add_title(titulus* title) {
-      if (!self.valid() && title->type() > titulus::type::baron) throw std::runtime_error("Cannot give title to unlanded");
-      if (!self.valid()) self = global::get<core::context>()->create_realm();
+      if (is_dead()) throw std::runtime_error("Could not give title to deadman");
+      const bool first_title = !self.valid();
+      if (first_title && title->type() > titulus::type::baron) throw std::runtime_error("Cannot give title to unlanded");
+      if (first_title || self->main_title->type() < titulus::type::baron) global::get<core::context>()->make_playable(this);
+      if (first_title) self = global::get<core::context>()->create_realm();
       self->add_title(title);
     }
     
     void character::remove_title(titulus* title) {
-      ASSERT(title->owner != nullptr);
       ASSERT(self.valid());
       ASSERT(title->owner == self);
       
       self->remove_title(title);
+      if (self->main_title == nullptr || self->main_title->type() == titulus::type::city) {
+        global::get<core::context>()->make_not_playable(this);
+      }
+      
       if (self->titles == nullptr) {
-        // это единственное условие по разрушению титула?
+        // это единственное условие по разрушению реалма?
         const size_t token = self.get_token();
         global::get<core::context>()->destroy_realm(token);
       }
@@ -497,7 +505,7 @@ namespace devils_engine {
       return data.set(final_index, value);
     }
 
-    bool character::has_flag(const std::string_view &flag) const { return utils::flags_container::has_flag(flag); }
+    bool character::has_flag(const std::string_view flag) const { return utils::flags_container::has_flag(flag); }
     // откуда мы берем flag? по идее если он приходит из эвента, то мы можем даже не париться по поводу хранилища
     // другое дело что скорее всего не все так просто, а значит нам похорошему нужно хранилище строк
     void character::add_flag(const std::string_view &flag, const size_t &turn) { flags.try_emplace(std::string(flag), turn); }
@@ -516,13 +524,18 @@ namespace devils_engine {
     void character::add_event(const event* e, utils::events_container::event_data &&data) { if (is_dead()) return; utils::events_container::add_event(e, std::move(data)); }
     void character::remove_event(const event* e) { if (is_dead()) return; utils::events_container::remove_event(e); }
     
+    bool character::has_same_culture_as(const character* other) const { return get_culture() == other->get_culture(); }
+    bool character::has_same_culture_group_as(const character* other) const { return get_culture_group() == other->get_culture_group(); }
+    bool character::has_same_religion_as(const character* other) const { return get_religion() == other->get_religion(); }
+    bool character::has_same_religion_group_as(const character* other) const { return get_religion_group() == other->get_religion_group(); }
+    
     uint64_t character::get_random() {
       using namespace utils::xoshiro256plusplus;
       rng_state = rng(rng_state);
       return get_value(rng_state);
     }
     
-    uint32_t character::get_age() const {
+    uint32_t character::compute_age() const {
       auto cal = global::get<utils::calendar>();
       if (death_day == INT64_MAX) {
         const int64_t current_day = cal->current_day();
@@ -537,6 +550,96 @@ namespace devils_engine {
       assert(days >= 0);
       return cal->days_to_years(days);
     }
+    
+    core::character* character::get_killer() const {
+      return killer;
+    }
+    
+    core::character* character::get_employer() const {
+      return nullptr;
+    }
+    
+    core::character* character::get_concubinist() const {
+      return family.owner;
+    }
+    
+    core::character* character::get_primary_consort() const {
+      return family.consort;
+    }
+    
+    core::character* character::get_betrothed() const {
+      return nullptr;
+    }
+    
+    character* character::get_father() const {
+      character* c = nullptr;
+      c = family.parents[0] != nullptr && family.parents[0]->is_male() ? family.parents[0] : c;
+      c = family.parents[1] != nullptr && family.parents[1]->is_male() ? family.parents[1] : c;
+      return c;
+    }
+    
+    character* character::get_mother() const {
+      character* c = nullptr;
+      c = family.parents[0] != nullptr && !family.parents[0]->is_male() ? family.parents[0] : c;
+      c = family.parents[1] != nullptr && !family.parents[1]->is_male() ? family.parents[1] : c;
+      return c;
+    }
+    
+    core::character* character::get_real_mother() const {
+      character* c = nullptr;
+      c = family.real_parents[0] != nullptr && !family.real_parents[0]->is_male() ? family.real_parents[0] : c;
+      c = family.real_parents[1] != nullptr && !family.real_parents[1]->is_male() ? family.real_parents[1] : c;
+      return c;
+    }
+    
+    core::character* character::get_pregnancy_assumed_father() const {
+      return nullptr;
+    }
+    
+    core::character* character::get_pregnancy_real_father() const {
+      return nullptr;
+    }
+    
+    // наследник у реалма, по идее должен быть в реалме
+    core::character* character::get_designated_heir() const {
+      return nullptr;
+    }
+    
+    // наследник у персонажа
+    core::character* character::get_player_heir() const {
+      return nullptr;
+    }
+
+    utils::handle<core::realm> character::get_suzerain() const {
+      return suzerain;
+    }
+    
+    utils::handle<core::realm> character::get_imprisoner() const {
+      return imprisoner;
+    }
+    
+    utils::handle<core::realm> character::get_self_realm() const {
+      return self;
+    }
+    
+    core::dynasty* character::get_dynasty() const {
+      return family.dynasty;
+    }
+    
+    utils::handle<core::army> character::get_commanding_army() const {
+      return army;
+    }
+    
+    utils::handle<core::hero_troop> character::get_hero_troop() const {
+      return troop;
+    }
+
+    core::culture* character::get_culture() const { return culture; }
+    const core::culture_group* character::get_culture_group() const { return culture->group; }
+    core::religion* character::get_religion() const { return religion; }
+    const core::religion_group* character::get_religion_group() const { return religion->group; }
+    core::religion* character::get_secret_religion() const { return secret_religion; }
+    const core::religion_group* character::get_secret_religion_group() const { return secret_religion->group; }
     
     std::string_view character::object_pronoun() const {
       

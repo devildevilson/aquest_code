@@ -409,6 +409,18 @@ namespace devils_engine {
       };
     }
     
+    namespace stats_list {
+      enum values {
+#define STAT_FUNC(val) val,
+#define CHARACTER_PENALTY_STAT_FUNC(val) val##_penalty,
+        UNIQUE_STATS_RESOURCES_LIST
+#undef CHARACTER_PENALTY_STAT_FUNC
+#undef STAT_FUNC
+        
+        count
+      };
+    }
+    
     namespace stat_value_type {
       enum values {
         int_t,

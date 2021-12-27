@@ -133,7 +133,7 @@ namespace devils_engine {
       const uint32_t current_index     = current_path % ai::path_container::container_size;
       //const float current_cost = ai::advance_container(this->path, current_container)->tile_path[current_index].cost;
       const uint32_t tile_index = ai::advance_container(this->path, current_container)->tile_path[current_index].tile;
-      auto prev_tile = ctx->get_tile_ptr(tile_index);
+      auto prev_tile = ctx->get_entity<core::tile>(tile_index);
       
       if (prev_tile->movement_token != object_token) {
         if (prev_tile->movement_token != SIZE_MAX) return; // ждем
@@ -157,7 +157,7 @@ namespace devils_engine {
         const uint32_t container = next_path_index / ai::path_container::container_size;
         const uint32_t index     = next_path_index % ai::path_container::container_size;
         const uint32_t current_tile_index = ai::advance_container(this->path, container)->tile_path[index].tile;
-        auto tile = ctx->get_tile_ptr(current_tile_index);
+        auto tile = ctx->get_entity<core::tile>(current_tile_index);
         if (tile->movement_token != SIZE_MAX) { return; }
                 
         current_time = 0;
@@ -177,7 +177,7 @@ namespace devils_engine {
         const uint32_t current_container = current_path / ai::path_container::container_size;
         const uint32_t current_index     = current_path % ai::path_container::container_size;
         const uint32_t tile_index = ai::advance_container(this->path, current_container)->tile_path[current_index].tile;
-        auto tile = ctx->get_tile_ptr(tile_index);
+        auto tile = ctx->get_entity<core::tile>(tile_index);
         
         assert(tile->movement_token == object_token);
         tile->movement_token = SIZE_MAX;
@@ -195,5 +195,10 @@ namespace devils_engine {
       ASSERT(troops.valid());
       return utils::ring::list_next<utils::list_type::army_troops>(current, troops.get());
     }
+    
+    OUTPUT_CHARACTER_TYPE army::get_commander() const { return general; }
+    OUTPUT_REALM_TYPE army::get_affiliation() const { return owner; }
+    OUTPUT_PROVINCE_TYPE army::get_location() const { return get_tile_province(tile_index); }
+    OUTPUT_PROVINCE_TYPE army::get_origin() const { return origin; }
   }
 }

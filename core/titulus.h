@@ -7,6 +7,7 @@
 #include "utils/list.h"
 #include "utils/sol.h"
 #include "utils/handle.h"
+#include "script/get_scope_commands_macro.h"
 
 namespace devils_engine {
   namespace utils {
@@ -78,6 +79,10 @@ namespace devils_engine {
       ~titulus();
       enum type type() const;
       bool is_formal() const;
+      
+#define GET_SCOPE_COMMAND_FUNC(name, a, b, type) type get_##name();
+      TITLE_GET_SCOPE_COMMANDS_LIST
+#undef GET_SCOPE_COMMAND_FUNC
       
       std::string_view full_name() const;
       std::string_view base_name() const;

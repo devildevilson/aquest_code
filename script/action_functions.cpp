@@ -9,6 +9,13 @@
 #include "utils/systems.h"
 #include "core/context.h"
 
+// все экшоны вполне можно засунуть в массив отложенного выполнения
+// для этого достаточно собрать данные примерно как на отрисовку
+// и рядом расположить функцию
+// с чем это может помочь? во первых с возможными последствиями позднего кода "root.base_military"
+// во вторых собрать эффекты можно в мультипотоке, применять их в таком виде гораздо проще
+// но это означает выделение памяти каждый запуск выделение памяти только для эффектов
+
 namespace devils_engine {
   namespace script {
 #define ADD_FLAG_CASE(type_id) \
@@ -36,6 +43,8 @@ namespace devils_engine {
 #undef ADD_FLAG_TYPE_FUNC
         default: throw std::runtime_error("Function 'add_flag' recieve invalid type " + std::string(core::structure_data::names[ctx->current.type]));
       }
+      
+      return object();
     }
     
     void add_flag::draw(context* ctx) const {
@@ -163,6 +172,10 @@ namespace devils_engine {
       // титулы должны быть либо у него, либо у госреалма
       // какой реалм нападает? можем ли мы объявить войну от реалма совета? вообще возможно
       // в таком случае должен быть явно указан скрипт чтобы получить нужный реалм
+      
+      // все таки скорее всего нападать нужно на персонажа, а тот уже разберется чем пользоваться
+      // да и вообще вся дипломатия должна быть в персонаже, к сожалению в реалме делать все взаимодействия неудобно
+      
       auto realm_attacker = current->self;
       if (current->realms[core::character::establishment].valid() && 
           current->realms[core::character::establishment]->is_state_independent_power() &&
@@ -189,11 +202,14 @@ namespace devils_engine {
       }
       
       // возможно потребуется больше проверок? возможно потребуется проверка ведут ли эти два персонажа войну друг с другом
-      if (const auto itr = realm_attacker->wars.find(realm_defender); itr != realm_attacker->wars.end()) {
+      // нужно проверить не отвалился ли за это время хендл
+      if (const auto itr = realm_attacker->relations.find(realm_defender); 
+          itr != realm_attacker->relations.end() && (itr->second.relation_type == core::diplomacy::war_attacker || itr->second.relation_type == core::diplomacy::war_defender)) {
         throw std::runtime_error("War between this realms is already exists");
       }
       
-      if (const auto itr = realm_defender->wars.find(realm_attacker); itr != realm_defender->wars.end()) {
+      if (const auto itr = realm_defender->relations.find(realm_attacker); 
+          itr != realm_defender->relations.end() && (itr->second.relation_type == core::diplomacy::war_attacker || itr->second.relation_type == core::diplomacy::war_defender)) {
         throw std::runtime_error("War between this realms is already exists");
       }
       
@@ -202,9 +218,9 @@ namespace devils_engine {
       
       war_h->cb = cb;
       war_h->war_opener = current;
-      war_h->opener_realm = realm_attacker;
+//       war_h->opener_realm = realm_attacker;
       war_h->target_character = target;
-      war_h->target_realm = realm_defender;
+//       war_h->target_realm = realm_defender;
       war_h->claimant = claimant;
       for (auto t = titles_script; t != nullptr; t = t->next) {
         const auto title_obj = t->process(ctx);
@@ -212,8 +228,12 @@ namespace devils_engine {
         war_h->target_titles.push_back(title);
       }
       
-      realm_attacker->wars.emplace(realm_defender, war_h);
-      realm_defender->wars.emplace(realm_attacker, war_h);
+      core::realm::relation r;
+      r.relation_type = core::diplomacy::war_attacker;
+      r.war = war_h;
+      realm_attacker->relations.emplace(realm_defender, r);
+      r.relation_type = core::diplomacy::war_defender;
+      realm_defender->relations.emplace(realm_attacker, r);
       
       // стартуем on_action
       
@@ -274,7 +294,47 @@ namespace devils_engine {
       ctx->draw(&dd);
     }
     
+//     const size_t end_war::type_index = commands::values::end_war;
+    const size_t end_war::context_types;
+    const size_t end_war::output_type;
+    end_war::end_war(const size_t &type) noexcept : type(type) {}
+    struct object end_war::process(context* ctx) const {
+      auto war = ctx->current.get<utils::handle<core::war>>();
+      // как оканчиваются войны? мы должны запустить скрипт у казус белли
+      // с какими данными мы это дело запускаем? только война в качестве рута? хороший вопрос
+      // в цк2 передается персонаж (точнее несколько через ROOT, FROM и проч структуры)
+      // я могу получить персонажа пройдясь по функциям смены скоупа, 
+      // мне нужно закончить вычисление этого скрипта и где то чуть позже вычислить on_success
+      // может быть это эвент? возможно кстати, такой же примерно как смерть персонажа
+      //war->cb->on_success.compute();
+      // то есть нужно вызвать on_war_end что то такое
+    }
+    
+    void end_war::draw(context* ctx) const {
+      
+    }
+    
+//     const size_t add_attacker::type_index = commands::values::add_attacker;
+    const size_t add_attacker::context_types;
+    const size_t add_attacker::output_type;
+    add_attacker::add_attacker(const interface* character) noexcept : character(character) {}
+    add_attacker::~add_attacker() noexcept { character->~interface(); }
+    struct object add_attacker::process(context* ctx) const {
+      const auto obj = character->process(ctx);
+      auto c = obj.get<core::character*>();
+      auto w = ctx->current.get<utils::handle<core::war>>();
+      // да, нападают то персонажи друг на друга
+      //w->attackers.push_back(c);
+    }
+    
+    void add_attacker::draw(context* ctx) const {
+      
+    }
+    
     const size_t imprison::type_index = commands::values::imprison;
+    const size_t imprison::context_types;
+    const size_t imprison::expected_types;
+    const size_t imprison::output_type;
     imprison::imprison(const interface* target, const interface* realm) noexcept : target(target), realm(realm) {}
     imprison::~imprison() noexcept { target->~interface(); if (realm != nullptr) realm->~interface(); }
     struct object imprison::process(context * ctx) const {
@@ -346,7 +406,7 @@ namespace devils_engine {
     struct object add_##name::process(context* ctx) const {                  \
       auto c = ctx->current.get<core::type*>();                              \
       const auto val = value->process(ctx);                                  \
-      c->current_stats.add(core::type##_stats::name, val.get<double>());     \
+      c->stats.add(core::type##_stats::name, val.get<double>());             \
       return object();                                                       \
     }                                                                        \
     

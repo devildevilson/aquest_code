@@ -13,11 +13,30 @@
 
 // нужно добавить ожидаемые и выходные типы функций
 
+// это все функции прочитать контекст и получить оттуда данные
+// мне еще нужно сделать функции запоминания в контексте,
+// причем желательно 3 уровня времени жизни: 
+// локальный (внутри скриптового блока? или внутри метода?), 
+// эвентовый (передается дальше по эвенту, текущий тоже? или нужно его сделать?)
+// глобальный (доступен всем и всегда, может перезаписаться в разных эвентах)
+// во первых в цк3 отдельно запоминаются скоупы и переменные
+// во вторых переменные можно запомнить прямо в каком то объекте (например в персонаже)
+// + локальные переменные для метода (immediate) + глобальные переменные
+// а скоупы бывают временные (только метод, но могут быть в кондитион блоке)
+// или обычные, которые потом перейдут в эвент
+// в моем случае можно не разделять на переменную и скоуп, 
+// но при этом лучше не давать возможности запоминать переменные (к тому же у меня уже есть флаги)
+// как быть с перезаписью? можно ли перезаписывать в контексте? кто может перезаписывать данные?
+// может ли перезаписать данные временная переменная? скорее нет, может ли перезаписать данные 
+// обычное сохранение? нет, оно записывает в отдельный контейнер, 
+// можно ли перезаписать данные в глобальном контексте? это делать нужно, но только в эффектах
+// 
+
+// так же нужен глобальный обход по всем группам объектов
+// тип: every_character
+
 namespace devils_engine {
   namespace script {
-    // нужно ли отдельно делать кондишен_блок? я могу в change_scope_condition скоуп указать как nullptr
-    
-    // кондишенов у меня будет несколько (И, ИЛИ, НЕИ, НЕИЛИ), здесь надо бы указать не детей, а одного ребенка - тип операции
     class change_scope_condition final : public interface {
     public:
       // эта информация нужна в основном только для смены скоупа, для конечных функций она бесполезна
@@ -35,7 +54,7 @@ namespace devils_engine {
     
     class change_scope_effect final : public interface {
     public:
-      static const size_t expected_types = object::type_bit::invalid;
+      static const size_t expected_types = 0;
       static const size_t output_type = object::type_bit::invalid;
       
       change_scope_effect(const interface* scope, const interface* condition, const interface* childs) noexcept;
@@ -77,6 +96,75 @@ namespace devils_engine {
       const interface* child;
     };
     
+    class selector final : public interface {
+    public:
+      static const size_t type_index;
+      static const size_t expected_types = object::type_bit::all;
+      static const size_t output_type = object::type_bit::all;
+      selector(const interface* childs) noexcept;
+      ~selector() noexcept;
+      object process(context* ctx) const override;
+      void draw(context* ctx) const override;
+    private:
+      const interface* childs;
+    };
+    
+    class sequence final : public interface {
+    public:
+      static const size_t type_index;
+      static const size_t expected_types = object::type_bit::all;
+      static const size_t output_type = object::type_bit::all;
+      sequence(const interface* count, const interface* childs) noexcept;
+      ~sequence() noexcept;
+      object process(context* ctx) const override;
+      void draw(context* ctx) const override;
+    private:
+      const interface* count;
+      const interface* childs;
+    };
+    
+    class chance final : public interface {
+    public:
+      static const size_t type_index;
+      static const size_t output_type = object::type_bit::boolean;
+      chance(const size_t &state, const interface* value) noexcept;
+      ~chance() noexcept;
+      object process(context* ctx) const override;
+      void draw(context* ctx) const override;
+    private:
+      size_t state;
+      const interface* value;
+    };
+    
+    // нужно сделать рандом по весам, как он должен выглядеть? 
+    class weighted_random final : public interface {
+    public:
+      static const size_t type_index;
+      static const size_t expected_types = object::type_bit::all;
+      static const size_t output_type = object::type_bit::all;
+      weighted_random(const size_t &state, const interface* childs, const interface* weights) noexcept;
+      ~weighted_random() noexcept;
+      object process(context* ctx) const override;
+      void draw(context* ctx) const override;
+    private:
+      size_t state;
+      const interface* childs;
+      const interface* weights;
+    };
+    
+    class random_value final : public interface {
+    public:
+      static const size_t type_index;
+      static const size_t output_type = object::type_bit::number;
+      random_value(const size_t &state, const interface* maximum) noexcept;
+      ~random_value() noexcept;
+      object process(context* ctx) const override;
+      void draw(context* ctx) const override;
+    private:
+      size_t state;
+      const interface* maximum;
+    };
+    
     class boolean_container final : public interface {
     public:
       static const size_t expected_types = object::type_bit::all;
@@ -105,6 +193,7 @@ namespace devils_engine {
       static const size_t output_type = object::type_bit::string;
       explicit string_container(const std::string &value) noexcept;
       explicit string_container(const std::string_view &value) noexcept;
+      ~string_container() noexcept;
       object process(context* ctx) const override;
       void draw(context* ctx) const override;
     private:
@@ -121,6 +210,8 @@ namespace devils_engine {
     private:
       object value;
     };
+    
+    // нужно еще сравниватель объектов сделать
     
     class number_comparator final : public interface {
     public:
@@ -149,6 +240,62 @@ namespace devils_engine {
       const interface* rvalue;
     };
     
+    class equals_to final : public interface {
+    public:
+      static const size_t type_index;
+      static const size_t expected_types = object::type_bit::all;
+      static const size_t output_type = object::type_bit::boolean;
+      equals_to(const interface* get_obj) noexcept;
+      ~equals_to() noexcept;
+      object process(context* ctx) const override;
+      void draw(context* ctx) const override;
+    private:
+      const interface* get_obj;
+    };
+    
+    // если добавится функция compare, то тут наверное было бы неплохо сделать по умолчанию объект
+    class equality final : public interface {
+    public:
+      static const size_t type_index;
+      static const size_t expected_types = object::type_bit::all;
+      static const size_t output_type = object::type_bit::boolean;
+      equality(const interface* childs) noexcept;
+      ~equality() noexcept;
+      object process(context* ctx) const override;
+      void draw(context* ctx) const override;
+    private:
+      const interface* childs;
+    };
+    
+    class type_equality final : public interface {
+    public:
+      static const size_t type_index;
+      static const size_t expected_types = object::type_bit::all;
+      static const size_t output_type = object::type_bit::boolean;
+      type_equality(const interface* childs) noexcept;
+      ~type_equality() noexcept;
+      object process(context* ctx) const override;
+      void draw(context* ctx) const override;
+    private:
+      const interface* childs;
+    };
+    
+    // эта функция может ответить на вопрос является ли первое число самым маленьким
+    // или быстрая проверка нескольких чисел на то что они больше нуля
+    class compare final : public interface {
+    public:
+      static const size_t type_index;
+      static const size_t expected_types = object::type_bit::valid_number;
+      static const size_t output_type = object::type_bit::boolean;
+      compare(const uint8_t op, const interface* childs) noexcept;
+      ~compare() noexcept;
+      object process(context* ctx) const override;
+      void draw(context* ctx) const override;
+    private:
+      uint8_t op;
+      const interface* childs;
+    };
+    
     class complex_object final : public interface {
     public:
       complex_object(const interface* childs) noexcept;
@@ -161,12 +308,21 @@ namespace devils_engine {
     
     class root final : public interface {
     public:
+      static const size_t type_index;
       object process(context* ctx) const override;
       void draw(context* ctx) const override;
     };
     
     class prev final : public interface {
     public:
+      static const size_t type_index;
+      object process(context* ctx) const override;
+      void draw(context* ctx) const override;
+    };
+    
+    class current final : public interface {
+    public:
+      static const size_t type_index;
       object process(context* ctx) const override;
       void draw(context* ctx) const override;
     };
@@ -175,6 +331,7 @@ namespace devils_engine {
     public:
       explicit get_context(const std::string &str) noexcept;
       explicit get_context(const std::string_view &str) noexcept;
+      ~get_context() noexcept;
       object process(context* ctx) const override;
       void draw(context* ctx) const override;
     private:
@@ -192,7 +349,7 @@ namespace devils_engine {
       void draw(context* ctx) const override;                        \
     private:                                                         \
       const interface* str;                                          \
-    };
+    };                                                               \
     
     GET_ENTITY_HELPER_FUNC(culture)
     GET_ENTITY_HELPER_FUNC(culture_group)
@@ -202,8 +359,130 @@ namespace devils_engine {
     GET_ENTITY_HELPER_FUNC(modificator)
     GET_ENTITY_HELPER_FUNC(titulus)
     GET_ENTITY_HELPER_FUNC(casus_belli)
+    GET_ENTITY_HELPER_FUNC(building_type)
+    GET_ENTITY_HELPER_FUNC(holding_type)
+    GET_ENTITY_HELPER_FUNC(city_type)
+    GET_ENTITY_HELPER_FUNC(troop_type)
+    GET_ENTITY_HELPER_FUNC(law)
     
 #undef GET_ENTITY_HELPER_FUNC
+    
+    // тут мы должны запомнить переменную только в методе, может быть лучше сменить название? save_method_var? просто save_temporary? последнее мне нравится больше
+    // нужно ли к названию добавить _as?
+//     class save_temporary final : public interface {
+//     public:
+//       static const size_t type_index;
+//       save_temporary(const interface* str, const interface* var) noexcept;
+//       ~save_temporary() noexcept;
+//       object process(context* ctx) const override;
+//       void draw(context* ctx) const override;
+//     private:
+//       const interface* str;
+//       const interface* var; // если вар не задан, то сохраняем куррент
+//     };
+    
+    // сохраняем для всего энтити (то есть для всего эвента например, или для всей интеракции)
+    class save_local final : public interface {
+    public:
+      static const size_t type_index;
+      save_local(const interface* str, const interface* var) noexcept;
+      ~save_local() noexcept;
+      object process(context* ctx) const override;
+      void draw(context* ctx) const override;
+    private:
+      const interface* str;
+      const interface* var; // если вар не задан, то сохраняем куррент
+    };
+    
+    // сохраняем отдельно для будущего использования (например в эвенте), только в эффектах
+    class save final : public interface {
+    public:
+      static const size_t type_index;
+      save(const interface* str, const interface* var) noexcept;
+      ~save() noexcept;
+      object process(context* ctx) const override;
+      void draw(context* ctx) const override;
+    private:
+      const interface* str;
+      const interface* var; // если вар не задан, то сохраняем куррент
+    };
+    
+    // сохраняем в специальном глобальном контексте
+    class save_global final : public interface {
+    public:
+      static const size_t type_index;
+      save_global(const interface* str, const interface* var) noexcept;
+      ~save_global() noexcept;
+      object process(context* ctx) const override;
+      void draw(context* ctx) const override;
+    private:
+      const interface* str;
+      const interface* var; // если вар не задан, то сохраняем куррент
+    };
+    
+    // возможно имеет смысл еще запоминать листы (переменные массивы)
+    
+    // как проверить тип? да и нужно ли его проверять таким способом или лучше как то иначе
+    // когда мы попадаем в скоуп переменной там можно вызвать функции проверки типа, а что если это число или строка?
+    // ну у них функции не определены, кроме видимо проверок типа
+    class has_local final : public interface {
+    public:
+      static const size_t type_index;
+      has_local(const interface* str) noexcept;
+      ~has_local() noexcept;
+      object process(context* ctx) const override;
+      void draw(context* ctx) const override;
+    private:
+      const interface* str;
+    };
+    
+    class has_global final : public interface {
+    public:
+      static const size_t type_index;
+      has_global(const interface* str) noexcept;
+      ~has_global() noexcept;
+      object process(context* ctx) const override;
+      void draw(context* ctx) const override;
+    private:
+      const interface* str;
+    };
+    
+    // для того чтобы это работало как флаги, переменные нужно еще выгружать из контекста
+    class remove_local final : public interface {
+    public:
+      static const size_t type_index;
+      remove_local(const interface* str) noexcept;
+      ~remove_local() noexcept;
+      object process(context* ctx) const override;
+      void draw(context* ctx) const override;
+    private:
+      const interface* str;
+    };
+    
+    class remove_global final : public interface {
+    public:
+      static const size_t type_index;
+      remove_global(const interface* str) noexcept;
+      ~remove_global() noexcept;
+      object process(context* ctx) const override;
+      void draw(context* ctx) const override;
+    private:
+      const interface* str;
+    };
+    
+    class assert_condition final : public interface {
+    public:
+      static const size_t type_index;
+      assert_condition(const interface* condition, const interface* str) noexcept;
+      ~assert_condition() noexcept;
+      object process(context* ctx) const override;
+      void draw(context* ctx) const override;
+    private:
+      const interface* condition;
+      const interface* str;
+    };
+    
+    // нужен еще debug_log
   }
 }
 

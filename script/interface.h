@@ -7,17 +7,15 @@ namespace devils_engine {
   namespace script {
     struct context;
     
-    // как проверить входные/выходные данные? можно биты типов указать, где их указать? они по идее нужны только при создании скрипта
     class interface {
     public:
-      inline interface() : next(nullptr) {}
+      inline interface() noexcept : next(nullptr) {}
       virtual ~interface() noexcept = default;
       virtual struct object process(context* ctx) const = 0;
-      // самый простой способ - это собрать луа таблицу
-      // возможно тут имеет смысл что то возвращать, например бул
       virtual void draw(context* ctx) const = 0;
       
-      const interface* next;
+      //const interface* next;
+      interface* next; // мне нужно пушить указатель если я создаю сразу несколько функций
     };
   }
 }

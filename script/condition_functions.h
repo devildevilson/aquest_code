@@ -7,6 +7,9 @@
 #include "interface.h"
 #include "object.h"
 
+// попытка написать функцию регистрации комманды для скрипта
+//#define REGISTER_CONDITION_FUNC(func_name, game_type, context_type_bits, output_type_bits)
+
 namespace devils_engine {
   namespace script {
     struct context;
@@ -22,7 +25,22 @@ namespace devils_engine {
       void draw(context* ctx) const override;                           \
     };                                                                  \
     
-    CONDITION_COMMANDS_LIST 
+    CHARACTER_GET_BOOL_NO_ARGS_COMMANDS_LIST 
+    
+#undef CONDITION_COMMAND_FUNC
+
+#define CONDITION_COMMAND_FUNC(name) \
+    class name final : public interface {                               \
+    public:                                                             \
+      static const size_t type_index;                                   \
+      static const size_t context_types = object::type_bit::realm;      \
+      static const size_t expected_types = 0;                           \
+      static const size_t output_type = object::type_bit::boolean;      \
+      struct object process(context* ctx) const override;               \
+      void draw(context* ctx) const override;                           \
+    };                                                                  \
+    
+    REALM_GET_BOOL_NO_ARGS_COMMANDS_LIST 
     
 #undef CONDITION_COMMAND_FUNC
 
@@ -32,18 +50,52 @@ namespace devils_engine {
       static const size_t type_index;                                   \
       static const size_t context_types = object::type_bit::character;  \
       static const size_t expected_types = 0;                           \
+      static const size_t output_type = object::type_bit::number;       \
+      struct object process(context* ctx) const override;               \
+      void draw(context* ctx) const override;                           \
+    };                                                                  \
+    
+    CHARACTER_GET_NUMBER_NO_ARGS_COMMANDS_LIST
+    
+#undef CONDITION_COMMAND_FUNC
+
+#define CONDITION_ARG_COMMAND_FUNC(name, value_type_bit, constness, value_type)    \
+    class name final : public interface {                               \
+    public:                                                             \
+      static const size_t type_index;                                   \
+      static const size_t context_types = object::type_bit::character;  \
+      static const size_t expected_types = object::type_bit::value_type_bit; \
       static const size_t output_type = object::type_bit::boolean;      \
       name(const interface* entity) noexcept;                           \
+      ~name() noexcept;                                                 \
       struct object process(context* ctx) const override;               \
       void draw(context* ctx) const override;                           \
     private:                                                            \
       const interface* entity;                                          \
     };                                                                  \
     
-    CHARACTER_CONDITION_STRING_CHECK_COMMANDS_LIST
+    CHARACTER_GET_BOOL_ONE_ARG_COMMANDS_LIST
     
-#undef CONDITION_COMMAND_FUNC
+#undef CONDITION_ARG_COMMAND_FUNC
 
+#define CONDITION_ARG_COMMAND_FUNC(name, unused1, unused2, type)          \
+  class name final : public interface {                                 \
+    public:                                                             \
+      static const size_t type_index;                                   \
+      static const size_t context_types = object::type_bit::realm;      \
+      static const size_t expected_types = 0;                           \
+      static const size_t output_type = object::type_bit::boolean;      \
+      name(const type &data) noexcept;                                  \
+      struct object process(context* ctx) const override;               \
+      void draw(context* ctx) const override;                           \
+    private:                                                            \
+      type data;                                                        \
+    };                                                                  \
+
+    REALM_GET_BOOL_EXISTED_ARG_COMMANDS_LIST
+    
+#undef CONDITION_ARG_COMMAND_FUNC
+    
 #define COMMON_STAT_FUNC(name, expected_context_bits, output_type_bits) \
     class name final : public interface {                        \
     public:                                                      \
@@ -55,7 +107,7 @@ namespace devils_engine {
       void draw(context* ctx) const override;                    \
     };                                                           \
     \
-    class base_##name final : public interface {                        \
+    class base_##name final : public interface {                 \
     public:                                                      \
       static const size_t type_index;                            \
       static const size_t context_types = expected_context_bits; \

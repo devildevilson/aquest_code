@@ -47,5 +47,9 @@ namespace devils_engine {
       this->aligment = aligment;
       memory = new char[size];
     }
+    
+    size_t container::mem_size() const {
+      return size;
+    }
   }
 }

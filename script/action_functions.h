@@ -112,6 +112,62 @@ namespace devils_engine {
       // в цк2 еще можно было задать фракцию, модификатор к известности, заставить вступить в войну челиков из интриги
     };
     
+    class end_war final : public interface {
+    public:
+      static const size_t type_index;
+      static const size_t context_types = object::type_bit::war;
+      static const size_t output_type = object::type_bit::invalid;
+      end_war(const size_t &type) noexcept;
+      struct object process(context* ctx) const override;
+      void draw(context* ctx) const override;
+    private:
+      size_t type; // тип окончания войны (победа атакующих, победа защищающихся и белый мир)
+    };
+    
+    class add_attacker final : public interface {
+    public:
+      static const size_t type_index;
+      static const size_t context_types = object::type_bit::war;
+      static const size_t expected_types = object::type_bit::character;
+      static const size_t output_type = object::type_bit::invalid;
+      add_attacker(const interface* character) noexcept;
+      ~add_attacker() noexcept;
+      struct object process(context* ctx) const override;
+      void draw(context* ctx) const override;
+    private:
+      const interface* character;
+    };
+    
+    class add_defender final : public interface {
+    public:
+      static const size_t type_index;
+      static const size_t context_types = object::type_bit::war;
+      static const size_t expected_types = object::type_bit::character;
+      static const size_t output_type = object::type_bit::invalid;
+      add_defender(const interface* character) noexcept;
+      ~add_defender() noexcept;
+      struct object process(context* ctx) const override;
+      void draw(context* ctx) const override;
+    private:
+      const interface* character;
+    };
+    
+    class remove_participant final : public interface {
+    public:
+      static const size_t type_index;
+      static const size_t context_types = object::type_bit::war;
+      static const size_t expected_types = object::type_bit::character;
+      static const size_t output_type = object::type_bit::invalid;
+      remove_participant(const interface* character) noexcept;
+      ~remove_participant() noexcept;
+      struct object process(context* ctx) const override;
+      void draw(context* ctx) const override;
+    private:
+      const interface* character;
+    };
+    
+    // set_called_to? set_casus_belli?
+    
     class imprison final : public interface {
     public:
       static const size_t type_index;

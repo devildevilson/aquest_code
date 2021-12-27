@@ -20,8 +20,6 @@ namespace devils_engine {
   namespace script {
     class container;
     
-    typedef std::tuple<interface*, size_t, size_t> (*init_func_p) (const input_data &input, const sol::object &data, container* cont);
-    
     namespace script_types {
       enum values {
 #define SCRIPT_TYPE_FUNC(name) name,
@@ -37,9 +35,10 @@ namespace devils_engine {
 #define LOGIC_BLOCK_COMMAND_FUNC(name, a, b) COMMAND_NAME_FUNC(name)
 #define NUMERIC_COMMAND_BLOCK_FUNC(name, a, b) COMMAND_NAME_FUNC(name) 
 #define NUMERIC_COMMAND_FUNC(name, a, b) COMMAND_NAME_FUNC(name)       
-#define GET_SCOPE_COMMAND_FUNC(name, a, b) COMMAND_NAME_FUNC(name)     
-#define CHANGE_CONTEXT_COMMAND_FUNC(name, a, b, c) COMMAND_NAME_FUNC(has##name) COMMAND_NAME_FUNC(random##name) COMMAND_NAME_FUNC(every##name)
+#define GET_SCOPE_COMMAND_FUNC(name, a, b, c) COMMAND_NAME_FUNC(name)     
+#define CHANGE_CONTEXT_COMMAND_FUNC(name, a, b, c) COMMAND_NAME_FUNC(has_##name) COMMAND_NAME_FUNC(random_##name) COMMAND_NAME_FUNC(every_##name)
 #define CONDITION_COMMAND_FUNC(name) COMMAND_NAME_FUNC(name)           
+#define CONDITION_ARG_COMMAND_FUNC(name, a, b, c) COMMAND_NAME_FUNC(name)
 #define ACTION_COMMAND_FUNC(name) COMMAND_NAME_FUNC(name)  
 #define COMMON_COMMAND_FUNC(name) COMMAND_NAME_FUNC(name)              
         SCRIPT_COMMANDS_LIST 
@@ -48,7 +47,8 @@ namespace devils_engine {
 #undef NUMERIC_COMMAND_FUNC        
 #undef GET_SCOPE_COMMAND_FUNC      
 #undef CHANGE_CONTEXT_COMMAND_FUNC 
-#undef CONDITION_COMMAND_FUNC      
+#undef CONDITION_COMMAND_FUNC
+#undef CONDITION_ARG_COMMAND_FUNC
 #undef ACTION_COMMAND_FUNC       
 #undef COMMON_COMMAND_FUNC         
 
@@ -111,6 +111,18 @@ namespace devils_engine {
 #define COMPLEX_OBJECT_TOKEN_FUNC(name) name,
         COMPLEX_OBJECT_TOKENS_LIST
 #undef COMPLEX_OBJECT_TOKEN_FUNC
+        count
+      };
+      
+      extern const std::string_view names[];
+      extern const phmap::flat_hash_map<std::string_view, values> map;
+    }
+    
+    namespace complex_variable_valid_string {
+      enum values {
+#define COMPLEX_VARIABLE_VALID_STRING_FUNC(name) name,
+        COMPLEX_VARIABLE_VALID_STRINGS_LIST
+#undef COMPLEX_VARIABLE_VALID_STRING_FUNC
         count
       };
       

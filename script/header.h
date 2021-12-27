@@ -18,11 +18,12 @@ namespace devils_engine {
     class base {
     public:
       base() noexcept : begin(nullptr) {}
-      ~base() noexcept { begin->~interface(); }
+      ~base() noexcept { if (valid()) begin->~interface(); }
       void init(container &&c, const interface* begin) { if (this->begin != nullptr) throw std::runtime_error("Double init script"); this->c = std::move(c); this->begin = begin; }
       T compute(context* ctx) const { if constexpr (std::is_same_v<T, void>) { begin->process(ctx); return; } const auto ret = begin->process(ctx); return ret.get<T>(); }
       void draw(context* ctx) const { begin->draw(ctx); }
       bool valid() const { return begin != nullptr; }
+      size_t size() const { return c.mem_size(); }
     private:
       container c;
       const interface* begin; 

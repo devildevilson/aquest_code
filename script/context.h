@@ -47,18 +47,18 @@ namespace devils_engine {
     
     using draw_function_t = std::function<bool(const draw_data* data)>;
     
-    struct random_state {
-      using state = DEFAULT_GENERATOR_NAMESPACE::state;
-      
-      static double normalize(const uint64_t value);
-      
-      state cur;
-      
-      random_state();
-      random_state(const size_t &val1, const size_t &val2, const size_t &val3, const size_t &val4);
-      random_state(const size_t &state_root, const size_t &state_container, const size_t &current_turn);
-      uint64_t next();
-    };
+//     struct random_state {
+//       using state = DEFAULT_GENERATOR_NAMESPACE::state;
+//       
+//       static double normalize(const uint64_t value);
+//       
+//       state cur;
+//       
+//       random_state();
+//       random_state(const size_t &val1, const size_t &val2, const size_t &val3, const size_t &val4);
+//       random_state(const size_t &state_root, const size_t &state_container, const size_t &current_turn);
+//       uint64_t next();
+//     };
     
     struct context {
       enum {
@@ -73,6 +73,12 @@ namespace devils_engine {
       size_t operator_type;
       size_t nest_level;
       object root, prev, current, rvalue;
+      
+      // данные для рандомизации, хэш поди нужно использовать std
+      size_t id_hash;
+      size_t method_hash;
+      size_t current_turn;
+      
       // а можем ли мы тут хранить строку? можем ли мы использовать string_view в качестве ключа?
       // контекст в каком то виде может перейти в контекст эвента игрока
       // все строки в скрипте храняться в контейнерах, могут ли какие нибудь строки прийти откуда нибудь извне так чтобы у них не было своего хранилища? 
@@ -80,18 +86,26 @@ namespace devils_engine {
       // возможно мы тут легко можем обойтись string_view
       //phmap::flat_hash_map<std::string, object> map;
       phmap::flat_hash_map<std::string_view, object> map; // здесь же могут храниться флаги
-      random_state random; 
+      // должен быть еще локальный контейнер, который мы почистим при выходе из метода, искать данные в обоих контейнерах? мех
+//       phmap::flat_hash_map<std::string_view, object> local_map;
+      // + контейнер который мы соберем для эвента
+      phmap::flat_hash_map<std::string_view, object> event_container;
+//       random_state random; 
       // функция рисования
       draw_function_t draw_function;
       // дебаг данные скорее всего
       utils::bit_field<1> attributes;
       
+      static double normalize_value(const uint64_t value);
+      
       context() noexcept;
+      context(const std::string_view &id, const std::string_view &method_name, const size_t &current_turn) noexcept;
       
       inline bool get_attribute(const size_t &index) const { return attributes.get(index); }
       inline void set_attribute(const size_t &index, const bool value) { attributes.set(index, value); }
       
       bool draw(const draw_data* data) const;
+      uint64_t get_random_value(const size_t &static_state) const;
     };
     
     // классы смены скоупа

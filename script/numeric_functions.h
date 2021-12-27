@@ -8,18 +8,10 @@
 namespace devils_engine {
   namespace script {
     struct context;
-    struct script_data;
     
-// #define NUMERIC_COMMAND_FUNC(name) double name(const target_t&, context*, const uint32_t&, const script_data*);
-//     NUMERIC_COMMANDS_LIST
-// #undef NUMERIC_COMMAND_FUNC
-// 
-// #define NUMERIC_COMMAND_FUNC(name) void name##_init(const uint32_t &, const sol::object &, script_data*);
-//     NUMERIC_COMMANDS_LIST
-// #undef NUMERIC_COMMAND_FUNC
-//     
-//     // как добавить тип сравнения? вообще лучше не делать эти штуки для сравниваемых значений
-//     double compute_complex_value(const target_t&, context*, const uint32_t&, const script_data*, uint32_t&);
+    // нужно наверное при запуске process просто посчитать значения везде, а применять эффекты в отдельной функции
+    // посчитанные данные легко пихнуть потом в драв, да ввод функции compute решит довольно много моих проблем
+    // и драв после этого даже будет неплохо работать
     
     // как тут указать вход/выход? в функцию через запятую перечислить? полезно
     // к входу/выходу нам нужно указать что мы ожидаем в текущем контексте

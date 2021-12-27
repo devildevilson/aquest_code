@@ -8,30 +8,36 @@
 namespace devils_engine {
   namespace script {
 #define NUMERIC_COMMAND_BLOCK_FUNC(name, expected_type_bits, output_type_bit) \
+    const size_t name::type_index = commands::values::name; \
+    const size_t name::expected_types;                \
+    const size_t name::output_type;                   \
     name::name(const interface* childs) noexcept : childs(childs) {} \
     name::~name() noexcept {                          \
       for (auto cur = childs; cur != nullptr; cur = cur->next) { cur->~interface(); } \
     }                                                 \
-    const size_t name::type_index = commands::values::name; \
     void name::draw(context* ctx) const {             \
       const auto obj = process(ctx);                  \
       draw_data dd(ctx);                              \
       dd.function_name = commands::names[type_index]; \
       dd.value = obj;                                 \
-      ctx->draw_function(&dd);                        \
+      if (!ctx->draw(&dd)) return;                    \
+      change_function_name cfn(ctx, dd.function_name);\
+      change_nesting cn(ctx, ctx->nest_level+1);      \
       for (auto cur = childs; cur != nullptr; cur = cur->next) { cur->draw(ctx); } \
     }
     
 #define NUMERIC_COMMAND_FUNC(name, expected_type_bits, output_type_bit) \
+    const size_t name::type_index = commands::values::name;       \
+    const size_t name::expected_types;                            \
+    const size_t name::output_type;                               \
     name::name(const interface* value) noexcept : value(value) {} \
     name::~name() noexcept { value->~interface(); }               \
-    const size_t name::type_index = commands::values::name;       \
     void name::draw(context* ctx) const {                         \
       const auto obj = process(ctx);                              \
       draw_data dd(ctx);                                          \
       dd.function_name = commands::names[type_index];             \
       dd.value = obj;                                             \
-      ctx->draw_function(&dd);                                    \
+      ctx->draw(&dd);                                             \
       value->draw(ctx);                                           \
     }
     
@@ -152,6 +158,50 @@ namespace devils_engine {
       }
       
       return object(value);
+    }
+    
+    struct object add_sequence::process(context* ctx) const {
+      double value = 0.0;
+      for (auto cur = childs; cur != nullptr; cur = cur->next) {
+        const auto &obj = cur->process(ctx);
+        if (obj.ignore()) break;
+        value += obj.get<double>();
+      }
+      
+      return object(value);
+    }
+    
+    struct object multiply_sequence::process(context* ctx) const {
+      double value = 1.0;
+      for (auto cur = childs; cur != nullptr; cur = cur->next) {
+        const auto &obj = cur->process(ctx);
+        if (obj.ignore()) break;
+        value *= obj.get<double>();
+      }
+      
+      return object(value);
+    }
+    
+    struct object min_sequence::process(context* ctx) const {
+      double value = std::numeric_limits<double>::max();
+      for (auto cur = childs; cur != nullptr; cur = cur->next) {
+        const auto &obj = cur->process(ctx);
+        if (obj.ignore()) break;
+        value = std::min(value, obj.get<double>());
+      }
+      
+      return value == std::numeric_limits<double>::max() ? ignore_value : object(value);
+    }
+    
+    struct object max_sequence::process(context* ctx) const {
+      double value = std::numeric_limits<double>::min();
+      for (auto cur = childs; cur != nullptr; cur = cur->next) {
+        const auto &obj = cur->process(ctx);
+        if (obj.ignore()) break;
+        value = std::max(value, obj.get<double>());
+      }
+      
+      return value == std::numeric_limits<double>::min() ? ignore_value : object(value);
     }
     
     struct object sin::process(context* ctx) const {

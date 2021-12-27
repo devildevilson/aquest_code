@@ -42,7 +42,7 @@ namespace devils_engine {
       template <typename T, typename... Args>
       T* add(Args&& ...args) {
         ASSERT(memory != nullptr);
-        ASSERT(offset + align_to(sizeof(T), aligment) < size);
+        ASSERT(offset + align_to(sizeof(T), aligment) <= size);
         auto ptr = &memory[offset];
         auto obj = new (ptr) T(std::forward<Args>(args)...);
         offset += align_to(sizeof(T), aligment);
@@ -52,7 +52,7 @@ namespace devils_engine {
       template <typename T>
       size_t add_delayed() {
         ASSERT(memory != nullptr);
-        ASSERT(offset + align_to(sizeof(T), aligment) < size);
+        ASSERT(offset + align_to(sizeof(T), aligment) <= size);
         const size_t cur = offset;
         offset += align_to(sizeof(T), aligment);
         return cur;
@@ -61,10 +61,12 @@ namespace devils_engine {
       template <typename T>
       delayed_initialization<T> get_init(const size_t &offset) {
         ASSERT(memory != nullptr);
-        ASSERT(offset + align_to(sizeof(T), aligment) < size);
+        ASSERT(offset + align_to(sizeof(T), aligment) <= size);
         auto cur = &memory[offset];
         return delayed_initialization<T>(cur);
       }
+      
+      size_t mem_size() const;
     private:
       size_t size;
       size_t offset;

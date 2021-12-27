@@ -6,19 +6,45 @@
 #include "change_context_commands_macro.h"
 #include "condition_commands_macro.h"
 #include "action_commands_macro.h"
+#include "get_scope_commands_macro.h"
 
 //  COUNT_OBJECTS_COMMANDS_LIST
 
 #define SCRIPT_COMMANDS_LIST \
   LOGIC_BLOCK_COMMANDS_LIST \
   NUMERIC_COMMANDS_LIST2 \
-  GET_SCOPE_COMMANDS_LIST \
-  CHANGE_CONTEXT_COMMANDS_LIST \
-  CONDITION_COMMANDS_LIST \
-  CHARACTER_CONDITION_STRING_CHECK_COMMANDS_LIST \
+  GET_SCOPE_COMMANDS_FINAL_LIST \
+  CHANGE_CONTEXT_COMMANDS_FINAL_LIST \
+  CHARACTER_GET_BOOL_NO_ARGS_COMMANDS_LIST \
+  CHARACTER_GET_NUMBER_NO_ARGS_COMMANDS_LIST \
+  CHARACTER_GET_BOOL_ONE_ARG_COMMANDS_LIST \
+  REALM_GET_BOOL_NO_ARGS_COMMANDS_LIST \
+  REALM_GET_BOOL_EXISTED_ARG_COMMANDS_LIST \
   ACTION_COMMANDS_LIST \
   COMMON_COMMAND_FUNC(root) \
   COMMON_COMMAND_FUNC(prev) \
+  COMMON_COMMAND_FUNC(current) \
+  COMMON_COMMAND_FUNC(selector) \
+  COMMON_COMMAND_FUNC(sequence) \
+  /*COMMON_COMMAND_FUNC(at_least_sequence)*/ \
+  COMMON_COMMAND_FUNC(chance) \
+  COMMON_COMMAND_FUNC(weighted_random) \
+  COMMON_COMMAND_FUNC(random_value) \
+  /*COMMON_COMMAND_FUNC(save_temporary)*/ \
+  COMMON_COMMAND_FUNC(save_local) \
+  COMMON_COMMAND_FUNC(save) \
+  COMMON_COMMAND_FUNC(save_global) \
+  COMMON_COMMAND_FUNC(has_local) \
+  COMMON_COMMAND_FUNC(has_global) \
+  COMMON_COMMAND_FUNC(remove_local) \
+  COMMON_COMMAND_FUNC(remove_global) \
+  COMMON_COMMAND_FUNC(assert_condition) \
+  COMMON_COMMAND_FUNC(equals_to) \
+  COMMON_COMMAND_FUNC(equality) \
+  COMMON_COMMAND_FUNC(type_equality) \
+  COMMON_COMMAND_FUNC(compare) \
+  
+// нужно сделать функцию указатель на текущий объект и еще их сравнивать
   
 #define ONLY_INIT_LIST \
   COMMON_COMMAND_FUNC(number_container) \
@@ -26,7 +52,8 @@
   COMMON_COMMAND_FUNC(object_container) \
   COMMON_COMMAND_FUNC(boolean_container) \
   COMMON_COMMAND_FUNC(compute_string) \
-  COMMON_COMMAND_FUNC(complex_object) \
+  COMMON_COMMAND_FUNC(compute_number) \
+  /*COMMON_COMMAND_FUNC(complex_object)*/ \
   COMMON_COMMAND_FUNC(change_scope_condition) \
   COMMON_COMMAND_FUNC(change_scope_effect) \
   
@@ -35,6 +62,9 @@
   /*SCRIPT_IGNORE_KEY_FUNC(count)*/ \
   SCRIPT_IGNORE_KEY_FUNC(percent) \
   SCRIPT_IGNORE_KEY_FUNC(weight) \
+  SCRIPT_IGNORE_KEY_FUNC(hint) \
+  SCRIPT_IGNORE_KEY_FUNC(text) \
+  SCRIPT_IGNORE_KEY_FUNC(op) \
   
 #define COMPARE_OPERATORS_LIST \
   COMPARE_OPERATOR_FUNC(equal) \
@@ -46,6 +76,12 @@
   
 #define COMPLEX_OBJECT_TOKENS_LIST \
   COMPLEX_OBJECT_TOKEN_FUNC(context) \
+  
+// скорее всего в будущем добавится
+#define COMPLEX_VARIABLE_VALID_STRINGS_LIST \
+  COMPLEX_VARIABLE_VALID_STRING_FUNC(root) \
+  COMPLEX_VARIABLE_VALID_STRING_FUNC(prev) \
+  COMPLEX_VARIABLE_VALID_STRING_FUNC(current) \
   
 // добавятся такие вещи как: годовой/месячный доход, 
 

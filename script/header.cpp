@@ -29,6 +29,7 @@ namespace devils_engine {
       input_data new_input = input;
       new_input.script_type = script_types::string;
       new_input.expected_types = object::type_bit::string;
+      new_input.set_flag(input_data::flags::dot_is_valid_string_symbol, true);
       
       const auto [invalid_ptr, unnessesary_count, init_size] = string_container_init(new_input, obj, nullptr);
       container cont(init_size, 8);

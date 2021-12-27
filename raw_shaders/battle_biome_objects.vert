@@ -32,8 +32,13 @@ layout(set = 0, binding = 0) uniform camera_uniform {
   mat4 view;
   vec4 pos;
   vec4 dir;
-  uvec4 dim;
 } camera;
+
+layout(set = 0, binding = 2) uniform common_uniform {
+  vec4 cursor_dir;
+  uvec4 dim;
+  uvec4 state;
+} additional;
 
 layout(set = 0, binding = 1) uniform matrices_uniform {
   mat4 proj;
@@ -135,7 +140,7 @@ void main() {
   const float final_scale = mix(scales.x, scales.y, scale_state_norm);
 
   const float max_zoom = biome_data.zooms[current_probability_index];
-  const float current_zoom = uintBitsToFloat(camera.dim.z);
+  const float current_zoom = uintBitsToFloat(additional.dim.z);
   const bool sprite_mode = current_zoom < max_zoom;
 
   const uint additional = prng(scale_state);

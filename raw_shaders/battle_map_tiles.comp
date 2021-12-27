@@ -27,9 +27,13 @@ layout(set = 0, binding = 0) uniform Camera {
   mat4 view;
   vec4 pos;
   vec4 dir;
-  uvec4 dim;
-  vec4 cursor_dir;
 } camera;
+
+layout(set = 0, binding = 2) uniform common_uniform {
+  vec4 cursor_dir;
+  uvec4 dim;
+  uvec4 state;
+} additional;
 
 layout(set = 1, binding = 0) uniform tiles_uniform_buffer {
   uvec4 map_properties;
@@ -164,10 +168,10 @@ void main() {
     float dist = 10000.0f;
     // тут наверное будет неверно находиться дист для цилиндров, да неверно
     // нужно искать среди всех плоскостей, а это 16 треугольников
-    //const bool ray_test_ret = ray_cylinder_test(camera.pos, camera.cursor_dir, final_tile_pos, tile_radius, dist);
+    //const bool ray_test_ret = ray_cylinder_test(camera.pos, additional.cursor_dir, final_tile_pos, tile_radius, dist);
     // проверять 16 треугольников конечно дольше чем цилиндр, но я вроде как сделал гпуфрендли алгоритм
     // теперь должно работать идеально
-    const bool ray_test_ret = tile_triangle_test(camera.pos, camera.cursor_dir, final_tile_pos, is_flat_orientation, dist);
+    const bool ray_test_ret = tile_triangle_test(camera.pos, additional.cursor_dir, final_tile_pos, is_flat_orientation, dist);
     // кажется нулевый фрустум везде дает положительный результат (ну или только для первого тайла)
     const bool frustum_test_ret = frustum_test(selection_frustum, final_tile_pos, tile_radius);
     const bool needs_to_buffer = frustum_test_ret && tile_has_troop;

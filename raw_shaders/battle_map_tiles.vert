@@ -52,8 +52,6 @@ layout(set = 0, binding = 0) uniform Camera {
   mat4 view;
   vec4 pos;
   vec4 dir;
-  uvec4 dim;
-  vec4 cursor_dir;
 } camera;
 
 layout(set = 2, binding = 0) uniform tiles_uniform_buffer {

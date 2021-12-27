@@ -38,11 +38,11 @@ layout(std140, set = 1, binding = 0) readonly buffer border_datas {
   border_data datas[];
 };
 
-layout(std140, set = 2, binding = 0) readonly buffer border_types {
+layout(std140, set = 1, binding = 1) readonly buffer border_types {
   border_type types[];
 };
 
-layout(std140, set = 3, binding = 0) readonly buffer tiles_buffer {
+layout(std140, set = 2, binding = 0) readonly buffer tiles_buffer {
   light_map_tile_t tiles[];
 };
 

@@ -36,6 +36,7 @@ layout(set = 0, binding = 1) uniform matrices_uniform {
 layout(set = 0, binding = 2) uniform common_uniform {
   vec4 cursor_dir;
   uvec4 dim;
+  uvec4 state;
 } additional;
 
 layout(std140, set = 2, binding = 0) readonly buffer tiles_buffer {

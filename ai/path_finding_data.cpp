@@ -69,7 +69,7 @@ namespace devils_engine {
         const uint32_t container = (next_path_index-1) / ai::path_container::container_size;
         const uint32_t index     = (next_path_index-1) % ai::path_container::container_size;
         const uint32_t next_tile_index = ai::advance_container(unit->path, container)->tile_path[index].tile;
-        auto tile = ctx->get_tile_ptr(next_tile_index);
+        auto tile = ctx->get_entity<core::tile>(next_tile_index);
         //const uint32_t another_army_index = map->get_tile_objects_index(next_tile_index, 4);
         //const uint32_t structure_index = map->get_tile_objects_index(next_tile_index, 0);
         //const bool has_not_another_army = another_army_index == UINT32_MAX;

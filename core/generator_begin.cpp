@@ -6,8 +6,8 @@
 #include "utils/works_utils.h"
 #include "utils/constexpr_funcs.h"
 #include "bin/generator_context2.h"
-#include "bin/map.h"
 #include "bin/figures.h"
+#include "map.h"
 
 namespace devils_engine {
   namespace core {

@@ -1,5 +1,5 @@
-#ifndef CASUS_BELLI_H
-#define CASUS_BELLI_H
+#ifndef DEVILS_ENGINE_CORE_CASUS_BELLI_H
+#define DEVILS_ENGINE_CORE_CASUS_BELLI_H
 
 #include <string>
 #include <cstdint>
@@ -8,67 +8,33 @@
 #include "utils/bit_field.h"
 #include "utils/constexpr_funcs.h"
 #include "script/header.h"
+#include "script/condition_commands_macro.h"
 
+#include "casus_belli_data_macro.h"
+  
 namespace devils_engine {
   namespace core {
     struct casus_belli {
       static const core::structure s_type = core::structure::casus_belli;
       
-      enum flags {
-        is_permanent,
-        is_independence,
-        hostile_against_others,
-        full_hostility,
-        can_ask_to_join_war,
-        reflect_titleholder_change,
-        is_claim_all,
-        is_revolt_cb,
-        major_revolt,
-        press_claim,
-        allow_whitepeace,
-        allowed_to_target_suzerains,
-        allowed_to_target_tributaries,
-        can_call_allies,
-        attacker_can_call_allies,
-        defender_can_call_allies,
-        can_call_vassals,
-        can_attack_vassals,
-        attacker_alliance_occ_warscore,
-        check_dejure_duchies,
-        check_all_titles,
-        check_all_trade_posts,
-        check_actor_direct_vassals,
-        other_de_jure_claim,
-        is_holy_war,
-        apply_long_occ_mod,
-        apply_short_occ_mod,
-        allow_distant,
-        attacker_rel_head_is_ally,
-        display_on_map,
-        coalition_threat,
-        is_tyranny_cb,
-        hostages_block_cb,
-        attacker_unoccupied_warscore,
-        defender_unoccupied_warscore,
-        capturing_attacker_is_complete_victory,
-        capturing_defender_is_complete_victory,
+      enum class flags {
+        // casus_belli_data_macro.h
+#define CASUS_BELLI_FLAG_FUNC(name) name,
+        CASUS_BELLI_FLAGS_LIST
+#undef CASUS_BELLI_FLAG_FUNC
+
         count
       };
       
-      static const size_t bit_field_size = ceil(double(count) / double(SIZE_WIDTH));
-      
       std::string id;
-      float battle_warscore_mult;
-      float infamy_modifier;
-      float ticking_war_score_multiplier;
-      float att_ticking_war_score_multiplier;
-      float def_ticking_war_score_multiplier;
-      float max_defender_occupation_score;
-      float max_attacker_occupation_score;
-      float max_defender_battle_score;
-      float max_attacker_battle_score;
+      
+      // casus_belli_data_macro.h
+#define CASUS_BELLI_NUMBER_FUNC(name) float name;
+      CASUS_BELLI_NUMBERS_LIST
+#undef CASUS_BELLI_NUMBER_FUNC
+
       size_t truce_turns;
-      utils::bit_field<bit_field_size> flags_field;
+      utils::bit_field<static_cast<size_t>(flags::count)> flags_field;
       // картиночка
       // diplo_view_region - меняет провинции котолрые подсвечиваются при выборе этого цб
       // check_de_jure_tier - сканирует (?) все де юре королевства на предмет владений у вассалов?
@@ -91,7 +57,7 @@ namespace devils_engine {
       script::effect on_add; // при добавлении участника
       script::effect on_add_post;
       script::effect on_success; // успешное завершение войны (для нападающего)
-      script::effect on_success_post;
+      script::effect on_success_post; // должно вызваться после разрушения войны для кого? возможно придется делать списки
       script::effect on_fail; // не успешное завершение войны
       script::effect on_fail_post;
       script::effect on_reverse_demand; // выдвинуты обратные требования (то есть победа защиты?)
@@ -105,8 +71,8 @@ namespace devils_engine {
       
       casus_belli();
       
-      inline bool get_flag(const size_t &index) { return flags_field.get(index); }
-      inline bool set_flag(const size_t &index, const bool value) { return flags_field.set(index, value); }
+      inline bool get_flag(const enum flags &flag) const { return flags_field.get(static_cast<size_t>(flag)); }
+      inline bool set_flag(const enum flags &flag, const bool value) { return flags_field.set(static_cast<size_t>(flag), value); }
       
       // какие данные мы ожидаем здесь?
       bool can_use(const realm* root, const realm* target, const titulus* title) const;
@@ -117,6 +83,14 @@ namespace devils_engine {
       float ai_probability(const realm* root, const realm* target, const titulus* title) const;
       std::string_view name(const realm* root, const realm* target, const titulus* title) const;
       std::string_view war_name(const realm* root, const realm* target, const titulus* title) const;
+      
+#define CASUS_BELLI_FLAG_FUNC(name) bool name() const;
+      CASUS_BELLI_GET_BOOL_NO_ARGS_COMMANDS_LIST
+#undef CASUS_BELLI_FLAG_FUNC
+
+#define CASUS_BELLI_NUMBER_FUNC(name) double get_##name() const;
+      CASUS_BELLI_GET_NUMBER_NO_ARGS_COMMANDS_LIST
+#undef CASUS_BELLI_NUMBER_FUNC
     };
     
     bool validate_casus_belli(const size_t &index, const sol::table &table);

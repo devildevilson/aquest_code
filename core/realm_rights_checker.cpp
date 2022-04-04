@@ -120,7 +120,7 @@ namespace devils_engine {
         // и для того чтобы это работало так нужно будет добавлять механик
         // сейчас пока будем пользоваться гос тюрьмой
         auto state = invoker->get_state();
-        return c->imprisoner == state;
+        return c->prison == state;
       }
       
       bool is_main_title(const realm* invoker, const titulus* title) {
@@ -132,11 +132,11 @@ namespace devils_engine {
       }
       
       bool is_pleb(const character* c) {
-        return !c->has_dynasty();
+        return c->is_pleb();
       }
       
       bool is_noble(const character* c) {
-        return c->has_dynasty();
+        return c->is_noble();
       }
       
       bool is_vassal(const character* c) {
@@ -1063,7 +1063,7 @@ namespace devils_engine {
         const auto state = get_government(invoker)->get_state();
         
         // а может быть все таки криминал просто не имеет прав пользоваться услугами там разными?
-        // вообще правда вылета не произойдет, поэтому наверное пусть перемещается в разряд прав
+        // вообще правда, вылета не произойдет, поэтому наверное пусть перемещается в разряд прав
         // можем ли мы обратиться в какой то стейт вне текущего государства? да, по идее в религиозную организацию
         // как это сделать? нужно найти какого то иного хозяина среди стейтов, хотя если только в религиозную организацию
         // то можно проверить иначе, оставим это "на подумать"

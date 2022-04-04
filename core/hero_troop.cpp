@@ -1,8 +1,8 @@
 #include "hero_troop.h"
 
-#include "utils/globals.h"
-#include "bin/map.h"
-#include "utils/systems.h"
+//#include "utils/globals.h"
+//#include "utils/systems.h"
+//#include "map.h"
 
 namespace devils_engine {
   namespace core {

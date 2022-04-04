@@ -390,7 +390,7 @@ namespace devils_engine {
     // но с другой стороны как то серьезно отделить вещи друг от друга довольно сложно
     // так или иначе нужно передать таблицу законов и прав
     // но еще нужно создать фракции внутри государства
-    void parse_character_goverment(core::character* character, const sol::table &table) {
+    void parse_character_government(core::character* character, const sol::table &table) {
       auto ctx = global::get<core::context>();
       
       //const size_t char_index1 = ctx->get_character_debug_index(character);

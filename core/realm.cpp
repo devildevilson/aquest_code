@@ -231,25 +231,25 @@ namespace devils_engine {
     }
     
     void realm::add_prisoner(struct character* prisoner) {
-      if (prisoner->imprisoner == this) return;
+      if (prisoner->prison == this) return;
       if (prisoner->imprisoner != nullptr) prisoner->imprisoner->remove_prisoner(prisoner);
       
       ASSERT(prisoner->imprisoner == nullptr);
       ASSERT(utils::ring::list_empty<utils::list_type::prisoners>(prisoner));
       
-      prisoner->imprisoner = utils::handle<realm>(this, this->object_token);
+      prisoner->prison = utils::handle<realm>(this, this->object_token);
       if (prisoners == nullptr) prisoners = prisoner;
       else utils::ring::list_add<utils::list_type::prisoners>(prisoners, prisoner);
     }
     
     void realm::add_prisoner_raw(character* prisoner) {
-      ASSERT(prisoner->imprisoner == this);
+      ASSERT(prisoner->prison == this);
       if (prisoners == nullptr) prisoners = prisoner;
       else utils::ring::list_add<utils::list_type::prisoners>(prisoners, prisoner);
     }
     
     void realm::remove_prisoner(struct character* prisoner) {
-      ASSERT(prisoner->imprisoner == this);
+      ASSERT(prisoner->prison == this);
       
       prisoner->imprisoner = nullptr;
       if (prisoners == prisoner) prisoners = utils::ring::list_next<utils::list_type::prisoners>(prisoner, prisoner);

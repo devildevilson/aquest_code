@@ -35,6 +35,15 @@ namespace devils_engine {
         exist
       };
       
+      enum class existance_state {
+        normal,
+        wealth,
+        sieged,
+        // сколько по времени занимает разграбление? наверное в условиях игры до начала следующего хода, 
+        // возможно имеет смысл сделать отдельный стейт и для этого
+        plundered
+      };
+      
       struct building_view {
         uint32_t off_troops_count;
         uint32_t def_troops_count;

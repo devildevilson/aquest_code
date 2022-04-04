@@ -12,7 +12,7 @@ namespace devils_engine {
       return std::make_tuple(static_cast<tokenized_type>(type), counter, index);
     }
     
-    context::context() noexcept {
+    context::context() noexcept : tiles_data_created(false) {
       //memset(containers.data(), 0, sizeof(container) * containers.size());
     }
     
@@ -695,17 +695,17 @@ namespace devils_engine {
         case structure::trait:          destroy_container<trait>();          break;
         case structure::modificator:    destroy_container<modificator>();    break;
         case structure::troop_type:     destroy_container<troop_type>();     break;
-        case structure::decision:       destroy_container<decision>();       break;
-        case structure::interaction:    destroy_container<interaction>();    break;
         case structure::religion_group: destroy_container<religion_group>(); break;
         case structure::religion:       destroy_container<religion>();       break;
         case structure::culture:        destroy_container<culture>();        break;
         case structure::law:            destroy_container<law>();            break;
-        case structure::event:          destroy_container<event>();          break;
         case structure::titulus:        destroy_container<titulus>();        break;
         case structure::casus_belli:    destroy_container<casus_belli>();    break;
         case structure::holding_type:   destroy_container<holding_type>();   break;
         case structure::culture_group:  destroy_container<culture_group>();  break;
+        case structure::event:          destroy_container<event>();          break;
+        case structure::decision:       destroy_container<decision>();       break;
+        case structure::interaction:    destroy_container<interaction>();    break;
         default: assert(false && "Bad structure type");
       }
     }

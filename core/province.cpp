@@ -5,12 +5,12 @@
 #include "utils/table_container.h"
 #include "utils/string_container.h"
 #include "utils/serializator_helper.h"
+#include "utils/systems.h"
 
 #include "context.h"
 #include "culture.h"
 #include "religion.h"
-
-#include "bin/map.h"
+#include "map.h"
 // #include "bin/map_creator.h"
 
 namespace devils_engine {
@@ -43,6 +43,73 @@ namespace devils_engine {
     core::culture_group* province::get_culture_group() const { return culture->group; }
     core::religion* province::get_religion() const { return religion; }
     core::religion_group* province::get_religion_group() const { return religion->group; }
+    
+    bool province::can_raise_army() const {
+      if (!offensive_army.valid()) return false;
+      if (offensive_army->state != core::army::state::stationed) return false;
+      
+      const uint32_t capital_tile = capital->tile_index;
+      auto ctx = global::get<systems::map_t>()->core_context;
+      auto tile = ctx->get_entity<core::tile>(capital_tile);
+      const uint32_t n_count = tile->neighbors_count();
+      uint32_t tile_index = UINT32_MAX;
+      uint32_t counter = 0;
+      while (tile_index == UINT32_MAX && counter < n_count) {
+        const uint32_t n_index = tile->neighbors[counter];
+        ++counter;
+        
+        auto n_tile = ctx->get_entity<core::tile>(n_index);
+        const uint32_t b_index = n_tile->biome_index;
+        auto biome = ctx->get_entity<core::biome>(b_index);
+        if (n_tile->army_token != SIZE_MAX) continue;
+        if (biome->get_attribute(core::biome::attributes::not_passable) || 
+            biome->get_attribute(core::biome::attributes::water)) continue;
+        
+        tile_index = n_index;
+      }
+      
+      if (tile_index == UINT32_MAX) return false;
+      
+      return true;
+    }
+    
+    utils::handle<army> province::raise_army() const {
+      if (!offensive_army.valid()) throw std::runtime_error("No army in province ");
+      if (offensive_army->state != core::army::state::stationed) throw std::runtime_error("Army is already has left the city");
+      
+      const uint32_t capital_tile = capital->tile_index;
+      auto ctx = global::get<systems::map_t>()->core_context;
+      auto tile = ctx->get_entity<core::tile>(capital_tile);
+      const uint32_t n_count = tile->neighbors_count();
+      uint32_t tile_index = UINT32_MAX;
+      uint32_t counter = 0;
+      while (tile_index == UINT32_MAX && counter < n_count) {
+        const uint32_t n_index = tile->neighbors[counter];
+        ++counter;
+        
+        auto n_tile = ctx->get_entity<core::tile>(n_index);
+        const uint32_t b_index = n_tile->biome_index;
+        auto biome = ctx->get_entity<core::biome>(b_index);
+        if (n_tile->army_token != SIZE_MAX) continue;
+        if (biome->get_attribute(core::biome::attributes::not_passable) || 
+            biome->get_attribute(core::biome::attributes::water)) continue;
+        
+        tile_index = n_index;
+      }
+      
+      if (tile_index == UINT32_MAX) throw std::runtime_error("Could not find tile to place the province army");
+      
+      // это нужно видимо вытащить отдельно, много что нужно сделать
+//       offensive_army->tile_index = tile_index;
+//       offensive_army->state = core::army::state::on_land;
+//       auto n_tile = ctx->get_entity<core::tile>(tile_index);
+//       n_tile->army_token = offensive_army.get_token();
+      auto ptr = offensive_army.raw_pointer();
+      ptr->raize_army(tile_index);
+      //offensive_army->raize_army(tile_index);
+      
+      return offensive_army;
+    }
     
     const utils::check_table_value province_table[] = {
       {

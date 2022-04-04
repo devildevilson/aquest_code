@@ -84,6 +84,7 @@ namespace devils_engine {
       bool can_become_assembler(const character* invoker);
       bool can_become_clergyman(const character* invoker);
       
+      // проверки прав
       bool has_right_to_become_stateman(const character* invoker);
       bool has_right_to_become_councillor(const character* invoker);
       bool has_right_to_become_magistrate(const character* invoker);
@@ -107,17 +108,17 @@ namespace devils_engine {
       bool can_become_elector(const character* invoker, const realm* target);
       bool has_right_to_become_elector(const character* invoker, const realm* target);
       
+      bool can_apply_to_the_state(const character* invoker);
       bool can_apply_to_the_tribunal(const character* invoker);
       bool can_apply_to_the_council(const character* invoker);
       bool can_apply_to_the_assembly(const character* invoker);
       bool can_apply_to_the_clergy(const character* invoker);
-      bool can_apply_to_the_state(const character* invoker);
       
+      bool has_right_to_apply_to_the_state(const character* invoker);
       bool has_right_to_apply_to_the_tribunal(const character* invoker);
       bool has_right_to_apply_to_the_council(const character* invoker);
       bool has_right_to_apply_to_the_assembly(const character* invoker);
       bool has_right_to_apply_to_the_clergy(const character* invoker);
-      bool has_right_to_apply_to_the_state(const character* invoker);
       
       bool can_apply_to(const character* invoker, const realm* target);
       bool has_right_to_apply_to(const character* invoker, const realm* target);

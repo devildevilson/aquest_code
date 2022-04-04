@@ -9,6 +9,7 @@
 #include "declare_structures.h"
 #include "stats.h"
 #include "stat_data.h"
+#include "diplomacy.h"
 
 #include "utils/bit_field.h"
 #include "utils/linear_rng.h"
@@ -91,6 +92,7 @@ namespace devils_engine {
       public utils::modificators_container,
       public utils::traits_container, 
       public utils::hooks_container,
+      public utils::pending_interactions_container,
       public utils::ring::list<character, utils::list_type::prisoners>,
       public utils::ring::list<character, utils::list_type::courtiers>,
       public utils::ring::list<character, utils::list_type::concubines>,
@@ -160,29 +162,33 @@ namespace devils_engine {
       
       // отношения должны быть сложнее, скорее нужно список расширить и сделать единственным
       struct relations {
-        enum friendship_level : int32_t {
-          nemesis = -3,
-          rival,
-          foe,
-          opponent,
-          pal,
-          mate,
-          best_friend
-        };
-        
-        enum love_level : int32_t {
-          bete_noire = -3,
-          hate,
-          dislike,
-          neutral,
-          sympathy,
-          lover,
-          soulmate
-        };
+//         enum friendship_level : int32_t {
+//           nemesis = -3,
+//           rival,
+//           foe,
+//           opponent,
+//           pal,
+//           mate,
+//           best_friend
+//         };
+//         
+//         enum love_level : int32_t {
+//           bete_noire = -3,
+//           hate,
+//           dislike,
+//           neutral,
+//           sympathy,
+//           lover,
+//           soulmate
+//         };
         
         struct data {
-          int32_t friendship;
-          int32_t love;
+          static_assert(ceil(double(core::relationship::count) / double(SIZE_WIDTH)) == 1);
+          
+          utils::bit_field<core::relationship::count> types;
+//           core::relationship::values type; // нужно и тут бит филд
+//           int32_t type;
+//           int32_t love;
         };
         
         static const size_t max_game_acquaintance = 64;
@@ -191,10 +197,18 @@ namespace devils_engine {
         
         relations() noexcept;
         
-        bool is_acquaintance(character* c, int32_t* friendship = nullptr, int32_t* love = nullptr) const;
-        bool add_acquaintance(character* c, int32_t friendship_level, int32_t love_level);
-        bool remove_acquaintance(character* c);
-        void remove_all_neutral();
+//         bool is_acquaintance(character* c, int32_t* friendship = nullptr, int32_t* love = nullptr) const;
+//         bool add_acquaintance(character* c, int32_t friendship_level, int32_t love_level);
+        bool is_acquaintance(const character* c, const size_t &type = SIZE_MAX) const; // SIZE_MAX - any type
+        size_t get_acquaintance_raw(const character* c) const;
+        bool is_lover(const character* c) const;
+        bool is_friend(const character* c) const;
+        bool is_rival(const character* c) const;
+        bool is_neutral(const character* c) const;
+        
+        bool add_acquaintance(character* c, const size_t &type);
+        bool remove_acquaintance(character* c, const size_t &type = SIZE_MAX); // SIZE_MAX - remove all relations
+//         void remove_all_neutral();
       };
       
       // секрет, что это такое? секреты - это некоторые характеристики отношений между персонажами
@@ -207,17 +221,27 @@ namespace devils_engine {
         const struct character* character;
         const struct trait* trait;
         
-        inline secret() : type(UINT32_MAX), character(nullptr), trait(nullptr) {}
+        inline secret() noexcept : type(UINT32_MAX), character(nullptr), trait(nullptr) {}
       };
       
-      struct relation {
-        uint32_t type;
+      // наверное эти штуки поди могут повторяться, если я заведу просто массив 
+      // вообще то еще интересует как убедиться что муж дочери когда получает титул и становиться бароном тоже появлялся в этих отношениях
+      // наверное такого рода штуки поди должны учитываться через обход близких родственников
+      // в цк3 альянсы появляются автоматически если персонажи титулованные, искать альянс вообще не особ быстро, поэтому наверное
+      // имеет смысл все же заполнять какой то массив, но нужно дозаполнять разные вещи после
+      // возможно имеет смысл пересобирать этот массив каждый ход или в определенных случаях (каких? развод, смерть?)
+      struct diplo_relation {
+        //uint32_t type;
+        utils::bit_field<diplomacy::count> types;
         utils::handle<core::war> war;
         utils::handle<core::realm> realm; 
         // например жена, или супруг ребенка, вообще уз может быть несколько (до бесконечности)
         // как быть? опять массив? кто дает гарантии? только семья? близкие родственники?
         // нужно начать с того чтобы определить кто есть кто, все близкие родственники могут оказаться причиной возникновения дипломатии
-        character* related_character;
+        //struct character* character;
+        struct character* related_character;
+        
+        inline diplo_relation() noexcept : /*character(nullptr),*/ related_character(nullptr) {}
       };
       
       utils::stats_container<character_stats::values, true> stats;
@@ -225,7 +249,7 @@ namespace devils_engine {
       utils::stats_container<hero_stats::values> hero_stats;
       utils::stats_container<hero_stats::values> current_hero_stats;
       utils::stats_container<character_resources::values> resources;
-      utils::static_vector<secret, 16> known_secrets;
+      utils::static_vector<secret, 16> known_secrets; // скорее всего мало очень
       
       uint32_t name_number; // если в династии уже есть использованное имя, то тут нужно указать сколько раз встречалось
       
@@ -238,7 +262,8 @@ namespace devils_engine {
       uint32_t name_index;
       uint32_t nickname_index; // как выдается ник? 
       utils::handle<realm> suzerain; // может ли быть при дворе государства?
-      utils::handle<realm> imprisoner; // мы можем сидеть во фракционной тюрьме (государственная тюрьма)
+      character* imprisoner; // мы можем сидеть во фракционной тюрьме (государственная тюрьма)
+      utils::handle<realm> prison;
       character* victims; // если вообще я буду делать удаление персонажей, то может удалиться первая жертва, вообще наверное мы можем предусмотреть это в деструкторе
       character* killer;
       
@@ -276,7 +301,10 @@ namespace devils_engine {
       // как тут сделать отношения и дипломатию? отношения сделал неудачно - лучше пусть просто будет список всех типов отношений, который и будем хранить 
       // в массиве, дипломатия должна быть здесь потому что она собственно только здесь и имеет смысл, как ее устроить? слева указатель на персонажа,
       // справа тип, война, персонаж, сколько всего может быть дипломатий? нужно ли смешивать дипломатию и отношения? не думаю что хорошая идея
-      
+      // я тут подумал - типов отношений может быть несколько с одним персонажем, мне бы наверное может быть сделать битово поле с типами?
+      // битово поле будет использовано в крайне редких случаях, но пусть остается
+      // вообще сама по себе война несет достаточно информации, имеет смысл ее поставить отдельно и не париться с diplo_relation
+      phmap::flat_hash_map<character*, diplo_relation> diplomacy;
       
       character(const bool male, const bool dead);
       ~character();
@@ -416,7 +444,7 @@ namespace devils_engine {
     bool validate_character(const size_t &index, const sol::table &table);
     bool validate_character_and_save(const size_t &index, sol::this_state lua, const sol::table &table, utils::world_serializator* container);
     void parse_character(core::character* character, const sol::table &table);
-    void parse_character_goverment(core::character* character, const sol::table &table);
+    void parse_character_government(core::character* character, const sol::table &table);
     
     void update_character_stats(core::character* character);
   }

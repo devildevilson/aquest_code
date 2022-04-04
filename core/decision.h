@@ -5,6 +5,7 @@
 #include <cstdint>
 #include "core/declare_structures.h"
 #include "script/header.h"
+#include "script/context.h"
 
 namespace devils_engine {
   namespace core {
@@ -48,46 +49,49 @@ namespace devils_engine {
     // в цк еще можно указать возможных таргетов для ии
     // надо наверное все же разделить десижоны от интеракций
     struct decision {
-      enum class type {
-        // правая кнопка (дипломатические? интеракция, перенес отсюда), мажорные, минорные, ???
-        major,
-        minor,
-        count
-      };
+//       enum class type {
+//         // правая кнопка (дипломатические? интеракция, перенес отсюда), мажорные, минорные, ???
+//         major,
+//         minor,
+//         count
+//       };
       
-      struct option {
-        std::string id;
-        script::string name_script;
-        script::string description_script;
-        script::condition potential;
-        script::condition condition;
-        script::effect effect;
-        script::number ai_will_do;
-        // флаг?
-      };
+//       struct option {
+//         std::string id;
+//         script::string name_script;
+//         script::string description_script;
+//         script::condition potential;
+//         script::condition condition;
+//         script::effect effect;
+//         script::number ai_will_do;
+//         // флаг?
+//       };
       
       static const structure s_type = structure::decision;
       
       std::string id;
+//       enum type type;
+      
       script::string name_script;
       script::string description_script;
-      enum type type;
+      script::string confirm_text;
       
-      // было бы неплохо както сократить количество проверяемых decision
-      
-      // как задать входные данные?
-      size_t input_count;
-//       std::array<std::pair<std::string, script::script_data>, 16> input_array;
-      // это наверное будет храниться непосредственно в script::script_data
-      script::condition potential; // нужно использовать определенное соглашение по именам для переменных (например root и recipient)
-      script::condition condition; // используется только для major minor (?)
-      // то есть мы его должны проверить (когда?) и тогда персонаж которому мы отправляем это дело в любом случае выполнит on_accept
-      
-      // тут довольно все просто с этим делом, нажимаем кнопку применить если условия проходят делаем эффект
+      script::condition ai_potential;
+      script::condition potential;
+      script::condition condition;
       script::effect effect;
-      
-      // как ии поймет что ему хочется сделать это решение?
       script::number ai_will_do;
+      script::number ai_check_frequency;
+      
+      script::number money_cost;
+      script::number authority_cost;
+      script::number esteem_cost;
+      script::number influence_cost;
+      
+      script::number cooldown;
+      
+      bool ai_goal;
+      bool major;
       
       decision();
       ~decision();
@@ -118,6 +122,47 @@ namespace devils_engine {
 //       
 //       // возвращаем корневого персонажа
 //       script::target_t check_input(script::context* ctx) const;
+    };
+    
+    // pending_state ?
+    struct compiled_decision {
+      const decision* d;
+      script::context ctx;
+      bool used;
+      
+      compiled_decision(const decision* d, const script::context &ctx);
+      
+      std::string_view get_name();
+      std::string_view get_description();
+      std::string_view get_confirm_text();
+      
+      bool ai_potential();
+      bool potential();
+      bool condition();
+      double ai_will_do();
+      double ai_check_frequency();
+      bool run();
+      
+      double money_cost();
+      double authority_cost();
+      double esteem_cost();
+      double influence_cost();
+      
+      void draw_name(const sol::function &func);
+      void draw_description(const sol::function &func);
+      void draw_confirm_text(const sol::function &func);
+      
+      void draw_ai_potential(const sol::function &func);
+      void draw_potential(const sol::function &func);
+      void draw_condition(const sol::function &func);
+      void draw_ai_will_do(const sol::function &func);
+      void draw_ai_check_frequency(const sol::function &func);
+      void draw_effect(const sol::function &func);
+      
+      void draw_money_cost(const sol::function &func);
+      void draw_authority_cost(const sol::function &func);
+      void draw_esteem_cost(const sol::function &func);
+      void draw_influence_cost(const sol::function &func);
     };
     
     // мне нужно компилировать десижоны, для того чтобы не пересоздавать контекст несколько раз и не портить рандом

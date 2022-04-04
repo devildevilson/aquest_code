@@ -37,6 +37,14 @@ namespace devils_engine {
     
     std::string_view casus_belli::war_name(const realm*, const realm*, const titulus*) const { return "invalid"; }
     
+#define CASUS_BELLI_FLAG_FUNC(name) bool casus_belli::name() const { return get_flag(flags::name); }
+    CASUS_BELLI_GET_BOOL_NO_ARGS_COMMANDS_LIST
+#undef CASUS_BELLI_FLAG_FUNC
+
+#define CASUS_BELLI_NUMBER_FUNC(name) double casus_belli::get_##name() const { return name; }
+      CASUS_BELLI_GET_NUMBER_NO_ARGS_COMMANDS_LIST
+#undef CASUS_BELLI_NUMBER_FUNC
+    
 #define NUMBER_VARIABLE(name) if (const auto proxy = table[#name]; proxy.valid()) { \
         if (proxy.get_type() != sol::type::number) { PRINT("Casus belli " + std::string(id) + " must have a valid " #name " number"); ++counter; } \
       }
@@ -142,7 +150,7 @@ namespace devils_engine {
       NUMBER_VARIABLE(max_attacker_battle_score)
       NUMBER_VARIABLE(truce_turns)
       
-      for (size_t i = 0; i < core::casus_belli::count; ++i) {
+      for (size_t i = 0; i < static_cast<size_t>(core::casus_belli::flags::count); ++i) {
         const auto enum_name = magic_enum::enum_name(static_cast<core::casus_belli::flags>(i));
         if (const auto proxy = table[enum_name]; proxy.valid()) {
           if (proxy.get_type() != sol::type::boolean) { PRINT("Casus belli " + std::string(id) + " must have a valid " + std::string(enum_name) + " flag"); ++counter; }
@@ -209,7 +217,7 @@ namespace devils_engine {
       
       if (const auto proxy = table["truce_turns"]; proxy.valid()) casus_belli->truce_turns = proxy.get<size_t>();
       
-      for (size_t i = 0; i < core::casus_belli::count; ++i) {
+      for (size_t i = 0; i < static_cast<size_t>(core::casus_belli::flags::count); ++i) {
         const auto enum_name = magic_enum::enum_name(static_cast<core::casus_belli::flags>(i));
         if (const auto proxy = table[enum_name]; proxy.valid()) {
           const bool val = proxy.get<bool>();

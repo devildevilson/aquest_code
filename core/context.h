@@ -5,13 +5,14 @@
 #include <array>
 #include <function2.hpp>
 
+#include "declare_structures_table.h"
+#include "structures_header.h"
+#include "map.h"
+
 #include "utils/handle.h"
 #include "parallel_hashmap/phmap.h"
-#include "bin/map.h"
 #include "utils/memory_pool.h"
-#include "structures_header.h"
 #include "utils/constexpr_funcs.h"
-#include "declare_structures_table.h"
 
 namespace devils_engine {
   namespace core {
@@ -50,6 +51,8 @@ namespace devils_engine {
         containers[index].type_size = sizeof(T);
         containers[index].count = count;
         containers[index].memory = new T[count];
+        
+        if constexpr (T::s_type == structure::tile) tiles_data_created = true;
       }
       
       template <typename T>
@@ -100,6 +103,8 @@ namespace devils_engine {
         auto itr = map.find(id);
         return itr != map.end() ? reinterpret_cast<T*>(itr->second) : nullptr;
       }
+      
+      inline bool is_tiles_created() const { return tiles_data_created; }
       
       void fill_id_maps();
       
@@ -196,6 +201,8 @@ namespace devils_engine {
       // но плохая для массивов (нужно перевыделять память для всего массива, что скорее всего забьет статическую память очень быстро)
 //       memory::static_allocator_storage<POINTER_MEMORY_SIZE> pointer_storage; 
 //       static_pool_t pointer_static_pool;
+      
+      std::atomic_bool tiles_data_created;
       
       // это будет сериализовано с помощью таблиц
 //       std::array<tile, core::map::hex_count_d(core::map::detail_level)> tile_array;

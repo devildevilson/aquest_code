@@ -23,12 +23,15 @@ namespace devils_engine {
       static const structure s_type = structure::province;
       static const size_t cities_max_game_count = 10;
       
+      // наверное имеет смысл добавить id для всех провинций
+      
       // название (или название по столице провинции?)
       // удобно и герб тоже по столице провинции дать (нет, титул для баронства существует)
       titulus* title; // не будет меняться, но нужно заполнить титул (или его заполнять в другом месте?)
       struct culture* culture;
       struct religion* religion;
       std::vector<uint32_t> tiles;
+      // у нас вот еще что должно быть: соседи которые ищутся автоматически через тайлы и соседи заданные генератором
       std::vector<uint32_t> neighbours;
       // какие техи распространились в этой провинции
       // что то вроде std::vector<bool> ?
@@ -62,6 +65,9 @@ namespace devils_engine {
       core::culture_group* get_culture_group() const;
       core::religion* get_religion() const;
       core::religion_group* get_religion_group() const;
+      
+      bool can_raise_army() const;
+      utils::handle<army> raise_army() const; // возвратить армию? почему бы и нет
     };
     
 //     size_t add_province(const sol::table &table);

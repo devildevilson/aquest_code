@@ -14,6 +14,8 @@
 #include "titulus.h"
 #include "context.h"
 
+#include "realm_rights_checker.h"
+
 namespace devils_engine {
   namespace core {
     
@@ -52,29 +54,137 @@ namespace devils_engine {
     
     const size_t character::relations::max_game_acquaintance;
     character::relations::relations() noexcept :
-      acquaintances{std::make_pair(nullptr, character::relations::data{0, 0})}
+      acquaintances{std::make_pair(nullptr, character::relations::data{})}
     {
       ASSERT(acquaintances[max_game_acquaintance-1].first == nullptr);
     }
     
-    bool character::relations::is_acquaintance(character* c, int32_t* friendship, int32_t* love) const {
+//     bool character::relations::is_acquaintance(character* c, int32_t* friendship, int32_t* love) const {
+//       for (const auto &pair : acquaintances) {
+//         if (pair.first == c) {
+//           if (friendship != nullptr) *friendship = pair.second.friendship;
+//           if (love != nullptr) *love = pair.second.friendship;
+//           return true;
+//         }
+//       }
+//       
+//       return false;
+//     }
+//     
+//     bool character::relations::add_acquaintance(character* c, int32_t friendship_level, int32_t love_level) {
+//       for (auto &pair : acquaintances) {
+//         if (pair.first == nullptr) {
+//           pair.first = c;
+//           pair.second = { friendship_level, love_level };
+//           ASSERT(is_acquaintance(c));
+//           return true;
+//         }
+//       }
+//       
+//       return false;
+//     }
+
+//     bool character::relations::is_acquaintance(character* c, int64_t* type) const {
+//       for (const auto &pair : acquaintances) {
+//         if (pair.first == c) {
+//           if (type != nullptr) *type = pair.second.type;
+//           return true;
+//         }
+//       }
+//       
+//       return false;
+//     }
+//     
+//     bool character::relations::add_acquaintance(character* c, int64_t type) {
+//       for (auto &pair : acquaintances) {
+//         if (pair.first == nullptr) {
+//           pair.first = c;
+//           pair.second = relations::data{ static_cast<core::relationship::values>(type) };
+//           ASSERT(is_acquaintance(c));
+//           return true;
+//         }
+//       }
+//       
+//       return false;
+//     }
+//     
+//     bool character::relations::remove_acquaintance(character* c) {
+//       for (auto &pair : acquaintances) {
+//         if (pair.first == c) {
+//           pair.first = nullptr;
+//           //pair.second = { INT64_MAX };
+//           pair.second = relations::data{ static_cast<core::relationship::values>(INT64_MAX) };
+//           return true;
+//         }
+//       }
+//       
+//       return false;
+//     }
+
+    bool character::relations::is_acquaintance(const character* c, const size_t &type) const {
       for (const auto &pair : acquaintances) {
         if (pair.first == c) {
-          if (friendship != nullptr) *friendship = pair.second.friendship;
-          if (love != nullptr) *love = pair.second.friendship;
-          return true;
+          if (type == SIZE_MAX) return true;
+          return pair.second.types.get(type);
         }
       }
       
       return false;
     }
     
-    bool character::relations::add_acquaintance(character* c, int32_t friendship_level, int32_t love_level) {
+    size_t character::relations::get_acquaintance_raw(const character* c) const {
+      for (const auto &pair : acquaintances) {
+        // размер контейнера 1, проверяется статик ассертом в character::relations::data
+        if (pair.first == c) return pair.second.types.container[0];
+      }
+      
+      return 0;
+    }
+    
+    bool character::relations::is_lover(const character* c) const {
+      for (const auto &pair : acquaintances) {
+        if (pair.first == c) return relationship::has_love(pair.second.types);
+      }
+      
+      return false;
+    }
+    
+    bool character::relations::is_friend(const character* c) const {
+      for (const auto &pair : acquaintances) {
+        if (pair.first == c) return relationship::has_good(pair.second.types);
+      }
+      
+      return false;
+    }
+    
+    bool character::relations::is_rival(const character* c) const {
+      for (const auto &pair : acquaintances) {
+        if (pair.first == c) return relationship::has_bad(pair.second.types);
+      }
+      
+      return false;
+    }
+    
+    bool character::relations::is_neutral(const character* c) const {
+      for (const auto &pair : acquaintances) {
+        if (pair.first == c) return relationship::has_neutral(pair.second.types);
+      }
+      
+      return false;
+    }
+    
+    bool character::relations::add_acquaintance(character* c, const size_t &type) {
+      for (auto &pair : acquaintances) {
+        if (pair.first == c) {
+          pair.second.types.set(type, true);
+          return true;
+        }
+      }
+      
       for (auto &pair : acquaintances) {
         if (pair.first == nullptr) {
           pair.first = c;
-          pair.second = { friendship_level, love_level };
-          ASSERT(is_acquaintance(c));
+          pair.second.types.set(type, true);
           return true;
         }
       }
@@ -82,11 +192,11 @@ namespace devils_engine {
       return false;
     }
     
-    bool character::relations::remove_acquaintance(character* c) {
+    bool character::relations::remove_acquaintance(character* c, const size_t &type) {
       for (auto &pair : acquaintances) {
         if (pair.first == c) {
-          pair.first = nullptr;
-          pair.second = { 0, 0 };
+          pair.second.types.set(type, false);
+          if (pair.second.types.empty()) pair.first = nullptr;
           return true;
         }
       }
@@ -95,14 +205,14 @@ namespace devils_engine {
     }
     
     // нужно ли тут что то вызывать?
-    void character::relations::remove_all_neutral() {
-      for (auto &pair : acquaintances) {
-        if (pair.second.friendship == 0 || pair.second.love == 0) {
-          pair.first = nullptr;
-          pair.second = { 0, 0 };
-        }
-      }
-    }
+//     void character::relations::remove_all_neutral() {
+//       for (auto &pair : acquaintances) {
+//         if (pair.second.friendship == 0 || pair.second.love == 0) {
+//           pair.first = nullptr;
+//           pair.second = { 0, 0 };
+//         }
+//       }
+//     }
     
     character::character(const bool male, const bool dead) : 
       name_number(0), 
@@ -134,6 +244,17 @@ namespace devils_engine {
 //       events.reserve(0);
     }
     
+    // есть ли у персонажа земля? что такое земля?
+    bool character::is_landed() const {
+      if (!self.valid()) return false;
+      
+      for (auto t = self->titles; t != nullptr; t = utils::ring::list_next<utils::list_type::titles>(t, self->titles)) {
+        if (t->type() == core::titulus::type::city) return true;
+      }
+      
+      return false;
+    }
+    
     bool character::is_independent() const {
       if (!self.valid()) {
         ASSERT(suzerain != nullptr);
@@ -144,7 +265,7 @@ namespace devils_engine {
     }
     
     // нужно потрудиться и при смене реалма не забыть обновить эту информацию
-    bool character::is_prisoner() const { return !imprisoner.valid(); }
+    bool character::is_prisoner() const { return prison.valid(); }
     bool character::is_married() const { return family.consort != nullptr; }
     bool character::is_male() const { return data.get(system::male); }
     bool character::is_female() const { return !is_male(); }
@@ -273,10 +394,121 @@ namespace devils_engine {
       return true;
     }
     
+    bool character::has_raised_armies() const {
+      if (!self.valid()) return false;
+      
+      for (auto t = self->titles; t != nullptr; t = utils::ring::list_next<utils::list_type::titles>(t, self->titles)) {
+        if (t->type() != core::titulus::type::baron) continue;
+        auto p = t->get_province();
+        // может ли не быть армии в провинции? вообще может быть
+        // но вряд ли провинции без хозяина не имеют армии
+        if (!p->offensive_army.valid()) continue;
+        if (p->offensive_army->state != core::army::state::stationed) return true;
+      }
+      
+      return false;
+    }
+    
+    bool character::can_become_stateman() const { return rights::can_become_stateman(this); }
+    bool character::can_become_councillor() const { return rights::can_become_councillor(this); }
+    bool character::can_become_magistrate() const { return rights::can_become_magistrate(this); }
+    bool character::can_become_assembler() const { return rights::can_become_assembler(this); }
+    bool character::can_become_clergyman() const { return rights::can_become_clergyman(this); }
+    bool character::has_right_to_become_stateman() const { return rights::has_right_to_become_stateman(this); }
+    bool character::has_right_to_become_councillor() const { return rights::has_right_to_become_councillor(this); }
+    bool character::has_right_to_become_magistrate() const { return rights::has_right_to_become_magistrate(this); }
+    bool character::has_right_to_become_assembler() const { return rights::has_right_to_become_assembler(this); }
+    bool character::has_right_to_become_clergyman() const { return rights::has_right_to_become_clergyman(this); }
+    bool character::can_become_stateman_elector() const { return rights::can_become_stateman_elector(this); }
+    bool character::can_become_councillor_elector() const { return rights::can_become_councillor_elector(this); }
+    bool character::can_become_magistrate_elector() const { return rights::can_become_tribunal_elector(this); }
+    bool character::can_become_assembler_elector() const { return rights::can_become_assembly_elector(this); }
+    bool character::can_become_clergyman_elector() const { return rights::can_become_clergyman_elector(this); }
+    bool character::has_right_to_become_stateman_elector() const { return rights::has_right_to_become_stateman_elector(this); }
+    bool character::has_right_to_become_councillor_elector() const { return rights::has_right_to_become_councillor_elector(this); }
+    bool character::has_right_to_become_magistrate_elector() const { return rights::has_right_to_become_tribunal_elector(this); }
+    bool character::has_right_to_become_assembler_elector() const { return rights::has_right_to_become_assembly_elector(this); }
+    bool character::has_right_to_become_clergyman_elector() const { return rights::has_right_to_become_clergyman_elector(this); }
+    bool character::can_apply_to_the_state() const { return rights::can_apply_to_the_state(this); }
+    bool character::can_apply_to_the_tribunal() const { return rights::can_apply_to_the_tribunal(this); }
+    bool character::can_apply_to_the_council() const { return rights::can_apply_to_the_council(this); }
+    bool character::can_apply_to_the_assembly() const { return rights::can_apply_to_the_assembly(this); }
+    bool character::can_apply_to_the_clergy() const { return rights::can_apply_to_the_clergy(this); }
+    bool character::has_right_to_apply_to_the_state() const { return rights::has_right_to_apply_to_the_state(this); }
+    bool character::has_right_to_apply_to_the_tribunal() const { return rights::has_right_to_apply_to_the_tribunal(this); }
+    bool character::has_right_to_apply_to_the_council() const { return rights::has_right_to_apply_to_the_council(this); }
+    bool character::has_right_to_apply_to_the_assembly() const { return rights::has_right_to_apply_to_the_assembly(this); }
+    bool character::has_right_to_apply_to_the_clergy() const { return rights::has_right_to_apply_to_the_clergy(this); }
+    
     bool character::has_culture(const core::culture* culture) const { return this->culture == culture; }
     bool character::has_culture_group(const core::culture_group* group) const { return culture->group == group; }
     bool character::has_religion(const core::religion* religion) const { return this->religion == religion; }
     bool character::has_religion_group(const core::religion_group* group) const { return religion->group == group; }
+    
+    bool character::is_at_war_with(const core::character* with) const {
+      const auto itr = diplomacy.find(with);
+      if (itr == diplomacy.end()) return false;
+      return itr->second.types.get(diplomacy::war_attacker) || itr->second.types.get(diplomacy::war_defender);
+    }
+    
+    bool character::is_allied_in_war(const core::character* with) const {
+      for (const auto &pair : diplomacy) {
+        if (pair.first == with && (pair.second.types.get(diplomacy::war_attacker) || pair.second.types.get(diplomacy::war_defender))) return false;
+        if (!pair.second.types.get(diplomacy::war_attacker) || !pair.second.types.get(diplomacy::war_defender)) continue;
+        auto war = pair.second.war;
+        assert(war.valid());
+        if (pair.second.types.get(diplomacy::war_attacker)) {
+          for (const auto &attacker : war->attackers) {
+            if (attacker == with) return true;
+          }
+        }
+        
+        if (pair.second.types.get(diplomacy::war_defender)) {
+          for (const auto &defender : war->defenders) {
+            if (defender == with) return true;
+          }
+        }
+      }
+      
+      return false;
+    }
+    
+    bool character::is_liege_or_above(const core::character* l) const {
+      utils::handle<core::realm> liege;
+      if (!self.valid() && !realms[establishment].valid()) {
+        liege = suzerain;
+      } else if (realms[establishment].valid() && realms[establishment]->leader == this) {
+        liege = realms[establishment]->liege;
+      } else {
+        liege = self->liege;
+      }
+      
+      while (liege.valid() && liege->leader != l) {
+        liege = liege->liege;
+      }
+      
+      return !liege.valid();
+    }
+    
+    bool character::is_vassal_or_below(const core::character* l) const {
+      return l->is_liege_or_above(this);
+    }
+    
+    bool character::has_love_relationship(const core::character* l) const {
+      return relations.is_lover(l);
+    }
+    
+    bool character::has_good_relationship(const core::character* l) const {
+      return relations.is_friend(l);
+    }
+    
+    bool character::has_bad_relationship(const core::character* l) const {
+      return relations.is_rival(l);
+    }
+    
+    bool character::has_neutral_relationship(const core::character* l) const {
+      return relations.is_neutral(l);
+    }
     
     bool character::is_child_of(const core::character* of) const { return family.parents[0] == of || family.parents[1] == of; }
     bool character::is_parent_of(const core::character* of) const { return of->is_child_of(this); }
@@ -287,8 +519,9 @@ namespace devils_engine {
     }
     
     bool character::is_half_sibling_of(const core::character* of) const {
-      return (family.parents[0] != nullptr && (family.parents[0] == of->family.parents[0] || family.parents[0] == of->family.parents[1])) || 
-             (family.parents[1] != nullptr && (family.parents[1] == of->family.parents[0] || family.parents[1] == of->family.parents[1]));
+      return ((family.parents[0] != nullptr && (family.parents[0] == of->family.parents[0] || family.parents[0] == of->family.parents[1])) || 
+              (family.parents[1] != nullptr && (family.parents[1] == of->family.parents[0] || family.parents[1] == of->family.parents[1]))) &&
+              !is_sibling_of(of);
     }
     
     bool character::is_grandchild_of(const core::character* of) const {
@@ -614,8 +847,12 @@ namespace devils_engine {
       return suzerain;
     }
     
-    utils::handle<core::realm> character::get_imprisoner() const {
+    character* character::get_imprisoner() const {
       return imprisoner;
+    }
+    
+    utils::handle<core::realm> character::get_prison() const {
+      return prison;
     }
     
     utils::handle<core::realm> character::get_self_realm() const {

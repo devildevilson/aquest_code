@@ -12,6 +12,10 @@
 // #include "troop.h"
 
 // у армий наверное будет несколько состояний: армия может быть разбита (в этом состоянии будет зализывать раны в городе?)
+// можем ли мы выделить армию которая находится внутри города?
+
+// как сделать поведение атаки чего нибудь? если я пытаюсь перейти на тайл с противником
+// мне нужно определить противников
 
 namespace devils_engine {
   namespace core {
@@ -40,11 +44,37 @@ namespace devils_engine {
       static const size_t flags_container_size = 25;
       static const size_t max_troops_count = 20;
       
+      enum class state {
+        stationed,      // в провинции
+        on_land,        // на земле
+        sailing,        // на воде (думаю что погрузка в воду должна быть доступна везде, но ценою очков передвижения)
+        pending_siege,  // игроку необходимо выбрать что делать со штурмом города
+        pending_battle, // игроку необходимо выбрать что делать при встрече с армией противника
+        besieging,      // занята осадой
+        fleeing,        // армия должна вернуться после того как была разбита
+        
+        // на всякий случай
+        reserved1,
+        reserved2,
+        reserved3,
+        
+        count
+      };
+      
+      enum relationship {
+        controlled_unit,
+        ally_unit,
+        neutral_unit,
+        enemy_unit,
+        
+        count
+      };
+      
       size_t object_token;
       
       // принадлежность армий, может ли реалм уничтожиться до уничтожения армии? мы можем доедать последнюю провку у противника
       // но тогда должна вызваться чистка, в которой собственно мы должны будем избавиться от армий и прочего
-      utils::handle<realm> owner;
+      utils::handle<realm> owner; // овнер по идее всегда владелец провинции
       character* general;
       // отряды + полководцы (главный полководец должен быть всегда первым)
       // количество отрядов в армии может быть больше 20
@@ -61,7 +91,11 @@ namespace devils_engine {
       // графика (иконка и отображение на карте)
       //render::image_t map_img; // на карте это нужно отображать с флагом
       
+      enum state state;
       province* origin;
+      city* target_city;
+      utils::handle<army> target_army;
+      // наверное еще мы можем провзаимодействовать с героем
       //const city* origin;
       
       //uint32_t army_gpu_slot;
@@ -81,6 +115,8 @@ namespace devils_engine {
       void set_img(const render::image_t &img);
       render::image_t get_img() const; // куда пихнуть геральдику? так не хочется еще заводить переменные для армий
       
+      // мы не можем искать путь и двигаться пока находимся в определенном состоянии
+      // и при этом мы не можем управлять армией когда она убегает
       size_t can_advance() const;
       bool can_full_advance() const;
       void advance();
@@ -93,6 +129,24 @@ namespace devils_engine {
       bool is_home() const;
       
       troop* next_troop(const troop* current) const;
+      
+      relationship get_relation(const utils::handle<core::army> &another) const;
+      relationship get_relation(const utils::handle<core::hero_troop> &another) const;
+      relationship get_relation(const core::city* another) const;
+      
+      bool can_be_raized() const;
+      bool can_be_returned() const;
+      bool is_in_pending_state() const;
+      bool is_in_movement_state() const;
+      
+      void place_army(const uint32_t &tile_index);
+      
+      void raize_army(const uint32_t &tile_index);
+      // возвращаем армию, армию мы можем вернуть когда? 
+      // вообще по идее в любой момент кроме случаев когда
+      // армия свободна и не находится рядом с противником
+      void return_army();
+      // тут мне нужно напасть на город или на армию
       
 #define GET_SCOPE_COMMAND_FUNC(name, a, b, type) type get_##name() const;
       ARMY_GET_SCOPE_COMMANDS_LIST

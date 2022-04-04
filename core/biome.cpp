@@ -77,8 +77,7 @@ namespace devils_engine {
       {
         "data",
         utils::check_table_value::type::array_t,
-        0, 0,
-        {
+        0, 0, {
           {
             "color",
             utils::check_table_value::type::int_t,
@@ -94,25 +93,31 @@ namespace devils_engine {
             utils::check_table_value::type::array_t,
             0, 0, {
               {
-                "texture",
-                utils::check_table_value::type::string_t,
-                utils::check_table_value::value_required, 0, {}
-              },
-              {
-                "min_scale",
-                utils::check_table_value::type::float_t,
-                utils::check_table_value::value_required, 0, {}
-              },
-              {
-                "max_scale",
-                utils::check_table_value::type::float_t,
-                utils::check_table_value::value_required, 0, {}
-              },
-              {
-                "probability",
-                utils::check_table_value::type::float_t,
-                utils::check_table_value::value_required, 0, {}
-              },
+                NESTED_ARRAY,
+                utils::check_table_value::type::array_t,
+                0, 0, {
+                  {
+                    "texture",
+                    utils::check_table_value::type::string_t,
+                    utils::check_table_value::value_required, 0, {}
+                  },
+                  {
+                    "min_scale",
+                    utils::check_table_value::type::float_t,
+                    utils::check_table_value::value_required, 0, {}
+                  },
+                  {
+                    "max_scale",
+                    utils::check_table_value::type::float_t,
+                    utils::check_table_value::value_required, 0, {}
+                  },
+                  {
+                    "probability",
+                    utils::check_table_value::type::float_t,
+                    utils::check_table_value::value_required, 0, {}
+                  },
+                }
+              }
             }
           }
         }

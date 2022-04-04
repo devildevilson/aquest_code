@@ -3,6 +3,7 @@
 
 #include <string_view>
 #include "parallel_hashmap/phmap.h"
+#include "utils/bit_field.h"
 
 // у меня есть кое какие идеи по продвинутой дипломатии
 // прежде всего альянс по династическому браку, нужно указать персонажа
@@ -27,10 +28,34 @@
   DIPLOMACY_TYPE_FUNC(faction_member) \
   DIPLOMACY_TYPE_FUNC(tributary) \
   DIPLOMACY_TYPE_FUNC(tribute_collector) \
-  DIPLOMACY_TYPE_FUNC(truce_2way) \
+  /*DIPLOMACY_TYPE_FUNC(truce_2way)*/ \
   DIPLOMACY_TYPE_FUNC(truce_holder) \
   DIPLOMACY_TYPE_FUNC(truce_receiver) \
 
+#define RELATIONSHIP_TYPES_LIST \
+  GOOD_RELATIONSHIP_TYPE_FUNC(potential_friend) \
+  GOOD_RELATIONSHIP_TYPE_FUNC(mate) \
+  GOOD_RELATIONSHIP_TYPE_FUNC(best_friend) \
+  GOOD_RELATIONSHIP_TYPE_FUNC(soldier_friend) \
+  LOVE_RELATIONSHIP_TYPE_FUNC(potential_lover) \
+  LOVE_RELATIONSHIP_TYPE_FUNC(crush) \
+  LOVE_RELATIONSHIP_TYPE_FUNC(lover) \
+  LOVE_RELATIONSHIP_TYPE_FUNC(soulmate) \
+  BAD_RELATIONSHIP_TYPE_FUNC(potential_rival) \
+  BAD_RELATIONSHIP_TYPE_FUNC(oaf) \
+  BAD_RELATIONSHIP_TYPE_FUNC(rival) \
+  BAD_RELATIONSHIP_TYPE_FUNC(nemesis) \
+  BAD_RELATIONSHIP_TYPE_FUNC(bully) \
+  /*RELATIONSHIP_TYPE_FUNC(victim)*/ \
+  RELATIONSHIP_TYPE_FUNC(ward) \
+  RELATIONSHIP_TYPE_FUNC(mentor) \
+  RELATIONSHIP_TYPE_FUNC(student) \
+  RELATIONSHIP_TYPE_FUNC(court_physician) \
+  RELATIONSHIP_TYPE_FUNC(guardian) \
+  RELATIONSHIP_TYPE_FUNC(intrigue_mentor) \
+  RELATIONSHIP_TYPE_FUNC(intrigue_student) \
+  
+  
 namespace devils_engine {
   namespace core {
     namespace diplomacy {
@@ -43,6 +68,34 @@ namespace devils_engine {
       
       extern const std::string_view names[];
       extern const phmap::flat_hash_map<std::string_view, values> map;
+    }
+    
+    namespace relationship {
+      enum values {
+#define RELATIONSHIP_TYPE_FUNC(name) name,
+#define GOOD_RELATIONSHIP_TYPE_FUNC(name) RELATIONSHIP_TYPE_FUNC(name)
+#define LOVE_RELATIONSHIP_TYPE_FUNC(name) RELATIONSHIP_TYPE_FUNC(name)
+#define BAD_RELATIONSHIP_TYPE_FUNC(name)  RELATIONSHIP_TYPE_FUNC(name)
+        RELATIONSHIP_TYPES_LIST
+#undef RELATIONSHIP_TYPE_FUNC
+#undef GOOD_RELATIONSHIP_TYPE_FUNC
+#undef LOVE_RELATIONSHIP_TYPE_FUNC
+#undef BAD_RELATIONSHIP_TYPE_FUNC
+        count
+      };
+      
+      extern const std::string_view names[];
+      extern const phmap::flat_hash_map<std::string_view, values> map;
+      
+      bool is_good(const values val);
+      bool is_love(const values val);
+      bool is_bad(const values val);
+      bool is_neutral(const values val);
+      
+      bool has_good(const utils::bit_field<core::relationship::count> &val);
+      bool has_love(const utils::bit_field<core::relationship::count> &val);
+      bool has_bad(const utils::bit_field<core::relationship::count> &val);
+      bool has_neutral(const utils::bit_field<core::relationship::count> &val);
     }
   }
 }

@@ -35,6 +35,13 @@
 // так же нужен глобальный обход по всем группам объектов
 // тип: every_character
 
+// нужен custom_description, но при этом мне нужно как то пометить его конец
+// hidden_effect - тупа ничего не делаем и ничего не рисуем (хотя наверное лучше будет так же как с custom_description, пометить конец блока)
+// для некоторых эвентов было бы неплохо сделать списки
+// send_interface_toast - отправить сообщение интерфейсу
+// trigger_event - запустить эвент, как указать аргументы?
+// show_as_tooltip - показать часть эффектов в тултипе, где? кому? в описании сказано, что в этом блоке эффекты только показать (но не выполнять)
+
 namespace devils_engine {
   namespace script {
     class change_scope_condition final : public interface {
@@ -247,6 +254,19 @@ namespace devils_engine {
       static const size_t output_type = object::type_bit::boolean;
       equals_to(const interface* get_obj) noexcept;
       ~equals_to() noexcept;
+      object process(context* ctx) const override;
+      void draw(context* ctx) const override;
+    private:
+      const interface* get_obj;
+    };
+    
+    class not_equals_to final : public interface {
+    public:
+      static const size_t type_index;
+      static const size_t expected_types = object::type_bit::all;
+      static const size_t output_type = object::type_bit::boolean;
+      not_equals_to(const interface* get_obj) noexcept;
+      ~not_equals_to() noexcept;
       object process(context* ctx) const override;
       void draw(context* ctx) const override;
     private:

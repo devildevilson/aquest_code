@@ -529,6 +529,26 @@ namespace devils_engine {
       ctx->draw(&dd);
     }
     
+    const size_t not_equals_to::type_index = commands::values::not_equals_to;
+    const size_t not_equals_to::expected_types;
+    const size_t not_equals_to::output_type;
+    not_equals_to::not_equals_to(const interface* get_obj) noexcept : get_obj(get_obj) {}
+    not_equals_to::~not_equals_to() noexcept { get_obj->~interface(); }
+    object not_equals_to::process(context* ctx) const {
+      const auto obj = get_obj->process(ctx);
+      return object(ctx->current != obj);
+    }
+    
+    void not_equals_to::draw(context* ctx) const {
+      const auto obj = get_obj->process(ctx);
+      const auto val = object(ctx->current != obj);
+      draw_data dd(ctx);
+      dd.function_name = commands::names[type_index];
+      dd.value = val;
+      dd.original = obj;
+      ctx->draw(&dd);
+    }
+    
     const size_t equality::type_index = commands::values::equality;
     const size_t equality::expected_types;
     const size_t equality::output_type;

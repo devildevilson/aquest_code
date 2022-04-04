@@ -40,7 +40,9 @@ namespace devils_engine {
 #define CONDITION_COMMAND_FUNC(name) COMMAND_NAME_FUNC(name)           
 #define CONDITION_ARG_COMMAND_FUNC(name, a, b, c) COMMAND_NAME_FUNC(name)
 #define ACTION_COMMAND_FUNC(name) COMMAND_NAME_FUNC(name)  
-#define COMMON_COMMAND_FUNC(name) COMMAND_NAME_FUNC(name)              
+#define COMMON_COMMAND_FUNC(name) COMMAND_NAME_FUNC(name)    
+#define CASUS_BELLI_FLAG_FUNC(name) CONDITION_COMMAND_FUNC(name)
+#define CASUS_BELLI_NUMBER_FUNC(name) CONDITION_COMMAND_FUNC(name)
         SCRIPT_COMMANDS_LIST 
 #undef LOGIC_BLOCK_COMMAND_FUNC    
 #undef NUMERIC_COMMAND_BLOCK_FUNC  
@@ -51,6 +53,8 @@ namespace devils_engine {
 #undef CONDITION_ARG_COMMAND_FUNC
 #undef ACTION_COMMAND_FUNC       
 #undef COMMON_COMMAND_FUNC         
+#undef CASUS_BELLI_FLAG_FUNC
+#undef CASUS_BELLI_NUMBER_FUNC
 
 #undef COMMAND_NAME_FUNC
 

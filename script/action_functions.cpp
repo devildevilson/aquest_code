@@ -176,42 +176,54 @@ namespace devils_engine {
       // все таки скорее всего нападать нужно на персонажа, а тот уже разберется чем пользоваться
       // да и вообще вся дипломатия должна быть в персонаже, к сожалению в реалме делать все взаимодействия неудобно
       
-      auto realm_attacker = current->self;
-      if (current->realms[core::character::establishment].valid() && 
-          current->realms[core::character::establishment]->is_state_independent_power() &&
-          current->realms[core::character::establishment]->leader == current) {
-        realm_attacker = current->realms[core::character::establishment];
-      }
+//       auto realm_attacker = current->self;
+//       if (current->realms[core::character::establishment].valid() && 
+//           current->realms[core::character::establishment]->is_state_independent_power() &&
+//           current->realms[core::character::establishment]->leader == current) {
+//         realm_attacker = current->realms[core::character::establishment];
+//       }
+//       
+//       if (attacker_realm != nullptr) {
+//         const auto obj = attacker_realm->process(ctx);
+//         realm_attacker = obj.get<utils::handle<core::realm>>();
+//       }
+//       
+//       auto realm_defender = target->self;
+//       if (target->realms[core::character::establishment].valid() && 
+//           target->realms[core::character::establishment]->is_state_independent_power() &&
+//           target->realms[core::character::establishment]->leader == target) {
+//         realm_defender = target->realms[core::character::establishment];
+//       }
       
-      if (attacker_realm != nullptr) {
-        const auto obj = attacker_realm->process(ctx);
-        realm_attacker = obj.get<utils::handle<core::realm>>();
-      }
-      
-      auto realm_defender = target->self;
-      if (target->realms[core::character::establishment].valid() && 
-          target->realms[core::character::establishment]->is_state_independent_power() &&
-          target->realms[core::character::establishment]->leader == target) {
-        realm_defender = target->realms[core::character::establishment];
-      }
-      
-      if (defender_realm != nullptr) {
-        change_scope cs(ctx, target_obj, ctx->current);
-        const auto obj = defender_realm->process(ctx);
-        realm_defender = obj.get<utils::handle<core::realm>>();
-      }
+//       if (defender_realm != nullptr) {
+//         change_scope cs(ctx, target_obj, ctx->current);
+//         const auto obj = defender_realm->process(ctx);
+//         realm_defender = obj.get<utils::handle<core::realm>>();
+//       }
       
       // возможно потребуется больше проверок? возможно потребуется проверка ведут ли эти два персонажа войну друг с другом
       // нужно проверить не отвалился ли за это время хендл
-      if (const auto itr = realm_attacker->relations.find(realm_defender); 
-          itr != realm_attacker->relations.end() && (itr->second.relation_type == core::diplomacy::war_attacker || itr->second.relation_type == core::diplomacy::war_defender)) {
-        throw std::runtime_error("War between this realms is already exists");
-      }
+//       if (const auto itr = realm_attacker->relations.find(realm_defender); 
+//           itr != realm_attacker->relations.end() && (itr->second.relation_type == core::diplomacy::war_attacker || itr->second.relation_type == core::diplomacy::war_defender)) {
+//         throw std::runtime_error("War between this realms is already exists");
+//       }
+//       
+//       if (const auto itr = realm_defender->relations.find(realm_attacker); 
+//           itr != realm_defender->relations.end() && (itr->second.relation_type == core::diplomacy::war_attacker || itr->second.relation_type == core::diplomacy::war_defender)) {
+//         throw std::runtime_error("War between this realms is already exists");
+//       }
       
-      if (const auto itr = realm_defender->relations.find(realm_attacker); 
-          itr != realm_defender->relations.end() && (itr->second.relation_type == core::diplomacy::war_attacker || itr->second.relation_type == core::diplomacy::war_defender)) {
-        throw std::runtime_error("War between this realms is already exists");
-      }
+      if (
+        const auto itr = current->diplomacy.find(target);
+        itr != current->diplomacy.end() && 
+        (itr->second.types.get(core::diplomacy::war_attacker) || itr->second.types.get(core::diplomacy::war_defender))
+      ) throw std::runtime_error("War between this characters is already exists");
+      
+      if (
+        const auto itr = target->diplomacy.find(current);
+        itr != target->diplomacy.end() && 
+        (itr->second.types.get(core::diplomacy::war_attacker) || itr->second.types.get(core::diplomacy::war_defender))
+      ) throw std::runtime_error("War between this characters is already exists");
       
       auto core_ctx = global::get<systems::map_t>()->core_context;
       auto war_h = core_ctx->create_war();
@@ -228,12 +240,19 @@ namespace devils_engine {
         war_h->target_titles.push_back(title);
       }
       
-      core::realm::relation r;
-      r.relation_type = core::diplomacy::war_attacker;
-      r.war = war_h;
-      realm_attacker->relations.emplace(realm_defender, r);
-      r.relation_type = core::diplomacy::war_defender;
-      realm_defender->relations.emplace(realm_attacker, r);
+      {
+        core::character::diplo_relation r;
+        r.types.set(core::diplomacy::war_attacker, true);
+        r.war = war_h;
+        current->diplomacy.emplace(target, r);
+      }
+      
+      {
+        core::character::diplo_relation r;
+        r.types.set(core::diplomacy::war_defender, true);
+        r.war = war_h;
+        target->diplomacy.emplace(current, r);
+      }
       
       // стартуем on_action
       
@@ -246,43 +265,43 @@ namespace devils_engine {
       const auto cb_obj = cb_script->process(ctx);
       const auto claimant_obj = claimant_script->process(ctx);
       
-      auto current = ctx->current.get<core::character*>();
-      auto target = target_obj.get<core::character*>();
+//       auto current = ctx->current.get<core::character*>();
+//       auto target = target_obj.get<core::character*>();
       
-      auto realm_attacker = current->self;
-      if (current->realms[core::character::establishment].valid() && 
-          current->realms[core::character::establishment]->is_state_independent_power() &&
-          current->realms[core::character::establishment]->leader == current) {
-        realm_attacker = current->realms[core::character::establishment];
-      }
-      
-      if (attacker_realm != nullptr) {
-        const auto obj = attacker_realm->process(ctx);
-        realm_attacker = obj.get<utils::handle<core::realm>>();
-      }
-      
-      auto realm_defender = target->self;
-      if (target->realms[core::character::establishment].valid() && 
-          target->realms[core::character::establishment]->is_state_independent_power() &&
-          target->realms[core::character::establishment]->leader == target) {
-        realm_defender = target->realms[core::character::establishment];
-      }
-      
-      if (defender_realm != nullptr) {
-        change_scope cs(ctx, target_obj, ctx->current);
-        const auto obj = defender_realm->process(ctx);
-        realm_defender = obj.get<utils::handle<core::realm>>();
-      }
+//       auto realm_attacker = current->self;
+//       if (current->realms[core::character::establishment].valid() && 
+//           current->realms[core::character::establishment]->is_state_independent_power() &&
+//           current->realms[core::character::establishment]->leader == current) {
+//         realm_attacker = current->realms[core::character::establishment];
+//       }
+//       
+//       if (attacker_realm != nullptr) {
+//         const auto obj = attacker_realm->process(ctx);
+//         realm_attacker = obj.get<utils::handle<core::realm>>();
+//       }
+//       
+//       auto realm_defender = target->self;
+//       if (target->realms[core::character::establishment].valid() && 
+//           target->realms[core::character::establishment]->is_state_independent_power() &&
+//           target->realms[core::character::establishment]->leader == target) {
+//         realm_defender = target->realms[core::character::establishment];
+//       }
+//       
+//       if (defender_realm != nullptr) {
+//         change_scope cs(ctx, target_obj, ctx->current);
+//         const auto obj = defender_realm->process(ctx);
+//         realm_defender = obj.get<utils::handle<core::realm>>();
+//       }
       
       draw_data dd(ctx);
       dd.function_name = commands::names[type_index];
       dd.set_arg(0, "attacker", ctx->current);
-      dd.set_arg(1, "attacker_realm", realm_attacker);
-      dd.set_arg(2, "target", target_obj);
-      dd.set_arg(3, "target_realm", realm_defender);
-      dd.set_arg(4, "cb", cb_obj);
-      dd.set_arg(5, "claimant", claimant_obj);
-      const size_t start = 6;
+//       dd.set_arg(1, "attacker_realm", realm_attacker);
+      dd.set_arg(1, "target", target_obj);
+//       dd.set_arg(3, "target_realm", realm_defender);
+      dd.set_arg(2, "cb", cb_obj);
+      dd.set_arg(3, "claimant", claimant_obj);
+      const size_t start = 4;
       size_t counter = start;
       for (auto t = titles_script; t != nullptr; t = t->next) {
         const auto title_obj = t->process(ctx);
@@ -325,6 +344,9 @@ namespace devils_engine {
       auto w = ctx->current.get<utils::handle<core::war>>();
       // да, нападают то персонажи друг на друга
       //w->attackers.push_back(c);
+      //c->diplomacy.emplace();
+      //fire_event(on_attacker_add)
+      //fire_event(on_attacker_add_post)
     }
     
     void add_attacker::draw(context* ctx) const {

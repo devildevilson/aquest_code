@@ -234,6 +234,12 @@ namespace devils_engine {
       return object(val);
     }
     
+    struct object round::process(context* ctx) const {
+      const auto &obj = value->process(ctx);
+      const double val = std::round(obj.get<double>()); // на проверку поди можно забить
+      return object(val);
+    }
+    
     struct object sqrt::process(context* ctx) const {
       const auto &obj = value->process(ctx);
       const double val = std::sqrt(obj.get<double>()); // на проверку поди можно забить

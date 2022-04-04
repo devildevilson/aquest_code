@@ -605,7 +605,7 @@ namespace devils_engine {
 
     static size_t count_good_acquaintances(core::character* current) {
       size_t counter = 0;
-      for (const auto &pair : current->relations.acquaintances) { counter += size_t(pair.first != nullptr && (pair.second.friendship > 0 || pair.second.love > 0)); }
+      for (const auto &pair : current->relations.acquaintances) { counter += size_t(pair.first != nullptr && core::relationship::has_good(pair.second.types)); }
       return counter;
     }
     
@@ -613,7 +613,7 @@ namespace devils_engine {
       double counter = 0;
       for (const auto &pair : current->relations.acquaintances) { 
         if (counter >= max_count) break;
-        if (pair.first == nullptr || (pair.second.friendship < 0 && pair.second.love < 0)) continue;
+        if (pair.first == nullptr || !core::relationship::has_good(pair.second.types)) continue;
         counter += f(ctx, pair.first);
       }
       return counter;
@@ -622,7 +622,7 @@ namespace devils_engine {
     static size_t each_good_acquaintance_logic(context* ctx, const size_t &, core::character* current, const std::function<double(context*, core::character*)> &f) {
       bool counter = true;
       for (const auto &pair : current->relations.acquaintances) { 
-        if (pair.first == nullptr || (pair.second.friendship < 0 && pair.second.love < 0)) continue;
+        if (pair.first == nullptr || !core::relationship::has_good(pair.second.types)) continue;
         const double ret = f(ctx, pair.first);
         counter = counter && (std::isnan(ret) ? true : bool(ret));
       }
@@ -630,13 +630,13 @@ namespace devils_engine {
     }
     
     static object first_good_acquaintance(core::character* current) {
-      for (const auto &pair : current->relations.acquaintances) { if (pair.first != nullptr && (pair.second.friendship > 0 || pair.second.love > 0)) return object(pair.first); }
+      for (const auto &pair : current->relations.acquaintances) { if (pair.first != nullptr && core::relationship::has_good(pair.second.types)) return object(pair.first); }
       return object();
     }
     
     static size_t count_bad_acquaintances(core::character* current) {
       size_t counter = 0;
-      for (const auto &pair : current->relations.acquaintances) { counter += size_t(pair.first != nullptr && (pair.second.friendship < 0 || pair.second.love < 0)); }
+      for (const auto &pair : current->relations.acquaintances) { counter += size_t(pair.first != nullptr && core::relationship::has_bad(pair.second.types)); }
       return counter;
     }
     
@@ -644,7 +644,7 @@ namespace devils_engine {
       double counter = 0;
       for (const auto &pair : current->relations.acquaintances) { 
         if (counter >= max_count) break;
-        if (pair.first == nullptr || (pair.second.friendship > 0 && pair.second.love > 0)) continue;
+        if (pair.first == nullptr || !core::relationship::has_bad(pair.second.types)) continue;
         counter += f(ctx, pair.first);
       }
       return counter;
@@ -653,7 +653,7 @@ namespace devils_engine {
     static size_t each_bad_acquaintance_logic(context* ctx, const size_t &, core::character* current, const std::function<double(context*, core::character*)> &f) {
       bool counter = true;
       for (const auto &pair : current->relations.acquaintances) { 
-        if (pair.first == nullptr || (pair.second.friendship > 0 && pair.second.love > 0)) continue;
+        if (pair.first == nullptr || !core::relationship::has_bad(pair.second.types)) continue;
         const double ret = f(ctx, pair.first);
         counter = counter && (std::isnan(ret) ? true : bool(ret));
       }
@@ -661,140 +661,204 @@ namespace devils_engine {
     }
     
     static object first_bad_acquaintance(core::character* current) {
-      for (const auto &pair : current->relations.acquaintances) { if (pair.first != nullptr && (pair.second.friendship < 0 || pair.second.love < 0)) return object(pair.first); }
+      for (const auto &pair : current->relations.acquaintances) { if (pair.first != nullptr && core::relationship::has_bad(pair.second.types)) return object(pair.first); }
       return object();
     }
     
-    static size_t count_pals(core::character* current) {
+    static size_t count_love_acquaintances(core::character* current) {
       size_t counter = 0;
-      for (const auto &pair : current->relations.acquaintances) { counter += size_t(pair.first != nullptr && pair.second.friendship > 0); }
+      for (const auto &pair : current->relations.acquaintances) { counter += size_t(pair.first != nullptr && core::relationship::has_love(pair.second.types)); }
       return counter;
     }
     
-    static double each_pal(context* ctx, const size_t &max_count, core::character* current, const std::function<double(context*, core::character*)> &f) {
+    static double each_love_acquaintance(context* ctx, const size_t &max_count, core::character* current, const std::function<double(context*, core::character*)> &f) {
       double counter = 0;
       for (const auto &pair : current->relations.acquaintances) { 
         if (counter >= max_count) break;
-        if (pair.first == nullptr || pair.second.friendship <= 0) continue;
+        if (pair.first == nullptr || !core::relationship::has_love(pair.second.types)) continue;
         counter += f(ctx, pair.first);
       }
       return counter;
     }
     
-    static size_t each_pal_logic(context* ctx, const size_t &, core::character* current, const std::function<double(context*, core::character*)> &f) {
+    static size_t each_love_acquaintance_logic(context* ctx, const size_t &, core::character* current, const std::function<double(context*, core::character*)> &f) {
       bool counter = true;
-      for (const auto &pair : current->relations.acquaintances) {
-        if (pair.first == nullptr || pair.second.friendship <= 0) continue;
+      for (const auto &pair : current->relations.acquaintances) { 
+        if (pair.first == nullptr || !core::relationship::has_love(pair.second.types)) continue;
         const double ret = f(ctx, pair.first);
         counter = counter && (std::isnan(ret) ? true : bool(ret));
       }
       return counter;
     }
     
-    static object first_pal(core::character* current) {
-      for (const auto &pair : current->relations.acquaintances) { if (pair.first != nullptr && pair.second.friendship > 0) return object(pair.first); }
+    static object first_love_acquaintance(core::character* current) {
+      for (const auto &pair : current->relations.acquaintances) { if (pair.first != nullptr && core::relationship::has_love(pair.second.types)) return object(pair.first); }
       return object();
     }
     
-    static size_t count_foes(core::character* current) {
+    static size_t count_neutral_acquaintances(core::character* current) {
       size_t counter = 0;
-      for (const auto &pair : current->relations.acquaintances) { counter += size_t(pair.first != nullptr && pair.second.friendship < 0); }
+      for (const auto &pair : current->relations.acquaintances) { 
+        counter += size_t(pair.first != nullptr && core::relationship::has_neutral(pair.second.types)); 
+      }
       return counter;
     }
     
-    static double each_foe(context* ctx, const size_t &max_count, core::character* current, const std::function<double(context*, core::character*)> &f) {
+    static double each_neutral_acquaintance(context* ctx, const size_t &max_count, core::character* current, const std::function<double(context*, core::character*)> &f) {
       double counter = 0;
       for (const auto &pair : current->relations.acquaintances) { 
         if (counter >= max_count) break;
-        if (pair.first == nullptr && pair.second.friendship >= 0) continue;
+        if (pair.first == nullptr || !core::relationship::has_neutral(pair.second.types)) continue;
         counter += f(ctx, pair.first);
       }
       return counter;
     }
     
-    static size_t each_foe_logic(context* ctx, const size_t &, core::character* current, const std::function<double(context*, core::character*)> &f) {
+    static size_t each_neutral_acquaintance_logic(context* ctx, const size_t &, core::character* current, const std::function<double(context*, core::character*)> &f) {
       bool counter = true;
       for (const auto &pair : current->relations.acquaintances) { 
-        if (pair.first == nullptr && pair.second.friendship >= 0) continue;
+        if (pair.first == nullptr || !core::relationship::has_neutral(pair.second.types)) continue;
         const double ret = f(ctx, pair.first);
         counter = counter && (std::isnan(ret) ? true : bool(ret));
       }
       return counter;
     }
     
-    static object first_foe(core::character* current) {
-      for (const auto &pair : current->relations.acquaintances) { if (pair.first != nullptr && pair.second.friendship < 0) return object(pair.first); }
+    static object first_neutral_acquaintance(core::character* current) {
+      for (const auto &pair : current->relations.acquaintances) { if (pair.first != nullptr && core::relationship::has_neutral(pair.second.types)) return object(pair.first); }
       return object();
     }
     
-    static size_t count_sympathys(core::character* current) {
-      size_t counter = 0;
-      for (const auto &pair : current->relations.acquaintances) { counter += size_t(pair.first != nullptr && pair.second.love > 0); }
-      return counter;
-    }
+//     static size_t count_pals(core::character* current) {
+//       size_t counter = 0;
+//       for (const auto &pair : current->relations.acquaintances) { counter += size_t(pair.first != nullptr && pair.second.friendship > 0); }
+//       return counter;
+//     }
+//     
+//     static double each_pal(context* ctx, const size_t &max_count, core::character* current, const std::function<double(context*, core::character*)> &f) {
+//       double counter = 0;
+//       for (const auto &pair : current->relations.acquaintances) { 
+//         if (counter >= max_count) break;
+//         if (pair.first == nullptr || pair.second.friendship <= 0) continue;
+//         counter += f(ctx, pair.first);
+//       }
+//       return counter;
+//     }
+//     
+//     static size_t each_pal_logic(context* ctx, const size_t &, core::character* current, const std::function<double(context*, core::character*)> &f) {
+//       bool counter = true;
+//       for (const auto &pair : current->relations.acquaintances) {
+//         if (pair.first == nullptr || pair.second.friendship <= 0) continue;
+//         const double ret = f(ctx, pair.first);
+//         counter = counter && (std::isnan(ret) ? true : bool(ret));
+//       }
+//       return counter;
+//     }
+//     
+//     static object first_pal(core::character* current) {
+//       for (const auto &pair : current->relations.acquaintances) { if (pair.first != nullptr && pair.second.friendship > 0) return object(pair.first); }
+//       return object();
+//     }
+//     
+//     static size_t count_foes(core::character* current) {
+//       size_t counter = 0;
+//       for (const auto &pair : current->relations.acquaintances) { counter += size_t(pair.first != nullptr && pair.second.friendship < 0); }
+//       return counter;
+//     }
+//     
+//     static double each_foe(context* ctx, const size_t &max_count, core::character* current, const std::function<double(context*, core::character*)> &f) {
+//       double counter = 0;
+//       for (const auto &pair : current->relations.acquaintances) { 
+//         if (counter >= max_count) break;
+//         if (pair.first == nullptr && pair.second.friendship >= 0) continue;
+//         counter += f(ctx, pair.first);
+//       }
+//       return counter;
+//     }
+//     
+//     static size_t each_foe_logic(context* ctx, const size_t &, core::character* current, const std::function<double(context*, core::character*)> &f) {
+//       bool counter = true;
+//       for (const auto &pair : current->relations.acquaintances) { 
+//         if (pair.first == nullptr && pair.second.friendship >= 0) continue;
+//         const double ret = f(ctx, pair.first);
+//         counter = counter && (std::isnan(ret) ? true : bool(ret));
+//       }
+//       return counter;
+//     }
+//     
+//     static object first_foe(core::character* current) {
+//       for (const auto &pair : current->relations.acquaintances) { if (pair.first != nullptr && pair.second.friendship < 0) return object(pair.first); }
+//       return object();
+//     }
+//     
+//     static size_t count_sympathys(core::character* current) {
+//       size_t counter = 0;
+//       for (const auto &pair : current->relations.acquaintances) { counter += size_t(pair.first != nullptr && pair.second.love > 0); }
+//       return counter;
+//     }
+//     
+//     static double each_sympathy(context* ctx, const size_t &max_count, core::character* current, const std::function<double(context*, core::character*)> &f) {
+//       double counter = 0;
+//       for (const auto &pair : current->relations.acquaintances) { 
+//         if (counter >= max_count) break;
+//         if (pair.first == nullptr && pair.second.love <= 0) continue;
+//         counter += f(ctx, pair.first);
+//       }
+//       return counter;
+//     }
+//     
+//     static size_t each_sympathy_logic(context* ctx, const size_t &, core::character* current, const std::function<double(context*, core::character*)> &f) {
+//       bool counter = true;
+//       for (const auto &pair : current->relations.acquaintances) { 
+//         if (pair.first == nullptr && pair.second.love <= 0) continue;
+//         const double ret = f(ctx, pair.first);
+//         counter = counter && (std::isnan(ret) ? true : bool(ret));
+//       }
+//       return counter;
+//     }
+//     
+//     static object first_sympathy(core::character* current) {
+//       for (const auto &pair : current->relations.acquaintances) { if (pair.first != nullptr && pair.second.love > 0) return object(pair.first); }
+//       return object();
+//     }
+//     
+//     static size_t count_dislikes(core::character* current) {
+//       size_t counter = 0;
+//       for (const auto &pair : current->relations.acquaintances) { counter += size_t(pair.first != nullptr && pair.second.love < 0); }
+//       return counter;
+//     }
+//     
+//     static double each_dislike(context* ctx, const size_t &max_count, core::character* current, const std::function<double(context*, core::character*)> &f) {
+//       double counter = 0;
+//       for (const auto &pair : current->relations.acquaintances) { 
+//         if (counter >= max_count) break;
+//         if (pair.first == nullptr && pair.second.love >= 0) continue;
+//         counter += f(ctx, pair.first);
+//       }
+//       return counter;
+//     }
+//     
+//     static size_t each_dislike_logic(context* ctx, const size_t &, core::character* current, const std::function<double(context*, core::character*)> &f) {
+//       bool counter = true;
+//       for (const auto &pair : current->relations.acquaintances) { 
+//         if (pair.first == nullptr && pair.second.love >= 0) continue;
+//         const double ret = f(ctx, pair.first);
+//         counter = counter && (std::isnan(ret) ? true : bool(ret));
+//       }
+//       return counter;
+//     }
+//     
+//     static object first_dislike(core::character* current) {
+//       for (const auto &pair : current->relations.acquaintances) { if (pair.first != nullptr && pair.second.love < 0) return object(pair.first); }
+//       return object();
+//     }
     
-    static double each_sympathy(context* ctx, const size_t &max_count, core::character* current, const std::function<double(context*, core::character*)> &f) {
-      double counter = 0;
-      for (const auto &pair : current->relations.acquaintances) { 
-        if (counter >= max_count) break;
-        if (pair.first == nullptr && pair.second.love <= 0) continue;
-        counter += f(ctx, pair.first);
-      }
-      return counter;
-    }
-    
-    static size_t each_sympathy_logic(context* ctx, const size_t &, core::character* current, const std::function<double(context*, core::character*)> &f) {
-      bool counter = true;
-      for (const auto &pair : current->relations.acquaintances) { 
-        if (pair.first == nullptr && pair.second.love <= 0) continue;
-        const double ret = f(ctx, pair.first);
-        counter = counter && (std::isnan(ret) ? true : bool(ret));
-      }
-      return counter;
-    }
-    
-    static object first_sympathy(core::character* current) {
-      for (const auto &pair : current->relations.acquaintances) { if (pair.first != nullptr && pair.second.love > 0) return object(pair.first); }
-      return object();
-    }
-    
-    static size_t count_dislikes(core::character* current) {
-      size_t counter = 0;
-      for (const auto &pair : current->relations.acquaintances) { counter += size_t(pair.first != nullptr && pair.second.love < 0); }
-      return counter;
-    }
-    
-    static double each_dislike(context* ctx, const size_t &max_count, core::character* current, const std::function<double(context*, core::character*)> &f) {
-      double counter = 0;
-      for (const auto &pair : current->relations.acquaintances) { 
-        if (counter >= max_count) break;
-        if (pair.first == nullptr && pair.second.love >= 0) continue;
-        counter += f(ctx, pair.first);
-      }
-      return counter;
-    }
-    
-    static size_t each_dislike_logic(context* ctx, const size_t &, core::character* current, const std::function<double(context*, core::character*)> &f) {
-      bool counter = true;
-      for (const auto &pair : current->relations.acquaintances) { 
-        if (pair.first == nullptr && pair.second.love >= 0) continue;
-        const double ret = f(ctx, pair.first);
-        counter = counter && (std::isnan(ret) ? true : bool(ret));
-      }
-      return counter;
-    }
-    
-    static object first_dislike(core::character* current) {
-      for (const auto &pair : current->relations.acquaintances) { if (pair.first != nullptr && pair.second.love < 0) return object(pair.first); }
-      return object();
-    }
-    
-    static size_t count_parents(core::character*) { return 2; }
+    static size_t count_parents(core::character* c) { return size_t(c->family.parents[0] != nullptr) + size_t(c->family.parents[1] != nullptr); }
     
     static double each_parent(context* ctx, const size_t &max_count, core::character* current, const std::function<double(context*, core::character*)> &f) {
       double counter = 0;
-      for (uint8_t i = 0; i < 2; ++i) {
-        if (counter >= max_count) break;
+      for (uint8_t i = 0; i < 2 && counter < max_count; ++i) {
+        if (current->family.parents[i] == nullptr) continue;
         counter += f(ctx, current->family.parents[i]);
       }
       return counter;
@@ -802,7 +866,8 @@ namespace devils_engine {
     
     static size_t each_parent_logic(context* ctx, const size_t &, core::character* current, const std::function<double(context*, core::character*)> &f) {
       bool counter = true;
-      for (uint8_t i = 0; i < 2; ++i) { 
+      for (uint8_t i = 0; i < 2; ++i) {
+        if (current->family.parents[i] == nullptr) continue;
         const double ret = f(ctx, current->family.parents[i]);
         counter = counter && (std::isnan(ret) ? true : bool(ret));
       }
@@ -987,27 +1052,27 @@ namespace devils_engine {
       return object(r->electors);
     }
     
-    static size_t count_wars(utils::handle<core::realm> r) {
+    static size_t count_wars(core::character* c) {
       size_t counter = 0;
-      for (const auto &pair : r->relations) { counter += size_t(pair.second.relation_type == core::diplomacy::war_attacker || pair.second.relation_type == core::diplomacy::war_defender); }
+      for (const auto &pair : c->diplomacy) { counter += size_t(pair.second.types.get(core::diplomacy::war_attacker) || pair.second.types.get(core::diplomacy::war_defender)); }
       return counter;
     }
     
-    static double each_war(context* ctx, const size_t &max_count, utils::handle<core::realm> r, const std::function<double(context*, utils::handle<core::war>)> &f) {
+    static double each_war(context* ctx, const size_t &max_count, core::character* c, const std::function<double(context*, utils::handle<core::war>)> &f) {
       double counter = 0;
-      for (const auto &pair : r->relations) {
+      for (const auto &pair : c->diplomacy) {
         if (counter >= max_count) break;
-        if (pair.second.relation_type != core::diplomacy::war_attacker && pair.second.relation_type != core::diplomacy::war_defender) continue;
+        if (!pair.second.types.get(core::diplomacy::war_attacker) && !pair.second.types.get(core::diplomacy::war_defender)) continue;
         ASSERT(pair.second.war.valid());
         counter += f(ctx, pair.second.war);
       }
       return counter;
     }
     
-    static size_t each_war_logic(context* ctx, const size_t &, utils::handle<core::realm> r, const std::function<double(context*, utils::handle<core::war>)> &f) {
+    static size_t each_war_logic(context* ctx, const size_t &, core::character* c, const std::function<double(context*, utils::handle<core::war>)> &f) {
       bool counter = true;
-      for (const auto &pair : r->relations) {
-        if (pair.second.relation_type != core::diplomacy::war_attacker && pair.second.relation_type != core::diplomacy::war_defender) continue;
+      for (const auto &pair : c->diplomacy) {
+        if (!pair.second.types.get(core::diplomacy::war_attacker) && !pair.second.types.get(core::diplomacy::war_defender)) continue;
         ASSERT(pair.second.war.valid());
         const double ret = f(ctx, pair.second.war);
         counter = counter && (std::isnan(ret) ? true : bool(ret));
@@ -1015,26 +1080,28 @@ namespace devils_engine {
       return counter;
     }
     
-    static object first_war(utils::handle<core::realm> r) {
-      for (const auto &pair : r->relations) { 
-        if (pair.second.relation_type == core::diplomacy::war_attacker || pair.second.relation_type == core::diplomacy::war_defender) 
+    static object first_war(core::character* c) {
+      for (const auto &pair : c->diplomacy) { 
+        if (pair.second.types.get(core::diplomacy::war_attacker) || pair.second.types.get(core::diplomacy::war_defender)) {
+          ASSERT(pair.second.war.valid());
           return object(pair.second.war); 
+        }
       }
       return object();
     }
     
-    static size_t count_war_allys(utils::handle<core::realm> r) {
+    static size_t count_war_allys(core::character* c) {
       // как определить является ли текущий реалм защитником или атакующим? хороший вопрос
       // нужно все отношения между реалмами свести в один контейнер, и там задать параметры по которым я все это узнаю
       size_t counter = 0;
-      for (const auto &pair : r->relations) {
-        if (pair.second.relation_type == core::diplomacy::war_attacker) {
+      for (const auto &pair : c->diplomacy) {
+        if (pair.second.types.get(core::diplomacy::war_attacker)) {
           ASSERT(pair.second.war.valid());
           const auto &war = pair.second.war;
           counter += war->attackers.size();
         }
         
-        if (pair.second.relation_type == core::diplomacy::war_defender) {
+        if (pair.second.types.get(core::diplomacy::war_defender)) {
           ASSERT(pair.second.war.valid());
           const auto &war = pair.second.war;
           counter += war->defenders.size();
@@ -1044,12 +1111,12 @@ namespace devils_engine {
       return counter;
     }
     
-    static double each_war_ally(context* ctx, const size_t &max_count, utils::handle<core::realm> r, const std::function<double(context*, core::character*)> &f) {
+    static double each_war_ally(context* ctx, const size_t &max_count, core::character* c, const std::function<double(context*, core::character*)> &f) {
       double counter = 0;
-      for (const auto &pair : r->relations) {
+      for (const auto &pair : c->diplomacy) {
         if (counter >= max_count) break;
         
-        if (pair.second.relation_type == core::diplomacy::war_attacker) {
+        if (pair.second.types.get(core::diplomacy::war_attacker)) {
           ASSERT(pair.second.war.valid());
           const auto &war = pair.second.war;
           for (const auto &attacker : war->attackers) {
@@ -1057,7 +1124,7 @@ namespace devils_engine {
           }
         }
         
-        if (pair.second.relation_type == core::diplomacy::war_defender) {
+        if (pair.second.types.get(core::diplomacy::war_defender)) {
           ASSERT(pair.second.war.valid());
           const auto &war = pair.second.war;
           counter += war->defenders.size();
@@ -1070,10 +1137,10 @@ namespace devils_engine {
       return counter;
     }
     
-    static size_t each_war_ally_logic(context* ctx, const size_t &, utils::handle<core::realm> r, const std::function<double(context*, core::character*)> &f) {
+    static size_t each_war_ally_logic(context* ctx, const size_t &, core::character* c, const std::function<double(context*, core::character*)> &f) {
       bool counter = true;
-      for (const auto &pair : r->relations) { 
-        if (pair.second.relation_type == core::diplomacy::war_attacker) {
+      for (const auto &pair : c->diplomacy) { 
+        if (pair.second.types.get(core::diplomacy::war_attacker)) {
           ASSERT(pair.second.war.valid());
           const auto &war = pair.second.war;
           for (const auto &attacker : war->attackers) {
@@ -1082,7 +1149,7 @@ namespace devils_engine {
           }
         }
         
-        if (pair.second.relation_type == core::diplomacy::war_defender) {
+        if (pair.second.types.get(core::diplomacy::war_defender)) {
           ASSERT(pair.second.war.valid());
           const auto &war = pair.second.war;
           for (const auto &defender : war->defenders) {
@@ -1095,15 +1162,15 @@ namespace devils_engine {
       return counter;
     }
     
-    static object first_war_ally(utils::handle<core::realm> r) {
-      for (const auto &pair : r->relations) { 
-        if (pair.second.relation_type == core::diplomacy::war_attacker) {
+    static object first_war_ally(core::character* c) {
+      for (const auto &pair : c->diplomacy) { 
+        if (pair.second.types.get(core::diplomacy::war_attacker)) {
           ASSERT(pair.second.war.valid());
           const auto &war = pair.second.war;
           for (const auto &attacker : war->attackers) { return object(attacker); }
         }
         
-        if (pair.second.relation_type == core::diplomacy::war_defender) {
+        if (pair.second.types.get(core::diplomacy::war_defender)) {
           ASSERT(pair.second.war.valid());
           const auto &war = pair.second.war;
           for (const auto &defender : war->defenders) { return object(defender); }
@@ -1112,18 +1179,18 @@ namespace devils_engine {
       return object();
     }
     
-    static size_t count_war_enemys(utils::handle<core::realm> r) {
+    static size_t count_war_enemys(core::character* c) {
       // как определить является ли текущий реалм защитником или атакующим? хороший вопрос
       // нужно все отношения между реалмами свести в один контейнер, и там задать параметры по которым я все это узнаю
       size_t counter = 0;
-      for (const auto &pair : r->relations) {
-        if (pair.second.relation_type == core::diplomacy::war_attacker) {
+      for (const auto &pair : c->diplomacy) {
+        if (pair.second.types.get(core::diplomacy::war_attacker)) {
           ASSERT(pair.second.war.valid());
           const auto &war = pair.second.war;
           counter += war->defenders.size();
         }
         
-        if (pair.second.relation_type == core::diplomacy::war_defender) {
+        if (pair.second.types.get(core::diplomacy::war_defender)) {
           ASSERT(pair.second.war.valid());
           const auto &war = pair.second.war;
           counter += war->attackers.size();
@@ -1133,12 +1200,12 @@ namespace devils_engine {
       return counter;
     }
     
-    static double each_war_enemy(context* ctx, const size_t &max_count, utils::handle<core::realm> r, const std::function<double(context*, core::character*)> &f) {
+    static double each_war_enemy(context* ctx, const size_t &max_count, core::character* c, const std::function<double(context*, core::character*)> &f) {
       double counter = 0;
-      for (const auto &pair : r->relations) {
+      for (const auto &pair : c->diplomacy) {
         if (counter >= max_count) break;
         
-        if (pair.second.relation_type == core::diplomacy::war_attacker) {
+        if (pair.second.types.get(core::diplomacy::war_attacker)) {
           ASSERT(pair.second.war.valid());
           const auto &war = pair.second.war;
           for (const auto &defender : war->defenders) {
@@ -1146,7 +1213,7 @@ namespace devils_engine {
           }
         }
         
-        if (pair.second.relation_type == core::diplomacy::war_defender) {
+        if (pair.second.types.get(core::diplomacy::war_defender)) {
           ASSERT(pair.second.war.valid());
           const auto &war = pair.second.war;
           counter += war->defenders.size();
@@ -1159,10 +1226,10 @@ namespace devils_engine {
       return counter;
     }
     
-    static size_t each_war_enemy_logic(context* ctx, const size_t &, utils::handle<core::realm> r, const std::function<double(context*, core::character*)> &f) {
+    static size_t each_war_enemy_logic(context* ctx, const size_t &, core::character* c, const std::function<double(context*, core::character*)> &f) {
       bool counter = true;
-      for (const auto &pair : r->relations) { 
-        if (pair.second.relation_type == core::diplomacy::war_attacker) {
+      for (const auto &pair : c->diplomacy) { 
+        if (pair.second.types.get(core::diplomacy::war_attacker)) {
           ASSERT(pair.second.war.valid());
           const auto &war = pair.second.war;
           for (const auto &defender : war->defenders) {
@@ -1171,7 +1238,7 @@ namespace devils_engine {
           }
         }
         
-        if (pair.second.relation_type == core::diplomacy::war_defender) {
+        if (pair.second.types.get(core::diplomacy::war_defender)) {
           ASSERT(pair.second.war.valid());
           const auto &war = pair.second.war;
           for (const auto &attacker : war->attackers) {
@@ -1184,15 +1251,15 @@ namespace devils_engine {
       return counter;
     }
     
-    static object first_war_enemy(utils::handle<core::realm> r) {
-      for (const auto &pair : r->relations) { 
-        if (pair.second.relation_type == core::diplomacy::war_attacker) {
+    static object first_war_enemy(core::character* c) {
+      for (const auto &pair : c->diplomacy) { 
+        if (pair.second.types.get(core::diplomacy::war_attacker)) {
           ASSERT(pair.second.war.valid());
           const auto &war = pair.second.war;
           for (const auto &defender : war->defenders) { return object(defender); }
         }
         
-        if (pair.second.relation_type == core::diplomacy::war_defender) {
+        if (pair.second.types.get(core::diplomacy::war_defender)) {
           ASSERT(pair.second.war.valid());
           const auto &war = pair.second.war;
           for (const auto &attacker : war->attackers) { return object(attacker); }
@@ -1201,107 +1268,107 @@ namespace devils_engine {
       return object();
     }
     
-    static size_t count_allys(utils::handle<core::realm> r) {
+    static size_t count_allys(core::character* c) {
       size_t counter = 0;
-      for (const auto &pair : r->relations) { counter += size_t(pair.second.relation_type == core::diplomacy::ally); }
+      for (const auto &pair : c->diplomacy) { counter += size_t(pair.second.types.get(core::diplomacy::ally)); }
       return counter;
     }
     
-    static double each_ally(context* ctx, const size_t &max_count, utils::handle<core::realm> r, const std::function<double(context*, utils::handle<core::realm>)> &f) {
+    static double each_ally(context* ctx, const size_t &max_count, core::character* c, const std::function<double(context*, core::character*)> &f) {
       double counter = 0;
-      for (const auto &pair : r->relations) {
+      for (const auto &pair : c->diplomacy) {
         if (counter >= max_count) break;
-        if (pair.second.relation_type != core::diplomacy::ally) continue;
-        ASSERT(pair.second.related_realm.valid());
-        counter += f(ctx, pair.second.related_realm);
+        if (!pair.second.types.get(core::diplomacy::ally)) continue;
+        //ASSERT(pair.second.character != nullptr);
+        counter += f(ctx, pair.first);
       }
       return counter;
     }
     
-    static size_t each_ally_logic(context* ctx, const size_t &, utils::handle<core::realm> r, const std::function<double(context*, utils::handle<core::realm>)> &f) {
+    static size_t each_ally_logic(context* ctx, const size_t &, core::character* c, const std::function<double(context*, core::character*)> &f) {
       bool counter = true;
-      for (const auto &pair : r->relations) {
-        if (pair.second.relation_type != core::diplomacy::ally) continue;
-        ASSERT(pair.second.related_realm.valid());
-        const double ret = f(ctx, pair.second.related_realm);
+      for (const auto &pair : c->diplomacy) {
+        if (!pair.second.types.get(core::diplomacy::ally)) continue;
+        //ASSERT(pair.second.character != nullptr);
+        const double ret = f(ctx, pair.first);
         counter = counter && (std::isnan(ret) ? true : bool(ret));
       }
       return counter;
     }
     
-    static object first_ally(utils::handle<core::realm> r) {
-      for (const auto &pair : r->relations) { 
-        if (pair.second.relation_type == core::diplomacy::ally) return object(pair.second.related_realm); 
+    static object first_ally(core::character* c) {
+      for (const auto &pair : c->diplomacy) { 
+        if (pair.second.types.get(core::diplomacy::ally)) return object(pair.first);
       }
       return object();
     }
     
-    static size_t count_truce_holders(utils::handle<core::realm> r) {
+    static size_t count_truce_holders(core::character* c) {
       size_t counter = 0;
-      for (const auto &pair : r->relations) { counter += size_t(pair.second.relation_type == core::diplomacy::truce_holder || pair.second.relation_type == core::diplomacy::truce_2way); }
+      for (const auto &pair : c->diplomacy) { counter += size_t(pair.second.types.get(core::diplomacy::truce_holder)); } // || pair.second.relation_type == core::diplomacy::truce_2way
       return counter;
     }
     
-    static double each_truce_holder(context* ctx, const size_t &max_count, utils::handle<core::realm> r, const std::function<double(context*, utils::handle<core::realm>)> &f) {
+    static double each_truce_holder(context* ctx, const size_t &max_count, core::character* c, const std::function<double(context*, core::character*)> &f) {
       double counter = 0;
-      for (const auto &pair : r->relations) {
+      for (const auto &pair : c->diplomacy) {
         if (counter >= max_count) break;
-        if (pair.second.relation_type != core::diplomacy::truce_holder && pair.second.relation_type != core::diplomacy::truce_2way) continue;
-        ASSERT(pair.second.related_realm.valid());
-        counter += f(ctx, pair.second.related_realm);
+        if (!pair.second.types.get(core::diplomacy::truce_holder)) continue; // && pair.second.relation_type != core::diplomacy::truce_2way
+        //ASSERT(pair.second.character != nullptr);
+        counter += f(ctx, pair.first);
       }
       return counter;
     }
     
-    static size_t each_truce_holder_logic(context* ctx, const size_t &, utils::handle<core::realm> r, const std::function<double(context*, utils::handle<core::realm>)> &f) {
+    static size_t each_truce_holder_logic(context* ctx, const size_t &, core::character* c, const std::function<double(context*, core::character*)> &f) {
       bool counter = true;
-      for (const auto &pair : r->relations) {
-        if (pair.second.relation_type != core::diplomacy::truce_holder && pair.second.relation_type != core::diplomacy::truce_2way) continue;
-        ASSERT(pair.second.related_realm.valid());
-        const double ret = f(ctx, pair.second.related_realm);
+      for (const auto &pair : c->diplomacy) {
+        if (!pair.second.types.get(core::diplomacy::truce_holder)) continue; // && pair.second.relation_type != core::diplomacy::truce_2way
+        //ASSERT(pair.second.character != nullptr);
+        const double ret = f(ctx, pair.first);
         counter = counter && (std::isnan(ret) ? true : bool(ret));
       }
       return counter;
     }
     
-    static object first_truce_holder(utils::handle<core::realm> r) {
-      for (const auto &pair : r->relations) { 
-        if (pair.second.relation_type == core::diplomacy::truce_holder || pair.second.relation_type == core::diplomacy::truce_2way) return object(pair.second.related_realm); 
+    static object first_truce_holder(core::character* c) {
+      for (const auto &pair : c->diplomacy) { 
+        if (pair.second.types.get(core::diplomacy::truce_holder)) return object(pair.first); // || pair.second.relation_type == core::diplomacy::truce_2way
       }
       return object();
     }
     
-    static size_t count_truce_targets(utils::handle<core::realm> r) {
+    static size_t count_truce_targets(core::character* c) {
       size_t counter = 0;
-      for (const auto &pair : r->relations) { counter += size_t(pair.second.relation_type == core::diplomacy::truce_receiver || pair.second.relation_type == core::diplomacy::truce_2way); }
+      for (const auto &pair : c->diplomacy) { counter += size_t(pair.second.types.get(core::diplomacy::truce_receiver)); } // || pair.second.relation_type == core::diplomacy::truce_2way
       return counter;
     }
     
-    static double each_truce_target(context* ctx, const size_t &max_count, utils::handle<core::realm> r, const std::function<double(context*, utils::handle<core::realm>)> &f) {
+    static double each_truce_target(context* ctx, const size_t &max_count, core::character* c, const std::function<double(context*, core::character*)> &f) {
       double counter = 0;
-      for (const auto &pair : r->relations) {
+      for (const auto &pair : c->diplomacy) {
         if (counter >= max_count) break;
-        if (pair.second.relation_type != core::diplomacy::truce_receiver && pair.second.relation_type != core::diplomacy::truce_2way) continue;
-        ASSERT(pair.second.related_realm.valid());
-        counter += f(ctx, pair.second.related_realm);
+        if (!pair.second.types.get(core::diplomacy::truce_receiver)) continue; // && pair.second.relation_type != core::diplomacy::truce_2way
+        //ASSERT(pair.second.character != nullptr);
+        counter += f(ctx, pair.first);
       }
       return counter;
     }
     
-    static size_t each_truce_target_logic(context* ctx, const size_t &, utils::handle<core::realm> r, const std::function<double(context*, utils::handle<core::realm>)> &f) {
+    static size_t each_truce_target_logic(context* ctx, const size_t &, core::character* c, const std::function<double(context*, core::character*)> &f) {
       bool counter = true;
-      for (const auto &pair : r->relations) {
-        if (pair.second.relation_type != core::diplomacy::truce_receiver && pair.second.relation_type != core::diplomacy::truce_2way) continue;
-        ASSERT(pair.second.related_realm.valid());
-        const double ret = f(ctx, pair.second.related_realm);
+      for (const auto &pair : c->diplomacy) {
+        if (!pair.second.types.get(core::diplomacy::truce_receiver)) continue; // && pair.second.relation_type != core::diplomacy::truce_2way
+        //ASSERT(pair.second.character != nullptr);
+        const double ret = f(ctx, pair.first);
         counter = counter && (std::isnan(ret) ? true : bool(ret));
       }
       return counter;
     }
     
-    static object first_truce_target(utils::handle<core::realm> r) {
-      for (const auto &pair : r->relations) { 
-        if (pair.second.relation_type == core::diplomacy::truce_receiver || pair.second.relation_type == core::diplomacy::truce_2way) return object(pair.second.related_realm); 
+    static object first_truce_target(core::character* c) {
+      for (const auto &pair : c->diplomacy) { 
+        if (pair.second.types.get(core::diplomacy::truce_receiver)) return object(pair.first); // || pair.second.relation_type == core::diplomacy::truce_2way
       }
       return object();
     }
@@ -2427,22 +2494,24 @@ CHANGE_SCOPE_FUNC_IMPLEMENTATION(concubine,         character_ptr_t, character_p
 CHANGE_SCOPE_FUNC_IMPLEMENTATION(acquaintance,      character_ptr_t, character_ptr_t)
 CHANGE_SCOPE_FUNC_IMPLEMENTATION(good_acquaintance, character_ptr_t, character_ptr_t)
 CHANGE_SCOPE_FUNC_IMPLEMENTATION(bad_acquaintance,  character_ptr_t, character_ptr_t)
-CHANGE_SCOPE_FUNC_IMPLEMENTATION(pal,               character_ptr_t, character_ptr_t)
-CHANGE_SCOPE_FUNC_IMPLEMENTATION(foe,               character_ptr_t, character_ptr_t)
-CHANGE_SCOPE_FUNC_IMPLEMENTATION(sympathy,          character_ptr_t, character_ptr_t)
-CHANGE_SCOPE_FUNC_IMPLEMENTATION(dislike,           character_ptr_t, character_ptr_t)
+CHANGE_SCOPE_FUNC_IMPLEMENTATION(love_acquaintance,  character_ptr_t, character_ptr_t)
+CHANGE_SCOPE_FUNC_IMPLEMENTATION(neutral_acquaintance,  character_ptr_t, character_ptr_t)
+// CHANGE_SCOPE_FUNC_IMPLEMENTATION(pal,               character_ptr_t, character_ptr_t)
+// CHANGE_SCOPE_FUNC_IMPLEMENTATION(foe,               character_ptr_t, character_ptr_t)
+// CHANGE_SCOPE_FUNC_IMPLEMENTATION(sympathy,          character_ptr_t, character_ptr_t)
+// CHANGE_SCOPE_FUNC_IMPLEMENTATION(dislike,           character_ptr_t, character_ptr_t)
 CHANGE_SCOPE_FUNC_IMPLEMENTATION(parent,            character_ptr_t, character_ptr_t)
 CHANGE_SCOPE_FUNC_IMPLEMENTATION(claim,             character_ptr_t, title_ptr_t)
 CHANGE_SCOPE_FUNC_IMPLEMENTATION(de_jure_claim,     character_ptr_t, title_ptr_t)
 CHANGE_SCOPE_FUNC_IMPLEMENTATION(heir_to_title,     character_ptr_t, title_ptr_t)
 CHANGE_SCOPE_FUNC_IMPLEMENTATION(election_realm,    character_ptr_t, realm_handle_t)
+CHANGE_SCOPE_FUNC_IMPLEMENTATION(war,               character_ptr_t, war_handle_t)
+CHANGE_SCOPE_FUNC_IMPLEMENTATION(war_ally,          character_ptr_t, character_ptr_t)
+CHANGE_SCOPE_FUNC_IMPLEMENTATION(war_enemy,         character_ptr_t, character_ptr_t)
+CHANGE_SCOPE_FUNC_IMPLEMENTATION(ally,              character_ptr_t, character_ptr_t)
+CHANGE_SCOPE_FUNC_IMPLEMENTATION(truce_holder,      character_ptr_t, character_ptr_t)
+CHANGE_SCOPE_FUNC_IMPLEMENTATION(truce_target,      character_ptr_t, character_ptr_t)
 
-CHANGE_SCOPE_FUNC_IMPLEMENTATION(war,        realm_handle_t, war_handle_t)
-CHANGE_SCOPE_FUNC_IMPLEMENTATION(war_ally,   realm_handle_t, character_ptr_t)
-CHANGE_SCOPE_FUNC_IMPLEMENTATION(war_enemy,  realm_handle_t, character_ptr_t)
-CHANGE_SCOPE_FUNC_IMPLEMENTATION(ally,       realm_handle_t, realm_handle_t)
-CHANGE_SCOPE_FUNC_IMPLEMENTATION(truce_holder, realm_handle_t, realm_handle_t)
-CHANGE_SCOPE_FUNC_IMPLEMENTATION(truce_target, realm_handle_t, realm_handle_t)
 CHANGE_SCOPE_FUNC_IMPLEMENTATION(member,     realm_handle_t, character_ptr_t)
 CHANGE_SCOPE_FUNC_IMPLEMENTATION(elector,    realm_handle_t, character_ptr_t)
 CHANGE_SCOPE_FUNC_IMPLEMENTATION(prisoner,   realm_handle_t, character_ptr_t)

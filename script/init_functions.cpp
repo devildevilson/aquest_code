@@ -259,6 +259,7 @@ namespace devils_engine {
 #undef GET_ENTITY_COMPLEX_CASE_FUNC
         
         // это может быть особое число (например месячный доход) + множитель (в том числе отрицательный)
+        // количество лет в ходах еще тоже может быть
         if (const auto itr = complex_object_tokens::map.find(token); itr != complex_object_tokens::map.end()) {
           assert(false);
           continue;
@@ -1266,6 +1267,7 @@ NUMERIC_INIT_FUNC(cos)
 NUMERIC_INIT_FUNC(abs)
 NUMERIC_INIT_FUNC(ceil)
 NUMERIC_INIT_FUNC(floor)
+NUMERIC_INIT_FUNC(round)
 NUMERIC_INIT_FUNC(sqrt)
 NUMERIC_INIT_FUNC(sqr)
 NUMERIC_INIT_FUNC(frac)
@@ -1929,6 +1931,36 @@ CONDITION_BLOCK_INIT_FUNC(OR_sequence)
     
     std::tuple<interface*, size_t, size_t> equals_to_init(const input_data &input, const sol::object &data, container* cont) {
       using type = script::equals_to;
+      // ожидаю что угодно, но из луа должна придти строка
+      if ((input.expected_types & type::output_type) != type::output_type) 
+        throw std::runtime_error("Wrong expectation from 'current' function: expected " + parse_type_bits(input.expected_types) + ", got " + parse_type_bits(type::output_type));
+      
+      size_t offset = SIZE_MAX;
+      if (cont != nullptr) offset = cont->add_delayed<type>();
+      size_t final_count = 1;
+      size_t final_size = sizeof(type);
+      
+      interface* obj = nullptr;
+      if (data.get_type() == sol::type::string) {
+        auto new_input = input;
+        new_input.expected_types = script::object::type_bit::all;
+        const auto [ptr, count, size] = complex_object_init(new_input, data, cont);
+        obj = ptr;
+        final_count += count;
+        final_size += size;
+      } else throw std::runtime_error("Not implemented yet");
+      
+      interface* final_ptr = nullptr;
+      if (cont != nullptr) {
+        auto init = cont->get_init<type>(offset);
+        final_ptr = init.init(obj);
+      }
+      
+      return std::make_tuple(final_ptr, final_count, final_size);
+    }
+    
+    std::tuple<interface*, size_t, size_t> not_equals_to_init(const input_data &input, const sol::object &data, container* cont) {
+      using type = script::not_equals_to;
       // ожидаю что угодно, но из луа должна придти строка
       if ((input.expected_types & type::output_type) != type::output_type) 
         throw std::runtime_error("Wrong expectation from 'current' function: expected " + parse_type_bits(input.expected_types) + ", got " + parse_type_bits(type::output_type));
@@ -2657,6 +2689,12 @@ CONDITION_BLOCK_INIT_FUNC(OR_sequence)
     
     CHARACTER_GET_BOOL_NO_ARGS_COMMANDS_LIST
     REALM_GET_BOOL_NO_ARGS_COMMANDS_LIST
+#define CASUS_BELLI_FLAG_FUNC(name) CONDITION_COMMAND_FUNC(name)
+    CASUS_BELLI_GET_BOOL_NO_ARGS_COMMANDS_LIST
+#undef CASUS_BELLI_FLAG_FUNC
+#define CASUS_BELLI_NUMBER_FUNC(name) CONDITION_COMMAND_FUNC(name)
+    CASUS_BELLI_GET_NUMBER_NO_ARGS_COMMANDS_LIST
+#undef CASUS_BELLI_NUMBER_FUNC
 
 #undef CONDITION_COMMAND_FUNC
 
@@ -2705,6 +2743,19 @@ CONDITION_COMMAND_FUNC(is_blood_relative_of, get_character_init)
 CONDITION_COMMAND_FUNC(is_relative_of, get_character_init)
 CONDITION_COMMAND_FUNC(is_owner_of, get_character_init)
 CONDITION_COMMAND_FUNC(is_concubine_of, get_character_init)
+CONDITION_COMMAND_FUNC(is_at_war_with, get_character_init)
+CONDITION_COMMAND_FUNC(is_allied_in_war, get_character_init)
+CONDITION_COMMAND_FUNC(is_liege_or_above, get_character_init)
+CONDITION_COMMAND_FUNC(is_vassal_or_below, get_character_init)
+CONDITION_COMMAND_FUNC(has_love_relationship, get_character_init)
+CONDITION_COMMAND_FUNC(has_good_relationship, get_character_init)
+CONDITION_COMMAND_FUNC(has_bad_relationship, get_character_init)
+CONDITION_COMMAND_FUNC(has_neutral_relationship, get_character_init)
+// CONDITION_COMMAND_FUNC(has_good_relationship, get_character_init)
+// CONDITION_COMMAND_FUNC(has_bad_relationship, get_character_init)
+// CONDITION_COMMAND_FUNC(has_love_relationship, get_character_init)
+// CONDITION_COMMAND_FUNC(has_good_relationship, get_character_init)
+// CONDITION_COMMAND_FUNC(has_bad_relationship, get_character_init)
 
 #undef CONDITION_COMMAND_FUNC
 

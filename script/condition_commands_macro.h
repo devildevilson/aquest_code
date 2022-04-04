@@ -13,12 +13,27 @@
 // я так понимаю отношения нужно сделать иначе
 // has_revoke_title_reason
 // has_strong_claim_on
+// is_ruler - ???
+// is_diplomatically_available - нужно проверить дальность до цели
+// has_raised_armies - подняты ли войска 
+// can_attack_in_hierarchy - может ли вассал атаковать хозяина?
+// может быть ситуация когда игрок попытается напасть ровно в тот момент 
+// когда рассматривается предложение о включении его в состав другого государства
+// тут нужно как то аккуратно это предусмотреть, 
+// я так думаю нужно сделать какие то состояния для реалма в зависимости от того что ждем
+// интеракция может привести к несвободе, как только определить такую интеракцию? поди можно добавить просто эффект 
+// has_strong_hook - хуков пока что у меня нет
+// отдельно должна быть тюрьма и imprisoner
+// war_declarer_needs_hook_on_liege - чтобы объявить войну хозяину нужен хук (?)
+// 
 
 // реалм
 // has_primary_title
 // has_raid_immunity_against - у реалма или у персонажа?
 // has_raised_armies - у реалма или у персонажа?
 // 
+
+#include "core/casus_belli_data_macro.h"
 
 #define SCRIPT_VALUE_TYPE_CONSTNESS const
 #define SCRIPT_VALUE_TYPE_CONSTLESS
@@ -32,6 +47,7 @@
   CONDITION_COMMAND_FUNC(is_adult) \
   CONDITION_COMMAND_FUNC(is_bastard) \
   CONDITION_COMMAND_FUNC(is_concubine_child) \
+  CONDITION_COMMAND_FUNC(is_landed) \
   CONDITION_COMMAND_FUNC(is_independent) \
   CONDITION_COMMAND_FUNC(is_vassal) \
   CONDITION_COMMAND_FUNC(is_courtier) \
@@ -70,11 +86,42 @@
   CONDITION_COMMAND_FUNC(can_call_crusade) \
   CONDITION_COMMAND_FUNC(can_grant_title) \
   CONDITION_COMMAND_FUNC(can_marry) \
+  CONDITION_COMMAND_FUNC(can_become_stateman) \
+  CONDITION_COMMAND_FUNC(can_become_councillor) \
+  CONDITION_COMMAND_FUNC(can_become_magistrate) \
+  CONDITION_COMMAND_FUNC(can_become_assembler) \
+  CONDITION_COMMAND_FUNC(can_become_clergyman) \
+  CONDITION_COMMAND_FUNC(has_right_to_become_stateman) \
+  CONDITION_COMMAND_FUNC(has_right_to_become_councillor) \
+  CONDITION_COMMAND_FUNC(has_right_to_become_magistrate) \
+  CONDITION_COMMAND_FUNC(has_right_to_become_assembler) \
+  CONDITION_COMMAND_FUNC(has_right_to_become_clergyman) \
+  CONDITION_COMMAND_FUNC(can_become_stateman_elector) \
+  CONDITION_COMMAND_FUNC(can_become_councillor_elector) \
+  CONDITION_COMMAND_FUNC(can_become_magistrate_elector) \
+  CONDITION_COMMAND_FUNC(can_become_assembler_elector) \
+  CONDITION_COMMAND_FUNC(can_become_clergyman_elector) \
+  CONDITION_COMMAND_FUNC(has_right_to_become_stateman_elector) \
+  CONDITION_COMMAND_FUNC(has_right_to_become_councillor_elector) \
+  CONDITION_COMMAND_FUNC(has_right_to_become_magistrate_elector) \
+  CONDITION_COMMAND_FUNC(has_right_to_become_assembler_elector) \
+  CONDITION_COMMAND_FUNC(has_right_to_become_clergyman_elector) \
+  CONDITION_COMMAND_FUNC(can_apply_to_the_state) \
+  CONDITION_COMMAND_FUNC(can_apply_to_the_tribunal) \
+  CONDITION_COMMAND_FUNC(can_apply_to_the_council) \
+  CONDITION_COMMAND_FUNC(can_apply_to_the_assembly) \
+  CONDITION_COMMAND_FUNC(can_apply_to_the_clergy) \
+  CONDITION_COMMAND_FUNC(has_right_to_apply_to_the_state) \
+  CONDITION_COMMAND_FUNC(has_right_to_apply_to_the_tribunal) \
+  CONDITION_COMMAND_FUNC(has_right_to_apply_to_the_council) \
+  CONDITION_COMMAND_FUNC(has_right_to_apply_to_the_assembly) \
+  CONDITION_COMMAND_FUNC(has_right_to_apply_to_the_clergy) \
   CONDITION_COMMAND_FUNC(has_dynasty) \
   CONDITION_COMMAND_FUNC(has_self_realm) \
   CONDITION_COMMAND_FUNC(has_owner) \
   CONDITION_COMMAND_FUNC(has_father) \
   CONDITION_COMMAND_FUNC(has_mother) \
+  CONDITION_COMMAND_FUNC(has_raised_armies) \
   
 #define CHARACTER_GET_NUMBER_NO_ARGS_COMMANDS_LIST \
   CONDITION_COMMAND_FUNC(age) \
@@ -92,6 +139,14 @@
   CONDITION_ARG_COMMAND_FUNC(has_same_culture_group_as,  character, SCRIPT_VALUE_TYPE_CONSTLESS, core::character*)   \
   CONDITION_ARG_COMMAND_FUNC(has_same_religion_as,       character, SCRIPT_VALUE_TYPE_CONSTLESS, core::character*)   \
   CONDITION_ARG_COMMAND_FUNC(has_same_religion_group_as, character, SCRIPT_VALUE_TYPE_CONSTLESS, core::character*)   \
+  CONDITION_ARG_COMMAND_FUNC(is_at_war_with,             character, SCRIPT_VALUE_TYPE_CONSTLESS, core::character*)   \
+  CONDITION_ARG_COMMAND_FUNC(is_allied_in_war,           character, SCRIPT_VALUE_TYPE_CONSTLESS, core::character*)   \
+  CONDITION_ARG_COMMAND_FUNC(is_liege_or_above,          character, SCRIPT_VALUE_TYPE_CONSTLESS, core::character*)   \
+  CONDITION_ARG_COMMAND_FUNC(is_vassal_or_below,         character, SCRIPT_VALUE_TYPE_CONSTLESS, core::character*)   \
+  CONDITION_ARG_COMMAND_FUNC(has_love_relationship,      character, SCRIPT_VALUE_TYPE_CONSTLESS, core::character*)   \
+  CONDITION_ARG_COMMAND_FUNC(has_good_relationship,      character, SCRIPT_VALUE_TYPE_CONSTLESS, core::character*)   \
+  CONDITION_ARG_COMMAND_FUNC(has_bad_relationship,       character, SCRIPT_VALUE_TYPE_CONSTLESS, core::character*)   \
+  CONDITION_ARG_COMMAND_FUNC(has_neutral_relationship,   character, SCRIPT_VALUE_TYPE_CONSTLESS, core::character*)   \
   /* close family */ \
   CONDITION_ARG_COMMAND_FUNC(is_child_of, character, SCRIPT_VALUE_TYPE_CONSTLESS, core::character*) \
   CONDITION_ARG_COMMAND_FUNC(is_parent_of, character, SCRIPT_VALUE_TYPE_CONSTLESS, core::character*) \
@@ -166,6 +221,12 @@
   CONDITION_COMMAND_FUNC(is_created) \
   CONDITION_COMMAND_FUNC(will_leave_realm_on_succession) \
   CONDITION_COMMAND_FUNC(is_formal) \
+  
+#define CASUS_BELLI_GET_BOOL_NO_ARGS_COMMANDS_LIST \
+  CASUS_BELLI_FLAGS_LIST
+  
+#define CASUS_BELLI_GET_NUMBER_NO_ARGS_COMMANDS_LIST \
+  CASUS_BELLI_NUMBERS_LIST
   
 // религия: священное место, священное место с флагом, fervor, хостилити, фичи, доктрина?, тэг и треит
 // культура: в цк3 только инновации, эра и графика

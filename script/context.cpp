@@ -46,7 +46,7 @@ namespace devils_engine {
       return utils::rng_normalize(value);
     }
     
-    context::context() noexcept : type(SIZE_MAX), operator_type(SIZE_MAX), nest_level(0) {}
+    context::context() noexcept : type(SIZE_MAX), operator_type(SIZE_MAX), nest_level(0), id_hash(0), method_hash(0), current_turn(0) {}
     context::context(const std::string_view &id, const std::string_view &method_name, const size_t &current_turn) noexcept : 
       id(id), 
       method_name(method_name), 
@@ -59,6 +59,21 @@ namespace devils_engine {
       method_hash(std::hash<std::string_view>()(method_name)),
       current_turn(current_turn)
     {}
+    
+    void context::set_data(const std::string_view &id, const std::string_view &method_name, const size_t &current_turn) noexcept {
+      this->id = id;
+      this->method_name = method_name;
+      this->current_turn = current_turn;
+      id_hash = std::hash<std::string_view>()(id);
+      method_hash = std::hash<std::string_view>()(method_name);
+    }
+    
+    void context::set_data(const std::string_view &id, const std::string_view &method_name) noexcept {
+      this->id = id;
+      this->method_name = method_name;
+      id_hash = std::hash<std::string_view>()(id);
+      method_hash = std::hash<std::string_view>()(method_name);
+    }
     
     bool context::draw(const draw_data* data) const {
       if (!draw_function) return true;

@@ -100,6 +100,8 @@ namespace devils_engine {
       
       context() noexcept;
       context(const std::string_view &id, const std::string_view &method_name, const size_t &current_turn) noexcept;
+      void set_data(const std::string_view &id, const std::string_view &method_name, const size_t &current_turn) noexcept;
+      void set_data(const std::string_view &id, const std::string_view &method_name) noexcept;
       
       inline bool get_attribute(const size_t &index) const { return attributes.get(index); }
       inline void set_attribute(const size_t &index, const bool value) { attributes.set(index, value); }

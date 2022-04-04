@@ -48,6 +48,23 @@ namespace devils_engine {
     class name final : public interface {                               \
     public:                                                             \
       static const size_t type_index;                                   \
+      static const size_t context_types = object::type_bit::casus_belli;\
+      static const size_t expected_types = 0;                           \
+      static const size_t output_type = object::type_bit::boolean;      \
+      struct object process(context* ctx) const override;               \
+      void draw(context* ctx) const override;                           \
+    };                                                                  \
+    
+#define CASUS_BELLI_FLAG_FUNC(name) CONDITION_COMMAND_FUNC(name)
+    CASUS_BELLI_GET_BOOL_NO_ARGS_COMMANDS_LIST
+#undef CASUS_BELLI_FLAG_FUNC
+    
+#undef CONDITION_COMMAND_FUNC
+
+#define CONDITION_COMMAND_FUNC(name) \
+    class name final : public interface {                               \
+    public:                                                             \
+      static const size_t type_index;                                   \
       static const size_t context_types = object::type_bit::character;  \
       static const size_t expected_types = 0;                           \
       static const size_t output_type = object::type_bit::number;       \
@@ -56,6 +73,23 @@ namespace devils_engine {
     };                                                                  \
     
     CHARACTER_GET_NUMBER_NO_ARGS_COMMANDS_LIST
+    
+#undef CONDITION_COMMAND_FUNC
+
+#define CONDITION_COMMAND_FUNC(name) \
+    class name final : public interface {                               \
+    public:                                                             \
+      static const size_t type_index;                                   \
+      static const size_t context_types = object::type_bit::casus_belli;\
+      static const size_t expected_types = 0;                           \
+      static const size_t output_type = object::type_bit::number;       \
+      struct object process(context* ctx) const override;               \
+      void draw(context* ctx) const override;                           \
+    };                                                                  \
+    
+#define CASUS_BELLI_NUMBER_FUNC(name) CONDITION_COMMAND_FUNC(name)
+    CASUS_BELLI_GET_NUMBER_NO_ARGS_COMMANDS_LIST
+#undef CASUS_BELLI_NUMBER_FUNC
     
 #undef CONDITION_COMMAND_FUNC
 

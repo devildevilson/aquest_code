@@ -57,6 +57,31 @@ namespace devils_engine {
     REALM_GET_BOOL_EXISTED_ARG_COMMANDS_LIST
     
 #undef CONDITION_ARG_COMMAND_FUNC
+
+#define CONDITION_COMMAND_FUNC(name)                  \
+    struct object name::process(context* ctx) const { \
+      auto c = ctx->current.get<const core::casus_belli*>(); \
+      return object(c->name());                       \
+    }                                                 \
+
+#define CASUS_BELLI_FLAG_FUNC(name) CONDITION_COMMAND_FUNC(name)
+    CASUS_BELLI_GET_BOOL_NO_ARGS_COMMANDS_LIST
+#undef CASUS_BELLI_FLAG_FUNC
+
+#undef CONDITION_COMMAND_FUNC
+
+
+#define CONDITION_COMMAND_FUNC(name)                  \
+    struct object name::process(context* ctx) const { \
+      auto c = ctx->current.get<const core::casus_belli*>(); \
+      return object(double(c->get_##name()));         \
+    }                                                 \
+
+#define CASUS_BELLI_NUMBER_FUNC(name) CONDITION_COMMAND_FUNC(name)
+    CASUS_BELLI_GET_NUMBER_NO_ARGS_COMMANDS_LIST
+#undef CASUS_BELLI_NUMBER_FUNC
+
+#undef CONDITION_COMMAND_FUNC
     
 #define STAT_FUNC(name) \
     const size_t name::type_index = commands::values::name; \
@@ -486,6 +511,12 @@ namespace devils_engine {
     
     CHARACTER_GET_BOOL_NO_ARGS_COMMANDS_LIST
     REALM_GET_BOOL_NO_ARGS_COMMANDS_LIST
+#define CASUS_BELLI_FLAG_FUNC(name) CONDITION_COMMAND_FUNC(name)
+    CASUS_BELLI_GET_BOOL_NO_ARGS_COMMANDS_LIST
+#undef CASUS_BELLI_FLAG_FUNC
+#define CASUS_BELLI_NUMBER_FUNC(name) CONDITION_COMMAND_FUNC(name)
+    CASUS_BELLI_GET_NUMBER_NO_ARGS_COMMANDS_LIST
+#undef CASUS_BELLI_NUMBER_FUNC
     
 #undef CONDITION_COMMAND_FUNC
 

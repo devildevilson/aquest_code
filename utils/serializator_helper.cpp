@@ -14,7 +14,7 @@
 #include "picosha2.h"
 #include "salsa20.h"
 #include "linear_rng.h"
-#include "bin/seasons.h"
+#include "core/seasons.h"
 
 #include <iostream>
 

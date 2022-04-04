@@ -6,7 +6,7 @@
 #include <string>
 #include "core/declare_structures.h"
 #include "utility.h"
-#include "bin/map.h"
+#include "core/map.h"
 
 namespace devils_engine {
   namespace core {

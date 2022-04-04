@@ -1,7 +1,7 @@
 #include "lua_initialization_hidden.h"
 
 #include <iostream>
-#include "magic_enum.hpp"
+#include "magic_enum_header.h"
 
 namespace devils_engine {
   namespace utils {

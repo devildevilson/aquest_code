@@ -2,7 +2,7 @@
 
 #include "globals.h"
 #include "systems.h"
-#include "bin/map.h"
+#include "core/map.h"
 #include "render/shared_structures.h"
 
 #include <iostream>

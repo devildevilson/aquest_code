@@ -80,10 +80,10 @@ namespace devils_engine {
     return (uint64_t(first) << 32) | uint64_t(second);
   }
   
-  constexpr size_t fnv_basis = 14695981039346656037ull;
-  constexpr size_t fnv_prime = 1099511628211ull;
-  constexpr size_t string_hash(const std::string_view &str) {
-    size_t current_hash = fnv_basis;
+  constexpr uint64_t fnv_basis = 14695981039346656037ull;
+  constexpr uint64_t fnv_prime = 1099511628211ull;
+  constexpr uint64_t string_hash(const std::string_view &str) {
+    uint64_t current_hash = fnv_basis;
     for (const char c : str) { current_hash = (current_hash ^ c) * fnv_prime; }
     return current_hash;
   }

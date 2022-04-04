@@ -181,9 +181,9 @@ namespace devils_engine {
           "family", sol::readonly(&core::character::family),
           "relations", sol::readonly(&core::character::relations),
                                                                  
-          "suzerain", sol::readonly_property([] (const core::character* c) { return lua_handle_realm(c->suzerain); }),
-          "imprisoner", sol::readonly_property([] (const core::character* c) { return lua_handle_realm(c->imprisoner); }),
-          "realm", sol::readonly_property([] (const core::character* self) { return lua_handle_realm(self->self); }),
+          //"suzerain", sol::readonly_property([] (const core::character* c) { return lua_handle_realm(c->suzerain); }),
+          //"imprisoner", sol::readonly_property([] (const core::character* c) { return lua_handle_realm(c->imprisoner); }),
+          //"realm", sol::readonly_property([] (const core::character* self) { return lua_handle_realm(self->self); }),
                                                                  
           "stats_start", sol::var(TO_LUA_INDEX(core::offsets::character_stats)),
           "hero_stats_start", sol::var(TO_LUA_INDEX(core::offsets::hero_stats)),
@@ -209,7 +209,7 @@ namespace devils_engine {
       return make_object(s, obj); \
     } \
         
-#define GET_SCOPE_COMMAND_FUNC(name, a, b, type) character_type.set_function("get_"#name, LUA_GET_FUNCTION(name));
+#define GET_SCOPE_COMMAND_FUNC(name, a, b, type) character_type.set_function(#name, sol::readonly_property( LUA_GET_FUNCTION(name) )); // "get_"
       CHARACTER_GET_SCOPE_COMMANDS_LIST
 #undef GET_SCOPE_COMMAND_FUNC
 
@@ -251,24 +251,31 @@ namespace devils_engine {
           "blood_dynasty", sol::readonly(&core::character::family::blood_dynasty),
           "dynasty", sol::readonly(&core::character::family::dynasty)
         );
-
+        
+        // че с этим делать? итерировать отношения двух персонажей + проверять отдельно типы, наверное как то так
         auto relations = character_type_table.new_usertype<struct core::character::relations>(
           "character_relations", sol::no_constructor,
           "acquaintances", sol::readonly_property([] (const struct core::character::relations* self) { 
             size_t counter = 0;
-            return [self, counter] () mutable -> std::tuple<core::character*, int32_t, int32_t> {
+            return [self, counter] () mutable -> core::character* {
               while (self->acquaintances[counter].first == nullptr && counter < self->acquaintances.size()) { ++counter; }
               if (counter < self->acquaintances.size()) {
-                return std::make_tuple(
-                  self->acquaintances[counter].first,
-                  self->acquaintances[counter].second.friendship,
-                  self->acquaintances[counter].second.love
-                );
+                return self->acquaintances[counter].first;
               }
               
-              return std::make_tuple(nullptr, 0, 0);
+              return nullptr;
             };
           }),
+          "acquaintance_types", [] (const struct core::character::relations* self, const core::character* character) {
+            size_t counter = 0;
+            // наверное будет лучше передать указатель на bit_field
+            size_t types = self->get_acquaintance_raw(character);
+            return [types, counter] (sol::this_state s) mutable -> sol::object {
+              while ((types & (size_t(1) << counter)) == 0 && counter < core::relationship::count) { ++counter; }
+              if (counter >= core::relationship::count) return sol::nil;
+              return sol::make_object(s, TO_LUA_INDEX(counter));
+            };
+          },
           "acquaintances_max_size", sol::var(core::character::relations::max_game_acquaintance)
         );
         
@@ -465,11 +472,30 @@ namespace devils_engine {
                           
           for (const auto &pair : character->relations.acquaintances) {
             if (pair.first == nullptr) continue;
-            const auto &ret = func(pair.first, pair.second.friendship, pair.second.love);
+            const auto &ret = func(pair.first);
             CHECK_ERROR_THROW(ret);
             
             if (ret.get_type() == sol::type::boolean) {
               if (const bool r = ret; r) return;
+            }
+          }
+        });
+        
+        core.set_function("each_acquaintance_type", [] (const core::character* first, const core::character* second, const sol::function &func) {
+          if (first == nullptr) throw std::runtime_error("Invalid input character");
+          if (second == nullptr) throw std::runtime_error("Invalid input character");
+          if (!func.valid()) throw std::runtime_error("Invalid input function");
+                          
+          for (const auto &pair : first->relations.acquaintances) {
+            if (pair.first != second) continue;
+            for (size_t i = 0; i < core::relationship::count; ++i) {
+              if (!pair.second.types.get(i)) continue;
+              const auto &ret = func(TO_LUA_INDEX(i)); // pair.first, // нужно ли персонажа сюда? по идее мы и так его передаем
+              CHECK_ERROR_THROW(ret);
+              
+              if (ret.get_type() == sol::type::boolean) {
+                if (const bool r = ret; r) return;
+              }
             }
           }
         });

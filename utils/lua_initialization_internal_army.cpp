@@ -14,9 +14,10 @@ namespace devils_engine {
   namespace utils {
     namespace internal {
       static float get_stat(const core::army* self, const sol::object &obj) {
-        if (obj.get_type() != sol::type::string && obj.get_type() != sol::type::number) throw std::runtime_error("Bad army stat index type");
+        const auto type = obj.get_type();
+        if (type != sol::type::string && type != sol::type::number) throw std::runtime_error("Bad army stat index type");
         
-        if (obj.get_type() == sol::type::number) {
+        if (type == sol::type::number) {
           const size_t stat_index = obj.as<size_t>();
           const size_t final_index = FROM_LUA_INDEX(stat_index);
           if (final_index < core::offsets::army_stats || final_index >= core::offsets::army_stats + core::army_stats::count) {
@@ -35,9 +36,10 @@ namespace devils_engine {
       }
       
       static float get_base_stat(const core::army* self, const sol::object &obj) {
-        if (obj.get_type() != sol::type::string && obj.get_type() != sol::type::number) throw std::runtime_error("Bad army stat index type");
+        const auto type = obj.get_type();
+        if (type != sol::type::string && type != sol::type::number) throw std::runtime_error("Bad army stat index type");
         
-        if (obj.get_type() == sol::type::number) {
+        if (type == sol::type::number) {
           const size_t stat_index = obj.as<size_t>();
           const size_t final_index = FROM_LUA_INDEX(stat_index);
           if (final_index < core::offsets::army_stats || final_index >= core::offsets::army_stats + core::army_stats::count) {
@@ -56,9 +58,10 @@ namespace devils_engine {
       }
       
       static float get_resource(const core::army* self, const sol::object &obj) {
-        if (obj.get_type() != sol::type::string && obj.get_type() != sol::type::number) throw std::runtime_error("Bad army resource index type");
+        const auto type = obj.get_type();
+        if (type != sol::type::string && type != sol::type::number) throw std::runtime_error("Bad army resource index type");
         
-        if (obj.get_type() == sol::type::number) {
+        if (type == sol::type::number) {
           const size_t stat_index = obj.as<size_t>();
           const size_t final_index = FROM_LUA_INDEX(stat_index);
           if (final_index < core::offsets::army_resources || final_index >= core::offsets::army_resources + core::army_resources::count) {
@@ -107,6 +110,9 @@ namespace devils_engine {
           "get_stat", &get_stat,
           "get_base_stat", &get_base_stat,
           "get_resource", &get_resource,
+          "can_be_raized", &core::army::can_be_raized,
+          "can_be_returned", &core::army::can_be_returned,
+          "return_army", &core::army::return_army,
           "stats_start", sol::var(TO_LUA_INDEX(core::offsets::army_stats)),
           "stats_end", sol::var(core::offsets::army_stats + core::army_stats::count),
           "resources_start", sol::var(TO_LUA_INDEX(core::offsets::army_resources)),

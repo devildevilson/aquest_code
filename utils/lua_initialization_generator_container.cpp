@@ -1,18 +1,22 @@
 #include "lua_initialization_hidden.h"
 
+#include "Cpp/FastNoiseLite.h"
+
 #include "bin/generator_container.h"
 #include "bin/generator_context2.h"
-#include "bin/seasons.h"
-#include "random_engine.h"
-#include "Cpp/FastNoiseLite.h"
-#include "bin/map.h"
+#include "bin/map_creator.h"
+#include "bin/image_parser.h"
+
 #include "render/shared_render_utility.h"
+
+#include "core/seasons.h"
+#include "core/titulus.h"
+#include "core/map.h"
+
 #include "globals.h"
 #include "serializator_helper.h"
-#include "bin/image_parser.h"
 #include "systems.h"
-#include "bin/map_creator.h"
-#include "core/titulus.h"
+#include "random_engine.h"
 
 #include <iostream>
 #include <string>
@@ -160,70 +164,70 @@ namespace devils_engine {
         }
       });
       
-      utils.set_function("int_random_queue", [] (sol::this_state s, const map::generator::context* ctx, const double &first_count, const sol::function prepare_function, const sol::function queue_function) {
-        sol::state_view lua = s;
-        std::vector<int64_t> queue;
-        queue.reserve(first_count * 2);
-        const auto push_func = [&queue] (const int64_t data) { queue.push_back(data); };
-        sol::object lua_push_func = sol::make_object(lua, push_func);
-        
-        for (size_t i = 0; i < first_count; ++i) {
-          prepare_function(TO_LUA_INDEX(i), lua_push_func);
-        }
-        
-        while (!queue.empty()) {
-          const size_t rand_index = ctx->random->index(queue.size());
-          const int64_t data = queue[rand_index];
-          queue[rand_index] = queue.back();
-          queue.pop_back();
-          
-          queue_function(data, lua_push_func);
-        }
-      });
-      
-      utils.set_function("num_random_queue", [] (sol::this_state s, const map::generator::context* ctx, const double &first_count, const sol::function prepare_function, const sol::function queue_function) {
-        sol::state_view lua = s;
-        std::vector<double> queue;
-        const size_t size = first_count;
-        queue.reserve(size * 2);
-        const auto push_func = [&queue] (const double data) { queue.push_back(data); };
-        sol::object lua_push_func = sol::make_object(lua, push_func);
-        
-        for (size_t i = 0; i < size; ++i) {
-          prepare_function(TO_LUA_INDEX(i), lua_push_func);
-        }
-        
-        while (!queue.empty()) {
-          const size_t rand_index = ctx->random->index(queue.size());
-          const double data = queue[rand_index];
-          queue[rand_index] = queue.back();
-          queue.pop_back();
-          
-          queue_function(data, lua_push_func);
-        }
-      });
-      
-      utils.set_function("random_queue", [] (sol::this_state s, const map::generator::context* ctx, const double &first_count, const sol::function prepare_function, const sol::function queue_function) {
-        sol::state_view lua = s;
-        std::vector<sol::object> queue;
-        const size_t size = first_count;
-        queue.reserve(size * 2);
-        const auto push_func = [&queue] (const sol::object data) { queue.push_back(data); };
-        sol::object lua_push_func = sol::make_object(lua, push_func);
-        
-        for (size_t i = 0; i < size; ++i) {
-          prepare_function(TO_LUA_INDEX(i), lua_push_func);
-        }
-        
-        while (!queue.empty()) {
-          const size_t rand_index = ctx->random->index(queue.size());
-          const sol::object data = queue[rand_index];
-          queue[rand_index] = queue.back();
-          queue.pop_back();
-          
-          queue_function(data, lua_push_func);
-        }
-      });
+//       utils.set_function("int_random_queue", [] (sol::this_state s, const map::generator::context* ctx, const double &first_count, const sol::function prepare_function, const sol::function queue_function) {
+//         sol::state_view lua = s;
+//         std::vector<int64_t> queue;
+//         queue.reserve(first_count * 2);
+//         const auto push_func = [&queue] (const int64_t data) { queue.push_back(data); };
+//         sol::object lua_push_func = sol::make_object(lua, push_func);
+//         
+//         for (size_t i = 0; i < first_count; ++i) {
+//           prepare_function(TO_LUA_INDEX(i), lua_push_func);
+//         }
+//         
+//         while (!queue.empty()) {
+//           const size_t rand_index = ctx->random->index(queue.size());
+//           const int64_t data = queue[rand_index];
+//           queue[rand_index] = queue.back();
+//           queue.pop_back();
+//           
+//           queue_function(data, lua_push_func);
+//         }
+//       });
+//       
+//       utils.set_function("num_random_queue", [] (sol::this_state s, const map::generator::context* ctx, const double &first_count, const sol::function prepare_function, const sol::function queue_function) {
+//         sol::state_view lua = s;
+//         std::vector<double> queue;
+//         const size_t size = first_count;
+//         queue.reserve(size * 2);
+//         const auto push_func = [&queue] (const double data) { queue.push_back(data); };
+//         sol::object lua_push_func = sol::make_object(lua, push_func);
+//         
+//         for (size_t i = 0; i < size; ++i) {
+//           prepare_function(TO_LUA_INDEX(i), lua_push_func);
+//         }
+//         
+//         while (!queue.empty()) {
+//           const size_t rand_index = ctx->random->index(queue.size());
+//           const double data = queue[rand_index];
+//           queue[rand_index] = queue.back();
+//           queue.pop_back();
+//           
+//           queue_function(data, lua_push_func);
+//         }
+//       });
+//       
+//       utils.set_function("random_queue", [] (sol::this_state s, const map::generator::context* ctx, const double &first_count, const sol::function prepare_function, const sol::function queue_function) {
+//         sol::state_view lua = s;
+//         std::vector<sol::object> queue;
+//         const size_t size = first_count;
+//         queue.reserve(size * 2);
+//         const auto push_func = [&queue] (const sol::object data) { queue.push_back(data); };
+//         sol::object lua_push_func = sol::make_object(lua, push_func);
+//         
+//         for (size_t i = 0; i < size; ++i) {
+//           prepare_function(TO_LUA_INDEX(i), lua_push_func);
+//         }
+//         
+//         while (!queue.empty()) {
+//           const size_t rand_index = ctx->random->index(queue.size());
+//           const sol::object data = queue[rand_index];
+//           queue[rand_index] = queue.back();
+//           queue.pop_back();
+//           
+//           queue_function(data, lua_push_func);
+//         }
+//       });
       
       utils.set_function("each_tile_neighbor", [] (const map::generator::context* ctx, const sol::function activity) {
         const size_t tiles_count = ctx->map->tiles_count();

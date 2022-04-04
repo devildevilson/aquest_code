@@ -360,19 +360,19 @@ namespace devils_engine {
       s.open_libraries(sol::lib::base, sol::lib::math, sol::lib::string, sol::lib::table);
       const std::string &root_path = global::root_directory();
       const std::string script_path = root_path + "scripts/";
-      auto serializator = s.require_file("serpent", script_path + "serpent.lua", false);
+//       auto serializator = s.require_file("serpent", script_path + "serpent.lua", false);
+//       
+//       //const auto serpent = s["serpent"];
+//       if (!serializator.is<sol::table>()) throw std::runtime_error("Could not loading serializator");
+//       const auto serpent = serializator.as<sol::table>();
+//       const auto block_proxy = serpent["block"];
+//       if (!block_proxy.valid() || block_proxy.get_type() != sol::type::function) throw std::runtime_error("Bad serializator function");
+//       const auto block_func = block_proxy.get<sol::function>();
       
-      //const auto serpent = s["serpent"];
-      if (!serializator.is<sol::table>()) throw std::runtime_error("Could not loading serializator");
-      const auto serpent = serializator.as<sol::table>();
-      const auto block_proxy = serpent["block"];
-      if (!block_proxy.valid() || block_proxy.get_type() != sol::type::function) throw std::runtime_error("Bad serializator function");
-      const auto block_func = block_proxy.get<sol::function>();
-      
-      auto opts = s.create_table();
-      opts["compact"] = false;
-      opts["fatal"] = true;
-      opts["comment"] = false;
+//       auto opts = s.create_table();
+//       opts["compact"] = false;
+//       opts["fatal"] = true;
+//       opts["comment"] = false;
       
       sol::table target = s.create_table();
       auto graphics = target["graphics"].get_or_create<sol::table>();
@@ -397,23 +397,53 @@ namespace devils_engine {
         auto current_mapping = keys[tables_keys[i]].get_or_create<sol::table>();
         auto local_mapping = core->keys_mapping[i];
         const auto &event_keys = local_mapping->events_map;
+        size_t lua_counter = 1;
         for (const auto &key_data : event_keys) {
-          sol::table key_data_table = s.create_table();
-          key_data_table.add(key_data.first.name());
-          key_data_table.add(key_data.second.keys[0]);
-          key_data_table.add(key_data.second.keys[1]);
-          current_mapping.add(key_data_table);
+          sol::table key_data_table = s.create_table(3, 0);
+          //key_data_table.clear();
+//           key_data_table.add(key_data.first.name());
+//           key_data_table.add(key_data.second.keys[0]);
+//           key_data_table.add(key_data.second.keys[1]);
+          key_data_table[1] = key_data.first.name();
+          key_data_table[2] = key_data.second.keys[0];
+          key_data_table[3] = key_data.second.keys[1];
+          current_mapping[lua_counter] = key_data_table;
+          ++lua_counter;
         }
       }
       
-      const auto func_ret = block_func(target, opts);
+      auto ret = s.require_file("serpent", global::root_directory() + "scripts/serpent.lua", false);
+      if (!ret.valid()) {
+        throw std::runtime_error("Could not load serpent.lua");
+      }
+      
+      auto serpent = ret.as<sol::table>();
+      auto proxy = serpent["dump"];
+      if (!proxy.valid() || proxy.get_type() != sol::type::function) throw std::runtime_error("Bad serpent table");
+      auto serpent_dump = proxy.get<sol::function>();
+      auto serpent_opts = s.create_table_with(
+        "compact", true,
+        "fatal", true,
+        //"sparse", true,
+        "nohuge", true,
+        "nocode", true,
+        "sortkeys", false,
+        "comment", false,
+        "valtypeignore", s.create_table_with(
+          "function", true,
+          "thread", true,
+          "userdata", true
+        )
+      );
+      
+      const auto func_ret = serpent_dump(target, serpent_opts);
       if (!func_ret.valid()) {
         sol::error err = func_ret;
         std::cout << err.what();
         throw std::runtime_error("There is lua errors");
       }
       
-      const std::string value = "return " + func_ret.get<std::string>();
+      const std::string value = func_ret.get<std::string>(); // "return " + 
       std::string final_path = path;
       if (path.empty()) {
         final_path = root_path + "settings.lua";

@@ -64,3 +64,6 @@
 [submodule "include/function2"]
 	path = include/function2
 	url = https://github.com/Naios/function2.git
+[submodule "include/dsml"]
+	path = include/dsml
+	url = https://github.com/dsiroky/dsml.git

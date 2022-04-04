@@ -1,14 +1,16 @@
 #include "lua_initialization_hidden.h"
 
-#include "script/header.h"
 #include "magic_enum_header.h"
-//#include "bin/core_structures.h"
+#include "lua_initialization_handle_types.h"
+
 #include "core/structures_header.h"
+
 #include "re2/re2.h"
+
+#include "script/header.h"
 #include "script/context.h"
 #include "script/init_functions.h"
 #include "script/core.h"
-#include "lua_initialization_handle_types.h"
 
 namespace devils_engine {
   namespace utils {
@@ -41,7 +43,7 @@ namespace devils_engine {
     }
     
     template <typename T>
-    sol::object make_handle_object(sol::this_state s, const script::object obj) {
+    static sol::object make_handle_object(sol::this_state s, const script::object obj) {
       if      constexpr (std::is_same_v<T, core::realm>)      return sol::make_object(s, lua_handle_realm(obj.get<utils::handle<T>>()));
       else if constexpr (std::is_same_v<T, core::army>)       return sol::make_object(s, lua_handle_army(obj.get<utils::handle<T>>()));
       else if constexpr (std::is_same_v<T, core::hero_troop>) return sol::make_object(s, lua_handle_hero_troop(obj.get<utils::handle<T>>()));
@@ -71,6 +73,25 @@ namespace devils_engine {
     }
     
 #undef OBJECT_TYPE_CASE
+
+    static std::string make_object_with_comparison(const script::compare_operators::values type, const sol::object &obj) {
+      if (obj.get_type() == sol::type::number) {
+        const double num = obj.as<double>();
+        return std::to_string(unique_counter++) + ":" + 
+                std::string(script::compare_operators::names[type]) + ":" + 
+                std::to_string(num);
+      }
+      
+      if (obj.get_type() == sol::type::string) {
+        const auto val = obj.as<std::string>();
+        return std::to_string(unique_counter++) + ":" + 
+                std::string(script::compare_operators::names[type]) + ":" + 
+                val;
+      }
+      
+      throw std::runtime_error("Bad input type");
+      return "";
+    }
     
     void setup_lua_script_utils(sol::state_view lua) {
       auto script_utils = lua["script_utils"].get_or_create<sol::table>();
@@ -78,61 +99,49 @@ namespace devils_engine {
       //script_utils.new_usertype<script::script_data>("script_data");
       script_utils.new_usertype<script::draw_data>(
         "draw_data", sol::no_constructor,
-        "id", &script::draw_data::id,
-        "method_name", &script::draw_data::method_name,
-        "function_name", &script::draw_data::function_name,
-        "prev_function_name", &script::draw_data::prev_function_name,
-        "type", &script::draw_data::type, // пока не понимаю что с типом делать
-        "operator_type", &script::draw_data::operator_type,
-        "nest_level", &script::draw_data::nest_level,
+        "id", sol::readonly(&script::draw_data::id),
+        "method_name", sol::readonly(&script::draw_data::method_name),
+        "function_name", sol::readonly(&script::draw_data::function_name),
+        "prev_function_name", sol::readonly(&script::draw_data::prev_function_name),
+        "type", sol::readonly(&script::draw_data::type), // пока не понимаю что с типом делать
+        "operator_type", sol::readonly(&script::draw_data::operator_type),
+        "nest_level", sol::readonly(&script::draw_data::nest_level),
         "current", sol::readonly_property([] (sol::this_state s, const script::draw_data* self) { return make_lua_object(s, self->current); }),
         "value", sol::readonly_property([] (sol::this_state s, const script::draw_data* self) { return make_lua_object(s, self->value); }),
         "original", sol::readonly_property([] (sol::this_state s, const script::draw_data* self) { return make_lua_object(s, self->original); }),
         // аргументы? составить таблицу нужно из них
-        "arguments", sol::readonly_property([] (sol::this_state s, const script::draw_data* self) { 
+        "get_arguments", [] (sol::this_state s, const script::draw_data* self) { 
           sol::state_view lua = s;
           auto table = lua.create_table(0, 16);
           for (size_t i = 0; i < self->arguments.size() && !self->arguments[i].first.empty(); ++i) {
             table.set(self->arguments[i].first, make_lua_object(s, self->arguments[i].second));
           }
           return table;
-        })
+        }
       );
       
-      script_utils.set_function("more", [] (const double &num) {
-        return std::to_string(unique_counter++) + ":" + 
-               std::string(script::compare_operators::names[script::compare_operators::more]) + ":" + 
-               std::to_string(num);
+      script_utils.set_function("more", [] (const sol::object &obj) {
+        return make_object_with_comparison(script::compare_operators::more, obj);
       });
       
-      script_utils.set_function("equal", [] (const double &num) {
-        return std::to_string(unique_counter++) + ":" + 
-               std::string(script::compare_operators::names[script::compare_operators::equal]) + ":" + 
-               std::to_string(num);
+      script_utils.set_function("equal", [] (const sol::object &obj) {
+        return make_object_with_comparison(script::compare_operators::equal, obj);
       });
       
-      script_utils.set_function("less", [] (const double &num) {
-        return std::to_string(unique_counter++) + ":" + 
-               std::string(script::compare_operators::names[script::compare_operators::less]) + ":" + 
-               std::to_string(num);
+      script_utils.set_function("less", [] (const sol::object &obj) {
+        return make_object_with_comparison(script::compare_operators::less, obj);
       });
       
-      script_utils.set_function("more_eq", [] (const double &num) {
-        return std::to_string(unique_counter++) + ":" + 
-               std::string(script::compare_operators::names[script::compare_operators::more_eq]) + ":" + 
-               std::to_string(num);
+      script_utils.set_function("more_eq", [] (const sol::object &obj) {
+        return make_object_with_comparison(script::compare_operators::more_eq, obj);
       });
       
-      script_utils.set_function("less_eq", [] (const double &num) {
-        return std::to_string(unique_counter++) + ":" + 
-               std::string(script::compare_operators::names[script::compare_operators::less_eq]) + ":" + 
-               std::to_string(num);
+      script_utils.set_function("less_eq", [] (const sol::object &obj) {
+        return make_object_with_comparison(script::compare_operators::less_eq, obj);
       });
       
-      script_utils.set_function("not_eq", [] (const double &num) {
-        return std::to_string(unique_counter++) + ":" + 
-               std::string(script::compare_operators::names[script::compare_operators::not_equal]) + ":" + 
-               std::to_string(num);
+      script_utils.set_function("not_eq", [] (const sol::object &obj) {
+        return make_object_with_comparison(script::compare_operators::not_equal, obj);
       });
       
 //       for (uint32_t i = script::data_source_type::stats_start+1; i < script::data_source_type::count; ++i) {
@@ -145,11 +154,11 @@ namespace devils_engine {
                std::string(id);
       });
       
-      script_utils.new_enum("decision", {
-        //std::make_pair(magic_enum::enum_name(core::decision::type::diplomatic), core::decision::type::diplomatic),
-        std::make_pair(magic_enum::enum_name(core::decision::type::major), core::decision::type::major),
-        std::make_pair(magic_enum::enum_name(core::decision::type::minor), core::decision::type::minor)
-      });
+//       script_utils.new_enum("decision", {
+//         //std::make_pair(magic_enum::enum_name(core::decision::type::diplomatic), core::decision::type::diplomatic),
+//         std::make_pair(magic_enum::enum_name(core::decision::type::major), core::decision::type::major),
+//         std::make_pair(magic_enum::enum_name(core::decision::type::minor), core::decision::type::minor)
+//       });
     }
   }
 }

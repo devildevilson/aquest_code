@@ -1,7 +1,7 @@
 #include "lua_initialization_hidden.h"
 
-#include "bin/battle_map.h"
-#include "utils/battle_map_enum.h"
+#include "battle/map.h"
+#include "battle/map_enum.h"
 #include "utils/globals.h"
 #include "magic_enum.hpp"
 

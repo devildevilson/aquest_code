@@ -2,7 +2,7 @@
 
 #include "utility.h"
 #include "progress_container.h"
-#include "magic_enum.hpp"
+#include "magic_enum_header.h"
 
 #define MAX_SAFE_INTEGER uint64_t(9007199254740991)
 

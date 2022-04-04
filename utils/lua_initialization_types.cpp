@@ -18,6 +18,8 @@ namespace devils_engine {
       internal::setup_lua_war(lua);
       internal::setup_lua_troop(lua);
       internal::setup_lua_troop_type(lua);
+      internal::setup_lua_interaction(lua);
+      internal::setup_lua_decision(lua);
 //       internal::setup_lua_trait(lua);
 //       internal::setup_lua_modificator(lua);
 //       internal::setup_lua_casus_belli(lua);

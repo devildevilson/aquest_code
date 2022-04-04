@@ -15,7 +15,6 @@
 #include "settings.h"
 //#include "astar_search.h"
 #include "astar_search_mt.h"
-#include "battle_lua_states.h"
 //#include "string_bank.h"
 #include "localization_container.h"
 #include "game_context.h"
@@ -45,24 +44,26 @@
 #include "ai/build_subsystem.h"
 #include "ai/path_container.h"
 
-#include "bin/map.h"
-#include "bin/map_generators2.h"
-#include "bin/generator_system2.h"
+//#include "bin/map_generators2.h"
+//#include "bin/generator_system2.h"
 #include "bin/generator_container.h"
 #include "bin/generator_context2.h"
 #include "bin/interface_context.h"
 #include "bin/map_creator.h"
 // #include "bin/interface2.h"
-#include "bin/seasons.h"
 #include "bin/game_time.h"
-#include "bin/battle_map.h"
 #include "bin/camera.h"
-#include "bin/battle_unit_states_container.h"
-#include "bin/battle_context.h"
 #include "bin/objects_selection.h"
 
+#include "core/map.h"
 #include "core/context.h"
 #include "core/internal_lua_state.h"
+#include "core/seasons.h"
+
+#include "battle/lua_states.h"
+#include "battle/unit_states_container.h"
+#include "battle/context.h"
+#include "battle/map.h"
 
 #include <filesystem>
 
@@ -271,13 +272,13 @@ namespace devils_engine {
              .dependencyDstAccessMask(vk::AccessFlagBits::eColorAttachmentWrite)
            .dependencyBegin(0, 1)
              .dependencySrcStageMask(vk::PipelineStageFlagBits::eColorAttachmentOutput)
-             .dependencyDstStageMask(vk::PipelineStageFlagBits::eColorAttachmentOutput)
+             .dependencyDstStageMask(vk::PipelineStageFlagBits::eDrawIndirect)
              .dependencySrcAccessMask(vk::AccessFlagBits::eColorAttachmentWrite)
-             .dependencyDstAccessMask(vk::AccessFlagBits::eColorAttachmentWrite)
+             .dependencyDstAccessMask(vk::AccessFlagBits::eMemoryRead)
            .dependencyBegin(1, 2)
-             .dependencySrcStageMask(vk::PipelineStageFlagBits::eColorAttachmentOutput)
+             .dependencySrcStageMask(vk::PipelineStageFlagBits::eDrawIndirect)
              .dependencyDstStageMask(vk::PipelineStageFlagBits::eColorAttachmentOutput)
-             .dependencySrcAccessMask(vk::AccessFlagBits::eColorAttachmentWrite)
+             .dependencySrcAccessMask(vk::AccessFlagBits::eMemoryRead)
              .dependencyDstAccessMask(vk::AccessFlagBits::eColorAttachmentWrite)
            .dependencyBegin(2, VK_SUBPASS_EXTERNAL)
              .dependencySrcStageMask(vk::PipelineStageFlagBits::eColorAttachmentOutput)
@@ -912,6 +913,7 @@ namespace devils_engine {
       if (!is_init()) return;
       
       global::get(reinterpret_cast<render::tile_render*>(SIZE_MAX));
+      global::get(reinterpret_cast<render::world_map_buffers*>(SIZE_MAX));
       
       world_buffers = nullptr;
       first_compute = nullptr;
@@ -1004,6 +1006,7 @@ namespace devils_engine {
       global::get(ar);
       global::get(copy);
       global::get(upd);
+      global::get(world_buffers);
       UNUSED_VARIABLE(borders);
     }
     

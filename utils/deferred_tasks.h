@@ -2,7 +2,9 @@
 #define DEFFERED_TASKS_H
 
 #include <vector>
+#include <queue>
 #include <functional>
+#include <mutex>
 
 namespace devils_engine {
   namespace utils {
@@ -13,9 +15,12 @@ namespace devils_engine {
       deffered_tasks();
       
       void add(const task_t &t);
+      void add(task_t &&t);
       void update(const size_t &time);
     private:
-      std::vector<task_t> tasks;
+      std::mutex mutex;
+      //std::vector<task_t> tasks;
+      std::queue<task_t> tasks;
     };
   }
 }

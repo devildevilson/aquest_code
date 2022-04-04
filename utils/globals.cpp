@@ -14,6 +14,8 @@ namespace devils_engine {
   
   using namespace utils::xoshiro256starstar;
   
+  size_t global::gen_id() { return val.fetch_add(1); }
+  void global::set_id_gen(const size_t &cur) { val = cur; }
   std::string global::root_directory() { return m_root_directory; }
   void global::set_root_directory(const std::string &path) { m_root_directory = path; }
   void global::initialize_state(const uint64_t &seed) {
@@ -35,4 +37,5 @@ namespace devils_engine {
   
   std::string global::m_root_directory;
   global::state global::game_state;
+  std::atomic<size_t> global::val(0);
 }

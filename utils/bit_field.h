@@ -19,7 +19,7 @@ namespace devils_engine {
     struct bit_field {
       using container_type = size_t;
       static const size_t container_size = ceil(double(N) / double(SIZE_WIDTH));
-      std::array<size_t, container_size> container; // атомарность? вряд ли
+      std::array<container_type, container_size> container; // атомарность? вряд ли
 
       inline bit_field() { reset(); }
       inline bool set(const size_t &index, const bool value) {
@@ -45,6 +45,14 @@ namespace devils_engine {
 
       inline void reset() {
         memset(container.data(), 0, sizeof(container_type) * container_size);
+      }
+      
+      inline bool empty() const {
+        for (const container_type val : container) {
+          if (val != 0) return false;
+        }
+        
+        return true;
       }
       
       bit_field(const bit_field &other) = default;
@@ -83,6 +91,14 @@ namespace devils_engine {
 
       inline void reset() {
         memset(container.data(), 0, sizeof(container_type) * container_size);
+      }
+      
+      inline bool empty() const {
+        for (const container_type val : container) {
+          if (val != 0) return false;
+        }
+        
+        return true;
       }
       
       bit_field_32(const bit_field_32 &other) = default;

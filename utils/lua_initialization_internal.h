@@ -24,6 +24,8 @@ namespace devils_engine {
       void setup_lua_casus_belli(sol::state_view lua);
       void setup_lua_troop(sol::state_view lua);
       void setup_lua_troop_type(sol::state_view lua);
+      void setup_lua_interaction(sol::state_view lua);
+      void setup_lua_decision(sol::state_view lua);
     }
   }
 }

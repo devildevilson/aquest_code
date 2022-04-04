@@ -3,7 +3,7 @@
 #include "globals.h"
 #include "systems.h"
 #include "input.h"
-#include "magic_enum.hpp"
+#include "magic_enum_header.h"
 
 #include <iostream>
 

@@ -10,7 +10,8 @@
 #include "bin/map_creator.h"
 #include "bin/loading_functions.h"
 #include "bin/logic.h"
-#include "bin/battle_map.h"
+
+#include "battle/map.h"
 
 #include "render/image_controller.h"
 // #include "render/battle_render_stages.h"

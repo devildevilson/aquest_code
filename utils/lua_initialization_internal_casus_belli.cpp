@@ -7,7 +7,7 @@ namespace devils_engine {
     namespace internal {
       void setup_lua_casus_belli(sol::state_view lua) {
         auto core = lua["core"].get_or_create<sol::table>();
-        core.new_usertype<core::casus_belli>(
+        auto casus_belli = core.new_usertype<core::casus_belli>(
           "casus_belli", sol::no_constructor,
           "id", sol::readonly(&core::casus_belli::id),
           "battle_warscore_mult", sol::readonly(&core::casus_belli::battle_warscore_mult),
@@ -29,6 +29,14 @@ namespace devils_engine {
           "name",           &core::casus_belli::name,
           "war_name",       &core::casus_belli::war_name
         );
+        
+#define CASUS_BELLI_FLAG_FUNC(name) casus_belli.set_function(#name, &core::casus_belli::name);
+        CASUS_BELLI_GET_BOOL_NO_ARGS_COMMANDS_LIST
+#undef CASUS_BELLI_FLAG_FUNC
+
+#define CASUS_BELLI_NUMBER_FUNC(name) casus_belli.set_function(#name, sol::readonly_property(&core::casus_belli::get_##name));
+        CASUS_BELLI_GET_NUMBER_NO_ARGS_COMMANDS_LIST
+#undef CASUS_BELLI_NUMBER_FUNC
       }
     }
   }

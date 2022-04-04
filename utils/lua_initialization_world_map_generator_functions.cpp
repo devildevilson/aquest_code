@@ -1,13 +1,14 @@
 #include "lua_initialization_hidden.h"
 
-#include "bin/image_parser.h"
-// #include "bin/data_parser.h"
-#include "bin/heraldy_parser.h"
 #include "magic_enum_header.h"
 #include "serializator_helper.h"
 #include "systems.h"
-#include "bin/map_creator.h"
 #include "globals.h"
+
+#include "bin/image_parser.h"
+#include "bin/heraldy_parser.h"
+#include "bin/map_creator.h"
+
 #include "core/structures_header.h"
 
 namespace devils_engine {
@@ -162,6 +163,7 @@ namespace devils_engine {
       SET_UTILS_ADD_FUNC(decision)
       SET_UTILS_ADD_FUNC(event)
       SET_UTILS_ADD_FUNC(interaction)
+      SET_UTILS_ADD_FUNC(troop_type)
       
       SET_UTILS_LOAD_FUNC(image)
       SET_UTILS_LOAD_FUNC(heraldy_layer)
@@ -182,6 +184,7 @@ namespace devils_engine {
       SET_UTILS_LOAD_FUNC(decision)
       SET_UTILS_LOAD_FUNC(event)
       SET_UTILS_LOAD_FUNC(interaction)
+      SET_UTILS_LOAD_FUNC(troop_type)
       
       utils.set_function("resize_characters", [] (const size_t &size) {
         return global::get<world_serializator>()->resize_data(world_serializator::character, size);

@@ -1,7 +1,11 @@
 #include "lua_initialization_hidden.h"
 
 #include "magic_enum_header.h"
+#include "globals.h"
+#include "systems.h"
+
 #include "bin/tiles_funcs.h"
+
 #include "core/tile.h"
 #include "core/city.h"
 #include "core/province.h"
@@ -9,15 +13,12 @@
 #include "core/hero_troop.h"
 #include "core/realm.h"
 #include "core/titulus.h"
-#include "bin/map.h"
-#include "globals.h"
-#include "systems.h"
+#include "core/map.h"
+
 #include "render/stages.h"
+
 #include "ai/path_container.h"
 #include "ai/path_finding_data.h"
-
-#define TO_LUA_INDEX(index) ((index)+1)
-#define FROM_LUA_INDEX(index) ((index)-1)
 
 // нужно вытащить тайловые функции отдельно
 namespace devils_engine {
@@ -73,6 +74,15 @@ namespace devils_engine {
       core.set_function("get_tile_city", [] (const uint32_t &tile_index) {
         return core::get_tile_city(FROM_LUA_INDEX(tile_index));
       });
+      
+//       core.set_function("get_potential_interactions", [] (const core::character* actor, const sol::object recipient) {
+//         auto ctx = global::get<systems::map_t>()->core_context;
+//         const size_t count = ctx->get_entity_count<core::interaction>();
+//         for (size_t i = 0; i < count; ++i) {
+//           auto inter = ctx->get_entity<core::interaction>(i);
+//           // проверяем интеракцию
+//         }
+//       });
       
       core.set_function("is_tile_index_valid", [] (const uint32_t &tile_index) {
         const uint32_t final_index = FROM_LUA_INDEX(tile_index);
@@ -136,7 +146,7 @@ namespace devils_engine {
         if (final_data == nullptr) throw std::runtime_error("Unit must be a valid army or hero troop");
         
         size_t current_path = final_data->current_path;
-        const size_t available_path = ai::unit_advance(final_data, current_path, current_speed);
+        const size_t available_path = ai::unit_advance(final_data, current_path, current_speed, ai::default_army_tile_checker);
         for (size_t i = current_path; i < available_path; ++i) {
           const uint32_t container = i / ai::path_container::container_size;
           const uint32_t index     = i % ai::path_container::container_size;
@@ -147,7 +157,7 @@ namespace devils_engine {
         current_path += available_path;
         size_t color_counter = 1;
         while (current_path < final_data->path_size) {
-          const size_t available_path = ai::unit_advance(final_data, current_path, maximum_speed);
+          const size_t available_path = ai::unit_advance(final_data, current_path, maximum_speed, ai::default_army_tile_checker);
           if (available_path == 0) break;
           
           for (size_t i = current_path; i < available_path; ++i) {

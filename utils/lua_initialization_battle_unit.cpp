@@ -1,7 +1,7 @@
 #include "lua_initialization_hidden.h"
 
-#include "bin/battle_structures.h"
-#include "magic_enum.hpp"
+#include "battle/structures.h"
+#include "magic_enum_header.h"
 
 namespace devils_engine {
   namespace utils {

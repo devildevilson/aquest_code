@@ -10,12 +10,16 @@
 #include "lua_environment.h"
 #include "globals.h"
 #include "systems.h"
+#include "lua_initialization_handle_types.h"
+
 #include "fmt/format.h"
+
 #include "core/structures_header.h"
 #include "core/stats.h"
 #include "core/stats_table.h"
 #include "core/realm_mechanics_arrays.h"
-#include "bin/map.h"
+#include "core/map.h"
+
 #include "ai/path_container.h"
 
 #include <iostream>
@@ -75,6 +79,18 @@ namespace devils_engine {
     
     constexpr bool is_integer(const double num) {
       return std::abs(double(int64_t(num)) - num) < EPSILON;
+    }
+    
+    static size_t rnd_index(utils::xoshiro256starstar::state &state, const size_t &size) {
+      uint64_t i = UINT64_MAX;
+      while (i >= size) {
+        state = utils::xoshiro256starstar::rng(state);
+        const uint64_t value = utils::xoshiro256starstar::get_value(state);
+        const double norm = utils::rng_normalize(value);
+        i = norm * double(size);
+      }
+      
+      return i;
     }
     
     static size_t count_func(sol::this_state this_s, const sol::object &iterable) {
@@ -177,17 +193,22 @@ namespace devils_engine {
         return std::make_tuple(255.0 / double(ur), 255.0 / double(ug), 255.0 / double(ub), 255.0 / double(ua));
       });
       
+      // add - эту хуйню вообще лучше не использовать
       utils.set_function("init_array", [] (const double &num, sol::object default_value, sol::this_state s) -> sol::table {
         const size_t size = num;
         sol::state_view view(s);
         auto t = view.create_table(size, 0);
         if (default_value.get_type() == sol::type::table) {
           for (size_t i = 0; i < size; ++i) {
-            t.add(view.create_table(30, 0));
+            const size_t index = TO_LUA_INDEX(i);
+            t[index] = view.create_table(30, 0);
+            //t.add(view.create_table(30, 0));
           }
         } else {
           for (size_t i = 0; i < size; ++i) {
-            t.add(default_value);
+            const size_t index = TO_LUA_INDEX(i);
+            t[index] = default_value;
+            //t.add(default_value);
           }
         }
         return t;
@@ -213,6 +234,9 @@ namespace devils_engine {
       // с функциональной либой не получилось, точшее луа сам по себе неплохо код оптимизирует, а вызовы с++ функций все портят
       
       utils.set_function("int_queue", [] (sol::this_state s, const double &first_count, const sol::function prepare_function, const sol::function queue_function) {
+        if (first_count < 0) throw std::runtime_error("Bad count value " + std::to_string(first_count));
+        if (std::abs(first_count) < EPSILON) return;
+        
         sol::state_view lua = s;
         std::queue<int64_t> queue;
         const auto push_func = [&queue] (const int64_t data) { queue.push(data); };
@@ -232,6 +256,9 @@ namespace devils_engine {
       });
       
       utils.set_function("num_queue", [] (sol::this_state s, const double &first_count, const sol::function prepare_function, const sol::function queue_function) {
+        if (first_count < 0) throw std::runtime_error("Bad count value " + std::to_string(first_count));
+        if (std::abs(first_count) < EPSILON) return;
+        
         sol::state_view lua = s;
         std::queue<double> queue;
         const auto push_func = [&queue] (const double data) { queue.push(data); };
@@ -251,6 +278,9 @@ namespace devils_engine {
       });
       
       utils.set_function("queue", [] (sol::this_state s, const double &first_count, const sol::function prepare_function, const sol::function queue_function) {
+        if (first_count < 0) throw std::runtime_error("Bad count value " + std::to_string(first_count));
+        if (std::abs(first_count) < EPSILON) return;
+        
         sol::state_view lua = s;
         std::queue<sol::object> queue;
         const auto push_func = [&queue] (const sol::object data) { queue.push(data); };
@@ -264,6 +294,83 @@ namespace devils_engine {
         while (!queue.empty()) {
           const sol::object data = queue.front();
           queue.pop();
+          
+          queue_function(data, lua_push_func);
+        }
+      });      
+      
+      utils.set_function("int_random_queue", [] (sol::this_state s, const int64_t &seed, const double &first_count, const sol::function prepare_function, const sol::function queue_function) {
+        if (first_count < 0) throw std::runtime_error("Bad count value " + std::to_string(first_count));
+        if (std::abs(first_count) < EPSILON) return;
+        
+        sol::state_view lua = s;
+        std::vector<int64_t> queue;
+        queue.reserve(first_count * 2);
+        const auto push_func = [&queue] (const int64_t data) { queue.push_back(data); };
+        sol::object lua_push_func = sol::make_object(lua, push_func);
+        auto rnd_state = xoshiro256starstar::init(s_to_unsigned64(seed));
+        
+        for (size_t i = 0; i < first_count; ++i) {
+          prepare_function(TO_LUA_INDEX(i), lua_push_func);
+        }
+        
+        while (!queue.empty()) {
+          const size_t rand_index = rnd_index(rnd_state, queue.size());
+          const int64_t data = queue[rand_index];
+          queue[rand_index] = queue.back();
+          queue.pop_back();
+          
+          queue_function(data, lua_push_func);
+        }
+      });
+      
+      utils.set_function("num_random_queue", [] (sol::this_state s, const int64_t &seed, const double &first_count, const sol::function prepare_function, const sol::function queue_function) {
+        if (first_count < 0) throw std::runtime_error("Bad count value " + std::to_string(first_count));
+        if (std::abs(first_count) < EPSILON) return;
+        
+        sol::state_view lua = s;
+        std::vector<double> queue;
+        const size_t size = first_count;
+        queue.reserve(size * 2);
+        const auto push_func = [&queue] (const double data) { queue.push_back(data); };
+        sol::object lua_push_func = sol::make_object(lua, push_func);
+        auto rnd_state = xoshiro256starstar::init(s_to_unsigned64(seed));
+        
+        for (size_t i = 0; i < size; ++i) {
+          prepare_function(TO_LUA_INDEX(i), lua_push_func);
+        }
+        
+        while (!queue.empty()) {
+          const size_t rand_index = rnd_index(rnd_state, queue.size());
+          const double data = queue[rand_index];
+          queue[rand_index] = queue.back();
+          queue.pop_back();
+          
+          queue_function(data, lua_push_func);
+        }
+      });
+      
+      utils.set_function("random_queue", [] (sol::this_state s, const int64_t &seed, const double &first_count, const sol::function prepare_function, const sol::function queue_function) {
+        if (first_count < 0) throw std::runtime_error("Bad count value " + std::to_string(first_count));
+        if (std::abs(first_count) < EPSILON) return;
+        
+        sol::state_view lua = s;
+        std::vector<sol::object> queue;
+        const size_t size = first_count;
+        queue.reserve(size * 2);
+        const auto push_func = [&queue] (const sol::object data) { queue.push_back(data); };
+        sol::object lua_push_func = sol::make_object(lua, push_func);
+        auto rnd_state = xoshiro256starstar::init(s_to_unsigned64(seed));
+        
+        for (size_t i = 0; i < size; ++i) {
+          prepare_function(TO_LUA_INDEX(i), lua_push_func);
+        }
+        
+        while (!queue.empty()) {
+          const size_t rand_index = rnd_index(rnd_state, queue.size());
+          const sol::object data = queue[rand_index];
+          queue[rand_index] = queue.back();
+          queue.pop_back();
           
           queue_function(data, lua_push_func);
         }
@@ -378,6 +485,12 @@ namespace devils_engine {
 #define GAME_STRUCTURE_FUNC(val) if (obj.is<core::val*>()) return #val;
         GAME_STRUCTURES_LIST
 #undef GAME_STRUCTURE_FUNC
+        // может ли сюда придти lightuserdata?
+        if (obj.is<utils::lua_handle_realm>())      return "realm_handle";
+        if (obj.is<utils::lua_handle_army>())       return "army_handle";
+        if (obj.is<utils::lua_handle_hero_troop>()) return "hero_troop_handle";
+        if (obj.is<utils::lua_handle_war>())        return "war_handle";
+        if (obj.is<utils::lua_handle_troop>())      return "troop_handle";
                         
         return "userdata";
       });
@@ -431,6 +544,7 @@ namespace devils_engine {
         sol::state_view lua = s;
         auto table = lua.create_table(path_size, 0);
         auto cur_path = path;
+        size_t lua_counter = 1;
         for (size_t i = 0, counter = 0; i < path_size; ++i, ++counter) {
           if (counter >= ai::path_container::container_size) {
             cur_path = ai::advance_container(cur_path, 1);
@@ -442,7 +556,9 @@ namespace devils_engine {
           // может быть положить просто один за другим?
           const auto &piece = cur_path->tile_path[counter];
           const double data = create_pair_u32f32(TO_LUA_INDEX(piece.tile), piece.cost);
-          table.add(data);
+          //table.add(data);
+          table[lua_counter] = data;
+          ++lua_counter;
         }
         
         path_finder->free_path(path);

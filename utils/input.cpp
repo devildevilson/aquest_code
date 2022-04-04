@@ -564,13 +564,15 @@ namespace devils_engine {
         
         const auto container = key_map;
         
-        auto itr = container->events_map.find(id);
+        // проблема в том что я нахожу это дело
+        const auto itr = container->events_map.find(id);
         if (itr == container->events_map.end()) continue;
         
         const auto &key_container = data->container;
         const auto &found_event = itr->second;
         if (found_event.keys[1] == INT32_MAX) {
           const int index = found_event.keys[0];
+          assert(index < int64_t(key_container.size()) && index >= 0);
           return key_container[index].event != release;
         }
         
@@ -830,6 +832,15 @@ namespace devils_engine {
         container->container[prev_key] = utils::id();
       }
       
+//       static bool first = false;
+//       if (first && id.name() == "activate_click") {
+//         assert(id.name() != "activate_click");
+//       }
+//       
+//       if (!first && id.name() == "activate_click") {
+//         first = true;
+//       }
+      
       // нужно ли запоминать в кнопке что к ней обращается? 
       // по идее мне это нужно только для того чтобы подтвердить что пользователь не прилепил на одну кнопку несколько эвентов
       // думаю что это можно сделать отдельно
@@ -842,7 +853,7 @@ namespace devils_engine {
       cont[key] = id;
       if (!old_id.valid()) return;
       
-      //ASSERT(false); // не понял
+      ASSERT(false); // не понял
       auto event_keys_container = container->events_map.find(old_id);
       ASSERT(event_keys_container != container->events_map.end());
       //const size_t old_event_index = event_keys_container->second;

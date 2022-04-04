@@ -8,6 +8,7 @@
 #include "core/stat_data.h"
 #include "core/stat_modifier.h"
 #include "script/object.h"
+#include "script/context.h"
 
 // имеет ли смысл для этих структур добавлять std mutex?
 // может сильно помочь на самом деле
@@ -99,6 +100,18 @@ namespace devils_engine {
       bool has_hook(const core::character* c) const;
       void add_hook(const core::character* c, const struct data &data);
       void remove_hook(const core::character* c);
+    };
+    
+    struct pending_interactions_container {
+      struct data {
+        const core::interaction* inter;
+        script::context ctx;
+        size_t id;
+      };
+      
+      std::vector<data> interactions;
+      
+      void remove_interaction(const size_t &id);
     };
 
     // тут нужно как то добавить проверку типов, в принципе особо проблем нет просто добавить указатель

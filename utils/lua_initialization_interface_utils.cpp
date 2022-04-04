@@ -3,12 +3,18 @@
 #include "magic_enum_header.h"
 #include "globals.h"
 #include "systems.h"
+#include "game_context.h"
+
 #include "bin/interface_context.h"
+
 #include "render/utils.h"
+#include "render/stages.h"
+
 #include "core/titulus.h"
 #include "core/realm.h"
-#include "game_context.h"
-#include "render/stages.h"
+#include "core/context.h"
+
+#include "script/context.h"
 
 namespace devils_engine {
   namespace utils {
@@ -105,6 +111,50 @@ namespace devils_engine {
         const glm::dvec2 max(maxx, maxy);
         
         render::set_selection_frustum(min, max);
+      });
+      
+      utils.set_function("get_interactions", [] (sol::this_state s, const sol::object first, const sol::object second) {
+        // нужно вернуть список взаимодействий которые потенциально могут быть вызваны игроком
+        // как это делается? во первых интеракция всегда исходит от персонажа (даже интеракция апати)
+        // интеракция может быть потенциально с любым объектом (то есть тип интеракции определяется вторым объектом)
+        // видимо при создании интеракции нужно указать тип получателя
+        if (!first.is<core::character*>()) throw std::runtime_error("Expected character in get_interactions function");
+        
+        sol::state_view lua = s;
+        auto table = lua.create_table(100, 0);
+        auto ctx = global::get<systems::map_t>()->core_context;
+        script::context script_ctx;
+        // положим первый объект в рут и в "context:actor", а второй в "context:recipient"
+        script_ctx.root = script::object(first.as<core::character*>());
+        script_ctx.map.emplace(std::make_pair(std::string_view("actor"), script_ctx.root));
+        for (size_t i = 0; i < ctx->get_entity_count<core::interaction>(); ++i) {
+          auto inter = ctx->get_entity<core::interaction>(i);
+          const bool ret = inter->potential.compute(&script_ctx);
+          // нужно ли "компилировать" интеракцию? игроку то наверное вообще все равно
+          if (ret) table.add(inter);
+        }
+        
+        return table;
+      });
+      
+      utils.set_function("get_decisions", [] (sol::this_state s, const sol::object first) {
+        // все десижоны вызываются от персонажа
+        // нужно просто пройтись по тем что мы можем потенциально вызвать
+        if (!first.is<core::character*>()) throw std::runtime_error("Expected character in get_decisions function");
+        
+        sol::state_view lua = s;
+        auto table = lua.create_table(100, 0);
+        auto ctx = global::get<systems::map_t>()->core_context;
+        script::context script_ctx;
+        script_ctx.root = script::object(first.as<core::character*>());
+        for (size_t i = 0; i < ctx->get_entity_count<core::decision>(); ++i) {
+          auto d = ctx->get_entity<core::decision>(i);
+          const bool ret = d->potential.compute(&script_ctx);
+          // нужно ли "компилировать" решение?
+          if (ret) table.add(d);
+        }
+        
+        return table;
       });
       
       auto core = lua["core"].get_or_create<sol::table>();

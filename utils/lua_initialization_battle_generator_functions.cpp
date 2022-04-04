@@ -1,10 +1,10 @@
 #include "lua_initialization_hidden.h"
 
 #include "bin/image_parser.h"
-#include "bin/battle_troop_parser.h"
-#include "bin/battle_troop_type_parser.h"
-#include "bin/battle_unit_state_parser.h"
-#include "magic_enum.hpp"
+#include "battle/troop_parser.h"
+#include "battle/troop_type_parser.h"
+#include "battle/unit_state_parser.h"
+#include "magic_enum_header.h"
 
 namespace devils_engine {
   namespace utils {

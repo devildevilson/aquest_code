@@ -1,10 +1,13 @@
 #include "lua_initialization_hidden.h"
 
-#include "bin/map.h"
 #include "magic_enum_header.h"
-#include "bin/generator_container.h"
 #include "globals.h"
-#include "battle_map_enum.h"
+
+#include "core/map.h"
+
+#include "bin/generator_container.h"
+
+#include "battle/map_enum.h"
 
 namespace devils_engine {
   namespace utils {

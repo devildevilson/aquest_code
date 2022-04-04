@@ -1,7 +1,7 @@
 #include "lua_initialization_hidden.h"
 
 #include "Cpp/FastNoiseLite.h"
-#include "magic_enum.hpp"
+#include "magic_enum_header.h"
 
 #define SET_NOISE_FUNCTION(arg_type, func_name) [] (const FastNoiseLite* self, sol::variadic_args va) -> float { \
   const size_t arg_size = va.size();                                                                              \

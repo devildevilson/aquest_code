@@ -2,7 +2,7 @@
 
 //#include "main_menu.h"
 #include "demiurge.h"
-#include "magic_enum.hpp"
+#include "magic_enum_header.h"
 #include "globals.h"
 #include "systems.h"
 #include "game_context.h"

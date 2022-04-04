@@ -21,6 +21,11 @@
   
   #define CHRONO_TIME_TYPE MCS_CHRONO_TYPE
   #define TIME_STRING MCS_TIME_STRING
+  
+  #define MCS_TO_SEC(dt) (double(dt) / double(TIME_PRECISION))
+#else
+  // если у нас будет NANO_PRECISION то наверное лучше бы использовать double
+  #define MCS_TO_SEC(dt) (float(dt) / float(TIME_PRECISION))
 #endif
 
 #define TIME_PRECISION MCS_PRECISION
@@ -31,9 +36,6 @@
 #define QUARTER_SECOND (ONE_SECOND/4)
 #define FIFTH_SECOND (ONE_SECOND/5)
 #define TENTH_SECOND (ONE_SECOND/10)
-
-// если у нас будет NANO_PRECISION то наверное лучше бы использовать double
-#define MCS_TO_SEC(dt) (float(dt) / float(TIME_PRECISION))
 
 #define ACCUMULATOR_MAX_CONSTANT FIFTH_SECOND
 #define DELTA_TIME_CONSTANT (ONE_SECOND/TARGET_CONSTANT_UPDATE_RATE)

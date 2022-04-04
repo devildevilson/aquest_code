@@ -51,12 +51,13 @@ set(LUA_LIB_PATH ${PROJECT_DIR}/scripts)
 
 include_directories(
   .
-  #include/sol2/include/
-  include/sol2_release/
+  include/sol2/include/
+  #include/sol2_release/
   include/lanes/src/
   #include/VulkanMemoryAllocator/src/
   include/FastNoise/
   #include/
+  include/dsml/
   include/json/single_include/
   include/stb/
   include/whereami/src/
@@ -283,11 +284,9 @@ set(SRC_LIST
   bin/objects_selection.cpp
   utils/astar_search.cpp
   utils/astar_search_mt.cpp
-  utils/battle_lua_states.cpp
-  bin/battle_context.cpp
-  bin/battle_structures.cpp
   utils/structures_utils.cpp
   utils/type_info.cpp
+  utils/murmur.cpp
   #include/FastNoise/FastNoise.cpp
   include/whereami/src/whereami.c
   include/fmt/src/format.cc
@@ -337,11 +336,10 @@ set(HDR_LIST
   bin/objects_selection.h
   utils/astar_search.h
   utils/astar_search_mt.h
-  utils/battle_lua_states.h
-  bin/battle_context.h
-  bin/battle_structures.h
   utils/structures_utils.h
   utils/type_info.h
+  utils/murmur.h
+  utils/pod_container.h
   include/FastNoise/Cpp/FastNoiseLite.h
   include/whereami/src/whereami.h
   
@@ -511,6 +509,7 @@ add_library(systems ${SRC_LIST} ${HDR_LIST})
 target_link_libraries(systems render utils)
 
 set(SRC_LIST
+  core/map.cpp
   core/realm_mechanics_arrays.cpp
   core/stats_table.cpp
   core/traits_modifier_attribs.cpp
@@ -543,9 +542,13 @@ set(SRC_LIST
   core/biome.cpp
   core/declare_structures_table.cpp
   core/realm_rights_checker.cpp
+  core/control_functions.cpp
+  core/diplomacy.cpp
+  core/interaction_filter_functions.cpp
 )
 
 set(HDR_LIST
+  core/map.h
   core/realm_mechanics.h
   core/realm_mechanics_arrays.h
   core/stats_table.h
@@ -579,10 +582,37 @@ set(HDR_LIST
   core/biome.h
   core/declare_structures_table.h
   core/realm_rights_checker.h
+  core/control_functions.h
+  core/diplomacy.h
+  core/interaction_filter_functions.h
+  core/seasons.h
 )
 
 add_library(core ${SRC_LIST} ${HDR_LIST})
 target_link_libraries(core systems utils)
+
+set(SRC_LIST
+  battle/context.cpp
+  battle/structures.cpp
+  battle/map.cpp
+  battle/troop_parser.cpp
+  battle/troop_type_parser.cpp
+  battle/unit_state_parser.cpp
+  battle/lua_states.cpp
+)
+
+set(HDR_LIST
+  battle/context.h
+  battle/structures.h
+  battle/map.h
+  battle/troop_parser.h
+  battle/troop_type_parser.h
+  battle/unit_state_parser.h
+  battle/lua_states.h
+)
+  
+add_library(battle ${SRC_LIST} ${HDR_LIST})
+target_link_libraries(battle systems utils)
 
 set(SRC_LIST
   utils/lua_initialization_game_logic.cpp
@@ -626,9 +656,11 @@ set(SRC_LIST
   utils/lua_initialization_internal_culture.cpp
   utils/lua_initialization_internal_troop.cpp
   utils/lua_initialization_internal_troop_type.cpp
-  #utils/lua_initialization_internal_trait.cpp
-  #utils/lua_initialization_internal_modificator.cpp
-  #utils/lua_initialization_internal_casus_belli.cpp
+  utils/lua_initialization_internal_interaction.cpp
+  utils/lua_initialization_internal_decision.cpp
+  utils/lua_initialization_internal_trait.cpp
+  utils/lua_initialization_internal_modificator.cpp
+  utils/lua_initialization_internal_casus_belli.cpp
 )
 
 set(HDR_LIST
@@ -638,61 +670,37 @@ set(HDR_LIST
 )
 
 add_library(lua_init ${SRC_LIST} ${HDR_LIST})
-target_link_libraries(lua_init core script ai render utils ${LUA_LIB})
+target_link_libraries(lua_init core battle script ai render utils ${LUA_LIB})
 
 set(SRC_LIST
   bin/interface_context.cpp
-  #bin/interfaces.cpp
-  #bin/overlay.cpp
   bin/figures.cpp
   bin/camera.cpp
   bin/generator_system2.cpp
-  #bin/map_generators2.cpp
-  bin/map.cpp
   bin/generator_container.cpp
-  #include/lanes/src/deep.c
-  #include/lanes/src/universe.c
-  #include/lanes/src/compat.c
-  #bin/character.cpp
   bin/map_creator.cpp
-  #bin/titulus_data_parser.cpp
-  #bin/province_data_parser.cpp
-  #bin/city_type_data_parser.cpp
-  #bin/city_data_parser.cpp
-  #bin/character_data_parser.cpp
-  #bin/building_data_parser.cpp
   bin/data_parser.cpp
   bin/image_parser.cpp
   bin/heraldy_parser.cpp
   bin/logic.cpp
   utils/quest_states.cpp
   bin/tiles_funcs.cpp
-  bin/battle_map.cpp
-  bin/battle_troop_parser.cpp
-  bin/battle_troop_type_parser.cpp
-  bin/battle_unit_state_parser.cpp
   
+  bin/application.cpp
   bin/main.cpp
   bin/helper.cpp
 )
 
 set(HDR_LIST
   bin/interface_context.h
-  #bin/interfaces.h
   bin/overlay.h
   bin/figures.h
   bin/camera.h
   bin/generator_system2.h
-  #bin/map_generators2.h
-  bin/map.h
   bin/generator_context2.h
   bin/generator_container.h
-  bin/map_generator.h
-  #bin/character.h
   bin/core_structures.h
-  #bin/declare_structures.h
   bin/map_creator.h
-  #bin/stats.h
   bin/data_parser.h
   bin/image_parser.h
   bin/heraldy_parser.h
@@ -700,15 +708,12 @@ set(HDR_LIST
   utils/quest_states.h
   utils/quest_state.h
   bin/tiles_funcs.h
-  bin/battle_map.h
-  bin/battle_troop_parser.h
-  bin/battle_troop_type_parser.h
-  bin/battle_unit_state_parser.h
   
+  bin/application.h
   bin/helper.h
 )
 add_executable(${TARGET_NAME} ${SRC_LIST} ${HDR_LIST})
-target_link_libraries(${TARGET_NAME} systems lua_init core script ai render utils serialization tcmalloc unwind)
+target_link_libraries(${TARGET_NAME} systems lua_init core battle script ai render utils serialization tcmalloc unwind)
 add_dependencies(${TARGET_NAME} shaders)
 
 if (MSVC)

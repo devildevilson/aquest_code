@@ -1114,7 +1114,7 @@ local function generate_cultures(ctx, _)
   local culture_provinces = utils.init_array(culture_groups_count, {})
   local unique_tiles = utils.create_table(0, tiles_count)
 
-  utils.int_random_queue(ctx, culture_groups_count, function(index, queue_push)
+  utils.int_random_queue(ctx.random:num(), culture_groups_count, function(index, queue_push)
     local tile_index = -1
     local attempts = 0
 
@@ -2314,8 +2314,11 @@ local function generate_heraldy(ctx, local_table) -- luacheck: ignore
 end -- generate_heraldy
 
 local function append_table(table1, table2)
-  for i = 1, #table2 do
-    table.insert(table1, table2[i])
+  local count = #table2
+  local cur_size = #table1
+  for i = 1, count do
+    table1[cur_size + i] = table2[i]
+    --table.insert(table1, table2[i])
   end
 end
 
@@ -4606,7 +4609,7 @@ local function generate_cities(ctx, local_table) -- luacheck: ignore
   for i = 1, provinces_creation_count do
     local province_tiles_count = ctx.container:get_childs_count(types.entities.province, i)
     local rand_index = ctx.random:index(province_tiles_count)
-    local rand_tile = ctx.container:get_child(types.entities.province, rand_index)
+    local rand_tile = ctx.container:get_child(types.entities.province, i, rand_index)
     -- id получаются совсем не информативными, они будут более информативными если генерировать имена
     -- в общем это проблема неединичной генерации, хочется использовать индексы, но они не информативные
     local city_id = "city" .. i .. "_title"
@@ -4639,7 +4642,7 @@ local function generate_cities(ctx, local_table) -- luacheck: ignore
   -- размер недели? как указать названия? тут вот как раз таки мне нужна локализация
 
   calendar.set_week_days_count(7)
-  calendar.set_start_date(865, 3, 25)
+  calendar.set_start_date(865, 3, 25) -- останется наверное только это
   calendar.set_current_date(865, 3, 25)
   calendar.add_month_data("month.jan", 31) -- январь
   calendar.add_month_data("month.feb", 29)
@@ -4663,6 +4666,11 @@ local function generate_cities(ctx, local_table) -- luacheck: ignore
 
   --utils.add_localization_table() -- наверное будет только второй вариант
   utils.load_localization_table("apates_quest/scripts/localization_config.lua")
+
+  -- было бы неплохо сделать какой нибудь лоад_ресурс_конфиг,
+  -- чтобы не указывать здесь каждый раз новые строки с загрузкой чего нибудь нового
+  utils.load_interactions("apates_quest/scripts/first_interaction.lua")
+  utils.load_decisions("apates_quest/scripts/first_decision.lua")
 
   --error("generate_cities end")
 

@@ -207,7 +207,7 @@ local function generate_plates(ctx, local_table)
     -- по идее сделал все что мог для оптимизации, все же луа это не с++
 
     -- около 3 секунд экономит (тоже неплохо)
-    utils.int_random_queue(ctx, plates_count, function(index, queue_push)
+    utils.int_random_queue(ctx.random:num(), plates_count, function(index, queue_push)
       local attempts = 0
       local success = false
       repeat
@@ -331,7 +331,7 @@ local function generate_plates(ctx, local_table)
     -- маленькая оптимизация
     for i = 1, tiles_count do
       local plate_index = tile_plate[i]
-      assert(plate_index >= 1 and plate_index <= plates_count)
+      assert(plate_index >= 1 and plate_index <= plates_count, "plate_index " .. plate_index .. " index " .. i)
       table.insert(plate_tiles[plate_index], i)
     end
 

@@ -153,7 +153,7 @@ end
 local function classic_strategic_camera_movement(time)
   local fbw, fbh = input.get_framebuffer_size()
   local xpos, ypos = input.get_cursor_pos()
-  local cursor_pos = {xpos / fbw, ypos / fbh}
+  local cursor_pos = {xpos / fbw, ypos / fbh} -- ???
   local movement_border = {0.01, 0.01}
 
   local square1 = cursor_pos[1] <  0.5 and cursor_pos[2]  < 0.5

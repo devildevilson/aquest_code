@@ -203,7 +203,7 @@ end -- compute_plate_boundary_stress
 local function assign_distance_field(ctx, seeds, stops, distances)
   --local edges_count = ctx.container:entities_count(types.entities.edge)
   --local index_queue = utils.create_table(ctx.map:tiles_count(), 0)
-  utils.int_random_queue(ctx, #seeds, function(index, queue_push)
+  utils.int_random_queue(ctx.random:num(), #seeds, function(index, queue_push)
     local edge_index = index
     if not seeds[edge_index] then return end
 

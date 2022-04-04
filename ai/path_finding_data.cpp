@@ -22,7 +22,8 @@ namespace devils_engine {
     bool path_finding_data::has_path() const { return path != nullptr && path != reinterpret_cast<ai::path_container*>(SIZE_MAX); }
     bool path_finding_data::path_not_found() const { return path == reinterpret_cast<ai::path_container*>(SIZE_MAX); }
     
-    size_t unit_advance(const path_finding_data* unit, const size_t &start, const size_t &speed) {
+    // тут же нам нужно проверить стоит ли кто на тайле
+    size_t unit_advance(const path_finding_data* unit, const size_t &start, const size_t &speed, const unit_check_next_tile_f &check_tile) {
       if (start >= unit->path_size) return 0;
       if (!unit->has_path()) return 0;
       
@@ -30,15 +31,19 @@ namespace devils_engine {
       auto ctx = global::get<systems::map_t>()->core_context;
       const uint32_t current_container = start / ai::path_container::container_size;
       const uint32_t current_index     = start % ai::path_container::container_size;
-      const float current_cost = ai::advance_container(unit->path, current_container)->tile_path[current_index].cost;
+      const auto piece = ai::advance_container(unit->path, current_container)->tile_path[current_index];
+      const float current_cost = piece.cost;
       size_t next_path_index = start+1;
       for (; next_path_index < unit->path_size; ++next_path_index) {
         const size_t final_path_index = next_path_index;
         const uint32_t container = final_path_index / ai::path_container::container_size;
         const uint32_t index     = final_path_index % ai::path_container::container_size;
-        const float next_tile_cost = ai::advance_container(unit->path, container)->tile_path[index].cost - current_cost;
+        const auto next_piece = ai::advance_container(unit->path, container)->tile_path[index];
+        const float next_tile_cost = next_piece.cost - current_cost;
         //if (next_tile_cost > speed) return final_path_index; // мы можем перейти ДО тайла i
         if (next_tile_cost > speed) break; // мы можем перейти ДО тайла i
+        
+        if (!check_tile(unit, piece.tile, next_piece.tile)) break;
         
 //         const uint32_t next_tile_index = ai::advance_container(this->path, container)->tile_path[index].tile;
         // тут должны быть проверки можем ли мы перейти на тайл next_tile_index
@@ -93,10 +98,47 @@ namespace devils_engine {
     }
     
     template <>
-    size_t maximum_unit_advance(const core::army* unit, const size_t &start) {
+    size_t maximum_unit_advance(const core::army* unit, const size_t &start, const unit_check_next_tile_f &check_tile) {
       ASSERT(unit != nullptr);
       const uint32_t speed = unit->stats.get(core::army_stats::speed);
-      return unit_advance(unit, start, speed);
+      return unit_advance(unit, start, speed, check_tile);
+    }
+    
+    bool default_army_tile_checker(const path_finding_data* unit, const uint32_t &cur_tile_index, const uint32_t &tile_index) {
+      auto ctx = global::get<systems::map_t>()->core_context;
+//         const auto cur_tile = ctx->get_entity<core::tile>(cur_tile_index);
+      const auto tile = ctx->get_entity<core::tile>(tile_index);
+      (void)cur_tile_index;
+      
+      // relationship нужно вытащить за пределы армии
+      auto cur_army = static_cast<const core::army*>(unit);
+      
+      if (tile->army_token != SIZE_MAX) {
+        assert(tile->city == UINT32_MAX);
+        auto army = ctx->get_army(tile->army_token);
+        const utils::handle<core::army> army_h(army, tile->army_token);
+        const auto rel = cur_army->get_relation(army_h);
+        if (rel == core::army::relationship::enemy_unit) return false;
+        //if (rel == relationship::ally_unit) return false; // наверное сквозь армии союзника можно пройти
+        if (rel == core::army::relationship::neutral_unit) return false;
+        if (army_h->is_in_pending_state()) return false;
+        
+        return true;
+      }
+      
+      if (tile->city != UINT32_MAX) {
+        assert(tile->army_token == SIZE_MAX);
+        auto city = ctx->get_entity<core::city>(tile->city);
+        const auto rel = cur_army->get_relation(city);
+        if (rel == core::army::relationship::enemy_unit) return false;
+        //if (rel == relationship::ally_unit) return false; // наверное сквозь города союзника можно пройти
+        if (rel == core::army::relationship::neutral_unit) return false;
+        
+        
+        return true;
+      }
+      
+      return true;
     }
   }
 }

@@ -2,6 +2,7 @@
 #define PATH_FINDING_DATA_H
 
 #include "path_container.h"
+#include <functional>
 
 namespace devils_engine {
   namespace ai {
@@ -38,10 +39,13 @@ namespace devils_engine {
       // + должен быть способ провести армию, но это наверное будет уже в конкретной армии
     };
     
-    size_t unit_advance(const path_finding_data* unit, const size_t &start, const size_t &speed);
+    using unit_check_next_tile_f = std::function<bool(const path_finding_data*, const uint32_t&, const uint32_t&)>;
+    size_t unit_advance(const path_finding_data* unit, const size_t &start, const size_t &speed, const unit_check_next_tile_f &check_tile);
     
     template <typename T>
-    size_t maximum_unit_advance(const T* unit, const size_t &start);
+    size_t maximum_unit_advance(const T* unit, const size_t &start, const unit_check_next_tile_f &check_tile);
+    
+    bool default_army_tile_checker(const path_finding_data* unit, const uint32_t &cur_tile_index, const uint32_t &tile_index);
   }
 }
 

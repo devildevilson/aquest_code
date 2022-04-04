@@ -9,7 +9,6 @@
 #include "utils/thread_pool.h"
 #include "utils/globals.h"
 #include "utils/systems.h"
-#include "bin/map.h"
 #include "utils/works_utils.h"
 
 namespace devils_engine {

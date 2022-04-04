@@ -2,13 +2,13 @@
 
 #include "utils/globals.h"
 #include "utils/systems.h"
-#include "bin/map.h"
+#include "core/map.h"
 #include "map_data.h"
 #include "container.h"
 #include "targets.h"
 #include "defines.h"
 #include "utils/constexpr_funcs.h"
-#include "bin/battle_map.h"
+#include "battle/map.h"
 #include "command_buffer.h"
 
 namespace devils_engine {

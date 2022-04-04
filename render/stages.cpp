@@ -22,8 +22,8 @@
 
 #include "bin/interface_context.h"
 #include "bin/interface2.h"
-#include "bin/map.h"
 
+#include "core/map.h"
 #include "core/context.h"
 
 #define TILE_RENDER_PIPELINE_LAYOUT_NAME "tile_render_pipeline_layout"
@@ -799,13 +799,12 @@ namespace devils_engine {
 
       auto uniform_layout = info.cont->vulkan->uniform_layout;
       auto tiles_data_layout = info.tiles_data_layout;
-      auto storage_buffer_layout = info.cont->vulkan->storage_layout;
+      auto border_layout = info.map_buffers->borders_data_layout;
 
       {
         pipeline_layout_maker plm(&device);
         p_layout = plm.addDescriptorLayout(uniform_layout)
-                      .addDescriptorLayout(storage_buffer_layout)
-                      .addDescriptorLayout(storage_buffer_layout)
+                      .addDescriptorLayout(border_layout)
                       .addDescriptorLayout(tiles_data_layout)
                       .create("tile_borders_render_layout");
       }
@@ -1745,13 +1744,14 @@ namespace devils_engine {
 
         pipe = pm.addShader(vk::ShaderStageFlagBits::eVertex, vertex.get())
                  .addShader(vk::ShaderStageFlagBits::eFragment, fragment.get())
-                 .assembly(vk::PrimitiveTopology::eTriangleStrip)
+                 .assembly(vk::PrimitiveTopology::eTriangleList)
                  .depthTest(VK_FALSE)
                  .depthWrite(VK_FALSE)
                  .colorBlendBegin(VK_FALSE)
                    .colorWriteMask(DEFAULT_COLOR_WRITE_MASK)
                  .frontFace(vk::FrontFace::eClockwise)
-                 .cullMode(vk::CullModeFlagBits::eBack)
+                 //.frontFace(vk::FrontFace::eCounterClockwise)
+                 .cullMode(vk::CullModeFlagBits::eNone)
                  .viewport()
                  .scissor()
                  .dynamicState(vk::DynamicState::eViewport).dynamicState(vk::DynamicState::eScissor)
@@ -1770,7 +1770,7 @@ namespace devils_engine {
       auto uniform_set = ctx->get_descriptor_set(string_hash(UNIFORM_BUFFERS_DESCRIPTOR_SET_NAME));
       task.bindPipeline(bind_point, pipe);
       task.bindDescriptorSets(bind_point, p_layout, 0, {uniform_set}, nullptr);
-      task.draw(14, 1, 0, 0);
+      task.draw(12 * 3, 1, 0, 0);
       return true;
     }
     void skybox::clear() {}

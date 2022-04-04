@@ -134,9 +134,15 @@ namespace devils_engine {
       vk::CommandBufferBeginInfo info(vk::CommandBufferUsageFlagBits::eOneTimeSubmit | vk::CommandBufferUsageFlagBits::eRenderPassContinue, &inheritance);
       cur_task.begin(info);
       
+      const auto render_area = ctx->get_render_area(0);
+      vk::Viewport v(render_area.offset.x, render_area.offset.y, render_area.extent.width, render_area.extent.height, 0.0f, 1.0f);
+      cur_task.setViewport(0, v);
+      cur_task.setScissor(0, render_area);
+      
       bool has_update = false;
       for (auto cur = childs; cur != nullptr; cur = cur->next) {
-        has_update = has_update || cur->process(ctx, cur_task);
+        const bool ret = cur->process(ctx, cur_task);
+        has_update = has_update || ret;
       }
       
       cur_task.end();
@@ -158,5 +164,6 @@ namespace devils_engine {
     void secondary_command_buffer::set_childs(stage* childs) { this->childs = childs; }
     void secondary_command_buffer::set_renderpass(pass* renderpass) { this->renderpass = renderpass; }
     vk::CommandBuffer secondary_command_buffer::get_current() const { return command_buffers[current]; }
+    //PRINT_VAR("command_buffers current", current);
   }
 }

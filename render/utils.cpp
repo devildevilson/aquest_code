@@ -2,20 +2,22 @@
 
 #include "utils/globals.h"
 #include "utils/systems.h"
+#include "utils/sol.h"
+#include "utils/interface_container2.h"
+#include "utils/game_context.h"
+
 #include "stages.h"
 #include "battle_render_stages.h"
 #include "targets.h"
 #include "window.h"
-#include "bin/camera.h"
 #include "container.h"
 
-#include "utils/sol.h"
+#include "bin/camera.h"
 #include "bin/objects_selection.h"
-#include "bin/map.h"
-#include "core/context.h"
 #include "bin/tiles_funcs.h"
-#include "utils/interface_container2.h"
-#include "utils/game_context.h"
+
+#include "core/map.h"
+#include "core/context.h"
 
 namespace devils_engine {
   namespace render {

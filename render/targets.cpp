@@ -4,7 +4,7 @@
 #include "bin/core_structures.h"
 #include "container.h"
 #include "makers.h"
-#include "bin/map.h"
+#include "core/map.h"
 
 #include <cstring>
 #include <iostream>

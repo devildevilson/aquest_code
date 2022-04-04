@@ -1,6 +1,6 @@
 #include "battle_render_stages.h"
 
-#include "bin/battle_map.h"
+#include "battle/map.h"
 
 #include "utils/globals.h"
 #include "utils/systems.h"

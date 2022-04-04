@@ -105,7 +105,8 @@ namespace VMA_HPP_NAMESPACE {
 
   VULKAN_HPP_INLINE AllocationCreateFlags operator~( AllocationCreateFlagBits bits )
   {
-    return ~( AllocationCreateFlags( bits ) );
+    //return ~( AllocationCreateFlags( bits ) );
+    return AllocationCreateFlags(~static_cast<std::underlying_type_t<AllocationCreateFlagBits>>(bits));
   }
 
   VULKAN_HPP_INLINE std::string to_string( AllocationCreateFlags value  )
@@ -136,7 +137,10 @@ namespace VMA_HPP_NAMESPACE {
     eExternallySynchronized = VMA_ALLOCATOR_CREATE_EXTERNALLY_SYNCHRONIZED_BIT,
     eKhrDedicatedAllocation = VMA_ALLOCATOR_CREATE_KHR_DEDICATED_ALLOCATION_BIT,
     eKhrBindMemory2 = VMA_ALLOCATOR_CREATE_KHR_BIND_MEMORY2_BIT,
-    eExtMemoryBudget = VMA_ALLOCATOR_CREATE_EXT_MEMORY_BUDGET_BIT
+    eExtMemoryBudget = VMA_ALLOCATOR_CREATE_EXT_MEMORY_BUDGET_BIT,
+    eAmdDeviceCoherentMemory = VMA_ALLOCATOR_CREATE_AMD_DEVICE_COHERENT_MEMORY_BIT,
+    eBufferDeviceAddress = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT,
+    eExtMemoryPriority = VMA_ALLOCATOR_CREATE_EXT_MEMORY_PRIORITY_BIT
   };
 
   VULKAN_HPP_INLINE std::string to_string( AllocatorCreateFlagBits value )
@@ -147,6 +151,9 @@ namespace VMA_HPP_NAMESPACE {
       case AllocatorCreateFlagBits::eKhrDedicatedAllocation : return "KhrDedicatedAllocation";
       case AllocatorCreateFlagBits::eKhrBindMemory2 : return "KhrBindMemory2";
       case AllocatorCreateFlagBits::eExtMemoryBudget : return "ExtMemoryBudget";
+      case AllocatorCreateFlagBits::eAmdDeviceCoherentMemory : return "AmdDeviceCoherentMemory";
+      case AllocatorCreateFlagBits::eBufferDeviceAddress : return "BufferDeviceAddress";
+      case AllocatorCreateFlagBits::eExtMemoryPriority : return "ExtMemoryPriority";
       default: return "invalid";
     }
   }
@@ -160,7 +167,8 @@ namespace VMA_HPP_NAMESPACE {
 
   VULKAN_HPP_INLINE AllocatorCreateFlags operator~( AllocatorCreateFlagBits bits )
   {
-    return ~( AllocatorCreateFlags( bits ) );
+    //return ~( AllocatorCreateFlags( bits ) );
+    return AllocatorCreateFlags(~static_cast<std::underlying_type_t<AllocatorCreateFlagBits>>(bits));
   }
 
   VULKAN_HPP_INLINE std::string to_string( AllocatorCreateFlags value  )
@@ -172,22 +180,46 @@ namespace VMA_HPP_NAMESPACE {
     if ( value & AllocatorCreateFlagBits::eKhrDedicatedAllocation ) result += "KhrDedicatedAllocation | ";
     if ( value & AllocatorCreateFlagBits::eKhrBindMemory2 ) result += "KhrBindMemory2 | ";
     if ( value & AllocatorCreateFlagBits::eExtMemoryBudget ) result += "ExtMemoryBudget | ";
+    if ( value & AllocatorCreateFlagBits::eAmdDeviceCoherentMemory ) result += "AmdDeviceCoherentMemory | ";
+    if ( value & AllocatorCreateFlagBits::eBufferDeviceAddress ) result += "BufferDeviceAddress | ";
+    if ( value & AllocatorCreateFlagBits::eExtMemoryPriority ) result += "ExtMemoryPriority | ";
     return "{ " + result.substr(0, result.size() - 3) + " }";
   }
 
   enum class DefragmentationFlagBits : VmaDefragmentationFlags
-  {};
-
-  VULKAN_HPP_INLINE std::string to_string( DefragmentationFlagBits )
   {
-    return "(void)";
+      eIncremental = VMA_DEFRAGMENTATION_FLAG_INCREMENTAL
+  };
+
+  VULKAN_HPP_INLINE std::string to_string( DefragmentationFlagBits value )
+  {
+    switch ( value )
+    {
+      case DefragmentationFlagBits::eIncremental : return "Incremental";
+      default: return "invalid";
+    }
   }
 
   using DefragmentationFlags = VULKAN_HPP_NAMESPACE::Flags<DefragmentationFlagBits>;
 
-  VULKAN_HPP_INLINE std::string to_string( DefragmentationFlags  )
+  VULKAN_HPP_INLINE DefragmentationFlags operator|( DefragmentationFlagBits bit0, DefragmentationFlagBits bit1 )
   {
-    return "{}";
+    return DefragmentationFlags( bit0 ) | bit1;
+  }
+
+  VULKAN_HPP_INLINE DefragmentationFlags operator~( DefragmentationFlagBits bits )
+  {
+    //return ~( DefragmentationFlags( bits ) );
+    return DefragmentationFlags(~static_cast<std::underlying_type_t<DefragmentationFlagBits>>(bits));
+  }
+
+  VULKAN_HPP_INLINE std::string to_string( DefragmentationFlags value  )
+  {
+    if ( !value ) return "{}";
+    std::string result;
+
+    if ( value & DefragmentationFlagBits::eIncremental ) result += "Incremental | ";
+    return "{ " + result.substr(0, result.size() - 3) + " }";
   }
 
   enum class PoolCreateFlagBits : VmaPoolCreateFlags
@@ -219,7 +251,8 @@ namespace VMA_HPP_NAMESPACE {
 
   VULKAN_HPP_INLINE PoolCreateFlags operator~( PoolCreateFlagBits bits )
   {
-    return ~( PoolCreateFlags( bits ) );
+    //return ~( PoolCreateFlags( bits ) );
+    return PoolCreateFlags(~static_cast<std::underlying_type_t<PoolCreateFlagBits>>(bits));
   }
 
   VULKAN_HPP_INLINE std::string to_string( PoolCreateFlags value  )
@@ -256,7 +289,8 @@ namespace VMA_HPP_NAMESPACE {
 
   VULKAN_HPP_INLINE RecordFlags operator~( RecordFlagBits bits )
   {
-    return ~( RecordFlags( bits ) );
+    //return ~( RecordFlags( bits ) );
+    return RecordFlags(~static_cast<std::underlying_type_t<RecordFlagBits>>(bits));
   }
 
   VULKAN_HPP_INLINE std::string to_string( RecordFlags value  )
@@ -369,7 +403,7 @@ namespace VMA_HPP_NAMESPACE {
 
     void getBudget( Budget* pBudget ) const;
 #ifndef VULKAN_HPP_DISABLE_ENHANCED_MODE
-    Budget getBudget() const;
+    std::vector<Budget> getBudget() const;
 #endif /*VULKAN_HPP_DISABLE_ENHANCED_MODE*/
 
 #ifdef VULKAN_HPP_DISABLE_ENHANCED_MODE
@@ -731,7 +765,8 @@ namespace VMA_HPP_NAMESPACE {
                                   VULKAN_HPP_NAMESPACE::MemoryPropertyFlags preferredFlags_ = VULKAN_HPP_NAMESPACE::MemoryPropertyFlags(),
                                   uint32_t memoryTypeBits_ = 0,
                                   Pool pool_ = Pool(),
-                                  void* pUserData_ = nullptr )
+                                  void* pUserData_ = nullptr,
+                                  float priority_ = 0 )
       : flags( flags_ )
       , usage( usage_ )
       , requiredFlags( requiredFlags_ )
@@ -739,6 +774,7 @@ namespace VMA_HPP_NAMESPACE {
       , memoryTypeBits( memoryTypeBits_ )
       , pool( pool_ )
       , pUserData( pUserData_ )
+      , priority( priority_ )
     {}
 
     AllocationCreateInfo( VmaAllocationCreateInfo const & rhs )
@@ -794,6 +830,12 @@ namespace VMA_HPP_NAMESPACE {
       return *this;
     }
 
+    AllocationCreateInfo & setPriority( float priority_ )
+    {
+        priority = priority_;
+        return *this;
+    }
+
     operator VmaAllocationCreateInfo const&() const
     {
       return *reinterpret_cast<const VmaAllocationCreateInfo*>( this );
@@ -812,7 +854,8 @@ namespace VMA_HPP_NAMESPACE {
           && ( preferredFlags == rhs.preferredFlags )
           && ( memoryTypeBits == rhs.memoryTypeBits )
           && ( pool == rhs.pool )
-          && ( pUserData == rhs.pUserData );
+          && ( pUserData == rhs.pUserData )
+          && ( priority == rhs.priority );
     }
 
     bool operator!=( AllocationCreateInfo const& rhs ) const
@@ -828,6 +871,7 @@ namespace VMA_HPP_NAMESPACE {
     uint32_t memoryTypeBits;
     Pool pool;
     void* pUserData;
+    float priority;
   };
   static_assert( sizeof( AllocationCreateInfo ) == sizeof( VmaAllocationCreateInfo ), "struct and wrapper have different size!" );
   static_assert( std::is_standard_layout<AllocationCreateInfo>::value, "struct wrapper is not a standard layout!" );
@@ -934,9 +978,11 @@ namespace VMA_HPP_NAMESPACE {
   struct DeviceMemoryCallbacks
   {
     DeviceMemoryCallbacks( PFN_vmaAllocateDeviceMemoryFunction pfnAllocate_ = nullptr,
-                                   PFN_vmaFreeDeviceMemoryFunction pfnFree_ = nullptr )
+                                   PFN_vmaFreeDeviceMemoryFunction pfnFree_ = nullptr,
+                                   void* pUserData_ = nullptr )
       : pfnAllocate( pfnAllocate_ )
       , pfnFree( pfnFree_ )
+      , pUserData( pUserData_ )
     {}
 
     DeviceMemoryCallbacks( VmaDeviceMemoryCallbacks const & rhs )
@@ -962,6 +1008,12 @@ namespace VMA_HPP_NAMESPACE {
       return *this;
     }
 
+      DeviceMemoryCallbacks & setPUserData( void* pUserData_ )
+    {
+        pUserData = pUserData_;
+        return *this;
+    }
+
     operator VmaDeviceMemoryCallbacks const&() const
     {
       return *reinterpret_cast<const VmaDeviceMemoryCallbacks*>( this );
@@ -975,7 +1027,8 @@ namespace VMA_HPP_NAMESPACE {
     bool operator==( DeviceMemoryCallbacks const& rhs ) const
     {
       return ( pfnAllocate == rhs.pfnAllocate )
-          && ( pfnFree == rhs.pfnFree );
+          && ( pfnFree == rhs.pfnFree )
+          && ( pUserData == rhs.pUserData );
     }
 
     bool operator!=( DeviceMemoryCallbacks const& rhs ) const
@@ -986,13 +1039,16 @@ namespace VMA_HPP_NAMESPACE {
   public:
     PFN_vmaAllocateDeviceMemoryFunction pfnAllocate;
     PFN_vmaFreeDeviceMemoryFunction pfnFree;
+      void* pUserData;
   };
   static_assert( sizeof( DeviceMemoryCallbacks ) == sizeof( VmaDeviceMemoryCallbacks ), "struct and wrapper have different size!" );
   static_assert( std::is_standard_layout<DeviceMemoryCallbacks>::value, "struct wrapper is not a standard layout!" );
 
   struct VulkanFunctions
   {
-    VulkanFunctions( PFN_vkGetPhysicalDeviceProperties vkGetPhysicalDeviceProperties_ = nullptr,
+    VulkanFunctions( PFN_vkGetInstanceProcAddr vkGetInstanceProcAddr_ = nullptr,
+                             PFN_vkGetDeviceProcAddr vkGetDeviceProcAddr_ = nullptr,
+                             PFN_vkGetPhysicalDeviceProperties vkGetPhysicalDeviceProperties_ = nullptr,
                              PFN_vkGetPhysicalDeviceMemoryProperties vkGetPhysicalDeviceMemoryProperties_ = nullptr,
                              PFN_vkAllocateMemory vkAllocateMemory_ = nullptr,
                              PFN_vkFreeMemory vkFreeMemory_ = nullptr,
@@ -1021,7 +1077,9 @@ namespace VMA_HPP_NAMESPACE {
                            , PFN_vkGetPhysicalDeviceMemoryProperties2KHR vkGetPhysicalDeviceMemoryProperties2KHR_ = nullptr
 #endif
                              ) 
-      : vkGetPhysicalDeviceProperties( vkGetPhysicalDeviceProperties_ )
+      : vkGetInstanceProcAddr( vkGetInstanceProcAddr_ )
+      , vkGetDeviceProcAddr( vkGetDeviceProcAddr_ )
+      , vkGetPhysicalDeviceProperties( vkGetPhysicalDeviceProperties_ )
       , vkGetPhysicalDeviceMemoryProperties( vkGetPhysicalDeviceMemoryProperties_ )
       , vkAllocateMemory( vkAllocateMemory_ )
       , vkFreeMemory( vkFreeMemory_ )
@@ -1060,6 +1118,18 @@ namespace VMA_HPP_NAMESPACE {
     {
       *reinterpret_cast<VmaVulkanFunctions*>(this) = rhs;
       return *this;
+    }
+
+    VulkanFunctions & setVkGetInstanceProcAddr( PFN_vkGetInstanceProcAddr vkGetInstanceProcAddr_ )
+    {
+        vkGetInstanceProcAddr = vkGetInstanceProcAddr_;
+        return *this;
+    }
+
+    VulkanFunctions & setVkGetDeviceProcAddr( PFN_vkGetDeviceProcAddr vkGetDeviceProcAddr_ )
+    {
+        vkGetDeviceProcAddr = vkGetDeviceProcAddr_;
+        return *this;
     }
 
     VulkanFunctions & setVkGetPhysicalDeviceProperties( PFN_vkGetPhysicalDeviceProperties vkGetPhysicalDeviceProperties_ )
@@ -1210,7 +1280,9 @@ namespace VMA_HPP_NAMESPACE {
 
     bool operator==( VulkanFunctions const& rhs ) const
     {
-      return ( vkGetPhysicalDeviceProperties == rhs.vkGetPhysicalDeviceProperties )
+      return ( vkGetInstanceProcAddr == rhs.vkGetInstanceProcAddr )
+          && ( vkGetDeviceProcAddr == rhs.vkGetDeviceProcAddr )
+          && ( vkGetPhysicalDeviceProperties == rhs.vkGetPhysicalDeviceProperties )
           && ( vkGetPhysicalDeviceMemoryProperties == rhs.vkGetPhysicalDeviceMemoryProperties )
           && ( vkAllocateMemory == rhs.vkAllocateMemory )
           && ( vkFreeMemory == rhs.vkFreeMemory )
@@ -1247,6 +1319,8 @@ namespace VMA_HPP_NAMESPACE {
     }
 
   public:
+    PFN_vkGetInstanceProcAddr vkGetInstanceProcAddr;
+    PFN_vkGetDeviceProcAddr vkGetDeviceProcAddr;
     PFN_vkGetPhysicalDeviceProperties vkGetPhysicalDeviceProperties;
     PFN_vkGetPhysicalDeviceMemoryProperties vkGetPhysicalDeviceMemoryProperties;
     PFN_vkAllocateMemory vkAllocateMemory;
@@ -1351,7 +1425,11 @@ namespace VMA_HPP_NAMESPACE {
                                  const VulkanFunctions* pVulkanFunctions_ = nullptr,
                                  const RecordSettings* pRecordSettings_ = nullptr,
                                  VULKAN_HPP_NAMESPACE::Instance instance_ = VULKAN_HPP_NAMESPACE::Instance(),
-                                 uint32_t vulkanApiVersion_ = VK_API_VERSION_1_0 )
+                                 uint32_t vulkanApiVersion_ = VK_API_VERSION_1_0
+#if VMA_EXTERNAL_MEMORY
+                               , const vk::ExternalMemoryHandleTypeFlagsKHR* pTypeExternalMemoryHandleTypes_ = nullptr
+#endif
+                                 )
       : flags( flags_ )
       , physicalDevice( physicalDevice_ )
       , device( device_ )
@@ -1364,6 +1442,9 @@ namespace VMA_HPP_NAMESPACE {
       , pRecordSettings( pRecordSettings_ )
       , instance( instance_ )
       , vulkanApiVersion( vulkanApiVersion_ )
+#if VMA_EXTERNAL_MEMORY
+      , pTypeExternalMemoryHandleTypes( pTypeExternalMemoryHandleTypes_ )
+#endif
     {}
 
     AllocatorCreateInfo( VmaAllocatorCreateInfo const & rhs )
@@ -1449,6 +1530,14 @@ namespace VMA_HPP_NAMESPACE {
       return *this;
     }
 
+#if VMA_EXTERNAL_MEMORY
+    AllocatorCreateInfo & setPTypeExternalMemoryHandleTypes( const vk::ExternalMemoryHandleTypeFlagsKHR* pTypeExternalMemoryHandleTypes_ )
+    {
+        pTypeExternalMemoryHandleTypes = pTypeExternalMemoryHandleTypes_;
+        return *this;
+    }
+#endif
+
     operator VmaAllocatorCreateInfo const&() const
     {
       return *reinterpret_cast<const VmaAllocatorCreateInfo*>( this );
@@ -1472,7 +1561,11 @@ namespace VMA_HPP_NAMESPACE {
           && ( pVulkanFunctions == rhs.pVulkanFunctions )
           && ( pRecordSettings == rhs.pRecordSettings )
           && ( instance == rhs.instance )
-          && ( vulkanApiVersion == rhs.vulkanApiVersion );
+          && ( vulkanApiVersion == rhs.vulkanApiVersion )
+#if VMA_EXTERNAL_MEMORY
+          && ( pTypeExternalMemoryHandleTypes == rhs.pTypeExternalMemoryHandleTypes )
+#endif
+          ;
     }
 
     bool operator!=( AllocatorCreateInfo const& rhs ) const
@@ -1493,6 +1586,9 @@ namespace VMA_HPP_NAMESPACE {
     const RecordSettings* pRecordSettings;
     VULKAN_HPP_NAMESPACE::Instance instance;
     uint32_t vulkanApiVersion;
+#if VMA_EXTERNAL_MEMORY
+    const vk::ExternalMemoryHandleTypeFlagsKHR* pTypeExternalMemoryHandleTypes;
+#endif
   };
   static_assert( sizeof( AllocatorCreateInfo ) == sizeof( VmaAllocatorCreateInfo ), "struct and wrapper have different size!" );
   static_assert( std::is_standard_layout<AllocatorCreateInfo>::value, "struct wrapper is not a standard layout!" );
@@ -1732,13 +1828,19 @@ namespace VMA_HPP_NAMESPACE {
                             VULKAN_HPP_NAMESPACE::DeviceSize blockSize_ = 0,
                             size_t minBlockCount_ = 0,
                             size_t maxBlockCount_ = 0,
-                            uint32_t frameInUseCount_ = 0 )
+                            uint32_t frameInUseCount_ = 0,
+                            float priority_ = 0,
+                            vk::DeviceSize minAllocationAlignment_ = 0,
+                            void* pMemoryAllocateNext_ = nullptr )
       : memoryTypeIndex( memoryTypeIndex_ )
       , flags( flags_ )
       , blockSize( blockSize_ )
       , minBlockCount( minBlockCount_ )
       , maxBlockCount( maxBlockCount_ )
       , frameInUseCount( frameInUseCount_ )
+      , priority( priority_ )
+      , minAllocationAlignment( minAllocationAlignment_ )
+      , pMemoryAllocateNext( pMemoryAllocateNext_ )
     {}
 
     PoolCreateInfo( VmaPoolCreateInfo const & rhs )
@@ -1788,6 +1890,24 @@ namespace VMA_HPP_NAMESPACE {
       return *this;
     }
 
+    PoolCreateInfo & setPriority( float priority_ )
+    {
+        priority = priority_;
+        return *this;
+    }
+
+    PoolCreateInfo & setMinAllocationAlignment( vk::DeviceSize minAllocationAlignment_ )
+    {
+        minAllocationAlignment = minAllocationAlignment_;
+        return *this;
+    }
+
+    PoolCreateInfo & setPMemoryAllocateNext( void* pMemoryAllocateNext_ )
+    {
+        pMemoryAllocateNext = pMemoryAllocateNext_;
+        return *this;
+    }
+
     operator VmaPoolCreateInfo const&() const
     {
       return *reinterpret_cast<const VmaPoolCreateInfo*>( this );
@@ -1805,7 +1925,10 @@ namespace VMA_HPP_NAMESPACE {
           && ( blockSize == rhs.blockSize )
           && ( minBlockCount == rhs.minBlockCount )
           && ( maxBlockCount == rhs.maxBlockCount )
-          && ( frameInUseCount == rhs.frameInUseCount );
+          && ( frameInUseCount == rhs.frameInUseCount )
+          && ( priority == rhs.priority )
+          && ( minAllocationAlignment == rhs.minAllocationAlignment )
+          && ( pMemoryAllocateNext == rhs.pMemoryAllocateNext );
     }
 
     bool operator!=( PoolCreateInfo const& rhs ) const
@@ -1820,6 +1943,9 @@ namespace VMA_HPP_NAMESPACE {
     size_t minBlockCount;
     size_t maxBlockCount;
     uint32_t frameInUseCount;
+    float priority;
+    vk::DeviceSize minAllocationAlignment;
+    void* pMemoryAllocateNext;
   };
   static_assert( sizeof( PoolCreateInfo ) == sizeof( VmaPoolCreateInfo ), "struct and wrapper have different size!" );
   static_assert( std::is_standard_layout<PoolCreateInfo>::value, "struct wrapper is not a standard layout!" );
@@ -2079,12 +2205,8 @@ namespace VMA_HPP_NAMESPACE {
                    StatInfo total_ = StatInfo() )
       : total( total_ )
     {
-      //std::copy(memoryType_, memoryType_+VK_MAX_MEMORY_TYPES, memoryType);
-      //std::copy(memoryHeap_, memoryHeap_+VK_MAX_MEMORY_HEAPS, memoryHeap);
-//       memcpy(memoryType, memoryType_, VK_MAX_MEMORY_TYPES);
-//       memcpy(memoryHeap, memoryHeap_, VK_MAX_MEMORY_HEAPS);
-      if (memoryType_ != nullptr) for (size_t i = 0; i < VK_MAX_MEMORY_TYPES; ++i) { memoryType[i] = memoryType_[i]; }
-      if (memoryHeap_ != nullptr) for (size_t i = 0; i < VK_MAX_MEMORY_TYPES; ++i) { memoryHeap[i] = memoryHeap_[i]; }
+      memcpy(memoryType, memoryType_, VK_MAX_MEMORY_TYPES * sizeof(memoryType_[0]));
+      memcpy(memoryHeap, memoryHeap_, VK_MAX_MEMORY_HEAPS * sizeof(memoryHeap_[0]));
     }
 
     Stats( VmaStats const & rhs )
@@ -2100,17 +2222,13 @@ namespace VMA_HPP_NAMESPACE {
 
     Stats & setMemoryType( StatInfo memoryType_[VK_MAX_MEMORY_TYPES] )
     {
-      if (memoryType_ != nullptr) for (size_t i = 0; i < VK_MAX_MEMORY_TYPES; ++i) { memoryType[i] = memoryType_[i]; }
-      //std::copy(memoryType_, memoryType_+VK_MAX_MEMORY_TYPES, memoryType);
-      //memcpy(memoryType, memoryType_, VK_MAX_MEMORY_TYPES);
+      memcpy(memoryType, memoryType_, VK_MAX_MEMORY_TYPES * sizeof(memoryType_[0]));
       return *this;
     }
 
     Stats & setMemoryHeap( StatInfo memoryHeap_[VK_MAX_MEMORY_HEAPS] )
     {
-      if (memoryHeap_ != nullptr) for (size_t i = 0; i < VK_MAX_MEMORY_TYPES; ++i) { memoryHeap[i] = memoryHeap_[i]; }
-      //std::copy(memoryHeap_, memoryHeap_+VK_MAX_MEMORY_HEAPS, memoryHeap);
-      //memcpy(memoryHeap, memoryHeap_, VK_MAX_MEMORY_HEAPS);
+      memcpy(memoryHeap, memoryHeap_, VK_MAX_MEMORY_HEAPS * sizeof(memoryHeap_[0]));
       return *this;
     }
 
@@ -2371,11 +2489,14 @@ namespace VMA_HPP_NAMESPACE {
     ::vmaGetBudget( m_allocator, reinterpret_cast<VmaBudget*>( pBudget ) );
   }
 #ifndef VULKAN_HPP_DISABLE_ENHANCED_MODE
-  VULKAN_HPP_INLINE Budget Allocator::getBudget() const
+  VULKAN_HPP_INLINE std::vector<Budget> Allocator::getBudget() const
   {
-    Budget budget;
-    ::vmaGetBudget( m_allocator, reinterpret_cast<VmaBudget*>( &budget ) );
-    return budget;
+    const VkPhysicalDeviceMemoryProperties* pPhysicalDeviceMemoryProperties = nullptr;
+    vmaGetMemoryProperties(m_allocator, &pPhysicalDeviceMemoryProperties);
+
+    std::vector<Budget> budgets(pPhysicalDeviceMemoryProperties->memoryHeapCount);
+    ::vmaGetBudget( m_allocator, reinterpret_cast<VmaBudget*>( budgets.data() ) );
+    return budgets;
   }
 #endif /*VULKAN_HPP_DISABLE_ENHANCED_MODE*/
 

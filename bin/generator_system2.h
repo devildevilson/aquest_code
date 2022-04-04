@@ -1,7 +1,7 @@
 #ifndef GENERATOR_SYSTEM2_H
 #define GENERATOR_SYSTEM2_H
 
-#include "map_generators2.h"
+#include "generator_context2.h"
 #include <atomic>
 
 namespace devils_engine {

@@ -81,9 +81,26 @@ namespace devils_engine {
           const auto &check = array_check[i];
           const bool stat_key = check.key == STAT_ID;
           const bool req = (check.flags & check_table_value::value_required) == check_table_value::value_required || stat_key;
-          auto proxy = table[check.key];
+          if (check.key == NESTED_ARRAY) {
+            // текущая таблица должна быть массивом
+            size_t counter = 0;
+            for (const auto &pair : table) {
+              if (pair.second.get_type() != sol::type::table) continue;
+              
+              recursive_check(id, data_type, pair.second.as<sol::table>(), &check, check.nested_array_data.begin(), check.nested_array_data.size(), counter);
+              ++counter;
+            }
+            
+            if (counter == 0) { PRINT("Table field " + std::string(current_check->key) + " must have one or more nested tables in " + std::string(data_type) + " data type"); ++counter; }
+            continue;
+          }
+          
+          const auto proxy = table[check.key];
+          //if (data_type == "biome") PRINT(check.key)
+          
           if (req && !proxy.valid()) { PRINT("Table field " + std::string(check.key) + " is required in " + std::string(data_type) + " data type"); ++counter; }
           if (!proxy.valid()) continue;
+          
           switch (check.value_type) {
             case check_table_value::type::bool_t: {
               const auto t = proxy.get_type();

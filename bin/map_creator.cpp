@@ -1,24 +1,24 @@
 #include "map_creator.h"
-// #include "interface_context.h"
+
 #include "utils/globals.h"
 #include "fmt/format.h"
-#include "generator_system2.h"
-// #include "map_generators2.h"
+
 #include "core/generator_begin.h"
-// #include "utils/random_engine.h"
-// #include "FastNoise.h"
-#include "generator_container.h"
-// #include "render/render_mode_container.h"
+#include "core/map.h"
+
 #include "utils/thread_pool.h"
 #include "utils/interface_container2.h"
 #include "utils/progress_container.h"
-#include "map.h"
 #include "utils/lua_initialization.h"
-#include "loading_functions.h"
 #include "utils/lua_environment.h"
 #include "utils/systems.h"
 
 #include "re2/re2.h"
+
+#include "generator_container.h"
+#include "generator_system2.h"
+#include "loading_functions.h"
+#include "application.h"
 
 #include <stdexcept>
 #include <random>
@@ -261,10 +261,12 @@ namespace devils_engine {
     
     void creator::advance() {
       advance_gen = true;
+      global::get<core::application>()->notify_gen_advance();
     }
     
     void creator::advance_all() {
       advance_gen_all = true;
+      global::get<core::application>()->notify_gen_advance();
     }
     
     bool creator::advancing() const {
@@ -443,6 +445,7 @@ namespace devils_engine {
         return 3;
       });
       
+      // тут нужно добавить переключение стейта у приложения
       t.set_function("advance", [this] () {
         if (global::get<systems::map_t>()->map_creator == nullptr) throw std::runtime_error("Map generator does not exist");
         advance();
@@ -455,7 +458,7 @@ namespace devils_engine {
       
       t.set_function("step", [this] () -> int32_t { // sol::readonly_property(
         if (global::get<systems::map_t>()->map_creator == nullptr) throw std::runtime_error("Map generator does not exist");
-        return current_step +1; // приведем к луа индексам
+        return TO_LUA_INDEX(current_step);
       });
       
       t.set_function("steps_count", [this] () -> uint32_t { // sol::readonly_property(

@@ -22,6 +22,7 @@ struct nk_context;
 #define COLOR_ARRAY "color_array"
 #define VEC4_ARRAY "vec4_array"
 #define NUM_ARRAY "num_array"
+#define NESTED_ARRAY "nested_array"
 
 namespace devils_engine {
   namespace utils {

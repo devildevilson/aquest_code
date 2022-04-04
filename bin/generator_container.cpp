@@ -1,5 +1,7 @@
 #include "generator_container.h"
-#include "map.h"
+
+#include "core/map.h"
+
 #include <cstring>
 #include <stdexcept>
 

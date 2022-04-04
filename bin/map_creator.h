@@ -11,7 +11,7 @@
 #include "utils/random_engine.h"
 #include "Cpp/FastNoiseLite.h"
 #include "utils/table_container.h"
-#include "utils/battle_map_enum.h"
+#include "battle/map_enum.h"
 #include "utils/serializator_helper.h"
 
 // нужен класс который соберет в себя несколько шагов создания карты

@@ -9,7 +9,6 @@
 #include "utils/string_container.h"
 #include "utils/progress_container.h"
 #include "utils/lua_initialization.h"
-#include "utils/battle_map_enum.h"
 #include "utils/lua_environment.h"
 #include "utils/localization_container.h"
 #include "utils/interface_container2.h"
@@ -26,28 +25,30 @@
 #include "render/map_data.h"
 #include "render/render_mode_container.h"
 
-#include "map.h"
-#include "seasons.h"
-#include "battle_map.h"
 #include "figures.h"
 #include "logic.h"
 #include "map_creator.h"
 #include "game_time.h"
 #include "image_parser.h"
 #include "data_parser.h"
-#include "battle_structures_enum.h"
-#include "battle_troop_parser.h"
-#include "battle_troop_type_parser.h"
-#include "battle_unit_state_parser.h"
 #include "heraldy_parser.h"
-#include "battle_context.h"
 
 #include "loading_defines.h"
 
+#include "core/map.h"
+#include "core/seasons.h"
 #include "core/context.h"
 #include "core/internal_lua_state.h"
 #include "core/structures_header.h"
 #include "core/generator_begin.h"
+
+#include "battle/map.h"
+#include "battle/structures_enum.h"
+#include "battle/troop_parser.h"
+#include "battle/troop_type_parser.h"
+#include "battle/unit_state_parser.h"
+#include "battle/context.h"
+#include "battle/map_enum.h"
 
 #define STATIC_ARRAY_SIZE(arr) (sizeof(arr) / sizeof(arr[0]))
 
@@ -1320,7 +1321,8 @@ namespace devils_engine {
         for (size_t i = 0; i < count; ++i) {
           auto character = ctx->get_character(i);
           if (character->suzerain != nullptr) court[character->suzerain.get()].push_back(character);
-          if (character->imprisoner != nullptr) prisoners[character->imprisoner.get()].push_back(character);
+          //if (character->imprisoner != nullptr) prisoners[character->imprisoner.get()].push_back(character);
+          if (character->prison != nullptr) prisoners[character->prison.get()].push_back(character);
           if (character->self != nullptr && character->self->liege != nullptr) {
             vassals[character->self->liege.get()].push_back(character->self.get());
           }
@@ -1344,9 +1346,13 @@ namespace devils_engine {
           // добавим всех знакомых
           for (const auto &pair : character->relations.acquaintances) {
             if (pair.first == nullptr) continue;
-            int32_t f, l;
-            if (pair.first->relations.is_acquaintance(character, &f, &l)) continue;
-            pair.first->relations.add_acquaintance(character, f, l);
+            const size_t t = pair.first->relations.get_acquaintance_raw(character);
+            if (t != 0) continue;
+            for (size_t i = 0; i < core::relationship::count; ++i) {
+              const size_t mask = size_t(1) << i;
+              const bool val = (t & mask) == mask;
+              if (val) pair.first->relations.add_acquaintance(character, i);
+            }
           }
 
           if (character->family.consort != nullptr) {
@@ -1916,8 +1922,14 @@ namespace devils_engine {
             
             sol::table final_t = obj.second.as<sol::table>();
             const bool valid = validation_func(counter, final_t);
+            if (!valid) {
+              std::string id;
+              if (const auto proxy = final_t["id"]; proxy.valid()) id = proxy.get<std::string>();
+              
+              if (id.empty()) throw std::runtime_error("Invalid " + std::string(type_str) + " data table in script " + path);
+              else throw std::runtime_error("Invalid " + std::string(type_str) + " data table with id " + id + " in script " + path);
+            }
             ++counter;
-            if (!valid) throw std::runtime_error("Invalid " + std::string(type_str) + " table in script " + path);
             tables.push_back(final_t);
           }
         } else tables.push_back(t); // сгенерированная таблица данных
@@ -1953,7 +1965,8 @@ namespace devils_engine {
         // тут нам было бы неплохо проверить что это за таблица
         const bool table_string = t[1].valid() && t[1].get_type() == sol::type::string && t.size() == 1;
         if (table_string) { // таблица-путь, подгрузим скрипт
-          if (type == utils::world_serializator::biome) throw std::runtime_error("Removed biome table scripts");
+          // кажется какое то старое ограничение, теперь не нужно
+          //if (type == utils::world_serializator::biome) throw std::runtime_error("Removed biome table scripts");
           
           const std::string path = t[1];
           // путь вида "*название мода*/*путь до скрипта*"
@@ -1977,16 +1990,24 @@ namespace devils_engine {
           size_t counter = 0;
           sol::table data_tables = ret;
           for (const auto &obj : data_tables) {
-            if (obj.first.get_type() != sol::type::number) continue;
+            //if (obj.first.get_type() != sol::type::number) continue;
             if (obj.second.get_type() != sol::type::table) continue;
             
-            const size_t cur_index = obj.first.as<double>();
-            if (cur_index != counter+1) throw std::runtime_error("Biomes table indices are not sequential. Use string keys to store additional data");
+            if (obj.first.get_type() != sol::type::number) {
+              const size_t cur_index = obj.first.as<double>();
+              if (cur_index != counter+1) throw std::runtime_error("Biomes table indices are not sequential. Use string keys to store additional data");
+            }
             
             sol::table final_t = obj.second.as<sol::table>();
             const bool valid = validation_func(counter, final_t);
+            if (!valid) {
+              std::string id;
+              if (const auto proxy = final_t["id"]; proxy.valid()) id = proxy.get<std::string>();
+              
+              if (id.empty()) throw std::runtime_error("Invalid " + std::string(type_str) + " data table in script " + path);
+              else throw std::runtime_error("Invalid " + std::string(type_str) + " data table with id " + id + " in script " + path);
+            }
             ++counter;
-            if (!valid) throw std::runtime_error("Invalid " + std::string(type_str) + " table in script " + path);
             tables.push_back(final_t);
           }
         } else tables.push_back(t); // сгенерированная таблица данных
@@ -2003,6 +2024,7 @@ namespace devils_engine {
       const uint32_t type = utils::world_serializator::heraldy_layer;
       std::vector<sol::table> tables;
       tables.reserve(w->get_data_count(type)*2);
+      
       for (size_t i = 0; i < w->get_data_count(type); ++i) {  
         //auto ret = internal->lua.script("return " + std::string(w->get_data(type, i)), internal->env);
         auto ret = internal->lua.script(w->get_data(type, i), internal->env, sol::detail::default_chunk_name(), sol::load_mode::text); // в виде скрипта: do local _={ данные };return _;end
@@ -2047,8 +2069,14 @@ namespace devils_engine {
               // еще одна вложенность отсутствует
               const auto h_t = pair.second.as<sol::table>();
               const bool valid = validation_func(counter, h_t);
+              if (!valid) {
+                std::string id;
+                if (const auto proxy = h_t["id"]; proxy.valid()) id = proxy.get<std::string>();
+                
+                if (id.empty()) throw std::runtime_error("Invalid heraldy data table in script " + path);
+                else throw std::runtime_error("Invalid heraldy data table with id " + id + " in script " + path);
+              }
               ++counter;
-              if (!valid) throw std::runtime_error("Invalid heraldy table in script " + path);
               tables.push_back(h_t);
               continue;
             }
@@ -2333,7 +2361,7 @@ namespace devils_engine {
       for (size_t i = 0; i < tables.size(); ++i) {
         const sol::table &t = tables[i];
         auto ptr = ctx->get_character(i);
-        core::parse_character_goverment(ptr, t);
+        core::parse_character_government(ptr, t);
       }
     }
     
@@ -2360,7 +2388,7 @@ namespace devils_engine {
       for (size_t i = 0; i < tables.size(); ++i) {
         const sol::table &t = tables[i];
         auto ptr = ctx->get_character(i);
-        core::parse_character_goverment(ptr, t);
+        core::parse_character_government(ptr, t);
       }
     }
     
@@ -3217,6 +3245,8 @@ namespace devils_engine {
       auto lua = loading_ctx->lua.get();
       auto env = loading_ctx->env.get();
       
+      utils::time_log log("creating_entities");
+      
       map_systems->core_context->create_container<core::tile>(core::map::hex_count_d(core::map::detail_level));
       
       // нам бы все эти вещи спихнуть в одну функцию + env
@@ -3246,6 +3276,18 @@ namespace devils_engine {
       const auto &city_tables = create_entity_without_id<core::city>(map_systems->core_context, world_data, *lua, *env, utils::world_serializator::city, "city", core::validate_city);
       const auto &character_tables = create_characters(map_systems->core_context, world_data, *lua, *env);
       
+      const auto &interactions_tables = create_entity<core::interaction>(
+        map_systems->core_context, to_data, world_data, *lua, *env, utils::world_serializator::interaction, "interaction", core::validate_interaction
+      );
+      
+      const auto &decisions_tables = create_entity<core::decision>(
+        map_systems->core_context, to_data, world_data, *lua, *env, utils::world_serializator::decision, "decision", core::validate_decision
+      );
+      
+      const auto &events_tables = create_entity<core::event>(
+        map_systems->core_context, to_data, world_data, *lua, *env, utils::world_serializator::event, "event", core::validate_event
+      );
+      
       map_systems->core_context->fill_id_maps();
       
       parse_entities<core::religion_group>(map_systems->core_context, religion_group_tables, core::parse_religion_group);
@@ -3259,6 +3301,10 @@ namespace devils_engine {
       parse_entities<core::province>(map_systems->core_context, province_tables, core::parse_province);
       parse_entities<core::city>(map_systems->core_context, city_tables, core::parse_city);
       parse_character(map_systems->core_context, character_tables);
+      
+      parse_entities<core::interaction>(map_systems->core_context, interactions_tables, core::parse_interaction);
+      parse_entities<core::decision>(map_systems->core_context, decisions_tables, core::parse_decision);
+      parse_entities<core::event>(map_systems->core_context, events_tables, core::parse_event);
     }
     
     void connecting_game_data(loading_context* loading_ctx) {

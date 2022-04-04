@@ -1436,9 +1436,9 @@ namespace devils_engine {
   }
   
   void sync(utils::frame_time &frame_time, const size_t &time) {
-    frame_time.end();
-    
     pre_sync();
+    
+    frame_time.end();
 
     size_t mcs = 0;
     while (mcs < time) {

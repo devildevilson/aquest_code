@@ -4,7 +4,7 @@
 #include "render/targets.h"
 #include "render/window.h"
 #include "render/shared_structures.h"
-#include "map.h"
+#include "core/map.h"
 #include "utils/shared_time_constant.h"
 #include "utils/systems.h"
 

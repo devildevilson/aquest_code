@@ -15,11 +15,13 @@
 
 #include "core/context.h"
 
+#include "core/map.h"
+#include "core/seasons.h"
+
+#include "battle/map.h"
+
 #include "data_parser.h"
-#include "map.h"
 #include "map_creator.h"
-#include "battle_map.h"
-#include "seasons.h"
 
 #include <filesystem>
 

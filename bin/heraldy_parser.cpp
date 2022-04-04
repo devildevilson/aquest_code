@@ -10,8 +10,9 @@
 #include "utils/systems.h"
 #include "utils/string_container.h"
 
+#include "core/map.h"
+
 #include "data_parser.h"
-#include "map.h"
 #include "map_creator.h"
 
 namespace devils_engine {

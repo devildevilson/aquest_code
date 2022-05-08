@@ -1,0 +1,57 @@
+set(SRC_LIST
+  lua_initialization_game_logic.cpp
+  lua_initialization_input.cpp
+  lua_initialization_types.cpp
+  lua_initialization_main_menu.cpp
+  lua_initialization_constants.cpp
+  lua_initialization_package.cpp
+  lua_initialization_settings.cpp
+  lua_initialization_tiles.cpp
+  lua_initialization_battle_map.cpp
+  lua_initialization_generator_container.cpp
+  lua_initialization_noiser.cpp
+  lua_initialization_random_engine.cpp
+  lua_initialization_progress_container.cpp
+  lua_initialization_battle_generator_functions.cpp
+  lua_initialization_battle_unit.cpp
+  lua_initialization_world_map.cpp
+  lua_initialization_world_map_generator_functions.cpp
+  lua_initialization_calendar.cpp
+  lua_initialization_safe_utils.cpp
+  lua_initialization_interface_utils.cpp
+  lua_initialization_game_context.cpp
+  lua_initialization_localization.cpp
+  lua_initialization_core_loading.cpp
+  lua_initialization_camera.cpp
+  lua_initialization_selection.cpp
+  #lua_initialization_script_utils.cpp
+  lua_initialization.cpp
+  lua_initialization_internal_enums.cpp
+  lua_initialization_internal_building_type.cpp
+  lua_initialization_internal_character.cpp
+  lua_initialization_internal_city.cpp
+  lua_initialization_internal_city_type.cpp
+  lua_initialization_internal_faction.cpp
+  lua_initialization_internal_province.cpp
+  lua_initialization_internal_titulus.cpp
+  lua_initialization_internal_army.cpp
+  lua_initialization_internal_war.cpp
+  lua_initialization_internal_religion.cpp
+  lua_initialization_internal_culture.cpp
+  lua_initialization_internal_troop.cpp
+  lua_initialization_internal_troop_type.cpp
+  lua_initialization_internal_trait.cpp
+  lua_initialization_internal_modificator.cpp
+  lua_initialization_internal_casus_belli.cpp
+  lua_initialization_internal_decision.cpp
+  lua_initialization_internal_interaction.cpp
+)
+
+set(HDR_LIST
+  lua_initialization.h
+  lua_initialization_hidden.h
+  lua_initialization_internal.h
+)
+
+add_library(lua_init ${SRC_LIST} ${HDR_LIST})
+target_link_libraries(lua_init generator core battle script ai render utils ${LUA_LIB})

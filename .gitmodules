@@ -67,3 +67,6 @@
 [submodule "include/dsml"]
 	path = include/dsml
 	url = https://github.com/dsiroky/dsml.git
+[submodule "include/doctest"]
+	path = include/doctest
+	url = https://github.com/doctest/doctest.git

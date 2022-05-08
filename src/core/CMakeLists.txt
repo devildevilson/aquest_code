@@ -1,0 +1,88 @@
+set(SRC_LIST
+  map.cpp
+  realm_mechanics_arrays.cpp
+  stats_table.cpp
+  traits_modifier_attribs.cpp
+  army.cpp
+  building_type.cpp
+  character.cpp
+  character_data_parser.cpp
+  city_type.cpp
+  city.cpp
+  culture.cpp
+  hero_troop.cpp
+  law.cpp
+  modificator.cpp
+  province.cpp
+  realm.cpp
+  religion.cpp
+  tile.cpp
+  titulus.cpp
+  trait.cpp
+  troop_type.cpp
+  troop.cpp
+  context.cpp
+  war.cpp
+  casus_belli.cpp
+  internal_lua_state.cpp
+  generator_begin.cpp
+  biome.cpp
+  declare_structures_table.cpp
+  realm_rights_checker.cpp
+  control_functions.cpp
+  diplomacy.cpp
+
+  interaction_filter_functions.cpp
+  decision.cpp
+  interaction.cpp
+  event.cpp
+  
+  render_stages.cpp
+)
+
+set(HDR_LIST
+  map.h
+  realm_mechanics.h
+  realm_mechanics_arrays.h
+  stats_table.h
+  stats.h
+  traits_modifier_attribs.h
+  casus_belli.h
+  war.h
+  decision.h
+  army.h
+  building_type.h
+  character.h
+  city_type.h
+  city.h
+  culture.h
+  event.h
+  hero_troop.h
+  law.h
+  modificator.h
+  province.h
+  realm.h
+  religion.h
+  tile.h
+  titulus.h
+  trait.h
+  troop_type.h
+  troop.h
+  context.h
+  interaction.h
+  internal_lua_state.h
+  generator_begin.h
+  biome.h
+  declare_structures_table.h
+  realm_rights_checker.h
+  control_functions.h
+  diplomacy.h
+  interaction_filter_functions.h
+  seasons.h
+  
+  render_stages.h
+  shared_structures.h
+)
+
+add_library(core ${SRC_LIST} ${HDR_LIST})
+target_link_libraries(core render systems utils)

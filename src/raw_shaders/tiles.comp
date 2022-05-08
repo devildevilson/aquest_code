@@ -1,0 +1,377 @@
+#version 450
+
+#extension GL_GOOGLE_include_directive : enable
+#include "../core/shared_structures.h"
+#include "../render/shared_structures.h"
+#include "../render/shared_render_utility.h"
+#include "../utils/shared_mathematical_constant.h"
+
+layout(constant_id = 0) const float triangle_size = 23.8457f;
+//layout(constant_id = 0) const float triangle_size = 10.0f;
+
+layout(set = 0, binding = 0) uniform Camera {
+  mat4 viewproj;
+  mat4 view;
+  vec4 pos;
+  vec4 dir;
+} camera;
+
+layout(std140, set = 1, binding = 0) readonly buffer tiles_buffer {
+  light_map_tile_t tiles[];
+};
+
+layout(std140, set = 1, binding = 1) readonly buffer biome_data_buffer {
+  packed_biome_data_t packed_biome_datas[];
+};
+
+layout(std140, set = 1, binding = 2) readonly buffer tile_points_buffer {
+  vec4 tile_points[];
+};
+
+layout(std140, set = 1, binding = 3) readonly buffer triangles_buffer {
+  packed_fast_triangle_t triangles[];
+};
+
+layout(std140, set = 1, binding = 4) readonly buffer triangles_tile_indices_buffer {
+  uvec4 triangles_tile_indices[];
+};
+
+layout(std140, set = 1, binding = 5) readonly buffer world_structure_buffer {
+  uvec4 world_structures[];
+};
+
+layout(std140, set = 2, binding = 0) buffer tile_indirect_buffer {
+  uvec4 pen_tiles_indirect;
+  uvec4 pen_tiles_data;
+  uvec4 hex_tiles_indirect;
+  uvec4 hex_tiles_data;
+  uvec4 borders_indirect;
+  uvec4 borders_data;
+  uvec4 walls_indirect;
+  uvec4 walls_data;
+  uvec4 structures_indirect;
+  uvec4 structures_data;
+  uvec4 heraldies_indirect;
+  uvec4 heraldies_data;
+  uvec4 dispatch_indirect;
+  // сюда можно засунуть фрустум
+  frustum_t frustum;
+
+  aabb_t selection_box;
+  frustum_t selection_frustum;
+
+  // uvec4 objects_indirect; // 256 штук?
+  // uvec4 objects_data;
+  // uvec4 biome_data[256*2/4];
+  biome_objects_data_t biome_objects_data[MAX_BIOMES_COUNT];
+};
+
+layout(std140, set = 2, binding = 1) buffer tiles_indices_buffer {
+  instance_data_t tiles_indices[];
+};
+
+layout(std140, set = 2, binding = 2) buffer borders_indices_buffer {
+  instance_data_t borders_indices[];
+};
+
+layout(std140, set = 2, binding = 3) buffer walls_indices_buffer {
+  instance_data_t walls_indices[];
+};
+
+layout(std140, set = 2, binding = 4) buffer objects_indices_buffer {
+  instance_data_t objects_indices[];
+};
+
+layout(std140, set = 2, binding = 5) buffer structures_indices_buffer {
+  instance_data_t structures_indices[];
+};
+
+layout(std140, set = 2, binding = 6) buffer heraldies_indices_buffer {
+  instance_data_t heraldies_indices[];
+};
+
+layout(std140, set = 3, binding = 0) buffer rendering_stat_buffer {
+  uvec4 rendering_data[];
+};
+
+layout(std140, set = 3, binding = 1) readonly buffer explored_stat_buffer {
+  uvec4 exploration_data[];
+};
+
+layout(std140, set = 3, binding = 2) readonly buffer visible_stat_buffer {
+  uvec4 visibility_data[];
+};
+
+#define FAR_PLANE 256.0f
+#define WORK_GROUP 256
+
+float distance2(const vec4 a, const vec4 b);
+vec4 get_triangle_dir(const vec4 a, const vec4 b, const vec4 c);
+bool triangle_frustum_test(const vec4 a, const vec4 b, const vec4 c, const frustum_t frustum);
+uint get_accel_triangle_tile_index(const uint index);
+world_structure_t unpack(const uvec4 data);
+
+void set_rendering_state(const uint tile_index);
+bool get_exploration_state(const uint tile_index);
+bool get_visibility_state(const uint tile_index);
+
+layout(local_size_x = WORK_GROUP, local_size_y = 1, local_size_z = 1) in;
+
+void main() {
+  const uint triangle_count = hex_tiles_data[1];
+  const uint max_indices_count = hex_tiles_data[2];
+  const uint triangle_index = gl_GlobalInvocationID.x;
+  if (triangle_index >= triangle_count) return;
+
+  const uint borders_indices_count = borders_data[1];
+  const uint walls_indices_count = walls_data[1];
+
+  //const light_map_tile_t tile = tiles[tile_index];
+  const packed_fast_triangle_t triangle = triangles[triangle_index];
+
+  const vec4 a = tile_points[triangle.points.x];
+  const vec4 b = tile_points[triangle.points.y];
+  const vec4 c = tile_points[triangle.points.z];
+
+  const vec4 dir = get_triangle_dir(a, b, c);
+
+  const vec4 camera_dir = camera.dir;
+  const vec4 camera_pos = camera.pos;
+
+  // должны быть в разные стороны
+  // *vec4(1.0f, 1.0f, 1.0f, 0.0f)
+  if (dot(dir, camera_dir) >= 0.0f || !triangle_frustum_test(a, b, c, frustum)) return;
+
+  // triangle.data[1] - количество тайлов всего, triangle.data[2] - есть ли среди них пентагон
+  // пентагон должен быть всегда последним
+  //const uint multiplier = PACKED_TILE_INDEX_COEF+1;
+  const uint new_tiles_count = triangle.data[1] - triangle.data[2];
+  //const uint new_indices_count = (new_tiles_count * multiplier) + (triangle.data[2] * multiplier); // 6 индексов + 1 рестарт
+  //const uint new_indices_offset = atomicAdd(hex_tiles_indirect.x, new_indices_count); // y
+  const uint new_indices_count = new_tiles_count;
+  const uint new_indices_offset = atomicAdd(hex_tiles_indirect.y, new_indices_count);
+  const uint hexagon_offset = 12;
+
+  if (new_indices_offset + new_indices_count >= max_indices_count) return;
+
+  // по идее так должно сработать
+  atomicAdd(structures_data.w, triangle.data[1]);
+  const uint max_dispatch = uint(ceil(float(structures_data.w) / float(WORK_GROUP)));
+  atomicMax(dispatch_indirect.x, max_dispatch);
+
+  // имеет смысл добавить проверку каждого тайла, но кеш сдохнет конечно
+  // ко всему прочему нужно будет два раза проходить цикл
+  for (uint i = 0; i < new_tiles_count; ++i) {
+    const uint tile_index = get_accel_triangle_tile_index(triangle.data[0] + i);
+    set_rendering_state(tile_index);
+    const uint offset = hexagon_offset + new_indices_offset + i;
+    const uint vec_index = offset / 4;
+    const uint slot_index = offset % 4;
+    tiles_indices[vec_index].index[slot_index] = tile_index;
+  }
+
+  if (bool(triangle.data[2])) {
+    const uint tile_index = get_accel_triangle_tile_index(triangle.data[0] + triangle.data[1] - 1);
+    set_rendering_state(tile_index);
+    const uint pentagon_offset = atomicAdd(pen_tiles_indirect.y, 1);
+    const uint vec_index = pentagon_offset / 4;
+    const uint slot_index = pentagon_offset % 4;
+    tiles_indices[vec_index].index[slot_index] = tile_index;
+  }
+
+  // теперь мы можем проверить и добавить границы и соединения
+  // if (walls_indices_count != 0) {
+  //   for (uint i = 0; i < triangle.data[1]; ++i) {
+  //     const uint tile_index = get_accel_triangle_tile_index(triangle.data[0] + i);
+  //     const uint walls_data = tiles[tile_index].packed_data4[1]; // блин у меня весь буффер используется только для двух переменных, наверное стоит вытащить их в другой буфер
+  //     if (walls_data == GPU_UINT_MAX) continue;
+  //
+  //     // было бы неплохо убрать те соединения, которые мы не видим
+  //     // как это сделать? мне для этого нужен буфер со стенами
+  //     const uint size = (walls_data >> 28) & connections_size_mask;
+  //     const uint offset = walls_data & connections_offset_mask;
+  //     const uint index_offset = atomicAdd(walls_indirect.x, size*(PACKED_INDEX_COEF+1));
+  //
+  //     for (uint j = 0; j < size; ++j) { // каждое соединение добавляем отдельно
+  //       const uint index = index_offset + j*(PACKED_INDEX_COEF+1);
+  //       const uint wall_index = offset + j;
+  //       const uint packed_index = wall_index * PACKED_INDEX_COEF;
+  //       for (uint k = 0; k < PACKED_INDEX_COEF; ++k) {
+  //         const uint final_index = index + k;
+  //         const uint vec_index = final_index / 4;
+  //         const uint slot_index = final_index % 4;
+  //         walls_indices[vec_index].index[slot_index] = packed_index + k;
+  //       }
+  //
+  //       const uint final_index = index + PACKED_INDEX_COEF;
+  //       const uint vec_index = final_index / 4;
+  //       const uint slot_index = final_index % 4;
+  //       walls_indices[vec_index].index[slot_index] = GPU_UINT_MAX;
+  //     }
+  //   }
+  // }
+
+  // borders_data.z должно указывать нужно ли пропускать рендер границ
+  // if (bool(borders_data[2]) && borders_indices_count != 0) {
+  //   for (uint i = 0; i < triangle.data[1]; ++i) {
+  //     const uint tile_index = get_accel_triangle_tile_index(triangle.data[0] + i);
+  //     //const uint borders_data = tiles[tile_index].packed_data4[0];
+  //     const uint borders_data = tiles[tile_index].packed_data[4][2];
+  //     const bool explored = get_exploration_state(tile_index);
+  //     if (!explored || borders_data == GPU_UINT_MAX) continue;
+  //
+  //     const uint size = (borders_data >> 28) & border_size_mask;
+  //     const uint offset = borders_data & border_offset_mask;
+  //     const uint index_offset = atomicAdd(borders_indirect.y, size); // *(PACKED_INDEX_COEF+1)
+  //
+  //     for (uint j = 0; j < size; ++j) { // каждую границу добавляем отдельно
+  //       const uint index = index_offset + j; // *(PACKED_INDEX_COEF+1)
+  //       const uint border_index = offset + j;
+  //       const uint packed_index = border_index; // * PACKED_INDEX_COEF
+  //       //for (uint k = 0; k < PACKED_INDEX_COEF; ++k) {
+  //         const uint final_index = index;
+  //         const uint vec_index = final_index / 4;
+  //         const uint slot_index = final_index % 4;
+  //         borders_indices[vec_index].index[slot_index] = packed_index;
+  //       //}
+  //
+  //       // const uint final_index = index + PACKED_INDEX_COEF;
+  //       // const uint vec_index = final_index / 4;
+  //       // const uint slot_index = final_index % 4;
+  //       // borders_indices[vec_index].index[slot_index] = GPU_UINT_MAX;
+  //     }
+  //   }
+  // }
+
+  // составляем индексы для объектов на тайле
+  // for (uint i = 0; i < triangle.data[1]; ++i) {
+  //   const uint tile_index = get_accel_triangle_tile_index(triangle.data[0] + i);
+  //   //const uint biome_index = tiles[tile_index].packed_data4[2] >> 24;
+  //   //const uint biome_index = tiles[tile_index].packed_data4[2];
+  //   const uint biome_index = tiles[tile_index].packed_data[4][3];
+  //
+  //   const biome_data_t biome = unpack_data(packed_biome_datas[biome_index]);
+  //
+  //   const float density = biome.density;
+  //   const uint instances = uint(max(density, 1.0f));
+  //
+  //   const bool explored = get_exploration_state(tile_index);
+  //
+  //   // может как то преобразовать? у меня tile_index может быть равен 0
+  //   // так что в любом случае надо что то сделать с индексом
+  //   // кажется с новым prng нам не нужно об этом думать
+  //   const uint prng_state = prng(tile_index);
+  //   const float val_norm = 1.0f - prng_normalize(prng_state);
+  //   //const float val_norm = 1.0f;
+  //   if (density == 0.0f || !explored || val_norm > density) continue; // || !is_image_valid(biome.object_texture2)
+  //
+  //   const uint offset = biome_objects_data[biome_index].objects_data[1];
+  //
+  //   const uint place = atomicAdd(biome_objects_data[biome_index].objects_indirect[0], PACKED_INDEX_COEF+1);
+  //   biome_objects_data[biome_index].objects_indirect[1] = instances;
+  //   biome_objects_data[biome_index].objects_indirect[2] = offset;
+  //
+  //   const uint packed_tile_index = tile_index * PACKED_INDEX_COEF;
+  //   const uint index = offset + place;
+  //   for (uint j = 0; j < PACKED_INDEX_COEF; ++j) {
+  //     const uint final_index = index + j;
+  //     const uint vec_index = final_index / 4;
+  //     const uint slot_index = final_index % 4;
+  //     objects_indices[vec_index].index[slot_index] = packed_tile_index + j;
+  //   }
+  //
+  //   const uint final_index = index + PACKED_INDEX_COEF;
+  //   const uint vec_index = final_index / 4;
+  //   const uint slot_index = final_index % 4;
+  //   objects_indices[vec_index].index[slot_index] = GPU_UINT_MAX;
+  // }
+}
+
+float distance2(const vec4 a, const vec4 b) {
+  const vec4 dir = b-a;
+  return dot(dir, dir);
+}
+
+vec4 get_triangle_dir(const vec4 a, const vec4 b, const vec4 c) {
+  const vec4 ab = b-a;
+  const vec4 ac = c-a;
+  return vec4(cross(vec3(ab), vec3(ac)), 0.0f);
+}
+
+#define OUTSIDE 0
+#define INSIDE 1
+#define INTERSECT 2
+
+bool triangle_frustum_test(const vec4 a, const vec4 b, const vec4 c, const frustum_t frustum) {
+  const vec4 center = (a + b + c) / 3.0f;
+  const vec4 extents = vec4(triangle_size, triangle_size, triangle_size, 0.0f);
+
+  uint result = INSIDE;
+  for (uint i = 0; i < 6; ++i) {
+    // const float dist = dot(center.xyz, frustum.planes[i].xyz) + frustum.planes[i].w + triangle_size;
+    // if (dist < 0.0f) return false;
+
+    const vec4 plane = vec4(frustum.planes[i][0], frustum.planes[i][1], frustum.planes[i][2], 0.0f); //frustum.planes[i] * simd::vec4(1.0f, 1.0f, 1.0f, 0.0f);
+    const float p3 = frustum.planes[i][3];
+
+    const float d = dot(center,      plane);
+
+    const float r = dot(extents, abs(plane));
+
+    const float d_p_r = d + r;
+    const float d_m_r = d - r;
+
+    //frustumPlane.w
+    if (d_p_r < -p3) {
+      result = OUTSIDE;
+      break;
+    } else if (d_m_r < -p3) result = INTERSECT;
+  }
+
+  return result != OUTSIDE;
+}
+
+uint get_accel_triangle_tile_index(const uint index) {
+  const uint vec4_index = index / 4;
+  const uint vec4_offset = index % 4;
+  return triangles_tile_indices[vec4_index][vec4_offset];
+}
+
+world_structure_t unpack(const uvec4 data) {
+  world_structure_t abc;
+  abc.city_image_top.container = data[0];
+  abc.city_image_face.container = data[1];
+  abc.scale = uintBitsToFloat(data[2]);
+  abc.heraldy_layer_index = data[3];
+  return abc;
+}
+
+void set_rendering_state(const uint tile_index) {
+  const uint piece_size = 4 * 32;
+  const uint array_index = tile_index / piece_size;
+  const uint bit_index = tile_index % piece_size;
+  const uint vec_index = bit_index / 32;
+  const uint final_bit_index = bit_index % 32;
+  const uint mask = 1 << final_bit_index;
+  atomicOr(rendering_data[array_index][vec_index], mask);
+}
+
+bool get_exploration_state(const uint tile_index) {
+  const uint piece_size = 4 * 32;
+  const uint array_index = tile_index / piece_size;
+  const uint bit_index = tile_index % piece_size;
+  const uint vec_index = bit_index / 32;
+  const uint final_bit_index = bit_index % 32;
+  const uint mask = 1 << final_bit_index;
+  return (exploration_data[array_index][vec_index] & mask) == mask;
+}
+
+bool get_visibility_state(const uint tile_index) {
+  const uint piece_size = 4 * 32;
+  const uint array_index = tile_index / piece_size;
+  const uint bit_index = tile_index % piece_size;
+  const uint vec_index = bit_index / 32;
+  const uint final_bit_index = bit_index % 32;
+  const uint mask = 1 << final_bit_index;
+  return (visibility_data[array_index][vec_index] & mask) == mask;
+}

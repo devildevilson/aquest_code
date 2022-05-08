@@ -1,0 +1,58 @@
+set(SRC_LIST
+  container.cpp
+  render.cpp
+  window.cpp
+  stages.cpp
+  targets.cpp
+  render_mode_container.cpp
+  #pipeline_mode_updater.cpp
+  image_container.cpp
+  image_controller.cpp
+  #persistent_resources.cpp
+  #slots.cpp
+  #battle_render_stages.cpp
+  utils.cpp
+  makers.cpp
+  vulkan_hpp_header.cpp
+  vk_mem_alloc_impl.cpp
+  queue.cpp
+  pass.cpp
+  command_buffer.cpp
+  proxy_stage.cpp
+  container_view.cpp
+)
+
+set(HDR_LIST
+  container.h
+  context.h
+  shared_structures.h
+  #stage.h
+  stages.h
+  target.h
+  targets.h
+  render.h
+  window.h
+  nuklear_header.h
+  render_mode_container.h
+  #pipeline_mode_updater.h
+  image_container.h
+  image_controller.h
+  #persistent_resources.h
+  #slots.h
+  shared_battle_structures.h
+  #battle_render_stages.h
+  utils.h
+  vk_mem_alloc/vk_mem_alloc.hpp
+  vulkan_declarations.h
+  vulkan_hpp_header.h
+  makers.h
+  queue.h
+  pass.h
+  command_buffer.h
+  proxy_stage.h
+  container_view.h
+  push_constant_data.h
+)
+
+add_library(render ${SRC_LIST} ${HDR_LIST})
+target_link_libraries(render utils ${VULKAN_LIB_NAME} ${GLFW3_LIBRARIES})

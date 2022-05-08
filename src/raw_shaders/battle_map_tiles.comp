@@ -1,0 +1,371 @@
+#version 450
+
+#extension GL_GOOGLE_include_directive : enable
+#include "../render/shared_structures.h"
+#include "../render/shared_battle_structures.h"
+#include "../core/shared_structures.h"
+#include "../utils/shared_mathematical_constant.h"
+#include "../render/shared_render_utility.h"
+
+const vec2 hex_map_row_const_offset[] = {
+  vec2(-0.5f, 0.0f),
+  vec2( 0.5f, 0.0f),
+  vec2( 0.0f,-0.5f),
+  vec2( 0.0f, 0.5f)
+};
+
+const vec2 walls_pos_offsets_arr[] = {
+  vec2( 0.0f,-2.0f),
+  vec2( 1.0f,-1.0f),
+  vec2( 1.0f, 1.0f),
+  vec2( 0.0f, 2.0f),
+  vec2(-1.0f, 1.0f),
+  vec2(-1.0f,-1.0f)
+};
+
+layout(set = 0, binding = 0) uniform Camera {
+  mat4 viewproj;
+  mat4 view;
+  vec4 pos;
+  vec4 dir;
+} camera;
+
+layout(set = 0, binding = 2) uniform common_uniform {
+  vec4 cursor_dir;
+  uvec4 dim;
+  uvec4 state;
+} additional;
+
+layout(set = 1, binding = 0) uniform tiles_uniform_buffer {
+  uvec4 map_properties;
+} tiles_uniform;
+
+layout(std140, set = 1, binding = 1) readonly buffer tiles_buffer {
+  packed_battle_map_tile_data_t tiles[];
+};
+
+layout(std140, set = 1, binding = 3) readonly buffer biomes_buffer {
+  packed_battle_biome_data_t biomes[];
+};
+
+layout(std140, set = 2, binding = 0) buffer tile_indirect_buffer {
+  uvec4 tiles_indirect;
+  uvec4 sizes_data;
+
+  uvec4 units_indirect;
+
+  frustum_t frustum;
+  frustum_t selection_frustum;
+  vec4 ray_pos;
+  vec4 ray_dir;
+
+  biome_objects_data_t biome_objects_data[BATTLE_BIOMES_MAX_COUNT];
+};
+
+layout(std140, set = 2, binding = 1) buffer tiles_indices_buffer {
+  instance_data_t tiles_indices[];
+};
+
+layout(std140, set = 2, binding = 2) buffer biomes_indices_buffer {
+  instance_data_t biomes_indices[];
+};
+
+layout(std140, set = 2, binding = 3) buffer units_indices_buffer {
+  instance_data_t units_indices[];
+};
+
+layout(std140, set = 2, binding = 4) buffer selection_buffer {
+  instance_data_t selection_indices[];
+};
+
+#define WORK_GROUP 256
+
+layout(local_size_x = WORK_GROUP, local_size_y = 1, local_size_z = 1) in;
+
+// для того чтобы проверить пересечение с цилиндром можно проверить пересение луча с окружностью
+// мы получаем 2 переменных т1 и т2, затем вычисляем точки, проверяем чтобы эти точки не были выше/ниже цилиндра
+bool ray_cylinder_test(const vec4 ray_pos, const vec4 ray_dir, const vec4 cyl_pos, const float radius, inout float dist);
+// с цилиндром не получилось
+bool tile_triangle_test(const vec4 ray_pos, const vec4 ray_dir, const vec4 tile_pos, const bool is_flat_orientation, inout float dist);
+
+void main() {
+  const uvec4 uniform_property_data = tiles_uniform.map_properties;
+  const uint tiles_count = uniform_property_data.x;
+  const uint map_width   = uniform_property_data.y;
+  const uint map_height  = uniform_property_data.z;
+  const uint map_type    = uniform_property_data.w;
+
+  const uint tile_index = gl_GlobalInvocationID.x;
+  if (tile_index >= tiles_count) return;
+
+  const bool is_square_map       = bool(map_type & (1 << 0));
+  const bool is_flat_orientation = bool(map_type & (1 << 1));
+  const bool is_odd_offset       = bool(map_type & (1 << 2));
+
+  const uint tile_map_width  = map_width;
+  const uint tile_map_height = map_height;
+  const uint row_index    = tile_index / tile_map_height;
+  const uint column_index = tile_index % tile_map_height;
+  const uvec2 tile_coord = uvec2(column_index, row_index);
+  //const uvec2 tile_coord = uvec2(0, 0);
+
+  const float hex_size = 1.0f;
+  const float hex_width = mix(sqrt(3.0f) * hex_size, 2.0f * hex_size, float(is_flat_orientation));
+  const float hex_height = mix(2.0f * hex_size, sqrt(3.0f) * hex_size, float(is_flat_orientation));
+  const float hex_width_dist = mix(1.0f * hex_width, (3.0f/4.0f) * hex_width, float(is_flat_orientation));
+  const float hex_height_dist = mix((3.0f/4.0f) * hex_height, 1.0f * hex_height, float(is_flat_orientation));
+
+  const uint offset_type_index = uint(is_odd_offset) + 2 * uint(is_flat_orientation);
+
+  // 4 константы зависят от того как мы представляем координатные системы
+  // квадратная карта может быть представлена: четный оффсет по строкам, нечетный оффсет по строкам, четный оффсет по столбцам, нечетный оффсет по столбцам
+  const uint row_column = uint(is_flat_orientation) * column_index + uint(!is_flat_orientation) * row_index;
+  const vec2 const_pos_k = float(row_column % 2 == 1) * hex_map_row_const_offset[offset_type_index] * vec2(hex_width_dist, hex_height_dist);
+
+  const battle_map_tile_data_t current_tile = unpack_data(tiles[tile_index]);
+  const float tile_height = current_tile.height;
+
+  const vec2 tile_pos = vec2(tile_coord) * vec2(hex_width_dist, hex_height_dist) + const_pos_k;
+  const vec4 final_tile_pos = vec4(tile_pos.x, tile_height, tile_pos.y, 1.0f);
+
+  const float tile_radius = hex_size; // ????
+  const bool ret = frustum_test(frustum, final_tile_pos, tile_radius);
+  if (!ret) return;
+
+  // нам нужно нарисовать сам тайл, элементы биома, элементы окружения, отряды
+  // нужно будет сделать видимость у отрядов, мне еще нужно сделать аккуратно биомы и переходы между ними
+  // было бы неплохо уметь спавнить переходящие объекты от биома к биому
+
+  // нужно сделать выделение и поиск тайла, по идее и выделение и поиск тайла
+  // должны работать только с видимыми тайлами, но во многих играх
+  // выделение за областью видимости поддерживается, для выделение нужен буфер
+  // причем буфер пар, для выделения - юнит + тип?, для поиска дальность и индекс тайла
+
+  {
+    const uint offset = atomicAdd(tiles_indirect.y, 1);
+    const uint vec_index = offset / 4;
+    const uint slot_index = offset % 4;
+    tiles_indices[vec_index].index[slot_index] = tile_index;
+  }
+
+  const uint troop_data = current_tile.troop_data;
+  const bool tile_has_troop = troop_data != GPU_UINT_MAX;
+  const uint unit_count  = get_troop_unit_count(troop_data);
+  const uint unit_offset = get_troop_unit_offset(troop_data);
+
+  if (tile_has_troop) {
+    for (uint i = 0; i < unit_count; ++i) {
+      // что куда добавить? инстансный буффер, 4 вершины, в инстансный буфер конкретный индекс
+      const uint unit_index = unit_offset + i;
+      const uint offset = atomicAdd(units_indirect.y, 1);
+      const uint vec_index = offset / 4;
+      const uint slot_index = offset % 4;
+      units_indices[vec_index].index[slot_index] = unit_index;
+    }
+  }
+
+  {
+    // селект, как сделать?
+    float dist = 10000.0f;
+    // тут наверное будет неверно находиться дист для цилиндров, да неверно
+    // нужно искать среди всех плоскостей, а это 16 треугольников
+    //const bool ray_test_ret = ray_cylinder_test(camera.pos, additional.cursor_dir, final_tile_pos, tile_radius, dist);
+    // проверять 16 треугольников конечно дольше чем цилиндр, но я вроде как сделал гпуфрендли алгоритм
+    // теперь должно работать идеально
+    const bool ray_test_ret = tile_triangle_test(camera.pos, additional.cursor_dir, final_tile_pos, is_flat_orientation, dist);
+    // кажется нулевый фрустум везде дает положительный результат (ну или только для первого тайла)
+    const bool frustum_test_ret = frustum_test(selection_frustum, final_tile_pos, tile_radius);
+    const bool needs_to_buffer = frustum_test_ret && tile_has_troop;
+
+    const uint picked_tile_offset = atomicAdd(sizes_data.w, 2 * uint(ray_test_ret));
+    const uint selected_tile_offset = atomicAdd(sizes_data.w, 2 * uint(needs_to_buffer));
+
+    const bool final_ray = ray_test_ret && (picked_tile_offset < 512*2-1);
+    const bool final_frustum = needs_to_buffer && (selected_tile_offset < 512*2-1);
+
+    // все равно много условных переходов
+    if (final_ray) {
+      {
+        const uint vec_index = picked_tile_offset / 4;
+        const uint slot_index = picked_tile_offset % 4;
+        selection_indices[vec_index].index[slot_index] = floatBitsToUint(abs(dist));
+      }
+
+      {
+        const uint vec_index = (picked_tile_offset+1) / 4;
+        const uint slot_index = (picked_tile_offset+1) % 4;
+        selection_indices[vec_index].index[slot_index] = tile_index;
+      }
+    }
+
+    if (final_frustum) {
+      {
+        //const uint selection_mask = uint(1) << 31;
+        const uint selection_mask = 0x1;
+        const uint vec_index = selected_tile_offset / 4;
+        const uint slot_index = selected_tile_offset % 4;
+        selection_indices[vec_index].index[slot_index] = selection_mask;
+      }
+
+      {
+        const uint vec_index = (selected_tile_offset+1) / 4;
+        const uint slot_index = (selected_tile_offset+1) % 4;
+        selection_indices[vec_index].index[slot_index] = tile_index;
+      }
+    }
+  }
+
+  const uint biome_index = current_tile.biome_index; // биом всегда должен быть валидным
+  // неплохо было бы еще переменную сохранить на каждую уникальную генерацию карты
+  // для того чтобы с одинаковыми входными данными, получать визуально чуть чуть другие карты
+  // хотя может и не надо, это будет влиять только на визуал поэтому почему бы и нет все же
+
+  const battle_biome_data_t biome_data = unpack_data(biomes[biome_index]);
+
+  const uint state_tile_index = prng(tile_index);
+  //const uint state_map_generation_id = prng(map_generation_id);
+  //const uint final_state = prng2(state_tile_index, state_map_generation_id);
+  const uint final_state = state_tile_index;
+  const float norm_state = 1.0f - prng_normalize(final_state);
+  const bool render_biome_on_this_tile = norm_state <= biome_data.density;
+  //const bool render_biome = render_biome_on_this_tile;
+  const bool render_biome = true;
+  const uint instances = uint(max(biome_data.density, 1.0f));
+
+  {
+    const uint offset = biome_objects_data[biome_index].objects_data[1];
+    const uint place = atomicAdd(biome_objects_data[biome_index].objects_indirect[0], uint(render_biome)*(PACKED_INDEX_COEF+1));
+    biome_objects_data[biome_index].objects_indirect[1] = instances;
+    biome_objects_data[biome_index].objects_indirect[2] = offset;
+
+    if (render_biome) {
+      const uint packed_tile_index = tile_index * PACKED_INDEX_COEF;
+      const uint index = offset + place;
+      for (uint j = 0; j < PACKED_INDEX_COEF; ++j) {
+        const uint final_index = index + j;
+        const uint vec_index = final_index / 4;
+        const uint slot_index = final_index % 4;
+        biomes_indices[vec_index].index[slot_index] = packed_tile_index + j;
+      }
+
+      const uint final_index = index + PACKED_INDEX_COEF;
+      const uint vec_index = final_index / 4;
+      const uint slot_index = final_index % 4;
+      biomes_indices[vec_index].index[slot_index] = GPU_UINT_MAX;
+    }
+  }
+
+  // из тайла мы можем получить отряд иногда их может и не быть
+  // где то еще должны храниться убитые противники
+}
+
+vec4 project_vector_on_plane(const vec4 normal, const vec4 origin, const vec4 vector) {
+  const float dist = dot(vector, normal);
+  const vec4 point2 = origin + vector - normal*dist;
+  return point2 - origin;
+}
+
+bool ray_cylinder_test(const vec4 ray_pos, const vec4 ray_dir, const vec4 cyl_pos, const float radius, inout float dist) {
+  // приводим направление луча к плоскости
+  const vec4 ray_pos_on_plane = vec4(ray_pos.x, 0.0f, ray_pos.z, 1.0f);
+  const vec4 ray_dir_on_plane = normalize(project_vector_on_plane(vec4(0.0f, 1.0f, 0.0f, 0.0f), vec4(0.0f, 0.0f, 0.0f, 1.0f), ray_dir));
+
+  const vec4 local_cyl_pos = vec4(cyl_pos.x, 0.0f, cyl_pos.z, 1.0f);
+  const float height = cyl_pos.y;
+  // проверяем пересечение приведенного луча с окружностью на плоскости
+  const vec4 f = ray_pos_on_plane - local_cyl_pos;
+  const float a = dot(ray_dir_on_plane, ray_dir_on_plane);
+  const float b = 2*dot(f, ray_dir_on_plane);
+  const float c = dot(f, f) - radius*radius;
+
+  float discriminant = b*b-4*a*c;
+  if (discriminant < 0) return false;
+
+  // решения уравнения
+  discriminant = sqrt(discriminant);
+  const float t1 = (-b - discriminant)/(2*a);
+  const float t2 = (-b + discriminant)/(2*a);
+
+  const bool t1_sol = t1 >= 0.0f; //  && t1 <= 1.0f;
+  const bool t2_sol = t2 >= 0.0f; //  && t2 <= 1.0f;
+
+  // поправка на приведение направления луча
+  const float ray_angle = acos(dot(ray_dir_on_plane, ray_dir));
+  const float next_angle = radians(90.0f) - ray_angle;
+  const float coef = 1.0f / sin(next_angle);
+
+  // t1 и t2 - это точки на окружности, а значит тайл по направлению луча будет ближе того
+  // на который луч непосредственно указывает скорее всего, проблема по идее будет видна на границе тайла
+  // нужно проверить
+  const float final_t1 = t1 * coef;
+  const float final_t2 = t2 * coef;
+  const vec4 t1_point = mix(vec4(-1.0f, -1.0f, -1.0f, 1.0f), ray_pos + ray_dir * final_t1, float(t1_sol));
+  const vec4 t2_point = mix(vec4(-1.0f, -1.0f, -1.0f, 1.0f), ray_pos + ray_dir * final_t2, float(t2_sol));
+
+  const bool t1_cyl_sol = t1_point.y >= 0.0f && t1_point.y <= height;
+  const bool t2_cyl_sol = t2_point.y >= 0.0f && t2_point.y <= height;
+
+  dist = t1_cyl_sol ? final_t1 : final_t2; // если t1 больше нуля то это число является меньшим ответом
+  //dist = distance(cyl_pos, ray_pos); // плохая идея, не всегда
+  return t1_cyl_sol || t2_cyl_sol;
+}
+
+bool tile_triangle_test(const vec4 ray_pos, const vec4 ray_dir, const vec4 tile_pos, const bool is_flat_orientation, inout float dist) {
+  dist = 10000.0f;
+  bool ret = false;
+
+  const float hex_size = 1.0f;
+  const float hex_width = mix(sqrt(3.0f) * hex_size, 2.0f * hex_size, float(is_flat_orientation));
+  const float hex_height = mix(2.0f * hex_size, sqrt(3.0f) * hex_size, float(is_flat_orientation));
+
+  const float offset_x = mix(0.5f * hex_width, 0.25f * hex_width, float(is_flat_orientation));
+  const float offset_z = mix(0.25f * hex_height, 0.5f * hex_height, float(is_flat_orientation));
+
+  const float tile_height = tile_pos.y;
+  const vec2 tile_center = vec2(tile_pos.x, tile_pos.z);
+
+  vec4 hex_points[6];
+  for (uint i = 0; i < 6; ++i) {
+    vec2 walls_pos_offset = walls_pos_offsets_arr[i];
+    walls_pos_offset = mix(walls_pos_offset, walls_pos_offset.yx, float(is_flat_orientation)) * vec2(offset_x, offset_z);
+    const vec2 wall_point = tile_center + walls_pos_offset;
+    hex_points[i] = vec4(wall_point.x, tile_height, wall_point.y, 1.0f);
+  }
+
+  // сначала стенки тайла
+  for (uint i = 0; i < 6; ++i) {
+    const uint next_i = (i+1)%6;
+    const vec4 wall_points[4] = {
+      hex_points[i],
+      hex_points[next_i],
+      vec4(hex_points[i].x, 0.0f, hex_points[i].z, 1.0f),
+      vec4(hex_points[next_i].x, 0.0f, hex_points[next_i].z, 1.0f)
+    };
+
+    float local_dist1 = 10000.0f;
+    float local_dist2 = 10000.0f;
+    const bool ret1 = ray_triangle_test(ray_pos, ray_dir, wall_points[0], wall_points[1], wall_points[2], local_dist1);
+    const bool ret2 = ray_triangle_test(ray_pos, ray_dir, wall_points[1], wall_points[2], wall_points[3], local_dist2);
+
+    ret = ret || ret1 || ret2;
+    dist = min(dist, local_dist1);
+    dist = min(dist, local_dist2);
+  }
+
+  // тут получается нужно проверить 4 треугольника
+  for (uint i = 1; i < 5; ++i) {
+    const uint third_i = (i+1)%6;
+    const vec4 tri_points[3] = {
+      hex_points[0],
+      hex_points[i],
+      hex_points[third_i]
+    };
+
+    float local_dist = 10000.0f;
+    const bool local_ret = ray_triangle_test(ray_pos, ray_dir, tri_points[0], tri_points[1], tri_points[2], local_dist);
+    ret = ret || local_ret;
+    dist = min(dist, local_dist);
+  }
+
+  return ret;
+}

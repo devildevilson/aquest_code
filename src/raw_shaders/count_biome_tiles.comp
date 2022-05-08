@@ -1,0 +1,144 @@
+#version 450
+
+#extension GL_GOOGLE_include_directive : enable
+#include "../render/shared_structures.h"
+#include "../core/shared_structures.h"
+#include "../render/shared_render_utility.h"
+#include "../utils/shared_mathematical_constant.h"
+
+layout(set = 0, binding = 0) uniform Camera {
+  mat4 viewproj;
+  mat4 view;
+  vec4 pos;
+  vec4 dir;
+} camera;
+
+layout(std140, set = 1, binding = 0) readonly buffer tiles_buffer {
+  light_map_tile_t tiles[];
+};
+
+layout(std140, set = 1, binding = 1) readonly buffer biome_data_buffer {
+  packed_biome_data_t packed_biome_datas[];
+};
+
+layout(std140, set = 1, binding = 2) readonly buffer tile_points_buffer {
+  vec4 tile_points[];
+};
+
+layout(std140, set = 1, binding = 3) readonly buffer triangles_buffer {
+  packed_fast_triangle_t triangles[];
+};
+
+layout(std140, set = 1, binding = 4) readonly buffer triangles_tile_indices_buffer {
+  uvec4 triangles_tile_indices[];
+};
+
+layout(std140, set = 1, binding = 5) readonly buffer world_structure_buffer {
+  uvec4 world_structures[];
+};
+
+layout(std140, set = 2, binding = 0) buffer tile_indirect_buffer {
+  uvec4 pen_tiles_indirect;
+  uvec4 pen_tiles_data;
+  uvec4 hex_tiles_indirect;
+  uvec4 hex_tiles_data;
+  uvec4 borders_indirect;
+  uvec4 borders_data;
+  uvec4 walls_indirect;
+  uvec4 walls_data;
+  uvec4 structures_indirect;
+  uvec4 structures_data;
+  uvec4 heraldies_indirect;
+  uvec4 heraldies_data;
+  uvec4 dispatch_indirect;
+  // сюда можно засунуть фрустум
+  frustum_t frustum;
+
+  aabb_t selection_box;
+  frustum_t selection_frustum;
+
+  // uvec4 objects_indirect; // 256 штук?
+  // uvec4 objects_data;
+  // uvec4 biome_data[256*2/4];
+  biome_objects_data_t biome_objects_data[MAX_BIOMES_COUNT];
+};
+
+layout(std140, set = 2, binding = 1) buffer tiles_indices_buffer {
+  instance_data_t tiles_indices[];
+};
+
+layout(std140, set = 2, binding = 2) buffer borders_indices_buffer {
+  instance_data_t borders_indices[];
+};
+
+layout(std140, set = 2, binding = 3) buffer walls_indices_buffer {
+  instance_data_t walls_indices[];
+};
+
+layout(std140, set = 2, binding = 4) buffer objects_indices_buffer {
+  instance_data_t objects_indices[];
+};
+
+layout(std140, set = 2, binding = 5) buffer structures_indices_buffer {
+  instance_data_t structures_indices[];
+};
+
+layout(std140, set = 2, binding = 6) buffer heraldies_indices_buffer {
+  instance_data_t heraldies_indices[];
+};
+
+layout(std140, set = 3, binding = 0) buffer rendering_stat_buffer {
+  uvec4 rendering_data[];
+};
+
+layout(std140, set = 3, binding = 1) readonly buffer explored_stat_buffer {
+  uvec4 exploration_data[];
+};
+
+layout(std140, set = 3, binding = 2) readonly buffer visible_stat_buffer {
+  uvec4 visibility_data[];
+};
+
+#define FAR_PLANE 256.0f
+#define WORK_GROUP 256
+
+layout(local_size_x = WORK_GROUP, local_size_y = 1, local_size_z = 1) in;
+
+bool get_exploration_state(const uint tile_index);
+
+void main() {
+  const uint local_index = gl_GlobalInvocationID.x;
+  if (local_index >= hex_tiles_indirect.y + pen_tiles_indirect.y) return;
+
+  const uint final_index = local_index >= pen_tiles_indirect.y ? local_index + 12 : local_index;
+  const uint inst_index = final_index / 4;
+  const uint vec_index  = final_index % 4;
+  const uint tile_index = tiles_indices[inst_index].index[vec_index];
+
+  const bool explored = get_exploration_state(tile_index);
+  if (!explored) return;
+
+  const light_map_tile_t tile_data = tiles[tile_index];
+  const uint biome_index = tile_data.packed_data[4].w; // последнее uint значение - это индекс
+
+  const biome_data_t biome = unpack_data(packed_biome_datas[biome_index]);
+  const float density = biome.density;
+  const uint instances = uint(max(density, 1.0f));
+  const uint prng_state = prng(tile_index);
+  const float val_norm = 1.0f - prng_normalize(prng_state);
+
+  const bool valid_biome_data = density > 0.0f && val_norm <= density;
+
+  // потом нам будет достаточно одного uint + индирект буфер будет состоять из 4 значений
+  atomicAdd(biome_objects_data[biome_index].objects_data[0], uint(valid_biome_data) * instances); // считаем количество
+}
+
+bool get_exploration_state(const uint tile_index) {
+  const uint piece_size = 4 * 32;
+  const uint array_index = tile_index / piece_size;
+  const uint bit_index = tile_index % piece_size;
+  const uint vec_index = bit_index / 32;
+  const uint final_bit_index = bit_index % 32;
+  const uint mask = 1 << final_bit_index;
+  return (exploration_data[array_index][vec_index] & mask) == mask;
+}

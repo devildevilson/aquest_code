@@ -26,6 +26,9 @@
   COMMON_COMMAND_FUNC(root) \
   COMMON_COMMAND_FUNC(prev) \
   COMMON_COMMAND_FUNC(current) \
+  COMMON_COMMAND_FUNC(index) \
+  COMMON_COMMAND_FUNC(prev_index) \
+  COMMON_COMMAND_FUNC(value) \
   COMMON_COMMAND_FUNC(selector) \
   COMMON_COMMAND_FUNC(sequence) \
   /*COMMON_COMMAND_FUNC(at_least_sequence)*/ \
@@ -46,6 +49,32 @@
   COMMON_COMMAND_FUNC(equality) \
   COMMON_COMMAND_FUNC(type_equality) \
   COMMON_COMMAND_FUNC(compare) \
+  COMMON_COMMAND_FUNC(transform) \
+  COMMON_COMMAND_FUNC(filter) \
+  COMMON_COMMAND_FUNC(reduce) \
+  COMMON_COMMAND_FUNC(take) \
+  COMMON_COMMAND_FUNC(drop) \
+  COMMON_COMMAND_FUNC(culture) \
+  COMMON_COMMAND_FUNC(culture_group) \
+  COMMON_COMMAND_FUNC(religion) \
+  COMMON_COMMAND_FUNC(religion_group) \
+  COMMON_COMMAND_FUNC(trait) \
+  COMMON_COMMAND_FUNC(modificator) \
+  COMMON_COMMAND_FUNC(titulus) \
+  COMMON_COMMAND_FUNC(casus_belli) \
+  COMMON_COMMAND_FUNC(building_type) \
+  COMMON_COMMAND_FUNC(holding_type) \
+  COMMON_COMMAND_FUNC(city_type) \
+  COMMON_COMMAND_FUNC(troop_type) \
+  COMMON_COMMAND_FUNC(law) \
+  COMMON_COMMAND_FUNC(context) \
+  COMMON_COMMAND_FUNC(local) \
+  COMMON_COMMAND_FUNC(add_to_list) \
+  COMMON_COMMAND_FUNC(is_in_list) \
+  COMMON_COMMAND_FUNC(has_in_list) \
+  COMMON_COMMAND_FUNC(random_in_list) \
+  COMMON_COMMAND_FUNC(every_in_list) \
+  COMMON_COMMAND_FUNC(list_view) \
   
 // нужно сделать функцию указатель на текущий объект и еще их сравнивать
   

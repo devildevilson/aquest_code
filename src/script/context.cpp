@@ -57,10 +57,10 @@ namespace devils_engine {
     }
     
     //const uint64_t hash_seed = 128847150991130ull;
-    //const uint64_t hash_seed = 18446744073709551293ull; // 18446744073709551253 // prime?
+    //const uint64_t hash_seed = 18446744073709551293ull; // 18446744073709551253ull; // prime?
     //const uint64_t hash_seed = uint64_t(-1)-363; // prime?
     const uint64_t hash_seed = (size_t(0xc6a4a793) << 32) | size_t(0x5bd1e995); // мож такой использовать?
-    context::context() noexcept : type(SIZE_MAX), operator_type(SIZE_MAX), nest_level(0), id_hash(0), method_hash(0), current_turn(0) {}
+    context::context() noexcept : type(SIZE_MAX), operator_type(SIZE_MAX), nest_level(0), id_hash(0), method_hash(0), current_turn(0), index(0), prev_index(0) {}
     context::context(const std::string_view &id, const std::string_view &method_name, const size_t &current_turn) noexcept : 
       id(id), 
       method_name(method_name), 
@@ -73,7 +73,9 @@ namespace devils_engine {
 //       method_hash(std::hash<std::string_view>()(method_name)),
       id_hash(murmur_hash64A(id, hash_seed)), // используем свою реализацию, вообще имеет смысл придумать какой то сид
       method_hash(murmur_hash64A(method_name, hash_seed)),
-      current_turn(mix_value(current_turn))
+      current_turn(mix_value(current_turn)),
+      index(0), 
+      prev_index(0)
     {}
     
     void context::set_data(const std::string_view &id, const std::string_view &method_name, const size_t &current_turn) noexcept {

@@ -457,6 +457,7 @@ namespace devils_engine {
   sys->REG_EVERY(handle_type, each_##name, "every_"#name)();   \
   sys->REG_HAS(handle_type, each_##name, "has_"#name)();       \
   sys->REG_RANDOM(handle_type, each_##name, "random_"#name)(); \
+  sys->REG_VIEW(handle_type, each_##name, #name"_view")();     \
   
 #define CHANGE_CONTEXT_COMMAND_FUNC(name, in, in2, out) COMMON_CHANGE_CONTEXT_COMMAND_FUNC(name, character_t)
       CHARACTER_CHANGE_CONTEXT_COMMANDS_LIST

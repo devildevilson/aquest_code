@@ -42,7 +42,7 @@
 // trigger_event - запустить эвент, как указать аргументы?
 // show_as_tooltip - показать часть эффектов в тултипе, где? кому? в описании сказано, что в этом блоке эффекты только показать (но не выполнять)
 
-#define MAXIMUM_OVERLOADS 64
+#define MAXIMUM_OVERLOADS 16
 
 namespace devils_engine {
   namespace script {
@@ -421,8 +421,40 @@ namespace devils_engine {
       std::string_view get_name() const override;
     };
     
+    class index final : public interface {
+    public:
+      static const size_t type_index;
+      struct object process(context* ctx) const override;
+      void draw(context* ctx) const override;
+      size_t get_type_id() const override;
+      std::string_view get_name() const override;
+    };
+    
+    class prev_index final : public interface {
+    public:
+      static const size_t type_index;
+      struct object process(context* ctx) const override;
+      void draw(context* ctx) const override;
+      size_t get_type_id() const override;
+      std::string_view get_name() const override;
+    };
+    
+    class value final : public interface {
+    public:
+      static const size_t type_index;
+      value(const interface* compute) noexcept;
+      ~value() noexcept;
+      struct object process(context* ctx) const override;
+      void draw(context* ctx) const override;
+      size_t get_type_id() const override;
+      std::string_view get_name() const override;
+    private:
+      const interface* compute;
+    };
+    
     class get_context final : public interface {
     public:
+      static const size_t type_index;
       explicit get_context(const std::string &str) noexcept;
       explicit get_context(const std::string_view &str) noexcept;
       ~get_context() noexcept;
@@ -439,6 +471,7 @@ namespace devils_engine {
     public:                                                          \
       /*static const size_t expected_types = object::type_bit::string;*/ \
       /*static const size_t output_type = object::type_bit::name;*/      \
+      static const size_t type_index;                                \
       get_##name(const interface* str) noexcept;                     \
       ~get_##name() noexcept;                                        \
       struct object process(context* ctx) const override;            \
@@ -587,6 +620,7 @@ namespace devils_engine {
     // имеет смысл хранить название для дебага
     class get_local final : public interface {
     public:
+      static const size_t type_index;
       get_local(const std::string &name, const size_t &index) noexcept;
       ~get_local() noexcept;
       struct object process(context* ctx) const override;
@@ -600,6 +634,7 @@ namespace devils_engine {
     
     class add_to_list final : public interface {
     public:
+      static const size_t type_index;
       add_to_list(const std::string &name) noexcept;
       ~add_to_list() noexcept;
       struct object process(context* ctx) const override;
@@ -612,6 +647,7 @@ namespace devils_engine {
     
     class is_in_list final : public interface {
     public:
+      static const size_t type_index;
       is_in_list(const std::string &name) noexcept;
       ~is_in_list() noexcept;
       struct object process(context* ctx) const override;
@@ -624,6 +660,7 @@ namespace devils_engine {
     
     class has_in_list final : public interface {
     public:
+      static const size_t type_index;
       has_in_list(const std::string &name, const interface* max_count, const interface* percentage, const interface* childs) noexcept;
       ~has_in_list() noexcept;
       struct object process(context* ctx) const override;
@@ -639,6 +676,7 @@ namespace devils_engine {
     
     class random_in_list final : public interface {
     public:
+      static const size_t type_index;
       random_in_list(const std::string &name, const size_t &state, const interface* condition, const interface* weight, const interface* childs) noexcept;
       ~random_in_list() noexcept;
       struct object process(context* ctx) const override;
@@ -655,6 +693,7 @@ namespace devils_engine {
     
     class every_in_list_numeric final : public interface {
     public:
+      static const size_t type_index;
       every_in_list_numeric(const std::string &name, const interface* condition, const interface* childs) noexcept;
       ~every_in_list_numeric() noexcept;
       struct object process(context* ctx) const override;
@@ -669,6 +708,7 @@ namespace devils_engine {
     
     class every_in_list_logic final : public interface {
     public:
+      static const size_t type_index;
       every_in_list_logic(const std::string &name, const interface* condition, const interface* childs) noexcept;
       ~every_in_list_logic() noexcept;
       struct object process(context* ctx) const override;
@@ -683,6 +723,7 @@ namespace devils_engine {
     
     class every_in_list_effect final : public interface {
     public:
+      static const size_t type_index;
       every_in_list_effect(const std::string &name, const interface* condition, const interface* childs) noexcept;
       ~every_in_list_effect() noexcept;
       struct object process(context* ctx) const override;
@@ -693,6 +734,87 @@ namespace devils_engine {
       std::string name;
       const interface* condition;
       const interface* childs;
+    };
+    
+    class list_view final : public interface {
+    public:
+      static const size_t type_index;
+      list_view(const std::string &name, const interface* default_value, const interface* childs) noexcept;
+      ~list_view() noexcept;
+      struct object process(context* ctx) const override;
+      void draw(context* ctx) const override;
+      size_t get_type_id() const override;
+      std::string_view get_name() const override;
+    private:
+      std::string name;
+      const interface* default_value;
+      const interface* childs;
+    };
+    
+    // по идее тут просто все: делаем действия возращаем объект, это скорее со стороны инициализации вопрсо
+    class transform final : public interface {
+    public:
+      static const size_t type_index;
+      transform(const interface* changes) noexcept;
+      ~transform() noexcept;
+      struct object process(context* ctx) const override;
+      void draw(context* ctx) const override;
+      size_t get_type_id() const override;
+      std::string_view get_name() const override;
+    private:
+      const interface* changes;
+    };
+    
+    class filter final : public interface {
+    public:
+      static const size_t type_index;
+      filter(const interface* condition) noexcept;
+      ~filter() noexcept;
+      struct object process(context* ctx) const override;
+      void draw(context* ctx) const override;
+      size_t get_type_id() const override;
+      std::string_view get_name() const override;
+    private:
+      const interface* condition;
+    };
+    
+    class reduce final : public interface {
+    public:
+      static const size_t type_index;
+      reduce(const interface* value) noexcept;
+      ~reduce() noexcept;
+      struct object process(context* ctx) const override;
+      void draw(context* ctx) const override;
+      size_t get_type_id() const override;
+      std::string_view get_name() const override;
+    private:
+      const interface* value;
+    };
+    
+    class take final : public interface {
+    public:
+      static const size_t type_index;
+      take(const size_t count) noexcept;
+      ~take() noexcept;
+      struct object process(context* ctx) const override;
+      void draw(context* ctx) const override;
+      size_t get_type_id() const override;
+      std::string_view get_name() const override;
+    private:
+      size_t count;
+    };
+    
+    class drop final : public interface {
+    public:
+      static const size_t type_index;
+      drop(const size_t count) noexcept;
+      ~drop() noexcept;
+      struct object process(context* ctx) const override;
+      void draw(context* ctx) const override;
+      size_t get_type_id() const override;
+      std::string_view get_name() const override;
+    private:
+      size_t count;
     };
     
     class assert_condition final : public interface {

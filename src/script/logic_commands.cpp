@@ -15,17 +15,18 @@ namespace devils_engine {
       for (auto cur = childs; cur != nullptr; cur = cur->next) { cur->~interface(); } \
     }                                                             \
     void func_name::draw(context* ctx) const {                    \
-      const auto obj = process(ctx);                              \
-      draw_data dd(ctx);                                          \
-      dd.function_name = commands::names[type_index];             \
-      dd.value = obj;                                             \
-      ctx->draw(&dd);                                             \
-      change_nesting cn(ctx, ++ctx->nest_level);                  \
-      change_function_name cfn(ctx, dd.function_name);            \
+      {                                                           \
+        const auto obj = process(ctx);                            \
+        draw_data dd(ctx);                                        \
+        dd.function_name = get_name();                            \
+        dd.value = obj;                                           \
+        ctx->draw(&dd);                                           \
+      }                                                           \
+      change_nesting cn(ctx, ctx->nest_level+1);                  \
+      change_function_name cfn(ctx, get_name());                  \
       for (auto cur = childs; cur != nullptr; cur = cur->next) {  \
         cur->draw(ctx);                                           \
       }                                                           \
-      if (type_index == commands::AND) throw std::runtime_error("AAAAAAAAAAAAAAAAAAAAAA"); \
     }                                                             \
     size_t func_name::get_type_id() const { return type_id<object>(); } \
     std::string_view func_name::get_name() const { return commands::names[type_index]; } \
@@ -136,22 +137,26 @@ namespace devils_engine {
     
     struct object AND_sequence::process(context* ctx) const {
       bool value = true;
-      for (auto cur = childs; cur != nullptr && value; cur = cur->next) {
-        const auto &obj = cur->process(ctx);
-        if (obj.ignore()) break;
+      object obj(true);
+      for (auto cur = childs; cur != nullptr && value && !obj.ignore(); cur = cur->next) {
         value = value && obj.get<bool>();
+        obj = cur->process(ctx);
       }
+      
+      if (!obj.ignore()) value = value && obj.get<bool>(); // последний
       
       return object(value);
     }
     
     struct object OR_sequence::process(context* ctx) const {
       bool value = false;
-      for (auto cur = childs; cur != nullptr && !value; cur = cur->next) {
-        const auto &obj = cur->process(ctx);
-        if (obj.ignore()) break;
+      object obj(false);
+      for (auto cur = childs; cur != nullptr && !value && !obj.ignore(); cur = cur->next) {
         value = value || obj.get<bool>();
+        obj = cur->process(ctx);
       }
+      
+      if (!obj.ignore()) value = value || obj.get<bool>(); // последний
       
       return object(value);
     }

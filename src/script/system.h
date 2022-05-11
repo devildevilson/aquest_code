@@ -47,7 +47,7 @@
 //   { transform = "title.parent.owner" },
 //   { filter = { OR = { "is_state", "is_council" } } },
 //   { reduce = "money" }, -- как понять какое действие нужно сделать? можно положить текущее вычисленное значение в локал - наверное предпочтительно
-//   -- наверное должен быть еще какая то пустая таблица для выполнения эффектов
+//   -- наверное должна быть еще какая то пустая таблица для выполнения эффектов
 //   -- от нумериков и кондишенов будет требоваться в конце редьюс (хотя мож составить новый лист)
 // }
 // еще было бы неплохо обычный цикл зафигачить, хотя это сопряжено с большим количеством проблем (например ошибка бесконечного цикла)
@@ -81,12 +81,18 @@ namespace devils_engine {
     void check_script_types(const std::string_view &name, const size_t &input, const size_t &expected);
     //static bool is_complex_object(const std::string_view &lvalue);
     
+    namespace detail {
+      extern const phmap::flat_hash_set<std::string_view> view_allowed_funcs;
+      std::string_view get_sol_type_name(const sol::type &t);
+    }
+    
     class system {
-      friend class system_view;
+      friend class view;
     public:
       struct init_func_data;
       struct init_context;
       using init_function_t = std::function<interface*(system*, init_context*, const sol::object &, container*)>;
+      using get_info_func_t = std::function<std::string()>;
       
       // current_type может быть 0 (void), тогда нужно найти все переопределения функции и пихнуть их в overload
       // когда такие происходит? когда у нас в лвалуе берется значение из контекста, причем больше ничего не происходит
@@ -119,6 +125,7 @@ namespace devils_engine {
         size_t return_type;
         size_t arguments_count;
         init_function_t func;
+        get_info_func_t info;
       };
       
       struct change_expected_type {
@@ -167,7 +174,7 @@ namespace devils_engine {
         size_t remove_local(const std::string_view &name);
         
         void add_list(const std::string &name);
-        bool list_exists(const std::string_view &name) const;
+        bool list_exists(const std::string_view &name) const; // вряд ли нужно проверять, можно добавить в несуществующий лист
         
         void set_return_type(const size_t &type); // скорее только для локала
         
@@ -299,6 +306,8 @@ namespace devils_engine {
       void register_has();
       template <typename Th, typename F, F f, const char* name>
       void register_random();
+      template <typename Th, typename F, F f, const char* name>
+      void register_view();
       
       // возвращать будем легкие обертки вокруг interface* (тип script::number и проч)
       // + нужно будет возвращать скрипты по названию, скрипты которые вставляются в другие скрипты вызываются иначе
@@ -322,6 +331,8 @@ namespace devils_engine {
       
       template <typename T>
       const init_func_data* get_init_function(const std::string_view &name) const;
+      
+      std::string get_function_data_dump() const;
     private:
       bool function_exists(const std::string_view &name, size_t* return_type = nullptr, size_t* arg_count = nullptr);
       const init_func_data* get_init_function(const size_t &type_id, const std::string_view &name) const;
@@ -369,7 +380,7 @@ namespace devils_engine {
       utils::xoroshiro128starstar::state random_state;
       utils::memory_pool<container, sizeof(container)*100> containers_pool;
       std::vector<std::pair<interface*, container*>> containers;
-      phmap::flat_hash_map<std::string_view, std::pair<size_t, interface*>> scripts; // проверяем чтобы возвращаемые типы совпадали
+      phmap::flat_hash_map<std::string, std::pair<size_t, interface*>> scripts; // проверяем чтобы возвращаемые типы совпадали
       phmap::flat_hash_map<size_t, phmap::flat_hash_map<std::string_view, init_func_data>> func_map;
       
       void init(); // default functions init
@@ -387,6 +398,7 @@ namespace devils_engine {
 #define REG_EVERY(handle_type, func, name) register_every<handle_type, decltype(&func), &func, decltype(name##_create)::value>
 #define REG_HAS(handle_type, func, name) register_has<handle_type, decltype(&func), &func, decltype(name##_create)::value>
 #define REG_RANDOM(handle_type, func, name) register_random<handle_type, decltype(&func), &func, decltype(name##_create)::value>
+#define REG_VIEW(handle_type, func, name) register_view<handle_type, decltype(&func), &func, decltype(name##_create)::value>
     
     
     /* ====================================================================================================================================================================== */
@@ -401,6 +413,26 @@ namespace devils_engine {
       const auto itr = func_map.find(type_id<T>());
       if (itr != func_map.end()) throw std::runtime_error("Type " + std::string(type_name<T>()) + " is already registered");
       func_map[type_id<T>()];
+    }
+    
+    template <typename F, size_t N, size_t cur>
+    std::string make_function_args_string(std::string str = "") {
+      if constexpr (N == cur) return str;
+      else {
+        using cur_arg = final_arg_type<F, cur>;
+        return make_function_args_string<F, N, cur+1>(str + std::string(type_name<cur_arg>()) + " ");
+      }
+      return "";
+    }
+    
+    template <typename F>
+    std::string make_function_const_args_string() {
+      return "";
+    }
+    
+    template <typename F, size_t head, size_t... args>
+    std::string make_function_const_args_string() {
+      return std::to_string(head) + " " + make_function_const_args_string<F, args...>();
     }
     
     // можем ли мы это сделать для произвольного числа входных данных? по крайней мере для нескольких первых
@@ -483,6 +515,12 @@ namespace devils_engine {
             
             return cur;
           }
+        }, [] () { 
+          constexpr bool is_independent_func = !is_member_v<Th, F>;
+          if constexpr (arg_count == 0) return std::string(name) + " I: " + std::string(type_name<Th>()) + " O: " + std::string(type_name<output_type>());
+          else return std::string(name) + " I: " + std::string(type_name<Th>()) + 
+                                          " O: " + std::string(type_name<output_type>()) + 
+                                          " Args: " + make_function_args_string<F, get_function_argument_count<F>(), is_independent_func>();
         }
       };
       
@@ -584,7 +622,7 @@ namespace devils_engine {
           
           // если это не метод, то первый слот искать не нужно
           constexpr size_t final_arg_count = get_function_argument_count<F>(); //func_arg_count; //  - std::is_same_v<function_member_of<F>, void>
-          constexpr bool is_independent_func = std::is_same_v<function_member_of<F>, void>;
+          constexpr bool is_independent_func = !is_member_v<Th, F>;
           if constexpr (is_independent_func) { static_assert(std::is_same_v<final_arg_type<F, 0>, Th>); }
           
           // всегда тут ожидаем таблицу?
@@ -613,6 +651,12 @@ namespace devils_engine {
           }
           
           return cur;
+        }, [] () { 
+          constexpr bool is_independent_func = !is_member_v<Th, F>;
+          if constexpr (func_arg_count == 0) return std::string(name) + " I: " + std::string(type_name<Th>()) + " O: " + std::string(type_name<output_type>());
+          else return std::string(name) + " I: " + std::string(type_name<Th>()) + 
+                                          " O: " + std::string(type_name<output_type>()) + 
+                                          " Args: " + make_function_args_string<F, get_function_argument_count<F>(), is_independent_func>();
         }
       };
       
@@ -667,6 +711,12 @@ namespace devils_engine {
           }
           
           return cur;
+        }, [] () { 
+          constexpr bool is_independent_func = !is_member_v<Th, F>;
+          if constexpr (func_arg_count == 0) return std::string(name) + " I: " + std::string(type_name<Th>()) + " O: " + std::string(type_name<output_type>());
+          else return std::string(name) + " I: " + std::string(type_name<Th>()) + 
+                                          " O: " + std::string(type_name<output_type>()) + 
+                                          " Args: " + make_function_args_string<F, get_function_argument_count<F>(), is_independent_func>();
         }
       };
       
@@ -748,6 +798,11 @@ namespace devils_engine {
           }
           
           return nullptr;
+        }, [] () { 
+          if constexpr (func_arg_count == 0) return std::string(name) + " I: " + std::string(type_name<void>()) + " O: " + std::string(type_name<output_type>());
+          else return std::string(name) + " I: " + std::string(type_name<void>()) + 
+                                          " O: " + std::string(type_name<output_type>()) + 
+                                          " Args: " + make_function_args_string<F, func_arg_count, 0>();
         }
       };
       
@@ -797,6 +852,11 @@ namespace devils_engine {
           }
           
           return cur;
+        }, [] () { 
+          if constexpr (func_arg_count == 0) return std::string(name) + " I: " + std::string(type_name<void>()) + " O: " + std::string(type_name<output_type>());
+          else return std::string(name) + " I: " + std::string(type_name<void>()) + 
+                                          " O: " + std::string(type_name<output_type>()) + 
+                                          " Args: " + make_function_args_string<F, func_arg_count, 0>();
         }
       };
       
@@ -846,6 +906,11 @@ namespace devils_engine {
           }
           
           return cur;
+        }, [] () { 
+          if constexpr (func_arg_count == 0) return std::string(name) + " I: " + std::string(type_name<void>()) + " O: " + std::string(type_name<output_type>());
+          else return std::string(name) + " I: " + std::string(type_name<void>()) + 
+                                          " O: " + std::string(type_name<output_type>()) + 
+                                          " Args: " + make_function_args_string<F, func_arg_count, 0>();
         }
       };
       
@@ -869,6 +934,10 @@ namespace devils_engine {
           
           if (cont != nullptr) return cont->add<function_type>();
           return nullptr;
+        }, [] () { 
+          return std::string(name) + " I: " + std::string(type_name<input_type>()) + 
+                                     " O: " + std::string(type_name<output_type>()) + 
+                                     " F: " + std::string(type_name<F>());
         }
       };
       
@@ -907,6 +976,10 @@ namespace devils_engine {
           }
           
           return cur;
+        }, [] () -> std::string { 
+          return std::string(name) + " I: " + std::string(type_name<Th>()) + 
+                                     " O: " + std::string(type_name<output_type>()) + 
+                                     " CArgs: " + make_function_const_args_string<F, head, args...>();
         }
       };
       
@@ -944,6 +1017,11 @@ namespace devils_engine {
           }
           
           return cur;
+        }, [] () { 
+          constexpr bool is_independent_func = !is_member_v<Th, F>;
+          return std::string(name) + " I: " + std::string(type_name<Th>()) + 
+                                     " O: " + std::string(type_name<output_type>()) + 
+                                     " CArgs: " + make_function_args_string<F, get_function_argument_count<F>(), is_independent_func>();
         }
       };
       
@@ -977,6 +1055,10 @@ namespace devils_engine {
           change_compare_op cco(ctx, compare_operators::more_eq);
           system::view v(sys, ctx, cont, no_iterator);
           return user_func(v, obj, std::move(init));
+        }, [] () { 
+          return std::string(name) + " I: " + std::string(type_name<T>()) + 
+                                     " O: " + std::string(type_name<output_type>()) + 
+                                     " F: " + std::string(type_name<F>());
         }
       };
       
@@ -1016,6 +1098,10 @@ namespace devils_engine {
           interface* cur = nullptr;
           if (init.valid()) cur = init.init(childs);
           return cur;
+        }, [] () { 
+          return std::string(name) + " I: " + std::string(type_name<T>()) + 
+                                     " O: " + std::string(type_name<output_type>()) + 
+                                     " F: " + std::string(type_name<F>());
         }
       };
       
@@ -1048,9 +1134,12 @@ namespace devils_engine {
           change_compare_op cco(ctx, ctx->compare_operator);
           system::view v(sys, ctx, cont, iterator);
           return user_func(v, obj, std::move(init));
+        }, [] () { 
+          return std::string(name) + " I: " + std::string(type_name<T>()) + 
+                                     " O: " + std::string(type_name<output_type>()) + 
+                                     " F: " + std::string(type_name<F>());
         }
       };
-      
       
       register_function<T, name>(std::move(ifd));
     }
@@ -1099,7 +1188,7 @@ namespace devils_engine {
 //           check_script_types(name, ctx->script_type, script_type);
           
           const auto sol_type = obj.get_type();
-          if (sol_type != sol::type::table) throw std::runtime_error("every_ function '" + std::string(name) + "' expected table as input");
+          if (sol_type != sol::type::table) throw std::runtime_error("Function '" + std::string(name) + "' expected table as input");
           const sol::table t = obj.as<sol::table>();
           
 //           change_block_function cbf(ctx, sys->get_init_function<T>(name));
@@ -1125,6 +1214,9 @@ namespace devils_engine {
           } else throw std::runtime_error("Cannot use '" + std::string(name) + "' in string or object script");
           
           return final_int;
+        }, [] () { 
+          return std::string(name) + " I: " + std::string(type_name<Th>()) + 
+                                     " O: bool, double or nothing ";
         }
       };
       
@@ -1153,7 +1245,7 @@ namespace devils_engine {
           check_script_types(name, ctx->script_type, script_type);
           
           const auto sol_type = obj.get_type();
-          if (sol_type != sol::type::table) throw std::runtime_error("has_ function " + std::string(name) + " expected table as input");
+          if (sol_type != sol::type::table) throw std::runtime_error("Function '" + std::string(name) + "' expected table as input");
           
           ctx->current_size += sizeof(function_type);
           container::delayed_initialization<function_type> init(nullptr);
@@ -1180,6 +1272,9 @@ namespace devils_engine {
           interface* cur = nullptr;
           if (init.valid()) cur = init.init(max_count, percentage, childs);
           return cur;
+        }, [] () { 
+          return std::string(name) + " I: " + std::string(type_name<Th>()) + 
+                                     " O: " + std::string(type_name<output_type>());
         }
       };
       
@@ -1207,7 +1302,7 @@ namespace devils_engine {
           check_script_types(name, ctx->script_type, script_type);
           
           const auto sol_type = obj.get_type();
-          if (sol_type != sol::type::table) throw std::runtime_error("random_ function " + std::string(name) + " expected table as input");
+          if (sol_type != sol::type::table) throw std::runtime_error("Function '" + std::string(name) + "' expected table as input");
           
           ctx->current_size += sizeof(function_type);
           container::delayed_initialization<function_type> init(nullptr);
@@ -1246,10 +1341,122 @@ namespace devils_engine {
           interface* cur = nullptr;
           if (init.valid()) cur = init.init(state, condition, weight, childs);
           return cur;
+        }, [] () { 
+          return std::string(name) + " I: " + std::string(type_name<Th>()) + 
+                                     " O: " + std::string(type_name<output_type>());
         }
       };
       
       using final_Th = typename std::conditional<std::is_same_v<clear_type_t<Th>, void>, void, Th>::type;
+      register_function<final_Th, name>(std::move(ifd));
+    }
+    
+    template <typename Th, typename F, F f, const char* name>
+    void system::register_view() {
+      using func_t = std::function<bool(const object &obj)>;
+      static_assert(std::is_invocable_v<F, Th, func_t>, 
+                    "Function must be invocable with arguments: script object and predicate function. "
+                    "The function must enterupt execution when predicate function returns 'false'");
+      
+      using output_type = object;
+      constexpr size_t script_type = get_script_type<output_type>();
+      static_assert(script_type != script_types::string);
+      
+      init_func_data ifd{
+        script_type, type_id<Th>(), type_id<output_type>(), FUNCTION_ITERATOR,
+        [] (system* sys, init_context* ctx, const sol::object &obj, container* cont) {
+          using function_type = scripted_iterator_view<Th, F, f, name>;
+          
+          constexpr size_t script_type = get_script_type<output_type>();
+          check_script_types(name, ctx->script_type, script_type);
+          
+          const auto sol_type = obj.get_type();
+          if (sol_type != sol::type::table) throw std::runtime_error("Function '" + std::string(name) + "' expected table as input");
+          
+          ctx->current_size += sizeof(function_type);
+          container::delayed_initialization<function_type> init(nullptr);
+          if (cont != nullptr) {
+            const size_t offset = cont->add_delayed<function_type>();
+            init = cont->get_init<function_type>(offset);
+          }
+          
+          // что мы тут ожидаем? ожидаем таблицу с таблицами с одним элементом + наверное "reduce_value" для значения по умолчанию
+          // может вообще везде сократить количество ошибок? все таки это не ФАТАЛ эррор, хотя с другой стороны 
+          // банальная ошибка которую мы можем не заметить
+          change_current_function_name ccfn(ctx, name);
+          interface* default_value = nullptr;
+          interface* begin_childs = nullptr;
+          interface* cur_child = nullptr;
+          const auto t = obj.as<sol::table>();
+          for (const auto &pair : t) {
+            if (pair.first.get_type() == sol::type::string) {
+              const auto str = obj.as<std::string_view>();
+              if (str != "reduce_value") { throw std::runtime_error("Unexpected lvalue string '" + std::string(str) + "' in function '" + std::string(name) + "', expected only 'reduce_value'"); }
+              change_expected_type cet(ctx, SIZE_MAX);
+              default_value = sys->make_raw_script_object(ctx, pair.second, cont);
+              continue;
+            }
+            
+            if (pair.first.get_type() == sol::type::number) {
+              if (pair.second.get_type() != sol::type::table)
+                throw std::runtime_error("Unexpected rvalue of type '" + std::string(detail::get_sol_type_name(pair.second.get_type())) + "', function '" + std::string(name) + "' expected table with tables");
+              
+              // тут ожидаем строго слева название функции
+              size_t counter = 0;
+              const auto inner_t = pair.second.as<sol::table>();
+              for (const auto &pair : inner_t) {
+                if (ctx->script_type == script_types::effect) {
+                  // если не строка то в эффекте ожидаем просто таблицу с перечислением действий вместо reduce
+                }
+                
+                if (counter >= 1) throw std::runtime_error("Function '" + std::string(name) + "' expects inner table to consist of one function ");
+                
+                interface* local = nullptr;
+                if (ctx->script_type != script_types::effect && pair.first.get_type() != sol::type::string)
+                  throw std::runtime_error("Unexpected lvalue of type '" + std::string(detail::get_sol_type_name(pair.first.get_type())) + "' in function '" + std::string(name) + "', expected string ");
+                
+                if (ctx->script_type == script_types::effect && pair.first.get_type() != sol::type::string) {
+                  // ождаем таблицу с эффектами
+                  if (pair.second.get_type() != sol::type::table) 
+                    throw std::runtime_error("If current script type is effect script, then instead of function 'reduce' the table with effect functions is expected, context '" + std::string(name) + "'");
+                  
+                  local = sys->make_raw_script_effect(ctx, pair.second, cont);
+                } else {
+                  const auto str = pair.first.as<std::string_view>();
+                  if (const auto itr = detail::view_allowed_funcs.find(str); itr == detail::view_allowed_funcs.end()) 
+                    throw std::runtime_error("Function '" + std::string(name) + "' expects only transform, filter, reduce, take and drop functions in inner table, got '" + std::string(str) + "'");
+                  
+                  if (str == "reduce" && ctx->script_type == script_types::effect) 
+                    throw std::runtime_error("Function 'reduce' is not allowed in inner table in effect scripts, context '" + std::string(name) + "'");
+                  
+                  const auto type_itr = sys->func_map.find(type_id<void>());
+                  assert(type_itr != sys->func_map.end());
+                  
+                  const auto itr = type_itr->second.find(str);
+                  if (itr == type_itr->second.end()) throw std::runtime_error("Could not find function '" + std::string(str) + "', context '" + std::string(name) + "'");
+                  
+                  local = itr->second.func(sys, ctx, pair.second, cont);
+                }
+                
+                ++counter;
+                if (begin_childs == nullptr) begin_childs = local;
+                if (cur_child != nullptr) cur_child->next = local;
+                cur_child = local;
+              }
+              continue;
+            }
+            
+            throw std::runtime_error("Unexpected lvalue of type '" + std::string(detail::get_sol_type_name(pair.first.get_type())) + "', function '" + std::string(name) + "' expected table or 'reduce_value'");
+          }
+          
+          return init.init(default_value, begin_childs);
+        }, [] () { 
+          return std::string(name) + " I: " + std::string(type_name<Th>()) + 
+                                     " O: " + std::string(type_name<output_type>());
+        }
+      };
+      
+      using final_Th = typename std::conditional< std::is_same_v<clear_type_t<Th>, void>, void, Th >::type;
       register_function<final_Th, name>(std::move(ifd));
     }
     
@@ -1369,3 +1576,4 @@ namespace devils_engine {
 }
 
 #endif
+

@@ -16,12 +16,14 @@ namespace devils_engine {
       for (auto cur = childs; cur != nullptr; cur = cur->next) { cur->~interface(); } \
     }                                                 \
     void name::draw(context* ctx) const {             \
-      const auto obj = process(ctx);                  \
-      draw_data dd(ctx);                              \
-      dd.function_name = commands::names[type_index]; \
-      dd.value = obj;                                 \
-      if (!ctx->draw(&dd)) return;                    \
-      change_function_name cfn(ctx, dd.function_name);\
+      {                                               \
+        const auto obj = process(ctx);                \
+        draw_data dd(ctx);                            \
+        dd.function_name = get_name();                \
+        dd.value = obj;                               \
+        if (!ctx->draw(&dd)) return;                  \
+      }                                               \
+      change_function_name cfn(ctx, get_name());      \
       change_nesting cn(ctx, ctx->nest_level+1);      \
       for (auto cur = childs; cur != nullptr; cur = cur->next) { cur->draw(ctx); } \
     }                                                 \
@@ -60,11 +62,6 @@ namespace devils_engine {
     }  
 
     struct object add::process(context* ctx) const {
-//       if (condition != nullptr) {
-//         const auto obj = condition->process(ctx);
-//         if (!obj.get<bool>()) return ignore_value;
-//       }
-      
       bool all_ignored = true;
       double value = 0.0;
       for (auto cur = childs; cur != nullptr; cur = cur->next) {
@@ -75,17 +72,6 @@ namespace devils_engine {
       
       return all_ignored ? ignore_value : object(value);
     }
-    
-//     void add::draw(context* ctx) const {
-//       const auto obj = process(ctx);
-//       draw_data dd(ctx);
-//       dd.function_name = commands::names[type_index];
-//       dd.value = obj;
-//       ctx->draw_function(&dd);
-//       for (auto cur = childs; cur != nullptr; cur = cur->next) {
-//         cur->draw(ctx);
-//       }
-//     }
     
     struct object sub::process(context* ctx) const {
       const auto [first, start] = find_first_not_ignore(ctx, childs);
@@ -166,46 +152,54 @@ namespace devils_engine {
     
     struct object add_sequence::process(context* ctx) const {
       double value = 0.0;
-      for (auto cur = childs; cur != nullptr; cur = cur->next) {
-        const auto &obj = cur->process(ctx);
-        if (obj.ignore()) break;
+      object obj(value);
+      for (auto cur = childs; cur != nullptr && !obj.ignore(); cur = cur->next) {
         value += obj.get<double>();
+        obj = cur->process(ctx);
       }
+      
+      if (!obj.ignore()) value += obj.get<double>(); // последний
       
       return object(value);
     }
     
     struct object multiply_sequence::process(context* ctx) const {
       double value = 1.0;
-      for (auto cur = childs; cur != nullptr; cur = cur->next) {
-        const auto &obj = cur->process(ctx);
-        if (obj.ignore()) break;
+      object obj(value);
+      for (auto cur = childs; cur != nullptr && !obj.ignore(); cur = cur->next) {
         value *= obj.get<double>();
+        obj = cur->process(ctx);
       }
+      
+      if (!obj.ignore()) value *= obj.get<double>(); // последний
       
       return object(value);
     }
     
     struct object min_sequence::process(context* ctx) const {
       double value = std::numeric_limits<double>::max();
-      for (auto cur = childs; cur != nullptr; cur = cur->next) {
-        const auto &obj = cur->process(ctx);
-        if (obj.ignore()) break;
+      object obj(value);
+      for (auto cur = childs; cur != nullptr && !obj.ignore(); cur = cur->next) {
         value = std::min(value, obj.get<double>());
+        obj = cur->process(ctx);
       }
+      
+      if (!obj.ignore()) value = std::min(value, obj.get<double>()); // последний
       
       return value == std::numeric_limits<double>::max() ? ignore_value : object(value);
     }
     
     struct object max_sequence::process(context* ctx) const {
-      double value = std::numeric_limits<double>::min();
-      for (auto cur = childs; cur != nullptr; cur = cur->next) {
-        const auto &obj = cur->process(ctx);
-        if (obj.ignore()) break;
+      double value = -std::numeric_limits<double>::max();
+      object obj(value);
+      for (auto cur = childs; cur != nullptr && !obj.ignore(); cur = cur->next) {
         value = std::max(value, obj.get<double>());
+        obj = cur->process(ctx);
       }
       
-      return value == std::numeric_limits<double>::min() ? ignore_value : object(value);
+      if (!obj.ignore()) value = std::max(value, obj.get<double>()); // последний
+      
+      return value == -std::numeric_limits<double>::max() ? ignore_value : object(value);
     }
     
 //     struct object sin::process(context* ctx) const {

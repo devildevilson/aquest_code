@@ -54,17 +54,27 @@ namespace devils_engine {
         new_scope = scope->process(ctx);
       }
       
+      {
+        const auto &ret = process(ctx);
+        draw_data dd(ctx);
+        dd.function_name = get_name();
+        dd.value = ret;
+        if (!ctx->draw(&dd)) return;
+      }
+      
       change_scope sc(ctx, new_scope, prev_scope);
       change_nesting сn(ctx, nesting);
       
       if (condition != nullptr) {
-        const auto &ret = condition->process(ctx);
-        draw_data dd(ctx);
-        dd.function_name = "condition";
-        dd.value = object(ret.get<bool>());
-        ctx->draw(&dd);
+        {
+          const auto &ret = condition->process(ctx);
+          draw_data dd(ctx);
+          dd.function_name = "condition";
+          dd.value = object(ret.get<bool>());
+          ctx->draw(&dd);
+        }
         change_nesting cn(ctx, ctx->nest_level+1);
-        change_function_name cfn(ctx, dd.function_name);
+        change_function_name cfn(ctx, "condition");
         condition->draw(ctx);
       }
       
@@ -72,7 +82,7 @@ namespace devils_engine {
     }
     
     size_t change_scope_condition::get_type_id() const { return type_id<object>(); }
-    std::string_view change_scope_condition::get_name() const { return type_name<decltype(*this)>(); }
+    std::string_view change_scope_condition::get_name() const { return "change_scope_condition"; }
     
     const size_t change_scope_effect::expected_types;
     //const size_t change_scope_effect::output_type;
@@ -116,18 +126,28 @@ namespace devils_engine {
         new_scope = scope->process(ctx);
       }
       
+      {
+        const auto &ret = process(ctx);
+        draw_data dd(ctx);
+        dd.function_name = get_name();
+        dd.value = ret;
+        if (!ctx->draw(&dd)) return;
+      }
+      
       change_scope sc(ctx, new_scope, prev_scope);
       change_nesting cn(ctx, nesting);
       
       // нужно как то дать понять что выполняется условие
       if (condition != nullptr) {
-        const auto &ret = condition->process(ctx);
-        draw_data dd(ctx);
-        dd.function_name = "condition";
-        dd.value = object(ret.get<bool>());
-        ctx->draw(&dd);
+        {
+          const auto &ret = condition->process(ctx);
+          draw_data dd(ctx);
+          dd.function_name = "condition";
+          dd.value = object(ret.get<bool>());
+          ctx->draw(&dd);
+        }
         change_nesting cn(ctx, ctx->nest_level+1);
-        change_function_name cfn(ctx, dd.function_name);
+        change_function_name cfn(ctx, "condition");
         condition->draw(ctx); 
       }
       
@@ -137,7 +157,7 @@ namespace devils_engine {
     }
     
     size_t change_scope_effect::get_type_id() const { return type_id<object>(); }
-    std::string_view change_scope_effect::get_name() const { return type_name<decltype(*this)>(); }
+    std::string_view change_scope_effect::get_name() const { return "change_scope_effect"; }
     
     const size_t compute_string::expected_types;
     //const size_t compute_string::output_type;
@@ -161,13 +181,38 @@ namespace devils_engine {
       return cur_obj;
     }
     
-    void compute_string::draw(context*) const {
-      // будет ли тут драв? должен быть наверное
-      assert(false);
+    void compute_string::draw(context* ctx) const {
+      {
+        const auto &ret = process(ctx);
+        draw_data dd(ctx);
+        dd.function_name = get_name();
+        dd.value = ret;
+        if (!ctx->draw(&dd)) return;
+      }
+      
+      change_nesting cn(ctx, ctx->nest_level+1);
+      
+      if (condition != nullptr) {
+        {
+          const auto &ret = condition->process(ctx);
+          draw_data dd(ctx);
+          dd.function_name = "condition";
+          dd.value = object(ret.get<bool>());
+          ctx->draw(&dd);
+        }
+        change_nesting cn(ctx, ctx->nest_level+1);
+        change_function_name cfn(ctx, "condition");
+        condition->draw(ctx);
+      }
+      
+      change_function_name cfn(ctx, get_name());
+      for (auto cur = childs; cur != nullptr; cur = cur->next) {
+        cur->draw(ctx);
+      }
     }
     
     size_t compute_string::get_type_id() const { return type_id<object>(); }
-    std::string_view compute_string::get_name() const { return type_name<decltype(*this)>(); }
+    std::string_view compute_string::get_name() const { return "compute_string"; }
     
     compute_object::compute_object(const interface* condition, const interface* childs) noexcept : condition(condition), childs(childs) {}
     compute_object::~compute_object() noexcept {
@@ -189,13 +234,39 @@ namespace devils_engine {
       return cur_obj;
     }
     
-    void compute_object::draw(context*) const {
-      // будет ли тут драв? должен быть наверное
-      assert(false);
+    void compute_object::draw(context* ctx) const {
+      // тут надо че нить рисовать?
+      {
+        const auto &ret = process(ctx);
+        draw_data dd(ctx);
+        dd.function_name = get_name();
+        dd.value = ret;
+        if (!ctx->draw(&dd)) return;
+      }
+      
+      change_nesting cn(ctx, ctx->nest_level+1);
+      
+      if (condition != nullptr) {
+        {
+          const auto &ret = condition->process(ctx);
+          draw_data dd(ctx);
+          dd.function_name = "condition";
+          dd.value = object(ret.get<bool>());
+          ctx->draw(&dd);
+        }
+        change_nesting cn(ctx, ctx->nest_level+1);
+        change_function_name cfn(ctx, "condition");
+        condition->draw(ctx);
+      }
+      
+      change_function_name cfn(ctx, get_name());
+      for (auto cur = childs; cur != nullptr; cur = cur->next) {
+        cur->draw(ctx);
+      }
     }
     
     size_t compute_object::get_type_id() const { return type_id<object>(); }
-    std::string_view compute_object::get_name() const { return type_name<decltype(*this)>(); }
+    std::string_view compute_object::get_name() const { return "compute_object"; }
     
     //const size_t compute_number::expected_types;
     //const size_t compute_number::output_type;
@@ -234,17 +305,27 @@ namespace devils_engine {
         new_scope = scope->process(ctx);
       }
       
+      {
+        const auto &ret = process(ctx);
+        draw_data dd(ctx);
+        dd.function_name = get_name();
+        dd.value = ret;
+        if (!ctx->draw(&dd)) return;
+      }
+      
       change_scope sc(ctx, new_scope, prev_scope);
-      change_nesting сn(ctx, nesting);
+      change_nesting cn(ctx, nesting);
       
       if (condition != nullptr) {
-        const auto &ret = condition->process(ctx);
-        draw_data dd(ctx);
-        dd.function_name = "condition";
-        dd.value = object(ret.get<bool>());
-        ctx->draw_function(&dd);
+        {
+          const auto &ret = condition->process(ctx);
+          draw_data dd(ctx);
+          dd.function_name = "condition";
+          dd.value = object(ret.get<bool>());
+          ctx->draw_function(&dd);
+        }
         change_nesting cn(ctx, ctx->nest_level+1);
-        change_function_name cfn(ctx, dd.function_name);
+        change_function_name cfn(ctx, "condition");
         condition->draw(ctx);
       }
       
@@ -252,7 +333,7 @@ namespace devils_engine {
     }
     
     size_t compute_number::get_type_id() const { return type_id<object>(); }
-    std::string_view compute_number::get_name() const { return type_name<decltype(*this)>(); }
+    std::string_view compute_number::get_name() const { return "compute_number"; }
     
     const size_t selector::type_index = commands::values::selector;
     //const size_t selector::expected_types;
@@ -268,14 +349,16 @@ namespace devils_engine {
     }
     
     void selector::draw(context* ctx) const {
-      const auto obj = process(ctx);
-      draw_data dd(ctx);
-      dd.function_name = commands::names[type_index];
-      dd.value = obj.ignore() ? object() : obj;
-      if (!ctx->draw(&dd)) return;
+      {
+        const auto obj = process(ctx);
+        draw_data dd(ctx);
+        dd.function_name = get_name();
+        dd.value = obj.ignore() ? object() : obj;
+        if (!ctx->draw(&dd)) return;
+      }
       
       change_nesting cn(ctx, ctx->nest_level+1);
-      change_function_name cfn(ctx, dd.function_name);
+      change_function_name cfn(ctx, get_name());
       
       for (auto cur = childs; cur != nullptr; cur = cur->next) {
         cur->draw(ctx);
@@ -283,7 +366,7 @@ namespace devils_engine {
     }
     
     size_t selector::get_type_id() const { return type_id<object>(); }
-    std::string_view selector::get_name() const { return type_name<decltype(*this)>(); }
+    std::string_view selector::get_name() const { return commands::names[type_index]; }
     
     const size_t sequence::type_index = commands::values::sequence;
     //const size_t sequence::expected_types;
@@ -308,22 +391,21 @@ namespace devils_engine {
     }
     
     void sequence::draw(context* ctx) const {
-      const auto obj = process(ctx);
-      draw_data dd(ctx);
-      dd.function_name = commands::names[type_index];
-      dd.value = obj.ignore() ? object() : obj;
-      if (!ctx->draw(&dd)) return;
+      {
+        const auto obj = process(ctx);
+        draw_data dd(ctx);
+        dd.function_name = get_name();
+        dd.value = obj.ignore() ? object() : obj;
+        if (!ctx->draw(&dd)) return;
+      }
       
       change_nesting cn(ctx, ctx->nest_level+1);
-      change_function_name cfn(ctx, dd.function_name);
-      
-      for (auto cur = childs; cur != nullptr; cur = cur->next) {
-        cur->draw(ctx);
-      }
+      change_function_name cfn(ctx, get_name());
+      for (auto cur = childs; cur != nullptr; cur = cur->next) { cur->draw(ctx); }
     }
     
     size_t sequence::get_type_id() const { return type_id<object>(); }
-    std::string_view sequence::get_name() const { return type_name<decltype(*this)>(); }
+    std::string_view sequence::get_name() const { return commands::names[type_index]; }
     
     overload::overload(const std::array<size_t, MAXIMUM_OVERLOADS> &overload_types, const interface* childs) noexcept : overload_types(overload_types), childs(childs) {}
     overload::~overload() noexcept { for (auto cur = childs; cur != nullptr; cur = cur->next) { cur->~interface(); } }
@@ -338,9 +420,7 @@ namespace devils_engine {
         const size_t expected_type = overload_types[counter];
         ++counter;
         
-        //const size_t id = cur->get_type_id();
         if (expected_type == type_id<void>()) any_child = cur; // может быть только один? 
-        //if (id == type_id<object>()) {}
         if (expected_type == ctx->current.get_type()) return cur->process(ctx);
       }
       return any_child != nullptr ? any_child->process(ctx) : object();
@@ -364,7 +444,7 @@ namespace devils_engine {
     }
     
     size_t overload::get_type_id() const { return type_id<object>(); }
-    std::string_view overload::get_name() const { return type_name<decltype(*this)>(); }
+    std::string_view overload::get_name() const { return "overload"; }
     
 //     const size_t at_least_sequence::type_index = commands::values::at_least_sequence;
 //     at_least_sequence::at_least_sequence(const interface* count, const interface* childs) noexcept : count(count), childs(childs) {}
@@ -405,6 +485,7 @@ namespace devils_engine {
     chance::~chance() noexcept { value->~interface(); }
     object chance::process(context* ctx) const {
       const auto obj = value->process(ctx); // может ли к нам придти игнор? вероятность не нулевая, что делать?
+      if (obj.ignore()) return ignore_value;
       const double val = obj.get<double>(); // имеет ли смысл выводить стак, имеет смысл хотя бы как то помочь при дебаге
       const uint64_t rnd_val = ctx->get_random_value(state);
       const double norm = context::normalize_value(rnd_val);
@@ -412,24 +493,23 @@ namespace devils_engine {
     }
     
     void chance::draw(context* ctx) const {
-      // проблема в том что для вычисления числа тоже может быть использован рандом
-      // а я тут два раза вычисляю по сути
-      const auto origin = value->process(ctx);
-      const auto obj = process(ctx);
-      // так я не буду лишний раз вычислять ctx->random.next, исправил ошибку теперь мне все равно
-//       const double val = origin.get<double>();
-//       const uint64_t rnd_val = ctx->random.next();
-//       const double norm = random_state::normalize(rnd_val);
-//       const auto obj = object(norm < val);
-      draw_data dd(ctx);
-      dd.function_name = commands::names[type_index];
-      dd.value = obj;
-      dd.original = origin;
-      ctx->draw(&dd);
+      {
+        const auto origin = value->process(ctx);
+        const auto obj = process(ctx);
+        draw_data dd(ctx);
+        dd.function_name = get_name();
+        dd.value = obj;
+        dd.original = origin;
+        ctx->draw(&dd);
+      }
+      
+      change_function_name cfn(ctx, get_name());
+      change_nesting cn(ctx, ctx->nest_level+1);
+      value->draw(ctx);
     }
     
     size_t chance::get_type_id() const { return type_id<object>(); }
-    std::string_view chance::get_name() const { return type_name<decltype(*this)>(); }
+    std::string_view chance::get_name() const { return commands::names[type_index]; }
     
     static const interface* get_random_child(context* ctx, const size_t &random_state, const interface* childs, const interface* weights) {
       size_t counter = 0;
@@ -437,7 +517,7 @@ namespace devils_engine {
       const size_t array_size = 128;
       std::array<double, array_size> w_numbers;
       for (auto cur_w = weights, cur = childs; cur_w != nullptr; cur_w = cur_w->next, cur = cur->next) {
-        if (counter >= array_size) throw std::runtime_error("weighted_random has childs more than array size (" + std::to_string(array_size) + ")");
+        if (counter >= array_size) throw std::runtime_error("'weighted_random' has childs more than array size (" + std::to_string(array_size) + ")");
         if (cur == nullptr) throw std::runtime_error("Childs count less than weights");
         const auto obj = cur_w->process(ctx);
         const double local_w = obj.get<double>();
@@ -450,17 +530,24 @@ namespace devils_engine {
       const double rand_num = context::normalize_value(rand);
       const double final_num = accum_w * rand_num;
       
+      const interface* choosed = childs;
+      const interface* prev_choosed = childs;
       double cumulative = 0.0;
-      const interface* choosed = nullptr;
-      size_t child_counter = 0;
-      for (auto cur = childs; cur != nullptr && cumulative <= final_num; cur = cur->next) {
-        cumulative += w_numbers[child_counter];
-        ++child_counter;
-        assert(child_counter < counter);
-        choosed = cur; // по этим условиям цикл пройдет хотя бы один раз
-      }
+      size_t index = 0;
+      for (; index < counter && cumulative <= final_num; cumulative += w_numbers[counter], ++index) { prev_choosed = choosed; choosed = choosed->next; }
+      index -= 1; // нужно брать предыдущее значение, потому что в choosed может лежать nullptr
       
-      return choosed;
+//       double cumulative = 0.0;
+//       const interface* choosed = nullptr;
+//       size_t child_counter = 0;
+//       for (auto cur = childs; cur != nullptr && cumulative <= final_num; cur = cur->next) {
+//         cumulative += w_numbers[child_counter];
+//         ++child_counter;
+//         assert(child_counter < counter);
+//         choosed = cur; // по этим условиям цикл пройдет хотя бы один раз
+//       }
+      
+      return prev_choosed;
     }
     
     const size_t weighted_random::type_index = commands::values::weighted_random;
@@ -475,21 +562,22 @@ namespace devils_engine {
     
     void weighted_random::draw(context* ctx) const {
       auto choosed = get_random_child(ctx, state, childs, weights);
-      // запуск таких вот обходов для получения значения череват дополнительным запуском функций рандома, что может поломать описание, исправил
-      const auto obj = choosed->process(ctx);
-      draw_data dd(ctx);
-      dd.function_name = commands::names[type_index];
-      dd.value = obj;
-      if (!ctx->draw(&dd)) return;
+      {
+        // запуск таких вот обходов для получения значения череват дополнительным запуском функций рандома, что может поломать описание, исправил
+        const auto obj = choosed->process(ctx);
+        draw_data dd(ctx);
+        dd.function_name = get_name();
+        dd.value = obj;
+        if (!ctx->draw(&dd)) return;
+      }
       
-      change_function_name cfn(ctx, dd.function_name);
+      change_function_name cfn(ctx, get_name());
       change_nesting cn(ctx, ctx->nest_level+1);
-      
       choosed->draw(ctx);
     }
     
     size_t weighted_random::get_type_id() const { return type_id<object>(); }
-    std::string_view weighted_random::get_name() const { return type_name<decltype(*this)>(); }
+    std::string_view weighted_random::get_name() const { return commands::names[type_index]; }
     
     const size_t random_value::type_index = commands::values::random_value;
     //const size_t random_value::output_type;
@@ -510,33 +598,50 @@ namespace devils_engine {
     }
     
     void random_value::draw(context* ctx) const {
-      draw_data dd(ctx);
-      dd.function_name = commands::names[type_index];
-      dd.value = process(ctx);
-      if (maximum != nullptr) dd.original = maximum->process(ctx);
-      ctx->draw(&dd);
+      {
+        draw_data dd(ctx);
+        dd.function_name = get_name();
+        dd.value = process(ctx);
+        if (maximum != nullptr) dd.original = maximum->process(ctx);
+        if (!ctx->draw(&dd)) return;
+      }
       
-      // нужно ли идти дальше? не думаю
+      // нужно ли идти дальше? не думаю, вообще наверное надо, хотя бы для дебага
+      if (maximum == nullptr) return;
+      
+      change_function_name cfn(ctx, get_name());
+      change_nesting cn(ctx, ctx->nest_level+1);
+      maximum->draw(ctx);
     }
     
     size_t random_value::get_type_id() const { return type_id<object>(); }
-    std::string_view random_value::get_name() const { return type_name<decltype(*this)>(); }
+    std::string_view random_value::get_name() const { return commands::names[type_index]; }
     
     //const size_t boolean_container::expected_types;
     //const size_t boolean_container::output_type;
     boolean_container::boolean_container(const bool value) noexcept : value(value) {}
     object boolean_container::process(context*) const { return object(value); }
-    void boolean_container::draw(context*) const { assert(false); }
+    void boolean_container::draw(context* ctx) const {
+      draw_data dd(ctx);
+      dd.function_name = get_name();
+      dd.value = value;
+      ctx->draw(&dd);
+    }
     size_t boolean_container::get_type_id() const { return type_id<object>(); }
-    std::string_view boolean_container::get_name() const { return type_name<decltype(*this)>(); }
+    std::string_view boolean_container::get_name() const { return "boolean_container"; }
     
     //const size_t number_container::expected_types;
     //const size_t number_container::output_type;
     number_container::number_container(const double &value) noexcept : value(value) {}
     object number_container::process(context*) const { return object(value); }
-    void number_container::draw(context*) const { assert(false); }
+    void number_container::draw(context* ctx) const {
+      draw_data dd(ctx);
+      dd.function_name = get_name();
+      dd.value = value;
+      ctx->draw(&dd);
+    }
     size_t number_container::get_type_id() const { return type_id<object>(); }
-    std::string_view number_container::get_name() const { return type_name<decltype(*this)>(); }
+    std::string_view number_container::get_name() const { return "number_container"; }
   
     //const size_t string_container::expected_types;
     //const size_t string_container::output_type;
@@ -544,9 +649,14 @@ namespace devils_engine {
     string_container::string_container(const std::string_view &value) noexcept : value(value) {}
     string_container::~string_container() noexcept { std::cout << "~string_container()\n"; }
     object string_container::process(context*) const { return object(value); }
-    void string_container::draw(context*) const { assert(false); }
+    void string_container::draw(context* ctx) const {
+      draw_data dd(ctx);
+      dd.function_name = get_name();
+      dd.value = value;
+      ctx->draw(&dd);
+    }
     size_t string_container::get_type_id() const { return type_id<object>(); }
-    std::string_view string_container::get_name() const { return type_name<decltype(*this)>(); }
+    std::string_view string_container::get_name() const { return "string_container"; }
     
     //const size_t object_container::expected_types;
     //const size_t object_container::output_type;
@@ -594,7 +704,7 @@ namespace devils_engine {
     }
     
     size_t number_comparator::get_type_id() const { return type_id<object>(); }
-    std::string_view number_comparator::get_name() const { return type_name<decltype(*this)>(); }
+    std::string_view number_comparator::get_name() const { return "number_comparator"; }
     
     //const size_t boolean_comparator::expected_types;
     //const size_t boolean_comparator::output_type;
@@ -618,7 +728,7 @@ namespace devils_engine {
     }
     
     size_t boolean_comparator::get_type_id() const { return type_id<object>(); }
-    std::string_view boolean_comparator::get_name() const { return type_name<decltype(*this)>(); }
+    std::string_view boolean_comparator::get_name() const { return "boolean_comparator"; }
     
     const size_t equals_to::type_index = commands::values::equals_to;
     //const size_t equals_to::expected_types;
@@ -634,14 +744,14 @@ namespace devils_engine {
       const auto obj = get_obj->process(ctx);
       const auto val = object(ctx->current == obj);
       draw_data dd(ctx);
-      dd.function_name = commands::names[type_index];
+      dd.function_name = get_name();
       dd.value = val;
       dd.original = obj;
       ctx->draw(&dd);
     }
     
     size_t equals_to::get_type_id() const { return type_id<object>(); }
-    std::string_view equals_to::get_name() const { return type_name<decltype(*this)>(); }
+    std::string_view equals_to::get_name() const { return commands::names[type_index]; }
     
     const size_t not_equals_to::type_index = commands::values::not_equals_to;
     //const size_t not_equals_to::expected_types;
@@ -657,14 +767,14 @@ namespace devils_engine {
       const auto obj = get_obj->process(ctx);
       const auto val = object(ctx->current != obj);
       draw_data dd(ctx);
-      dd.function_name = commands::names[type_index];
+      dd.function_name = get_name();
       dd.value = val;
       dd.original = obj;
       ctx->draw(&dd);
     }
     
     size_t not_equals_to::get_type_id() const { return type_id<object>(); }
-    std::string_view not_equals_to::get_name() const { return type_name<decltype(*this)>(); }
+    std::string_view not_equals_to::get_name() const { return commands::names[type_index]; }
     
     const size_t equality::type_index = commands::values::equality;
     //const size_t equality::expected_types;
@@ -688,20 +798,22 @@ namespace devils_engine {
     }
     
     void equality::draw(context* ctx) const {
-      const auto obj = process(ctx);
-      draw_data dd(ctx);
-      dd.function_name = commands::names[type_index];
-      dd.value = obj;
-      if (!ctx->draw(&dd)) return;
+      {
+        const auto obj = process(ctx);
+        draw_data dd(ctx);
+        dd.function_name = get_name();
+        dd.value = obj;
+        if (!ctx->draw(&dd)) return;
+      }
       
       // нужно ли тут обходить детей? может и нужно, но как это дело рисовать не ясно
-      change_function_name cfn(ctx, dd.function_name);
+      change_function_name cfn(ctx, get_name());
       change_nesting cn(ctx, ctx->nest_level+1);
       for (auto cur = childs; cur != nullptr; cur = cur->next) { cur->draw(ctx); }
     }
     
     size_t equality::get_type_id() const { return type_id<object>(); }
-    std::string_view equality::get_name() const { return type_name<decltype(*this)>(); }
+    std::string_view equality::get_name() const { return commands::names[type_index]; }
     
     const size_t type_equality::type_index = commands::values::type_equality;
     //const size_t type_equality::expected_types;
@@ -725,20 +837,22 @@ namespace devils_engine {
     }
     
     void type_equality::draw(context* ctx) const {
-      const auto obj = process(ctx);
-      draw_data dd(ctx);
-      dd.function_name = commands::names[type_index];
-      dd.value = obj;
-      if (!ctx->draw(&dd)) return;
+      {
+        const auto obj = process(ctx);
+        draw_data dd(ctx);
+        dd.function_name = get_name();
+        dd.value = obj;
+        if (!ctx->draw(&dd)) return;
+      }
       
       // нужно ли тут обходить детей? может и нужно, но как это дело рисовать не ясно
-      change_function_name cfn(ctx, dd.function_name);
+      change_function_name cfn(ctx, get_name());
       change_nesting cn(ctx, ctx->nest_level+1);
       for (auto cur = childs; cur != nullptr; cur = cur->next) { cur->draw(ctx); }
     }
     
     size_t type_equality::get_type_id() const { return type_id<object>(); }
-    std::string_view type_equality::get_name() const { return type_name<decltype(*this)>(); }
+    std::string_view type_equality::get_name() const { return commands::names[type_index]; }
     
     const size_t compare::type_index = commands::values::compare;
     //const size_t compare::expected_types;
@@ -763,20 +877,24 @@ namespace devils_engine {
     }
     
     void compare::draw(context* ctx) const {
-      const auto obj = childs->process(ctx);
-      draw_data dd(ctx);
-      dd.function_name = commands::names[type_index];
-      dd.value = process(ctx);
-      dd.original = obj;
-      if (!ctx->draw(&dd)) return;
+      {
+        const auto obj = childs->process(ctx);
+        draw_data dd(ctx);
+        dd.function_name = get_name();
+        dd.value = process(ctx);
+        dd.original = obj;
+        if (!ctx->draw(&dd)) return;
+      }
       
+      change_function_name cfn(ctx, get_name());
+      change_nesting cn(ctx, ctx->nest_level+1);
       for (auto cur = childs; cur != nullptr; cur = cur->next) {
         cur->draw(ctx);
       }
     }
     
     size_t compare::get_type_id() const { return type_id<object>(); }
-    std::string_view compare::get_name() const { return type_name<decltype(*this)>(); }
+    std::string_view compare::get_name() const { return commands::names[type_index]; }
       
     // в текущем объекте к нам должен был придти новый контекст
     // меняем его пока не достигнем последнего ребенка, 
@@ -803,53 +921,92 @@ namespace devils_engine {
     
     // тут явно не нужно рисовать детей
     void complex_object::draw(context* ctx) const {
-      draw_data dd(ctx);
-      dd.function_name = "get_object";
-      dd.value = process(ctx);
-      ctx->draw(&dd);
+      {
+        draw_data dd(ctx);
+        dd.function_name = get_name();
+        dd.value = process(ctx);
+        if (!ctx->draw(&dd)) return;
+      }
+      
+      for (auto cur = childs; cur != nullptr; cur = cur->next) {
+        cur->draw(ctx);
+      }
     }
     
     size_t complex_object::get_type_id() const { return type_id<object>(); }
-    std::string_view complex_object::get_name() const { return type_name<decltype(*this)>(); }
+    std::string_view complex_object::get_name() const { return "complex_value"; }
     
     const size_t root::type_index = commands::values::root;
-    object root::process(context* ctx) const { return ctx->root; }
+    struct object root::process(context* ctx) const { return ctx->root; }
     size_t root::get_type_id() const { return type_id<object>(); }
-    std::string_view root::get_name() const { return type_name<decltype(*this)>(); }
+    std::string_view root::get_name() const { return commands::names[type_index]; }
     const size_t prev::type_index = commands::values::prev;
-    object prev::process(context* ctx) const { return ctx->prev; }
+    struct object prev::process(context* ctx) const { return ctx->prev; }
     size_t prev::get_type_id() const { return type_id<object>(); }
-    std::string_view prev::get_name() const { return type_name<decltype(*this)>(); }
+    std::string_view prev::get_name() const { return commands::names[type_index]; }
     const size_t current::type_index = commands::values::current;
-    object current::process(context* ctx) const { return ctx->current; }
+    struct object current::process(context* ctx) const { return ctx->current; }
     size_t current::get_type_id() const { return type_id<object>(); }
-    std::string_view current::get_name() const { return type_name<decltype(*this)>(); }
+    std::string_view current::get_name() const { return commands::names[type_index]; }
     
     // мы должны что то нарисовать
     void root::draw(context* ctx) const { 
       draw_data dd(ctx);
-      dd.function_name = commands::names[type_index];
+      dd.function_name = get_name();
       dd.value = process(ctx);
       ctx->draw(&dd);
     }
     
     void prev::draw(context* ctx) const {
       draw_data dd(ctx);
-      dd.function_name = commands::names[type_index];
+      dd.function_name = get_name();
       dd.value = process(ctx);
       ctx->draw(&dd);
     }
     
     void current::draw(context* ctx) const {
       draw_data dd(ctx);
-      dd.function_name = commands::names[type_index];
+      dd.function_name = get_name();
       dd.value = process(ctx);
       ctx->draw(&dd);
     }
     
+    const size_t index::type_index = commands::index;
+    struct object index::process(context* ctx) const { return object(double(ctx->index)); }
+    size_t index::get_type_id() const { return type_id<object>(); }
+    std::string_view index::get_name() const { return commands::names[type_index]; }
+    
+    const size_t prev_index::type_index = commands::prev_index;
+    struct object prev_index::process(context* ctx) const { return object(double(ctx->prev_index)); }
+    size_t prev_index::get_type_id() const { return type_id<object>(); }
+    std::string_view prev_index::get_name() const { return commands::names[type_index]; }
+    
+    void index::draw(context* ctx) const {
+      draw_data dd(ctx);
+      dd.function_name = get_name();
+      dd.value = process(ctx);
+      ctx->draw(&dd);
+    }
+    
+    void prev_index::draw(context* ctx) const {
+      draw_data dd(ctx);
+      dd.function_name = get_name();
+      dd.value = process(ctx);
+      ctx->draw(&dd);
+    }
+    
+    const size_t value::type_index = commands::value;
+    value::value(const interface* compute) noexcept : compute(compute) {}
+    value::~value() noexcept { compute->~interface(); }
+    struct object value::process(context* ctx) const { return compute->process(ctx); }
+    size_t value::get_type_id() const { return type_id<object>(); }
+    std::string_view value::get_name() const { return commands::names[type_index]; }
+    void value::draw(context* ctx) const { compute->draw(ctx); }
+    
+    const size_t get_context::type_index = commands::context;
     get_context::get_context(const std::string &str) noexcept : name(str) {}
     get_context::get_context(const std::string_view &str) noexcept : name(str) {}
-    get_context::~get_context() noexcept { std::cout << "~get_context()"; }
+    get_context::~get_context() noexcept { std::cout << "~get_context()\n"; }
     object get_context::process(context* ctx) const {
       const auto itr = ctx->map.find(name);
       if (itr == ctx->map.end()) throw std::runtime_error("Could not find context object using key " + name);
@@ -860,24 +1017,31 @@ namespace devils_engine {
       const auto obj = process(ctx);
       // тут нам нужно как то словестно описать что мы получили на основе типа
       draw_data dd(ctx);
-      dd.function_name = "get_object";
+      dd.function_name = get_name();
       dd.value = obj;
+      dd.original = name;
       ctx->draw(&dd);
     }
     
     size_t get_context::get_type_id() const { return type_id<object>(); }
-    std::string_view get_context::get_name() const { return type_name<decltype(*this)>(); }
+    std::string_view get_context::get_name() const { return commands::names[type_index]; }
     
 #define GET_ENTITY_HELPER_COMMON_PART(name)                              \
     /*const size_t get_##name::expected_types;*/                         \
     /*const size_t get_##name::output_type;*/                            \
+    const size_t get_##name::type_index = commands::name;                \
     get_##name::get_##name(const interface* str) noexcept : str(str) {}  \
     get_##name::~get_##name() noexcept { str->~interface(); }            \
-    void get_##name::draw(context*) const {                              \
-      assert(false);                                                     \
+    void get_##name::draw(context* ctx) const {                          \
+      const auto obj = process(ctx);                                     \
+      draw_data dd(ctx);                                                 \
+      dd.function_name = get_name();                                     \
+      dd.value = obj;                                                    \
+      dd.original = str->process(ctx);                                   \
+      ctx->draw(&dd);                                                    \
     }                                                                    \
     size_t get_##name::get_type_id() const { return type_id<object>(); } \
-    std::string_view get_##name::get_name() const { return type_name<decltype(*this)>(); } \
+    std::string_view get_##name::get_name() const { return commands::names[type_index]; } \
     
 #define GET_ENTITY_HELPER_FUNC(name)                               \
     GET_ENTITY_HELPER_COMMON_PART(name)                            \
@@ -965,7 +1129,7 @@ namespace devils_engine {
 //     }
     
     const size_t save_local::type_index = commands::values::save_local;
-    save_local::save_local(const std::string &name, const size_t &index, const interface* var) noexcept : name(name), index(index), var(var) {}
+    save_local::save_local(const std::string &name, const size_t &index, const interface* var) noexcept : name(name), index(index), var(var) { assert(index < context::locals_container_size); }
     save_local::~save_local() noexcept { if (var != nullptr) var->~interface(); }
     object save_local::process(context* ctx) const {
       // тут понятно где запомнить
@@ -974,13 +1138,10 @@ namespace devils_engine {
         obj = var->process(ctx);
       }
       
-//       const auto name = str->process(ctx);
-//       const auto name_str = name.get<std::string_view>();
-//       if (const auto itr = ctx->map.find(name_str); itr != ctx->map.end()) { 
-//         if (!obj.lazy_compare_types(itr->second)) throw std::runtime_error("Rewriting local variable " + std::string(name_str) + " with different type variable is considered as error"); 
-//       } else ctx->map.emplace(name_str, obj);
-
-      
+      // ошибка? ну было бы неплохо перезапись чекать
+      if (ctx->locals[index].valid() && !ctx->locals[index].ignore() && !obj.lazy_type_compare(ctx->locals[index])) 
+        throw std::runtime_error("Rewriting local variable " + name + " with different type variable is considered as error"); 
+      ctx->locals[index] = obj;
       
       return ignore_value;
     }
@@ -991,25 +1152,20 @@ namespace devils_engine {
         obj = var->process(ctx);
       }
       
-//       const auto name = str->process(ctx);
-//       
-//       // все равно добавляем, требуется как то перезаписать данные, может если типы разные то перезапись отваливается? вообще возможно это неплохое решение
-//       // если сделать перезапись то можно будет поискать максимум
-//       const auto name_str = name.get<std::string_view>();
-//       if (const auto itr = ctx->map.find(name_str); itr != ctx->map.end()) { 
-//         if (!obj.lazy_compare_types(itr->second)) throw std::runtime_error("Rewriting local variable " + std::string(name_str) + " with different type variable is considered as error"); 
-//         itr->second = obj;
-//       } else ctx->map.emplace(name_str, obj);
+      // ошибка? ну было бы неплохо перезапись чекать
+      if (ctx->locals[index].valid() && !ctx->locals[index].ignore() && !obj.lazy_type_compare(ctx->locals[index])) 
+        throw std::runtime_error("Rewriting local variable " + name + " with different type variable is considered as error"); 
+      ctx->locals[index] = obj;
       
       draw_data dd(ctx);
       dd.value = obj;
-//       dd.original = name;
+      dd.original = name;
       dd.function_name = commands::names[type_index];
       ctx->draw(&dd);
     }
     
     size_t save_local::get_type_id() const { return type_id<object>(); }
-    std::string_view save_local::get_name() const { return type_name<decltype(*this)>(); }
+    std::string_view save_local::get_name() const { return commands::names[type_index]; }
   
     const size_t save::type_index = commands::values::save;
     save::save(const interface* str, const interface* var) noexcept : str(str), var(var) {}
@@ -1050,7 +1206,7 @@ namespace devils_engine {
     }
     
     size_t save::get_type_id() const { return type_id<object>(); }
-    std::string_view save::get_name() const { return type_name<decltype(*this)>(); }
+    std::string_view save::get_name() const { return commands::names[type_index]; }
     
     const size_t save_global::type_index = commands::values::save_global;
     save_global::save_global(const interface* str, const interface* var) noexcept : str(str), var(var) {}
@@ -1070,27 +1226,27 @@ namespace devils_engine {
     }
     
     size_t save_global::get_type_id() const { return type_id<object>(); }
-    std::string_view save_global::get_name() const { return type_name<decltype(*this)>(); }
+    std::string_view save_global::get_name() const { return commands::names[type_index]; }
     
     const size_t has_local::type_index = commands::values::has_local;
     has_local::has_local(const size_t &index) noexcept : index(index) {}
     has_local::~has_local() noexcept {}
     object has_local::process(context* ctx) const {
       ASSERT(index < context::locals_container_size);
-      return object(ctx->locals[index].valid());
+      return object(ctx->locals[index].valid() && !ctx->locals[index].ignore());
     }
     
     void has_local::draw(context* ctx) const {
       const auto obj = process(ctx);
       draw_data dd(ctx);
       dd.value = obj;
-      //dd.original = name; // наверное вообще не должно быть
+      //dd.original = name; // наверное надо бы имя оставить
       dd.function_name = commands::names[type_index];
       ctx->draw(&dd);
     }
     
     size_t has_local::get_type_id() const { return type_id<object>(); }
-    std::string_view has_local::get_name() const { return type_name<decltype(*this)>(); }
+    std::string_view has_local::get_name() const { return commands::names[type_index]; }
     
     const size_t has_global::type_index = commands::values::has_global;
     has_global::has_global(const interface* str) noexcept : str(str) {}
@@ -1107,7 +1263,7 @@ namespace devils_engine {
     }
     
     size_t has_global::get_type_id() const { return type_id<object>(); }
-    std::string_view has_global::get_name() const { return type_name<decltype(*this)>(); }
+    std::string_view has_global::get_name() const { return commands::names[type_index]; }
     
     const size_t remove_local::type_index = commands::values::remove_local;
     remove_local::remove_local(const std::string &name, const size_t &index) noexcept : name(name), index(index) {}
@@ -1126,7 +1282,7 @@ namespace devils_engine {
     }
     
     size_t remove_local::get_type_id() const { return type_id<object>(); }
-    std::string_view remove_local::get_name() const { return type_name<decltype(*this)>(); }
+    std::string_view remove_local::get_name() const { return commands::names[type_index]; }
     
     const size_t remove_global::type_index = commands::values::remove_global;
     remove_global::remove_global(const interface* str) noexcept : str(str) {}
@@ -1143,13 +1299,14 @@ namespace devils_engine {
     }
     
     size_t remove_global::get_type_id() const { return type_id<object>(); }
-    std::string_view remove_global::get_name() const { return type_name<decltype(*this)>(); }
+    std::string_view remove_global::get_name() const { return commands::names[type_index]; }
     
+    const size_t get_local::type_index = commands::local;
     get_local::get_local(const std::string &name, const size_t &index) noexcept : name(name), index(index) {}
     get_local::~get_local() noexcept {}
     struct object get_local::process(context* ctx) const {
       const auto obj = ctx->locals[index];
-      if (!obj.valid()) throw std::runtime_error("Local variable " + name + " is invalid");
+      if (!obj.valid() || obj.ignore()) throw std::runtime_error("Local variable " + name + " is invalid");
       return obj;
     }
     
@@ -1158,13 +1315,14 @@ namespace devils_engine {
       draw_data dd(ctx);
       dd.value = obj;
       dd.original = object(name);
-      dd.function_name = "get_local";
+      dd.function_name = get_name();
       ctx->draw(&dd);
     }
     
     size_t get_local::get_type_id() const { return type_id<object>(); }
-    std::string_view get_local::get_name() const { return type_name<decltype(*this)>(); }
+    std::string_view get_local::get_name() const { return commands::names[type_index]; }
     
+    const size_t add_to_list::type_index = commands::add_to_list;
     add_to_list::add_to_list(const std::string &name) noexcept : name(name) {}
     add_to_list::~add_to_list() noexcept {}
     struct object add_to_list::process(context* ctx) const {
@@ -1176,13 +1334,14 @@ namespace devils_engine {
     void add_to_list::draw(context* ctx) const {
       draw_data dd(ctx);
       dd.original = object(name);
-      dd.function_name = "add_to_list";
+      dd.function_name = get_name();
       ctx->draw(&dd);
     }
     
     size_t add_to_list::get_type_id() const { return type_id<object>(); }
-    std::string_view add_to_list::get_name() const { return type_name<decltype(*this)>(); }
-  
+    std::string_view add_to_list::get_name() const { return commands::names[type_index]; }
+    
+    const size_t is_in_list::type_index = commands::is_in_list;
     is_in_list::is_in_list(const std::string &name) noexcept : name(name) {}
     is_in_list::~is_in_list() noexcept {}
     struct object is_in_list::process(context* ctx) const {
@@ -1190,7 +1349,7 @@ namespace devils_engine {
       const auto itr = ctx->object_lists.find(name);
       if (itr == ctx->object_lists.end()) return object(false);
       
-      for (const auto obj : itr->second) {
+      for (const auto &obj : itr->second) {
         if (cur == obj) return object(true);
       }
       
@@ -1202,13 +1361,14 @@ namespace devils_engine {
       draw_data dd(ctx);
       dd.value = obj;
       dd.original = object(name);
-      dd.function_name = "is_in_list";
+      dd.function_name = get_name();
       ctx->draw(&dd);
     }
     
     size_t is_in_list::get_type_id() const { return type_id<object>(); }
-    std::string_view is_in_list::get_name() const { return type_name<decltype(*this)>(); }
+    std::string_view is_in_list::get_name() const { return commands::names[type_index]; }
   
+    const size_t has_in_list::type_index = commands::has_in_list;
     has_in_list::has_in_list(const std::string &name, const interface* max_count, const interface* percentage, const interface* childs) noexcept :
       name(name), max_count(max_count), percentage(percentage), childs(childs)
     {}
@@ -1243,10 +1403,12 @@ namespace devils_engine {
       
       size_t val = 0;
       change_scope cs(ctx, ctx->current, ctx->prev);
+      change_indices ci(ctx, 0, ctx->index);
       ctx->prev = ctx->current;
       for (size_t i = 0; i < list_itr->second.size() && i < final_max_count; ++i) {
         const auto obj = list_itr->second[i];
         ctx->current = obj;
+        ctx->index = i;
         
         for (auto cur = childs; cur != nullptr; cur = cur->next) {
           const auto &obj = cur->process(ctx);
@@ -1260,9 +1422,9 @@ namespace devils_engine {
     
     void has_in_list::draw(context* ctx) const {
       const auto list_itr = ctx->object_lists.find(name);
-      if (list_itr == ctx->object_lists.end()) {
+      if (list_itr == ctx->object_lists.end() || list_itr->second.empty()) {
         draw_data dd(ctx);
-        dd.function_name = "has_in_list";
+        dd.function_name = get_name();
         dd.original = object(name);
         ctx->draw(&dd);
         return;
@@ -1277,7 +1439,7 @@ namespace devils_engine {
         if (percentage != nullptr) percent = percentage->process(ctx);
       
         draw_data dd(ctx);
-        dd.function_name = "has_in_list";
+        dd.function_name = get_name();
         dd.value = value;
         dd.original = object(name);
         if (percentage != nullptr) dd.set_arg(0, "percentage", percent);
@@ -1290,15 +1452,16 @@ namespace devils_engine {
       
       change_nesting cn(ctx, ++ctx->nest_level);
       change_scope cs(ctx, first, ctx->current);
-      change_function_name cfn(ctx, name);
+      change_function_name cfn(ctx, get_name());
       for (auto cur = childs; cur != nullptr; cur = cur->next) {
         cur->draw(ctx);
       }
     }
     
     size_t has_in_list::get_type_id() const { return type_id<object>(); }
-    std::string_view has_in_list::get_name() const { return type_name<decltype(*this)>(); }
+    std::string_view has_in_list::get_name() const { return commands::names[type_index]; }
   
+    const size_t random_in_list::type_index = commands::random_in_list;
     random_in_list::random_in_list(const std::string &name, const size_t &state, const interface* condition, const interface* weight, const interface* childs) noexcept :
       name(name), state(state), condition(condition), weight(weight), childs(childs)
     {}
@@ -1311,18 +1474,17 @@ namespace devils_engine {
       }
     }
     
-    struct object random_in_list::process(context* ctx) const {
-      const auto list_itr = ctx->object_lists.find(name);
-      if (list_itr == ctx->object_lists.end()) return object(0.0);
+    static struct object get_rand_obj(context* ctx, const utils::array_view<object> &view, const interface* condition, const interface* weight, const size_t state, const std::string_view &func_name) {
+      change_indices ci(ctx, 0, ctx->index);
       
-      change_scope cs(ctx, object(), ctx->current);
-      
+      size_t counter = 0;
       double accum_weight = 0.0;
       std::vector<std::pair<struct object, double>> objects;
-      objects.reserve(list_itr->second.size());
-      for (size_t i = 0; i < list_itr->second.size(); ++i) {
-        const auto obj = list_itr->second[i];
-        ctx->current = obj;
+      objects.reserve(view.size());
+      for (size_t i = 0; i < view.size(); ++i) {
+        ctx->current = view[i];
+        ctx->index = counter;
+        ++counter;
         
         if (condition != nullptr) {
           const auto obj = condition->process(ctx);
@@ -1335,8 +1497,8 @@ namespace devils_engine {
         }
         
         const double local = weight_val.get<double>();
-        if (local < 0.0) throw std::runtime_error(std::string(name) + " weights must not be less than zero");
-        objects.emplace_back(obj, local);
+        if (local < 0.0) throw std::runtime_error(std::string(func_name) + " weights must not be less than zero");
+        objects.emplace_back(view[i], local);
         accum_weight += local;
       }
       
@@ -1352,38 +1514,51 @@ namespace devils_engine {
       return objects[index].first;
     }
     
+    struct object random_in_list::process(context* ctx) const {
+      const auto list_itr = ctx->object_lists.find(name);
+      if (list_itr == ctx->object_lists.end()) return object(0.0);
+      
+      change_scope cs(ctx, object(), ctx->current);
+      const auto obj = get_rand_obj(ctx, list_itr->second, condition, weight, state, "random_in_list");
+      ctx->current = obj;
+      return obj.valid() ? childs->process(ctx) : ignore_value;
+    }
+    
     void random_in_list::draw(context* ctx) const {
       const auto list_itr = ctx->object_lists.find(name);
-      if (list_itr == ctx->object_lists.end()) {
+      if (list_itr == ctx->object_lists.end() || list_itr->second.empty()) {
         draw_data dd(ctx);
-        dd.function_name = "random_in_list";
+        dd.function_name = get_name();
         dd.original = object(name);
         ctx->draw(&dd);
         return;
       }
       
-      auto obj = process(ctx);
-      if (!obj.valid()) return;
+      auto obj = get_rand_obj(ctx, list_itr->second, condition, weight, state, get_name());
+      //if (!obj.valid()) return; // нам бы все равно что то нарисовать желательно
+      if (!obj.valid()) obj = list_itr->second[0];
       
       {
         draw_data dd(ctx);
-        dd.function_name = "random_in_list";
+        dd.function_name = get_name();
         dd.value = obj;
         dd.original = object(name);
         if (!ctx->draw(&dd)) return;
       }
 
       change_scope cs(ctx, obj, ctx->current);
-      change_nesting cn(ctx, ++ctx->nest_level);
-      change_function_name cfn(ctx, name);
-      for (auto cur = childs; cur != nullptr; cur = cur->next) {
-        cur->draw(ctx);
-      }          
+      change_nesting cn(ctx, ctx->nest_level+1);
+      change_function_name cfn(ctx, get_name());
+//       for (auto cur = childs; cur != nullptr; cur = cur->next) {
+//         cur->draw(ctx);
+//       }
+      childs->draw(ctx);
     }
     
     size_t random_in_list::get_type_id() const { return type_id<object>(); }
-    std::string_view random_in_list::get_name() const { return type_name<decltype(*this)>(); }
-  
+    std::string_view random_in_list::get_name() const { return commands::names[type_index]; }
+    
+    const size_t every_in_list_numeric::type_index = commands::every_in_list;
     every_in_list_numeric::every_in_list_numeric(const std::string &name, const interface* condition, const interface* childs) noexcept :
       name(name), condition(condition), childs(childs)
     {}
@@ -1399,10 +1574,12 @@ namespace devils_engine {
       const auto list_itr = ctx->object_lists.find(name);
       if (list_itr == ctx->object_lists.end()) return object(0.0);
       change_scope cs(ctx, object(), ctx->current);
+      change_indices ci(ctx, 0, ctx->index);
       
       double val = 0.0;
-      for (const auto obj : list_itr->second) {
-        ctx->current = obj;
+      for (size_t i = 0; i < list_itr->second.size(); ++i) {
+        ctx->current = list_itr->second[i];
+        ctx->index = i;
         
         if (condition != nullptr) {
           const auto obj = condition->process(ctx);
@@ -1420,9 +1597,9 @@ namespace devils_engine {
     
     void every_in_list_numeric::draw(context* ctx) const {
       const auto list_itr = ctx->object_lists.find(name);
-      if (list_itr == ctx->object_lists.end()) {
+      if (list_itr == ctx->object_lists.end() || list_itr->second.empty()) {
         draw_data dd(ctx);
-        dd.function_name = "every_in_list";
+        dd.function_name = get_name();
         dd.original = object(name);
         ctx->draw(&dd);
         return;
@@ -1432,33 +1609,34 @@ namespace devils_engine {
       
       {
         draw_data dd(ctx);
-        dd.function_name = "every_in_list";
+        dd.function_name = get_name();
         dd.original = object(name);
         dd.value = val;
         if (!ctx->draw(&dd)) return;
       }
       
       const object first = list_itr->second[0];
-      if (!first.valid()) return;
+      assert(first.valid());
       
       change_scope cs(ctx, first, ctx->current);
-      change_function_name cfn(ctx, name);
+      change_function_name cfn(ctx, get_name());
       
       if (condition != nullptr) {
         draw_condition dc(ctx);
-        change_nesting cn(ctx, ++ctx->nest_level);
+        change_nesting cn(ctx, ctx->nest_level+1);
         condition->draw(ctx);
       }
       
-      change_nesting cn(ctx, ++ctx->nest_level);
+      change_nesting cn(ctx, ctx->nest_level+1);
       for (auto cur = childs; cur != nullptr; cur = cur->next) {
         cur->draw(ctx);
       }
     }
     
     size_t every_in_list_numeric::get_type_id() const { return type_id<object>(); }
-    std::string_view every_in_list_numeric::get_name() const { return type_name<decltype(*this)>(); }
-  
+    std::string_view every_in_list_numeric::get_name() const { return commands::names[type_index]; }
+    
+    const size_t every_in_list_logic::type_index = commands::every_in_list;
     every_in_list_logic::every_in_list_logic(const std::string &name, const interface* condition, const interface* childs) noexcept :
       name(name), condition(condition), childs(childs)
     {}
@@ -1474,10 +1652,12 @@ namespace devils_engine {
       const auto list_itr = ctx->object_lists.find(name);
       if (list_itr == ctx->object_lists.end()) return object(0.0);
       change_scope cs(ctx, object(), ctx->current);
+      change_indices ci(ctx, 0, ctx->index);
       
       bool val = true;
-      for (const auto obj : list_itr->second) {
-        ctx->current = obj;
+      for (size_t i = 0; i < list_itr->second.size(); ++i) {
+        ctx->current = list_itr->second[i];
+        ctx->index = i;
         
         if (condition != nullptr) {
           const auto obj = condition->process(ctx);
@@ -1496,9 +1676,9 @@ namespace devils_engine {
     
     void every_in_list_logic::draw(context* ctx) const {
       const auto list_itr = ctx->object_lists.find(name);
-      if (list_itr == ctx->object_lists.end()) {
+      if (list_itr == ctx->object_lists.end() || list_itr->second.empty()) {
         draw_data dd(ctx);
-        dd.function_name = "every_in_list";
+        dd.function_name = get_name();
         dd.original = object(name);
         ctx->draw(&dd);
         return;
@@ -1508,17 +1688,17 @@ namespace devils_engine {
       
       {
         draw_data dd(ctx);
-        dd.function_name = "every_in_list";
+        dd.function_name = get_name();
         dd.original = object(name);
         dd.value = val;
         if (!ctx->draw(&dd)) return;
       }
       
       const object first = list_itr->second[0];
-      if (!first.valid()) return;
+      assert(first.valid());
       
       change_scope cs(ctx, first, ctx->current);
-      change_function_name cfn(ctx, name);
+      change_function_name cfn(ctx, get_name());
       
       if (condition != nullptr) {
         draw_condition dc(ctx);
@@ -1533,26 +1713,27 @@ namespace devils_engine {
     }
     
     size_t every_in_list_logic::get_type_id() const { return type_id<object>(); }
-    std::string_view every_in_list_logic::get_name() const { return type_name<decltype(*this)>(); }
-  
+    std::string_view every_in_list_logic::get_name() const { return commands::names[type_index]; }
+    
+    const size_t every_in_list_effect::type_index = commands::every_in_list;
     every_in_list_effect::every_in_list_effect(const std::string &name, const interface* condition, const interface* childs) noexcept :
       name(name), condition(condition), childs(childs)
     {}
     
     every_in_list_effect::~every_in_list_effect() noexcept {
       if (condition != nullptr) condition->~interface();
-      for (auto cur = childs; cur != nullptr; cur = cur->next) { 
-        cur->~interface(); 
-      }
+      for (auto cur = childs; cur != nullptr; cur = cur->next) { cur->~interface(); }
     }
     
     struct object every_in_list_effect::process(context* ctx) const {
       const auto list_itr = ctx->object_lists.find(name);
       if (list_itr == ctx->object_lists.end()) return object(0.0);
       change_scope cs(ctx, object(), ctx->current);
+      change_indices ci(ctx, 0, ctx->index);
       
-      for (const auto obj : list_itr->second) {
-        ctx->current = obj;
+      for (size_t i = 0; i < list_itr->second.size(); ++i) {
+        ctx->current = list_itr->second[i];
+        ctx->index = i;
         
         if (condition != nullptr) {
           const auto obj = condition->process(ctx);
@@ -1567,7 +1748,7 @@ namespace devils_engine {
     
     void every_in_list_effect::draw(context* ctx) const {
       const auto list_itr = ctx->object_lists.find(name);
-      if (list_itr == ctx->object_lists.end()) {
+      if (list_itr == ctx->object_lists.end() || list_itr->second.empty()) {
         draw_data dd(ctx);
         dd.function_name = name;
         dd.original = object(name);
@@ -1577,16 +1758,16 @@ namespace devils_engine {
       
       {
         draw_data dd(ctx);
-        dd.function_name = "every_in_list";
+        dd.function_name = get_name();
         dd.original = object(name);
         if (!ctx->draw(&dd)) return;
       }
       
       const object first = list_itr->second[0];
-      if (!first.valid()) return;
+      assert(first.valid());
       
       change_scope cs(ctx, first, ctx->current);
-      change_function_name cfn(ctx, name);
+      change_function_name cfn(ctx, get_name());
       
       if (condition != nullptr) {
         draw_condition dc(ctx);
@@ -1601,7 +1782,142 @@ namespace devils_engine {
     }
     
     size_t every_in_list_effect::get_type_id() const { return type_id<object>(); }
-    std::string_view every_in_list_effect::get_name() const { return type_name<decltype(*this)>(); }
+    std::string_view every_in_list_effect::get_name() const { return commands::names[type_index]; }
+    
+    const size_t list_view::type_index = commands::list_view;
+    list_view::list_view(const std::string &name, const interface* default_value, const interface* childs) noexcept : name(name), default_value(default_value), childs(childs) {}
+    list_view::~list_view() noexcept {
+      default_value->~interface();
+      for (auto cur = childs; cur != nullptr; cur = cur->next) { cur->~interface(); }
+    }
+    
+    struct object list_view::process(context* ctx) const {
+      const auto list_itr = ctx->object_lists.find(name);
+      if (list_itr == ctx->object_lists.end()) return ignore_value;
+      
+      const auto def_val = default_value != nullptr ? default_value->process(ctx) : object();
+      
+      change_scope cs(ctx, object(), ctx->current);
+      change_reduce_value crv(ctx, def_val);
+      change_indices ci(ctx, 0, ctx->index);
+      
+      size_t counter = 0;
+      object cur_ret = ignore_value;
+      for (size_t i = 0; i < list_itr->second.size(); ++i) {
+        ctx->current = list_itr->second[i];
+        ctx->index = counter;
+        for (auto child = childs; child != nullptr && !ctx->current.ignore(); child = child->next) {
+          const auto ret = child->process(ctx);
+          ctx->current = ret;
+        }
+        
+        counter += size_t(!ctx->current.ignore());
+        cur_ret = !ctx->current.ignore() ? ctx->current : cur_ret;
+      }
+      
+      return cur_ret;
+    }
+    
+    void list_view::draw(context* ctx) const {
+      {
+        const auto obj = process(ctx);
+        draw_data dd(ctx);
+        dd.function_name = get_name();
+        dd.value = obj.ignore() ? object() : obj;
+        dd.original = name;
+        if (!ctx->draw(&dd)) return;
+      }
+      
+      //change_scope cs(ctx, obj, ctx->current);
+      change_nesting cn(ctx, ctx->nest_level+1);
+      change_function_name cfn(ctx, get_name());
+      for (auto child = childs; child != nullptr; child = child->next) { child->draw(ctx); }
+    }
+    
+    size_t list_view::get_type_id() const { return type_id<object>(); }
+    std::string_view list_view::get_name() const { return commands::names[type_index]; }
+    
+    const size_t transform::type_index = commands::transform;
+    transform::transform(const interface* changes) noexcept : changes(changes) {}
+    transform::~transform() noexcept { changes->~interface(); }
+    struct object transform::process(context* ctx) const { return changes->process(ctx); }
+    void transform::draw(context* ctx) const {
+      {
+        draw_data dd(ctx);
+        dd.function_name = get_name();
+        dd.value = process(ctx);
+        if (!ctx->draw(&dd)) return;
+      }
+      changes->draw(ctx);
+    }
+    size_t transform::get_type_id() const { return type_id<object>(); }
+    std::string_view transform::get_name() const { return commands::names[type_index]; }
+    
+    const size_t filter::type_index = commands::filter;
+    filter::filter(const interface* condition) noexcept : condition(condition) {}
+    filter::~filter() noexcept { condition->~interface(); }
+    struct object filter::process(context* ctx) const {
+      const auto obj = condition->process(ctx);
+      return obj.ignore() || !obj.get<bool>() ? ignore_value : ctx->current;
+    }
+    void filter::draw(context* ctx) const {
+      {
+        draw_data dd(ctx);
+        dd.function_name = get_name();
+        dd.value = condition->process(ctx);
+        if (!ctx->draw(&dd)) return;
+      }
+      condition->draw(ctx);
+    }
+    size_t filter::get_type_id() const { return type_id<object>(); }
+    std::string_view filter::get_name() const { return commands::names[type_index]; }
+    
+    const size_t reduce::type_index = commands::reduce;
+    reduce::reduce(const interface* value) noexcept : value(value) {}
+    reduce::~reduce() noexcept { value->~interface(); }
+    struct object reduce::process(context* ctx) const {
+      const auto obj = value->process(ctx);
+      ASSERT(!obj.ignore());
+      ctx->reduce_value = obj;
+      return obj;
+    }
+    void reduce::draw(context* ctx) const {
+      {
+        draw_data dd(ctx);
+        dd.function_name = get_name();
+        dd.value = process(ctx);
+        if (!ctx->draw(&dd)) return;
+      }
+      value->draw(ctx);
+    }
+    size_t reduce::get_type_id() const { return type_id<object>(); }
+    std::string_view reduce::get_name() const { return commands::names[type_index]; }
+    
+    const size_t take::type_index = commands::take;
+    take::take(const size_t count) noexcept : count(count) {}
+    take::~take() noexcept {}
+    struct object take::process(context* ctx) const { return ctx->index < count ? ctx->current : ignore_value; }
+    void take::draw(context* ctx) const {
+      draw_data dd(ctx);
+      dd.function_name = get_name();
+      dd.value = object(double(count));
+      ctx->draw(&dd);
+    }
+    size_t take::get_type_id() const { return type_id<object>(); }
+    std::string_view take::get_name() const { return commands::names[type_index]; }
+    
+    const size_t drop::type_index = commands::drop;
+    drop::drop(const size_t count) noexcept : count(count) {}
+    drop::~drop() noexcept {}
+    struct object drop::process(context* ctx) const { return ctx->index < count ? ignore_value : ctx->current; }
+    void drop::draw(context* ctx) const {
+      draw_data dd(ctx);
+      dd.function_name = get_name();
+      dd.value = object(double(count));
+      ctx->draw(&dd);
+    }
+    size_t drop::get_type_id() const { return type_id<object>(); }
+    std::string_view drop::get_name() const { return commands::names[type_index]; }
     
     static void draw_nesting(const size_t &nest_level) {
       for (size_t i = 0; i < nest_level; ++i) { std::cout << "  "; }
@@ -1647,6 +1963,6 @@ namespace devils_engine {
     }
     
     size_t assert_condition::get_type_id() const { return type_id<object>(); }
-    std::string_view assert_condition::get_name() const { return type_name<decltype(*this)>(); }
+    std::string_view assert_condition::get_name() const { return commands::names[type_index]; }
   }
 }

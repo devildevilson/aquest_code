@@ -24,7 +24,7 @@ namespace devils_engine {
     }
     
     struct object {
-      static const size_t mem_size = sizeof(size_t) + sizeof(void*);
+      static const size_t mem_size = align_to(sizeof(size_t) + sizeof(void*), 8);
       
       size_t type;
       union {
@@ -44,42 +44,46 @@ namespace devils_engine {
       };
       
       template <typename T>
-      static constexpr void check_type() {
+      inline static constexpr void check_type() {
         static_assert(sizeof(T) <= mem_size);
         static_assert(alignof(T) <= alignof(object));
         static_assert(std::is_trivially_destructible_v<T>, "Custom destructor is not supported");
         static_assert(std::is_copy_constructible_v<T>, "Type must be copyable");
         static_assert(!(std::is_pointer_v<T> && std::is_fundamental_v<std::remove_reference_t<std::remove_pointer_t<T>>>), "Do not store pointer to fundamental types, array views is supported");
         static_assert(!std::is_same_v<T, std::string_view*>, "Do not store pointer to string_view");
+        static_assert(!std::is_same_v<T, const std::string_view*>, "Do not store pointer to string_view");
       }
       
-      constexpr inline object() noexcept : type(0), data(nullptr), value(0) {}
-      constexpr inline explicit object(const bool val) noexcept : type(type_id<bool>()), data(nullptr), value(val) {}
-      constexpr inline explicit object(const double val) noexcept : type(type_id<double>()), data(nullptr), value(val) {}
-      inline object(const std::string_view val) noexcept : type(type_id<std::string_view>()), data(nullptr), value(0) { set_data(val); }
-      inline object(const std::string &val) noexcept : object(std::string_view(val)) {}
+      constexpr object() noexcept : type(0), data(nullptr), value(0) {}
+      constexpr explicit object(const bool val) noexcept : type(type_id<bool>()), data(nullptr), value(val) {}
+      constexpr explicit object(const double val) noexcept : type(type_id<double>()), data(nullptr), value(val) {}
+      inline explicit object(const std::string_view val) noexcept : type(type_id<std::string_view>()), data(nullptr), value(0) { set_data(val); }
+      inline explicit object(const std::string &val) noexcept : object(std::string_view(val)) {}
       //constexpr inline object(const glm::vec4 val) noexcept : type(type_id<glm::vec4>()), data(nullptr), value(0) { set_data(val); }
       template <typename T>
-      inline object(const utils::array_view<T> val) noexcept : type(type_id<utils::array_view<T>>()), data(nullptr), value(0) { set_data(val); }
+      object(const utils::array_view<T> val) noexcept : type(type_id<utils::array_view<T>>()), data(nullptr), value(0) { set_data(val); }
       template <typename T>
-      inline object(const T val) noexcept : type(type_id<T>()), data(nullptr), value(0) { 
+      object(const T val) noexcept : type(type_id<T>()), data(nullptr), value(0) { 
         check_type<T>();
         set_data(val); 
       }
+      
+      ~object() noexcept = default;
       
       object(const object &copy) noexcept = default;
       object(object &move) noexcept = default;
       object & operator=(const object &copy) noexcept = default;
       object & operator=(object &move) noexcept = default;
       
-      constexpr inline object & operator=(const bool val) noexcept { type = type_id<bool>(); data = nullptr; value = double(val); return *this; }
-      constexpr inline object & operator=(const double val) noexcept { type = type_id<double>(); data = nullptr; value = val; return *this; }
-      constexpr inline object & operator=(const std::string_view val) noexcept { type = type_id<std::string_view>(); data = nullptr; value = 0; set_data(val); return *this; }
+      constexpr object & operator=(const bool val) noexcept { type = type_id<bool>(); data = nullptr; value = double(val); return *this; }
+      constexpr object & operator=(const double val) noexcept { type = type_id<double>(); data = nullptr; value = val; return *this; }
+      inline object & operator=(const std::string_view val) noexcept { type = type_id<std::string_view>(); data = nullptr; value = 0; set_data(val); return *this; }
+      inline object & operator=(const std::string &val) noexcept { return operator=(std::string_view(val)); }
       //constexpr inline object(const glm::vec4 val) noexcept : type(type_id<glm::vec4>()), data(nullptr), value(0) { set_data(val); }
       template <typename T>
-      constexpr inline object & operator=(const utils::array_view<T> val) noexcept { type = type_id<utils::array_view<T>>(); data = nullptr; value = 0; set_data(val); return *this; }
+      object & operator=(const utils::array_view<T> val) noexcept { type = type_id<utils::array_view<T>>(); data = nullptr; value = 0; set_data(val); return *this; }
       template <typename T>
-      constexpr inline object & operator=(const T val) noexcept { 
+      object & operator=(const T val) noexcept { 
         type = type_id<T>(); 
         data = nullptr; 
         value = 0;
@@ -99,7 +103,18 @@ namespace devils_engine {
       
       template<typename T>
       T get() const {
-        if (!is<T>()) throw std::runtime_error("Expected '" + std::string(type_name<T>()) + "' (" + std::to_string(type_id<T>()) + "), but another type stored (" + std::to_string(type) + ")");
+        // если требуется указатель на константную область памяти, но лежит указатель на не константную область
+        // то мы все равно можем передать указатель
+        if constexpr (std::is_pointer_v<T> && std::is_const_v<std::remove_pointer_t<T>>) {
+          using non_const_ptr = std::remove_cv_t< std::remove_reference_t < std::remove_pointer_t<T> > > *;
+          static_assert(std::is_pointer_v<non_const_ptr> && !std::is_const_v<non_const_ptr> && !std::is_const_v<std::remove_pointer_t<non_const_ptr>>);
+          if (!is<T>() && !is<non_const_ptr>()) {
+            throw std::runtime_error(
+              "Expected '" + std::string(type_name<T>()) + "' (" + std::to_string(type_id<T>()) + ") or '" 
+                           + std::string(type_name<non_const_ptr>()) + "' (" + std::to_string(type_id<non_const_ptr>()) + "), but another type stored (" + std::to_string(type) + ")"
+            );
+          }
+        } else if (!is<T>()) throw std::runtime_error("Expected '" + std::string(type_name<T>()) + "' (" + std::to_string(type_id<T>()) + "), but another type stored (" + std::to_string(type) + ")");
         
         if constexpr (std::is_same_v<T, bool>) return !(std::abs(value) < EPSILON);
         else if constexpr (std::is_same_v<T, double>) return value;

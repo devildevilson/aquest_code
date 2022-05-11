@@ -75,12 +75,15 @@ namespace devils_engine {
       size_t type;
       size_t operator_type;
       size_t nest_level;
-      object root, prev, current, rvalue;
+      object root, prev, current, rvalue, reduce_value;
       
       // данные для рандомизации, хэш поди нужно использовать std, использую свой
       size_t id_hash;
       size_t method_hash;
       size_t current_turn; // наверное тут укажем просто какой нибдуь сид
+      
+      // только два? мож пихать в локальную переменную прост? не, это мы если захотим сделаем сами
+      size_t index, prev_index;
       
       // а можем ли мы тут хранить строку? можем ли мы использовать string_view в качестве ключа?
       // контекст в каком то виде может перейти в контекст эвента игрока
@@ -108,6 +111,12 @@ namespace devils_engine {
       
       context() noexcept;
       context(const std::string_view &id, const std::string_view &method_name, const size_t &current_turn) noexcept;
+      
+      context(const context &copy) noexcept = default;
+      context(context &&move) noexcept = default;
+      context & operator=(const context &copy) noexcept = default;
+      context & operator=(context &&move) noexcept = default;
+      
       void set_data(const std::string_view &id, const std::string_view &method_name, const size_t &current_turn) noexcept;
       void set_data(const std::string_view &id, const std::string_view &method_name) noexcept;
       
@@ -181,8 +190,33 @@ namespace devils_engine {
     struct change_function_name {
       context* ctx;
       std::string_view function_name;
-      inline change_function_name(context* ctx, const std::string_view &new_function_name) : ctx(ctx), function_name(ctx->prev_function_name) { ctx->prev_function_name = new_function_name; }
-      inline ~change_function_name() { ctx->prev_function_name = function_name; }
+      inline change_function_name(context* ctx, const std::string_view &new_function_name) : ctx(ctx), function_name(ctx->prev_function_name) { 
+        ctx->prev_function_name = ctx->function_name; ctx->function_name = new_function_name;
+      }
+      inline ~change_function_name() { ctx->function_name = ctx->prev_function_name; ctx->prev_function_name = function_name; }
+    };
+    
+    struct change_indices {
+      context* ctx;
+      size_t index, prev_index;
+      inline change_indices(context* ctx, const size_t new_index, const size_t new_prev_index) : 
+        ctx(ctx), index(ctx->index), prev_index(ctx->prev_index) 
+      { 
+        ctx->index = new_index; 
+        ctx->prev_index = new_prev_index;
+      }
+      inline ~change_indices() { ctx->index = index; ctx->prev_index = index; }
+    };
+    
+    struct change_reduce_value {
+      context* ctx;
+      object reduce_value;
+      
+      inline change_reduce_value(context* ctx, const object &new_reduce_value) noexcept : ctx(ctx), reduce_value(ctx->reduce_value) {
+        ctx->reduce_value = new_reduce_value;
+      }
+      
+      inline ~change_reduce_value() noexcept { ctx->reduce_value = reduce_value; }
     };
   }
 }

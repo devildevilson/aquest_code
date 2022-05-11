@@ -207,6 +207,60 @@ namespace devils_engine {
       return effect(itr->second.second);
     }
     
+    std::string system::get_function_data_dump() const {
+      static const std::pair<std::string_view, size_t> types[] = {
+        std::make_pair("effect", type_id<void>()),
+        std::make_pair("condition", type_id<bool>()),
+        std::make_pair("numeric", type_id<double>()),
+//         std::make_pair("scope", type_id<object>()),
+      };
+      
+      std::string dump;
+      dump.reserve(1024 * 10);
+      for (size_t i = 0; i < sizeof(types) / sizeof(types[0]); ++i) {
+        const auto &p = types[i];
+        dump.append(p.first);
+        dump.append(":\n");
+        for (const auto &t : func_map) {
+          for (const auto &f : t.second) {
+            if (f.second.return_type != p.second) continue;
+            if (f.second.arguments_count == FUNCTION_ITERATOR) continue;
+            const auto str = f.second.info();
+            dump.append("  ");
+            dump.append(str);
+            dump.append("\n");
+          }
+        }
+        dump.append("\n");
+      }
+      
+      dump.append("scope:\n");
+      for (const auto &t : func_map) {
+        for (const auto &f : t.second) {
+          if (f.second.return_type == type_id<void>() || f.second.return_type == type_id<bool>() || f.second.return_type == type_id<double>()) continue;
+          if (f.second.arguments_count == FUNCTION_ITERATOR) continue;
+          const auto str = f.second.info();
+          dump.append("  ");
+          dump.append(str);
+          dump.append("\n");
+        }
+      }
+      
+      dump.append("\n");
+      dump.append("iterator:\n");
+      for (const auto &t : func_map) {
+        for (const auto &f : t.second) {
+          if (f.second.arguments_count != FUNCTION_ITERATOR) continue;
+          const auto str = f.second.info();
+          dump.append("  ");
+          dump.append(str);
+          dump.append("\n");
+        }
+      }
+      
+      return dump;
+    }
+    
     bool system::function_exists(const std::string_view &name, size_t* return_type, size_t* arg_count) {
       size_t current_type = SIZE_MAX;
       size_t current_args = SIZE_MAX;
@@ -995,7 +1049,8 @@ namespace devils_engine {
             break;
           }
           
-          default: throw std::runtime_error("Bad table lvalue, supported only boolean, number and string");
+          default: throw std::runtime_error("Bad table lvalue of type " + std::string(detail::get_sol_type_name(first_type)) + 
+                     ", supported only boolean, number and string");
         }
         
         if (cur != nullptr) cur->next = next;
@@ -1033,7 +1088,8 @@ namespace devils_engine {
             break;
           }
           
-          default: throw std::runtime_error("Bad table lvalue, supported only boolean, number and string, context " + std::string(ctx->function_name));
+          default: throw std::runtime_error("Bad table lvalue of type " + std::string(detail::get_sol_type_name(first_type)) + 
+                     ", supported only boolean, number and string, context " + std::string(ctx->function_name));
         }
         
         if (cur != nullptr) cur->next = next;
@@ -1065,7 +1121,8 @@ namespace devils_engine {
             break;
           }
           
-          default: throw std::runtime_error("Bad table lvalue, supported only number, context " + std::string(ctx->function_name));
+          default: throw std::runtime_error("Bad table lvalue of type " + std::string(detail::get_sol_type_name(first_type)) + 
+                     ", supported only number, context " + std::string(ctx->function_name));
         }
         
         if (cur != nullptr) cur->next = next;
@@ -1106,7 +1163,8 @@ namespace devils_engine {
             break;
           }
           
-          default: throw std::runtime_error("Bad table lvalue, supported only number, context " + std::string(ctx->function_name));
+          default: throw std::runtime_error("Bad table lvalue of type " + std::string(detail::get_sol_type_name(first_type)) + 
+                     ", supported only number, context " + std::string(ctx->function_name));
         }
         
         if (cur != nullptr) cur->next = next;
@@ -1153,7 +1211,8 @@ namespace devils_engine {
             break;
           }
           
-          default: throw std::runtime_error("Bad table lvalue, supported only boolean, number and string, context " + std::string(ctx->function_name));
+          default: throw std::runtime_error("Unexpected table lvalue of type " + std::string(detail::get_sol_type_name(first_type)) + 
+                     ", supported only boolean, number and string, context " + std::string(ctx->function_name));
         }
         
         if (cur != nullptr) cur->next = next;
@@ -1231,6 +1290,9 @@ namespace devils_engine {
           } else throw std::runtime_error("Cannot use 'every_in_list' in string or object script");
           
           return final_int;
+        }, [] () { 
+          return "every_in_list"" I: " + std::string(type_name<void>()) + 
+                                " O: bool, double or nothing ";
         }
       };
       
@@ -1361,6 +1423,8 @@ namespace devils_engine {
       REG_BASIC_TYPE(void, root, object, "root")();
       REG_BASIC_TYPE(void, prev, object, "prev")();
       REG_BASIC_TYPE(void, current, object, "current")();
+      REG_BASIC_TYPE(void, index, double, "index")();
+      REG_BASIC_TYPE(void, prev_index, double, "prev_index")();
       
 //       LOCAL_REG_BASIC(get_title)
       
@@ -1374,14 +1438,16 @@ namespace devils_engine {
           const auto t = obj.as<sol::table>();
           const auto str_proxy = t["name"];
           const auto number_proxy = t["value"];
-          if (!str_proxy.valid() || !number_proxy.valid()) throw std::runtime_error("save_local function expects fields 'name' with string and 'value' with scripted number");
+          if (!str_proxy.valid() || !number_proxy.valid()) throw std::runtime_error("Function 'save_local' expects fields 'name' with string and 'value' with scripted number");
+          if (str_proxy.get_type() != sol::type::string) throw std::runtime_error("Function 'save_local' expects field 'name' to be string");
           const auto str = str_proxy.get<std::string_view>();
           const size_t index = v.save_local(std::string(str), type_id<double>());
-          auto num = v.make_scripted_numeric(number_proxy);
+          //auto num = v.make_scripted_numeric(number_proxy);
+          auto num = v.make_scripted_object<object>(number_proxy); // любой объект, число получаем функцией value
           return init.init(std::string(str), index, num);
         }
         
-        if (obj.get_type() != sol::type::string) throw std::runtime_error("save_local function expects string or table as input data");
+        if (obj.get_type() != sol::type::string) throw std::runtime_error("Function 'save_local' expects string or table as input data");
         
         const auto str = obj.as<std::string_view>();
         const size_t index = v.save_local(std::string(str), v.get_context()->current_type);
@@ -1391,7 +1457,7 @@ namespace devils_engine {
       REG_USER(void, save_local, bool, "save_local")(save_local_f);
       
       const auto has_local_f = [] (view v, const sol::object &obj, container::delayed_initialization<has_local> init) {
-        if (obj.get_type() != sol::type::string) throw std::runtime_error("has_local function expects string as input data");
+        if (obj.get_type() != sol::type::string) throw std::runtime_error("Function 'has_local' expects string as input data");
         const auto str = obj.as<std::string_view>();
         const auto [index, type] = v.get_local(str);
         return init.init(index);
@@ -1400,20 +1466,20 @@ namespace devils_engine {
       REG_USER(void, has_local, bool, "has_local")(has_local_f);
       
       const auto remove_local_f = [] (view v, const sol::object &obj, container::delayed_initialization<remove_local> init) {
-        if (obj.get_type() != sol::type::string) throw std::runtime_error("remove_local function expects string as input data");
+        if (obj.get_type() != sol::type::string) throw std::runtime_error("Function 'remove_local' expects string as input data");
         const auto str = obj.as<std::string_view>();
         // наверное имеет смысл именно удалить запись о переменной
         // хотя эти вещи могут быть удалены/созданы в каких то условных переходах
         // то есть всего 64 переменных под разными названиями
         const size_t index = v.remove_local(str);
-        if (index == SIZE_MAX) throw std::runtime_error("Could not find local variable " + std::string(str));
+        if (index == SIZE_MAX) throw std::runtime_error("Could not find local variable " + std::string(str) + ", context 'remove_local'");
         return init.init(std::string(str), index);
       };
       
       REG_USER(void, remove_local, void, "remove_local")(remove_local_f);
       
       const auto sequence_f = [] (view v, const sol::object &obj, container::delayed_initialization<sequence> init) {
-        if (obj.get_type() != sol::type::table) throw std::runtime_error("'sequence' function expects table as input");
+        if (obj.get_type() != sol::type::table) throw std::runtime_error("Function 'sequence' expects table as input");
         
         interface* count_val = nullptr;
         interface* begin = nullptr;
@@ -1428,10 +1494,10 @@ namespace devils_engine {
               continue;
             }
             
-            throw std::runtime_error("String keys, except 'count', in 'sequence' function is not allowed");
+            throw std::runtime_error("String keys, except 'count', in function 'sequence' is not allowed");
           }
           
-          if (pair.first.get_type() != sol::type::number) throw std::runtime_error("'sequence' function expects array with tables or 'count' obj");
+          if (pair.first.get_type() != sol::type::number) throw std::runtime_error("Function 'sequence' expects array with tables or 'count' obj");
           
           // тут нужно создать блочные функции
           auto cur = v.any_scripted_object(pair.second);
@@ -1446,7 +1512,7 @@ namespace devils_engine {
       REG_ITR(void, sequence, object, "sequence")(sequence_f);
       
       const auto selector_f = [] (view v, const sol::object &obj, container::delayed_initialization<selector> init) {
-        if (obj.get_type() != sol::type::table) throw std::runtime_error("'sequence' function expects table as input");
+        if (obj.get_type() != sol::type::table) throw std::runtime_error("Function 'selector' expects table as input");
         
         interface* begin = nullptr;
         interface* current = nullptr;
@@ -1618,7 +1684,7 @@ namespace devils_engine {
       const auto random_in_list_f = [] (view v, const sol::object &obj, container::delayed_initialization<random_in_list> init) -> interface* {
         if (obj.get_type() != sol::type::table) throw std::runtime_error("'random_in_list' expects table");
         
-        const auto t = obj.as<sol::table>();
+        auto t = obj.as<sol::table>();
         const auto name_proxy = t["list"];
         if (!name_proxy.valid() || name_proxy.get_type() != sol::type::string) throw std::runtime_error("'random_in_list' expects field 'list' with name");
         const auto name = name_proxy.get<std::string_view>();
@@ -1633,7 +1699,11 @@ namespace devils_engine {
           weight = v.make_scripted_numeric(proxy);
         }
         
-        auto childs = v.traverse_children(obj);
+        //auto childs = v.traverse_children(obj);
+        const sol::object cond_obj = t["condition"];
+        t["condition"] = sol::nil;
+        auto childs = v.any_scripted_object(obj);
+        t["condition"] = cond_obj;
         
         const size_t state = v.get_random_state();
         return init.init(std::string(name), state, condition, weight, childs);
@@ -1664,13 +1734,14 @@ namespace devils_engine {
       
       REG_USER(void, get_local, object, "local")(local_f);
       
-      const auto value_f = [] (view, const sol::object &obj, container::delayed_initialization<number_container> init) -> interface* {
-        if (obj.get_type() != sol::type::number) throw std::runtime_error("Function 'value' expects number as input");
-        const auto num = obj.as<double>();
-        return init.init(num);
+      const auto value_f = [] (view v, const sol::object &obj, container::delayed_initialization<value> init) -> interface* {
+        //if (obj.get_type() != sol::type::number) throw std::runtime_error("Function 'value' expects number as input");
+        //const auto num = obj.as<double>();
+        auto compute = v.make_scripted_numeric(obj);
+        return init.init(compute);
       };
       
-      REG_USER(void, number_container, double, "value")(value_f);
+      REG_USER(void, value, double, "value")(value_f);
       
       // нам еще потребуется хранить глобальные переменные + переменные в объекте?
       
@@ -1691,8 +1762,92 @@ namespace devils_engine {
       
       REG_USER(void, assert_condition, bool, "assert_condition")(assert_condition_f);
       
-      // нужно теперь сделать отдельно инициализацию всех остальных функций
+      // было бы неплохо добавить функции для view: transform, filter, reduce, take, drop
+      // как должен выглядеть сам view? для того чтобы это создать нам действительно нужен ЛЮБОЙ
+      // объект как возвращаемое значение, вне зависимости от типа скрипта
+      
+      const auto transform_f = [] (view v, const sol::object &obj, container::delayed_initialization<transform> init) -> interface* {
+        // тут мы ожидаем что? на самом деле скорее всего все что угодно, но тут может быть и таблица
+        // из таблицы по умолчанию ожидаем число? наверное 
+        interface* changes = nullptr;
+        if (obj.get_type() == sol::type::string) {
+          // это скорее всего сложное лвалуе: ожидаем любой объект
+          changes = v.make_scripted_object<object>(obj);
+        } else {
+          changes = v.make_scripted_numeric(obj);
+        }
+        
+        return init.init(changes);
+      };
+      
+      REG_USER(void, transform, object, "transform")(transform_f);
+      
+      const auto filter_f = [] (view v, const sol::object &obj, container::delayed_initialization<filter> init) -> interface* {
+        // тут мы ожидаем таблицу с вычислением булеана (а мож и не таблицу)
+        auto cond = v.make_scripted_conditional(obj);
+        return init.init(cond);
+      };
+      
+      REG_USER(void, filter, object, "filter")(filter_f);
+      
+      const auto reduce_f = [] (view v, const sol::object &obj, container::delayed_initialization<reduce> init) -> interface* {
+        // тут что? вот тут было бы неплохо сделать скрипт-объект, то есть тут бы мы например выбрали бы самый крутой город по какой-нибудь метрике
+        // да, и число тут было бы тоже неплохо ожидать, как тут это число можно вычислить? действительно нужно сделать функцию value
+        // которая тупо вычислит число
+        interface* red = nullptr;
+        const size_t script_type = v.get_context()->script_type;
+        if (script_type == script_types::condition) {
+          red = v.make_scripted_conditional(obj);
+        } else if (script_type == script_types::numeric) {
+          red = v.make_scripted_numeric(obj);
+        } else if (script_type == script_types::object) {
+          const size_t expected = v.get_context()->expected_type;
+          red = v.make_scripted_object(expected, obj);
+        }
+        
+        return init.init(red);
+      };
+      
+      REG_USER(void, reduce, object, "reduce")(reduce_f);
+      
+      const auto take_f = [] (view, const sol::object &obj, container::delayed_initialization<take> init) -> interface* {
+        if (obj.get_type() != sol::type::number) throw std::runtime_error("Function 'take' expects number as input");
+        return init.init(obj.as<double>());
+      };
+      REG_USER(void, take, object, "take")(take_f);
+      
+      const auto drop_f = [] (view, const sol::object &obj, container::delayed_initialization<drop> init) -> interface* {
+        if (obj.get_type() != sol::type::number) throw std::runtime_error("Function 'drop' expects number as input");
+        return init.init(obj.as<double>());
+      };
+      REG_USER(void, drop, object, "drop")(drop_f);
     }
+    
+    namespace detail {
+      const phmap::flat_hash_set<std::string_view> view_allowed_funcs = {
+        "transform", "filter", "reduce", "take", "drop"
+      };
+      
+      std::string_view get_sol_type_name(const sol::type &t) {
+        std::string_view str;
+        switch (t) {
+          case sol::type::none:     str = "none"; break;
+          case sol::type::lua_nil:  str = "nil"; break;
+//           case sol::type::nil: str = "none"; break;
+          case sol::type::string:   str = "string"; break;
+          case sol::type::number:   str = "number"; break;
+          case sol::type::thread:   str = "thread"; break;
+          case sol::type::boolean:  str = "boolean"; break;
+          case sol::type::function: str = "function"; break;
+          case sol::type::userdata: str = "userdata"; break;
+          case sol::type::lightuserdata: str = "lightuserdata"; break;
+          case sol::type::table:    str = "table"; break;
+          case sol::type::poly:     str = "poly"; break;
+        }
+        
+        return str;
+      }
+    } // namespace detail
   }
 }
 

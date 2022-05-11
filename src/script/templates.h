@@ -248,6 +248,21 @@ namespace devils_engine {
       const interface* childs;
     };
     
+    template <typename Th, typename F, F f, const char* name>
+    class scripted_iterator_view final : public interface {
+    public:
+      scripted_iterator_view(const interface* default_value, const interface* childs) noexcept;
+      ~scripted_iterator_view() noexcept;
+      
+      struct object process(context* ctx) const override;
+      void draw(context* ctx) const override;
+      size_t get_type_id() const override;
+      std::string_view get_name() const override;
+    private:
+      const interface* default_value;
+      const interface* childs;
+    };
+    
     /* ================================================================================================================================================ */
     // implementation
     // 
@@ -369,7 +384,7 @@ namespace devils_engine {
       using output_type = function_result_type<F>;
       if constexpr (!std::is_same_v<output_type, void>) dd.value = process(ctx);
       if (!ctx->draw(&dd)) return;
-      // нужно ли пройтись по аргументам, скорее всего пригодится в будущем
+      // нужно ли пройтись по аргументам? скорее всего пригодится в будущем
     }
     
     template <typename F, F f, const char* name>
@@ -699,9 +714,13 @@ namespace devils_engine {
       
       // передадим текущий объект или контекст? контекст кажется избыточным
       // мы можем передавать сам объект
+      change_indices ci(ctx, 0, ctx->index);
+      size_t counter = 0;
       double val = 0.0;
       f(cur, [&] (const object &obj) -> bool {
         ctx->current = obj;
+        ctx->index = counter;
+        ++counter;
         
         if (condition != nullptr) {
           const auto obj = condition->process(ctx);
@@ -751,11 +770,11 @@ namespace devils_engine {
       
       if (condition != nullptr) {
         draw_condition dc(ctx);
-        change_nesting cn(ctx, ++ctx->nest_level);
+        change_nesting cn(ctx, ctx->nest_level+1);
         condition->draw(ctx);
       }
       
-      change_nesting cn(ctx, ++ctx->nest_level);
+      change_nesting cn(ctx, ctx->nest_level+1);
       for (auto cur = childs; cur != nullptr; cur = cur->next) {
         cur->draw(ctx);
       }
@@ -781,8 +800,12 @@ namespace devils_engine {
       Th cur;
       if constexpr (std::is_same_v<void*, Th>) cur = nullptr;
       else cur = ctx->current.get<Th>();
+      change_indices ci(ctx, 0, ctx->index);
+      size_t counter = 0;
       f(cur, [&] (const object &obj) -> bool {
         ctx->current = obj;
+        ctx->index = counter;
+        ++counter;
         
         if (condition != nullptr) {
           const auto obj = condition->process(ctx);
@@ -824,11 +847,11 @@ namespace devils_engine {
       
       if (condition != nullptr) {
         draw_condition dc(ctx);
-        change_nesting cn(ctx, ++ctx->nest_level);
+        change_nesting cn(ctx, ctx->nest_level+1);
         condition->draw(ctx);
       }
       
-      change_nesting cn(ctx, ++ctx->nest_level);
+      change_nesting cn(ctx, ctx->nest_level+1);
       for (auto cur = childs; cur != nullptr; cur = cur->next) {
         cur->draw(ctx);
       }
@@ -855,8 +878,13 @@ namespace devils_engine {
       if constexpr (std::is_same_v<void*, Th>) cur = nullptr;
       else cur = ctx->current.get<Th>();
       
+      change_indices ci(ctx, 0, ctx->index);
+      size_t counter = 0;
       bool val = true;
       f(cur, [&] (const object &obj) -> bool {
+        ctx->index = counter;
+        ++counter;
+        
         if (!val) return false;
         ctx->current = obj;
         
@@ -910,11 +938,11 @@ namespace devils_engine {
       
       if (condition != nullptr) {
         draw_condition dc(ctx);
-        change_nesting cn(ctx, ++ctx->nest_level);
+        change_nesting cn(ctx, ctx->nest_level+1);
         condition->draw(ctx);
       }
       
-      change_nesting cn(ctx, ++ctx->nest_level);
+      change_nesting cn(ctx, ctx->nest_level+1);
       for (auto cur = childs; cur != nullptr; cur = cur->next) {
         cur->draw(ctx);
       }
@@ -962,10 +990,12 @@ namespace devils_engine {
       
       if (final_max_count == 0) return object(0.0);
       
+      change_indices ci(ctx, 0, ctx->index);
       size_t counter = 0;
       size_t val = 0;
       f(cur, [&] (const object &obj) -> bool {
         if (counter >= final_max_count) return false;
+        ctx->index = counter;
         ++counter;
         ctx->current = obj;
         // задать в контекст текущий val и counter в качестве локальных переменных
@@ -1013,7 +1043,7 @@ namespace devils_engine {
       });
       if (!first.valid()) return;
       
-      change_nesting cn(ctx, ++ctx->nest_level);
+      change_nesting cn(ctx, ctx->nest_level+1);
       change_scope cs(ctx, first, ctx->current);
       change_function_name cfn(ctx, name);
       for (auto cur = childs; cur != nullptr; cur = cur->next) {
@@ -1039,11 +1069,17 @@ namespace devils_engine {
     
     template <typename F, F f, typename Th>
     static struct object get_rand_obj(context* ctx, Th cur, const interface* condition, const interface* weight, const size_t state, const std::string_view &func_name) {
+      change_indices ci(ctx, 0, ctx->index);
+      
+      size_t counter = 0;
       double accum_weight = 0.0;
       std::vector<std::pair<struct object, double>> objects;
       objects.reserve(50);
       f(cur, [&] (const object &obj) -> bool {
         ctx->current = obj;
+        ctx->index = counter;
+        ++counter;
+        
         // здесь поди тоже можно задать индексы
         
         if (condition != nullptr) {
@@ -1087,7 +1123,7 @@ namespace devils_engine {
       // рандом можно использовать только в эффекте, или нет? что я получаю если не в эффекте?
       // если передавать сюда собранный скрипт объекта, то понятно становится что возвращать
       ctx->current = obj;
-      return childs->process(ctx);
+      return obj.valid() ? childs->process(ctx) : ignore_value;
     }
     
     template <typename Th, typename F, F f, const char* name>
@@ -1095,18 +1131,18 @@ namespace devils_engine {
       Th cur;
       if constexpr (std::is_same_v<void*, Th>) cur = nullptr;
       else cur = ctx->current.get<Th>();
-      const auto obj = get_rand_obj<F, f>(ctx, cur, condition, weight, state, name);
+      auto obj = get_rand_obj<F, f>(ctx, cur, condition, weight, state, name);
       // а нужно ли это рисовать вообще если рандом не получился? не думаю, но было бы неплохо для дебага
-//       if (!obj.valid()) {
-//         object first;
-//         f(cur, [&] (const object &obj) -> bool {
-//           first = obj;
-//           return false;
-//         });
-//         obj = first;
-//       }
+      if (!obj.valid()) {
+        object first;
+        f(cur, [&] (const object &obj) -> bool {
+          first = obj;
+          return false;
+        });
+        obj = first;
+      }
       
-      if (!obj.valid()) return;
+      //if (!obj.valid()) return;
       
       {
         draw_data dd(ctx);
@@ -1116,7 +1152,7 @@ namespace devils_engine {
       }
 
       change_scope cs(ctx, obj, ctx->current);
-      //change_nesting cn(ctx, ++ctx->nest_level);
+      //change_nesting cn(ctx, ctx->nest_level+1);
       change_function_name cfn(ctx, name);
 //       for (auto cur = childs; cur != nullptr; cur = cur->next) {
 //         cur->draw(ctx);
@@ -1129,6 +1165,63 @@ namespace devils_engine {
     template <typename Th, typename F, F f, const char* name>
     std::string_view scripted_iterator_random<Th, F, f, name>::get_name() const { return name; }
     
+    template <typename Th, typename F, F f, const char* name>
+    scripted_iterator_view<Th, F, f, name>::scripted_iterator_view(const interface* default_value, const interface* childs) noexcept : default_value(default_value), childs(childs) {}
+    template <typename Th, typename F, F f, const char* name>
+    scripted_iterator_view<Th, F, f, name>::~scripted_iterator_view() noexcept {
+      if (default_value != nullptr) default_value->~interface();
+      for (auto cur = childs; cur != nullptr; cur = cur->next) { cur->~interface(); } 
+    }
+    template <typename Th, typename F, F f, const char* name>
+    struct object scripted_iterator_view<Th, F, f, name>::process(context* ctx) const {
+      const auto def_val = default_value != nullptr ? default_value->process(ctx) : object();
+      
+      Th cur;
+      if constexpr (std::is_same_v<void*, Th>) cur = nullptr;
+      else cur = ctx->current.get<Th>();
+      
+      change_indices ci(ctx, 0, ctx->index);
+      change_reduce_value crv(ctx, def_val);
+      change_scope cs(ctx, object(), ctx->current);
+      
+      size_t counter = 0;
+      object cur_ret = ignore_value;
+      f(cur, [&] (const object &obj) -> bool {
+        ctx->current = obj;
+        ctx->index = counter;
+        for (auto child = childs; child != nullptr && !ctx->current.ignore(); child = child->next) {
+          const auto ret = child->process(ctx);
+          ctx->current = ret;
+        }
+        
+        counter += size_t(!ctx->current.ignore());
+        cur_ret = !ctx->current.ignore() ? ctx->current : cur_ret;
+        return true;
+      });
+      
+      return cur_ret;
+    }
+    
+    template <typename Th, typename F, F f, const char* name>
+    void scripted_iterator_view<Th, F, f, name>::draw(context* ctx) const {
+      {
+        const auto obj = process(ctx);
+        draw_data dd(ctx);
+        dd.function_name = name;
+        dd.value = obj.ignore() ? object() : obj;
+        if (!ctx->draw(&dd)) return;
+      }
+      
+      //change_scope cs(ctx, obj, ctx->current);
+      change_nesting cn(ctx, ctx->nest_level+1);
+      change_function_name cfn(ctx, name);
+      for (auto child = childs; child != nullptr; child = child->next) { child->draw(ctx); }
+    }
+    
+    template <typename Th, typename F, F f, const char* name>
+    size_t scripted_iterator_view<Th, F, f, name>::get_type_id() const { return type_id<object>(); }
+    template <typename Th, typename F, F f, const char* name>
+    std::string_view scripted_iterator_view<Th, F, f, name>::get_name() const { return name; }
   }
 }
 
